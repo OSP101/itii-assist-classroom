@@ -1,0 +1,796 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import {
+  Table,
+  TableHeader,
+  TableColumn,
+  TableBody,
+  TableRow,
+  TableCell,
+  getKeyValue,
+} from "@heroui/table";
+import { Pagination } from "@heroui/pagination";
+import { Input } from "@heroui/input";
+import { Button } from "@heroui/button";
+import { Chip } from "@heroui/chip";
+import { Spinner } from "@heroui/spinner";
+import { Tooltip } from "@heroui/tooltip";
+import { Avatar } from "@heroui/avatar";
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+} from "@heroui/modal";
+import { Select, SelectItem } from "@heroui/select";
+import { addToast } from "@heroui/toast";
+import { Icon } from "@iconify/react";
+import { userService } from "@/services/user.service";
+import type { User, CreateUserDto, UpdateUserDto, UserStats } from "@/services/user.service";
+import { useAdmin } from "@/contexts/AdminContext";
+
+// Column definitions
+const columns = [
+  { key: "username", label: "ชื่อผู้ใช้", sortable: true },
+  { key: "full_name", label: "ชื่อ-นามสกุล", sortable: true },
+  { key: "email", label: "อีเมล", sortable: true },
+  { key: "role", label: "บทบาท", sortable: true },
+  { key: "status", label: "สถานะ", sortable: true },
+  { key: "provider", label: "ประเภท", sortable: false },
+  { key: "actions", label: "จัดการ", sortable: false },
+];
+
+const roleOptions = [
+  { key: "all", label: "ทุกบทบาท" },
+  { key: "admin", label: "ผู้ดูแลระบบ" },
+  { key: "instructor", label: "อาจารย์" },
+  { key: "ta", label: "ผู้ช่วยสอน" },
+];
+
+const statusOptions = [
+  { key: "all", label: "ทุกสถานะ" },
+  { key: "active", label: "ใช้งาน" },
+  { key: "inactive", label: "ปิดใช้งาน" },
+];
+
+const roleLabels: Record<string, string> = {
+  admin: "ผู้ดูแลระบบ",
+  instructor: "อาจารย์",
+  ta: "ผู้ช่วยสอน",
+};
+
+const roleColors: Record<string, "primary" | "secondary" | "success" | "warning" | "danger"> = {
+  admin: "danger",
+  instructor: "primary",
+  ta: "success",
+};
+
+export default function UsersPage() {
+  const { user: authUser } = useAdmin();
+  const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  
+  // Pagination & Filters
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [limit] = useState(10);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState<string>("created_at");
+  const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
+  
+  // Modal states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Form data
+  const [formData, setFormData] = useState<CreateUserDto>({
+    username: "",
+    password: "",
+    full_name: "",
+    email: "",
+    role: "ta",
+  });
+
+  // Fetch users
+  const fetchUsers = useCallback(async () => {
+    try {
+      const response = await userService.getUsers({
+        page,
+        limit,
+        search: search || undefined,
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        sortBy,
+        sortOrder,
+      });
+
+      if (response.success && response.data) {
+        setUsers(response.data.users);
+        setTotalPages(response.data.pagination.totalPages);
+        setTotalItems(response.data.pagination.totalItems);
+      }
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      addToast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถโหลดข้อมูลผู้ใช้ได้",
+        color: "danger",
+      });
+    }
+  }, [page, limit, search, roleFilter, statusFilter, sortBy, sortOrder]);
+
+  // Fetch stats
+  const fetchStats = useCallback(async () => {
+    try {
+      const response = await userService.getStats();
+      if (response.success && response.data) {
+        setStats(response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsers();
+    fetchStats();
+  }, [fetchUsers, fetchStats]);
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchUsers();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Handle create user
+  const handleCreate = async () => {
+    if (!formData.username || !formData.password || !formData.full_name) {
+      addToast({
+        title: "กรุณากรอกข้อมูลให้ครบ",
+        description: "ชื่อผู้ใช้ รหัสผ่าน และชื่อ-นามสกุล จำเป็นต้องกรอก",
+        color: "warning",
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await userService.createUser(formData);
+      if (response.success) {
+        addToast({
+          title: "สร้างผู้ใช้สำเร็จ",
+          description: `ผู้ใช้ ${formData.username} ถูกสร้างเรียบร้อยแล้ว`,
+          color: "success",
+        });
+        setIsCreateModalOpen(false);
+        resetForm();
+        fetchUsers();
+        fetchStats();
+      } else {
+        addToast({
+          title: "ไม่สามารถสร้างผู้ใช้ได้",
+          description: response.message || "เกิดข้อผิดพลาด",
+          color: "danger",
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถสร้างผู้ใช้ได้",
+        color: "danger",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle update user
+  const handleUpdate = async () => {
+    if (!selectedUser) return;
+
+    setIsSubmitting(true);
+    try {
+      const updateData: UpdateUserDto = {
+        username: formData.username,
+        full_name: formData.full_name,
+        email: formData.email || undefined,
+        role: formData.role,
+      };
+
+      // Only include password if it was changed
+      if (formData.password) {
+        updateData.password = formData.password;
+      }
+
+      const response = await userService.updateUser(selectedUser.id, updateData);
+      if (response.success) {
+        addToast({
+          title: "อัปเดตผู้ใช้สำเร็จ",
+          description: `ผู้ใช้ ${formData.username} ถูกอัปเดตเรียบร้อยแล้ว`,
+          color: "success",
+        });
+        setIsEditModalOpen(false);
+        resetForm();
+        fetchUsers();
+      } else {
+        addToast({
+          title: "ไม่สามารถอัปเดตผู้ใช้ได้",
+          description: response.message || "เกิดข้อผิดพลาด",
+          color: "danger",
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถอัปเดตผู้ใช้ได้",
+        color: "danger",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle delete user
+  const handleDelete = async () => {
+    if (!selectedUser) return;
+
+    setIsSubmitting(true);
+    try {
+      const response = await userService.deleteUser(selectedUser.id);
+      if (response.success) {
+        addToast({
+          title: "ลบผู้ใช้สำเร็จ",
+          description: `ผู้ใช้ ${selectedUser.username} ถูกลบเรียบร้อยแล้ว`,
+          color: "success",
+        });
+        setIsDeleteModalOpen(false);
+        setSelectedUser(null);
+        fetchUsers();
+        fetchStats();
+      } else {
+        addToast({
+          title: "ไม่สามารถลบผู้ใช้ได้",
+          description: response.message || "เกิดข้อผิดพลาด",
+          color: "danger",
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถลบผู้ใช้ได้",
+        color: "danger",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle toggle status
+  const handleToggleStatus = async (user: User) => {
+    try {
+      const response = await userService.toggleStatus(user.id);
+      if (response.success) {
+        addToast({
+          title: user.is_active ? "ปิดใช้งานสำเร็จ" : "เปิดใช้งานสำเร็จ",
+          description: `ผู้ใช้ ${user.username} ถูก${user.is_active ? "ปิด" : "เปิด"}ใช้งานแล้ว`,
+          color: "success",
+        });
+        fetchUsers();
+        fetchStats();
+      } else {
+        addToast({
+          title: "เกิดข้อผิดพลาด",
+          description: response.message || "ไม่สามารถเปลี่ยนสถานะได้",
+          color: "danger",
+        });
+      }
+    } catch (error) {
+      addToast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถเปลี่ยนสถานะได้",
+        color: "danger",
+      });
+    }
+  };
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      username: "",
+      password: "",
+      full_name: "",
+      email: "",
+      role: "ta",
+    });
+    setSelectedUser(null);
+  };
+
+  // Open edit modal
+  const openEditModal = (user: User) => {
+    setSelectedUser(user);
+    setFormData({
+      username: user.username,
+      password: "",
+      full_name: user.full_name,
+      email: user.email || "",
+      role: user.role,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // Open delete modal
+  const openDeleteModal = (user: User) => {
+    setSelectedUser(user);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Render cell content
+  const renderCell = useCallback((user: User, columnKey: React.Key) => {
+    switch (columnKey) {
+      case "username":
+        return (
+          <div className="flex items-center gap-3">
+            <Avatar
+              size="sm"
+              name={user.full_name}
+              className="bg-gradient-to-br from-blue-500 to-purple-500 text-white"
+            />
+            <div>
+              <p className="font-medium">{user.username}</p>
+              <p className="text-xs text-default-400">ID: {user.id}</p>
+            </div>
+          </div>
+        );
+      case "full_name":
+        return <span className="font-medium">{user.full_name}</span>;
+      case "email":
+        return user.email ? (
+          <span className="text-default-600">{user.email}</span>
+        ) : (
+          <span className="text-default-300">-</span>
+        );
+      case "role":
+        return (
+          <Chip
+            color={roleColors[user.role]}
+            variant="flat"
+            size="sm"
+          >
+            {roleLabels[user.role]}
+          </Chip>
+        );
+      case "status":
+        return (
+          <Chip
+            color={user.is_active ? "success" : "default"}
+            variant="dot"
+            size="sm"
+          >
+            {user.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
+          </Chip>
+        );
+      case "provider":
+        return (
+          <div className="flex items-center gap-1">
+            <Icon
+              icon={user.provider === "google" ? "logos:google-icon" : "solar:key-bold"}
+              className="text-lg"
+            />
+            <span className="text-sm text-default-500">
+              {user.provider === "google" ? "Google" : "Local"}
+            </span>
+          </div>
+        );
+      case "actions":
+        return (
+          <div className="flex items-center gap-1">
+            <Tooltip content="แก้ไข">
+              <Button
+                isIconOnly
+                size="sm"
+                variant="light"
+                onPress={() => openEditModal(user)}
+              >
+                <Icon icon="solar:pen-linear" className="text-lg text-default-500" />
+              </Button>
+            </Tooltip>
+            <Tooltip content={user.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}>
+              <Button
+                isIconOnly
+                size="sm"
+                variant="light"
+                onPress={() => handleToggleStatus(user)}
+              >
+                <Icon
+                  icon={user.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                  className="text-lg text-default-500"
+                />
+              </Button>
+            </Tooltip>
+            <Tooltip content="ลบ" color="danger">
+              <Button
+                isIconOnly
+                size="sm"
+                variant="light"
+                color="danger"
+                onPress={() => openDeleteModal(user)}
+                isDisabled={user.id === authUser?.id}
+              >
+                <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
+              </Button>
+            </Tooltip>
+          </div>
+        );
+      default:
+        return getKeyValue(user, columnKey as keyof User);
+    }
+  }, [authUser]);
+
+  // Handle sort
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === "ASC" ? "DESC" : "ASC");
+    } else {
+      setSortBy(column);
+      setSortOrder("ASC");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
+          <p className="text-default-500">จัดการผู้ใช้งานในระบบ</p>
+        </div>
+        <Button
+          color="primary"
+          startContent={<Icon icon="solar:user-plus-bold" className="text-xl" />}
+          onPress={() => {
+            resetForm();
+            setIsCreateModalOpen(true);
+          }}
+        >
+          เพิ่มผู้ใช้
+        </Button>
+      </div>
+
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-default-500">ผู้ใช้ทั้งหมด</p>
+                  <p className="text-2xl font-bold text-default-900">{stats.total}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <Icon icon="solar:shield-user-bold" className="text-2xl text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-default-500">ผู้ดูแลระบบ</p>
+                  <p className="text-2xl font-bold text-default-900">{stats.byRole.admin}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Icon icon="solar:user-check-bold" className="text-2xl text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-default-500">อาจารย์</p>
+                  <p className="text-2xl font-bold text-default-900">{stats.byRole.instructor}</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Icon icon="solar:user-hand-up-bold" className="text-2xl text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-default-500">ผู้ช่วยสอน</p>
+                  <p className="text-2xl font-bold text-default-900">{stats.byRole.ta}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Input
+            className="w-full sm:w-80"
+            placeholder="ค้นหาผู้ใช้..."
+            value={search}
+            onValueChange={setSearch}
+            startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
+            isClearable
+            onClear={() => setSearch("")}
+          />
+          <Select
+            className="w-full sm:w-40"
+            placeholder="บทบาท"
+            selectedKeys={[roleFilter]}
+            onSelectionChange={(keys) => {
+              const value = Array.from(keys)[0] as string;
+              setRoleFilter(value);
+              setPage(1);
+            }}
+          >
+            {roleOptions.map((option) => (
+              <SelectItem key={option.key}>{option.label}</SelectItem>
+            ))}
+          </Select>
+          <Select
+            className="w-full sm:w-40"
+            placeholder="สถานะ"
+            selectedKeys={[statusFilter]}
+            onSelectionChange={(keys) => {
+              const value = Array.from(keys)[0] as string;
+              setStatusFilter(value);
+              setPage(1);
+            }}
+          >
+            {statusOptions.map((option) => (
+              <SelectItem key={option.key}>{option.label}</SelectItem>
+            ))}
+          </Select>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
+          <Table
+            aria-label="Users table"
+            removeWrapper
+            classNames={{
+              th: "bg-default-100 text-default-600 font-semibold",
+              td: "py-3",
+            }}
+          >
+            <TableHeader columns={columns}>
+              {(column) => (
+                <TableColumn
+                  key={column.key}
+                  align={column.key === "actions" ? "center" : "start"}
+                  allowsSorting={column.sortable}
+                  onClick={() => column.sortable && handleSort(column.key)}
+                  className={column.sortable ? "cursor-pointer hover:bg-default-200" : ""}
+                >
+                  <div className="flex items-center gap-1">
+                    {column.label}
+                    {column.sortable && sortBy === column.key && (
+                      <Icon
+                        icon={sortOrder === "ASC" ? "solar:alt-arrow-up-linear" : "solar:alt-arrow-down-linear"}
+                        className="text-sm"
+                      />
+                    )}
+                  </div>
+                </TableColumn>
+              )}
+            </TableHeader>
+            <TableBody
+              items={users}
+              emptyContent={
+                <div className="py-10 text-center">
+                  <Icon icon="solar:users-group-rounded-linear" className="text-5xl text-default-300 mx-auto mb-3" />
+                  <p className="text-default-400">ไม่พบข้อมูลผู้ใช้</p>
+                </div>
+              }
+              loadingContent={<Spinner color="primary" />}
+            >
+              {(item) => (
+                <TableRow key={item.id}>
+                  {(columnKey) => (
+                    <TableCell>{renderCell(item, columnKey)}</TableCell>
+                  )}
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-default-200">
+              <span className="text-sm text-default-500">
+                แสดง {((page - 1) * limit) + 1} - {Math.min(page * limit, totalItems)} จาก {totalItems} รายการ
+              </span>
+              <Pagination
+                total={totalPages}
+                page={page}
+                onChange={setPage}
+                showControls
+                size="sm"
+              />
+            </div>
+          )}
+        </div>
+
+      {/* Create Modal */}
+      <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} size="lg">
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <h3 className="text-lg font-bold">เพิ่มผู้ใช้ใหม่</h3>
+            <p className="text-sm text-default-500 font-normal">กรอกข้อมูลผู้ใช้ที่ต้องการเพิ่ม</p>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="ชื่อผู้ใช้"
+                placeholder="กรอกชื่อผู้ใช้"
+                value={formData.username}
+                onValueChange={(value) => setFormData({ ...formData, username: value })}
+                isRequired
+                startContent={<Icon icon="solar:user-linear" className="text-default-400" />}
+              />
+              <Input
+                label="รหัสผ่าน"
+                placeholder="กรอกรหัสผ่าน"
+                type="password"
+                value={formData.password}
+                onValueChange={(value) => setFormData({ ...formData, password: value })}
+                isRequired
+                startContent={<Icon icon="solar:lock-password-linear" className="text-default-400" />}
+              />
+              <Input
+                label="ชื่อ-นามสกุล"
+                placeholder="กรอกชื่อ-นามสกุล"
+                value={formData.full_name}
+                onValueChange={(value) => setFormData({ ...formData, full_name: value })}
+                isRequired
+                startContent={<Icon icon="solar:user-id-linear" className="text-default-400" />}
+              />
+              <Input
+                label="อีเมล"
+                placeholder="กรอกอีเมล (ไม่บังคับ)"
+                type="email"
+                value={formData.email}
+                onValueChange={(value) => setFormData({ ...formData, email: value })}
+                startContent={<Icon icon="solar:letter-linear" className="text-default-400" />}
+              />
+              <Select
+                label="บทบาท"
+                placeholder="เลือกบทบาท"
+                selectedKeys={[formData.role]}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
+                  setFormData({ ...formData, role: value });
+                }}
+                isRequired
+              >
+                <SelectItem key="admin">ผู้ดูแลระบบ</SelectItem>
+                <SelectItem key="instructor">อาจารย์</SelectItem>
+                <SelectItem key="ta">ผู้ช่วยสอน</SelectItem>
+              </Select>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setIsCreateModalOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button color="primary" onPress={handleCreate} isLoading={isSubmitting}>
+              เพิ่มผู้ใช้
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} size="lg">
+        <ModalContent>
+          <ModalHeader className="flex flex-col gap-1">
+            <h3 className="text-lg font-bold">แก้ไขผู้ใช้</h3>
+            <p className="text-sm text-default-500 font-normal">แก้ไขข้อมูลผู้ใช้ {selectedUser?.username}</p>
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <Input
+                label="ชื่อผู้ใช้"
+                placeholder="กรอกชื่อผู้ใช้"
+                value={formData.username}
+                onValueChange={(value) => setFormData({ ...formData, username: value })}
+                isRequired
+                startContent={<Icon icon="solar:user-linear" className="text-default-400" />}
+              />
+              <Input
+                label="รหัสผ่านใหม่"
+                placeholder="กรอกรหัสผ่านใหม่ (เว้นว่างถ้าไม่ต้องการเปลี่ยน)"
+                type="password"
+                value={formData.password}
+                onValueChange={(value) => setFormData({ ...formData, password: value })}
+                startContent={<Icon icon="solar:lock-password-linear" className="text-default-400" />}
+              />
+              <Input
+                label="ชื่อ-นามสกุล"
+                placeholder="กรอกชื่อ-นามสกุล"
+                value={formData.full_name}
+                onValueChange={(value) => setFormData({ ...formData, full_name: value })}
+                isRequired
+                startContent={<Icon icon="solar:user-id-linear" className="text-default-400" />}
+              />
+              <Input
+                label="อีเมล"
+                placeholder="กรอกอีเมล (ไม่บังคับ)"
+                type="email"
+                value={formData.email}
+                onValueChange={(value) => setFormData({ ...formData, email: value })}
+                startContent={<Icon icon="solar:letter-linear" className="text-default-400" />}
+              />
+              <Select
+                label="บทบาท"
+                placeholder="เลือกบทบาท"
+                selectedKeys={[formData.role]}
+                onSelectionChange={(keys) => {
+                  const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
+                  setFormData({ ...formData, role: value });
+                }}
+                isRequired
+                isDisabled={selectedUser?.id === authUser?.id}
+              >
+                <SelectItem key="admin">ผู้ดูแลระบบ</SelectItem>
+                <SelectItem key="instructor">อาจารย์</SelectItem>
+                <SelectItem key="ta">ผู้ช่วยสอน</SelectItem>
+              </Select>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setIsEditModalOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button color="primary" onPress={handleUpdate} isLoading={isSubmitting}>
+              บันทึก
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} size="sm">
+        <ModalContent>
+          <ModalHeader>
+            <h3 className="text-lg font-bold text-danger">ยืนยันการลบ</h3>
+          </ModalHeader>
+          <ModalBody>
+            <div className="text-center">
+              <Icon icon="solar:trash-bin-trash-bold" className="text-5xl text-danger mx-auto mb-4" />
+              <p className="text-default-700">
+                คุณต้องการลบผู้ใช้ <strong>{selectedUser?.username}</strong> หรือไม่?
+              </p>
+              <p className="text-sm text-default-500 mt-2">
+                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+              </p>
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
+              ยกเลิก
+            </Button>
+            <Button color="danger" onPress={handleDelete} isLoading={isSubmitting}>
+              ลบ
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    </div>
+  );
+}
