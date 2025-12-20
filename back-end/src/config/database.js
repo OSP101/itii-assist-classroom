@@ -1,0 +1,39 @@
+const { Sequelize } = require('sequelize');
+const config = require('./index');
+
+const sequelize = new Sequelize(
+  config.db.name,
+  config.db.user,
+  config.db.password,
+  {
+    host: config.db.host,
+    port: config.db.port,
+    dialect: 'mysql',
+    logging: config.nodeEnv === 'development' ? console.log : false,
+    timezone: '+07:00', // Thailand timezone
+    define: {
+      timestamps: true,
+      underscored: true, // use snake_case for auto-generated fields
+      freezeTableName: true, // don't pluralize table names
+    },
+    pool: {
+      max: 10,
+      min: 0,
+      acquire: 30000,
+      idle: 10000,
+    },
+  }
+);
+
+// Test connection
+const testConnection = async () => {
+  try {
+    await sequelize.authenticate();
+    console.log('✅ Database connection established successfully.');
+  } catch (error) {
+    console.error('❌ Unable to connect to the database:', error.message);
+    process.exit(1);
+  }
+};
+
+module.exports = { sequelize, testConnection };

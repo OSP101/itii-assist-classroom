@@ -1,0 +1,168 @@
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+
+const config = require('./config');
+const { testConnection } = require('./config/database');
+const passport = require('./config/passport');
+const routes = require('./routes');
+const { 
+  notFoundHandler, 
+  errorConverter, 
+  errorHandler 
+} = require('./middlewares');
+const { logger } = require('./utils');
+
+// Initialize express app
+const app = express();
+
+// Trust proxy (for rate limiting behind reverse proxy)
+app.set('trust proxy', 1);
+
+// Security middleware
+app.use(helmet());
+
+// CORS configuration
+app.use(cors({
+  origin: config.frontendUrl,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    success: false,
+    error: {
+      code: 429,
+      message: 'Too many requests, please try again later.',
+    },
+  },
+});
+app.use('/api', limiter);
+
+// Auth routes rate limiting (stricter)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each IP to 20 login attempts per windowMs
+  message: {
+    success: false,
+    error: {
+      code: 429,
+      message: 'Too many login attempts, please try again later.',
+    },
+  },
+});
+app.use('/api/auth/login', authLimiter);
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parser
+app.use(cookieParser(config.cookieSecret));
+
+// Logging
+if (config.nodeEnv === 'development') {
+  app.use(morgan('dev'));
+} else {
+  app.use(morgan('combined', {
+    stream: { write: (message) => logger.info(message.trim()) },
+  }));
+}
+
+// Initialize Passport
+app.use(passport.initialize());
+
+// API routes
+app.use('/api', routes);
+
+// Root endpoint with system info
+app.get('/', (req, res) => {
+  const uptime = process.uptime();
+  const days = Math.floor(uptime / 86400);
+  const hours = Math.floor((uptime % 86400) / 3600);
+  const minutes = Math.floor((uptime % 3600) / 60);
+  const seconds = Math.floor(uptime % 60);
+  
+  res.json({
+    success: true,
+    system: {
+      name: 'Course & Lab Management System',
+      description: 'ระบบจัดการรายวิชา, เช็คชื่อ, เก็บคะแนน และจองคิวตรวจงาน',
+      version: '1.0.0',
+    },
+    developer: {
+      name: 'OSP101',
+      project: 'Senior Project (โปรเจคจบ)',
+      university: 'Khon Kaen University',
+    },
+    technology: {
+      runtime: `Node.js ${process.version}`,
+      framework: 'Express.js',
+      database: 'MySQL with Sequelize ORM',
+      authentication: 'Passport.js + JWT',
+      realtime: 'Socket.io (coming soon)',
+    },
+    server: {
+      environment: config.nodeEnv,
+      port: config.port,
+      platform: process.platform,
+      arch: process.arch,
+      pid: process.pid,
+      memoryUsage: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`,
+      uptime: `${days}d ${hours}h ${minutes}m ${seconds}s`,
+      startedAt: new Date(Date.now() - uptime * 1000).toISOString(),
+    },
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      docs: 'Coming soon...',
+    },
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Error handling
+app.use(notFoundHandler);
+app.use(errorConverter);
+app.use(errorHandler);
+
+// Start server
+const startServer = async () => {
+  try {
+    // Test database connection
+    await testConnection();
+    
+    // Start listening
+    app.listen(config.port, () => {
+      logger.info(`🚀 Server running in ${config.nodeEnv} mode on port ${config.port}`);
+      logger.info(`📍 API URL: http://localhost:${config.port}/api`);
+    });
+  } catch (error) {
+    logger.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+// Start the server
+startServer();
+
+module.exports = app;

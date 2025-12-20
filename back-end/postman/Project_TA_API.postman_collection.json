@@ -1,0 +1,635 @@
+{
+  "info": {
+    "_postman_id": "project-ta-api-collection",
+    "name": "Project TA - Course & Lab Management API",
+    "description": "API Collection สำหรับระบบจัดการรายวิชา, เช็คชื่อ, เก็บคะแนน และจองคิวตรวจงาน\n\nDeveloper: OSP101\nUniversity: Khon Kaen University",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🏠 General",
+      "item": [
+        {
+          "name": "Get System Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "ดูข้อมูลระบบ, เวอร์ชัน, เทคโนโลยีที่ใช้, และสถานะ server"
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            },
+            "description": "ตรวจสอบว่า API ทำงานปกติหรือไม่"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+                  "        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+                  "        console.log('✅ Tokens saved to collection variables');",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has access token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('accessToken');",
+                  "});",
+                  "",
+                  "pm.test('Response has refresh token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('refreshToken');",
+                  "});",
+                  "",
+                  "pm.test('Response has user data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('user');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "เข้าสู่ระบบด้วย username และ password\n\n**Default Admin Account:**\n- Username: `admin`\n- Password: `password123`"
+          },
+          "response": [
+            {
+              "name": "Login Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"password123\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": true,\n    \"message\": \"Login successful\",\n    \"data\": {\n        \"user\": {\n            \"id\": 1,\n            \"username\": \"admin\",\n            \"role\": \"admin\",\n            \"full_name\": \"Administrator\",\n            \"email\": \"admin@osp101.com\"\n        },\n        \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n        \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n    }\n}"
+            },
+            {
+              "name": "Login Failed - Invalid Credentials",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"wrongpassword\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/login",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "login"]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": false,\n    \"error\": {\n        \"code\": 401,\n        \"message\": \"Invalid username or password\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Current User (Me)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has user data', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('user');",
+                  "});",
+                  "",
+                  "pm.test('User has required fields', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.user).to.have.property('id');",
+                  "    pm.expect(jsonData.data.user).to.have.property('username');",
+                  "    pm.expect(jsonData.data.user).to.have.property('role');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "ดูข้อมูลผู้ใช้ที่ล็อกอินอยู่\n\n**ต้อง Login ก่อน** - Access Token จะถูกใส่อัตโนมัติหลัง Login"
+          },
+          "response": [
+            {
+              "name": "Get Me Success",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "me"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": true,\n    \"data\": {\n        \"user\": {\n            \"id\": 1,\n            \"username\": \"admin\",\n            \"role\": \"admin\",\n            \"linked_student_id\": null,\n            \"full_name\": \"Administrator\",\n            \"email\": \"admin@osp101.com\",\n            \"google_id\": null,\n            \"provider\": \"local\",\n            \"is_active\": true,\n            \"created_at\": \"2025-12-09T18:28:14.000Z\",\n            \"updated_at\": \"2025-12-09T18:28:14.000Z\"\n        }\n    }\n}"
+            },
+            {
+              "name": "Unauthorized - No Token",
+              "originalRequest": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "me"]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": false,\n    \"error\": {\n        \"code\": 401,\n        \"message\": \"Unauthorized - Invalid or expired token\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.data && jsonData.data.accessToken) {",
+                  "        pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+                  "        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
+                  "        console.log('✅ New tokens saved to collection variables');",
+                  "    }",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has new access token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('accessToken');",
+                  "});",
+                  "",
+                  "pm.test('Response has new refresh token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('refreshToken');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            },
+            "description": "ขอ Access Token ใหม่โดยใช้ Refresh Token\n\nใช้เมื่อ Access Token หมดอายุ (15 นาที)"
+          },
+          "response": [
+            {
+              "name": "Refresh Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/refresh",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "refresh"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": true,\n    \"message\": \"Token refreshed successfully\",\n    \"data\": {\n        \"accessToken\": \"eyJhbGciOiJIUzI1NiIs...\",\n        \"refreshToken\": \"eyJhbGciOiJIUzI1NiIs...\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response message indicates success', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"currentPassword\": \"password123\",\n    \"newPassword\": \"newpassword456\",\n    \"confirmPassword\": \"newpassword456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "change-password"]
+            },
+            "description": "เปลี่ยนรหัสผ่าน\n\n**ข้อกำหนด:**\n- ต้องใส่รหัสผ่านปัจจุบันที่ถูกต้อง\n- รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร\n- confirmPassword ต้องตรงกับ newPassword\n\n**หมายเหตุ:** หลังเปลี่ยนรหัสผ่าน refresh token ทั้งหมดจะถูก revoke ต้อง login ใหม่"
+          },
+          "response": [
+            {
+              "name": "Change Password Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"currentPassword\": \"password123\",\n    \"newPassword\": \"newpassword456\",\n    \"confirmPassword\": \"newpassword456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/change-password",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "change-password"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": true,\n    \"message\": \"Password changed successfully. Please login again.\"\n}"
+            },
+            {
+              "name": "Wrong Current Password",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"currentPassword\": \"wrongpassword\",\n    \"newPassword\": \"newpassword456\",\n    \"confirmPassword\": \"newpassword456\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/change-password",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "change-password"]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": false,\n    \"error\": {\n        \"code\": 400,\n        \"message\": \"Current password is incorrect\"\n    }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('accessToken', '');",
+                  "    pm.collectionVariables.set('refreshToken', '');",
+                  "    console.log('✅ Tokens cleared from collection variables');",
+                  "}",
+                  "",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response message indicates success', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            },
+            "description": "ออกจากระบบและ revoke refresh token\n\nหลัง logout จะไม่สามารถใช้ refresh token เดิมได้อีก"
+          },
+          "response": [
+            {
+              "name": "Logout Success",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/auth/logout",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "auth", "logout"]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "body": "{\n    \"success\": true,\n    \"message\": \"Logged out successfully\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Google OAuth Login",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/google",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "google"]
+            },
+            "description": "เริ่มกระบวนการ Login ด้วย Google OAuth\n\n**หมายเหตุ:** \n- ต้องเปิดใน Browser ไม่สามารถทดสอบใน Postman ได้โดยตรง\n- ต้องตั้งค่า Google OAuth credentials ใน .env ก่อน\n- หลัง login สำเร็จจะ redirect ไปที่ Frontend พร้อม tokens"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🧪 Test Error Handling",
+      "item": [
+        {
+          "name": "404 - Route Not Found",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Response has error object', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('error');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/nonexistent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "nonexistent"]
+            },
+            "description": "ทดสอบ error handling สำหรับ route ที่ไม่มีอยู่"
+          },
+          "response": []
+        },
+        {
+          "name": "401 - Unauthorized (No Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "ทดสอบเข้าถึง protected route โดยไม่มี token"
+          },
+          "response": []
+        },
+        {
+          "name": "400 - Validation Error",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "ทดสอบ validation error เมื่อส่งข้อมูลไม่ครบ"
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

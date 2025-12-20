@@ -1,0 +1,302 @@
+================================================================================
+📚 PROJECT TA - COURSE & LAB MANAGEMENT SYSTEM
+================================================================================
+สร้างเมื่อ: December 2025
+Developer: OSP101 (Supphitan Paksawad)
+University: Khon Kaen University
+Project Type: Senior Project (โปรเจคจบ)
+
+================================================================================
+📋 PROJECT OVERVIEW (ภาพรวมโปรเจค)
+================================================================================
+
+ระบบนี้คือ เว็บแอปสำหรับจัดการรายวิชา, เช็คชื่อแบบยืนยันตัวตน, เก็บคะแนน, 
+และระบบจองคิวตรวจงานในห้องแลป
+
+================================================================================
+🚀 TECH STACK
+================================================================================
+
+Frontend: Next.js
+Backend: Express.js (Node.js)
+Database: MySQL
+ORM: Sequelize
+Real-time: Socket.io
+Authentication: Passport.js + JWT (Access Token + Refresh Token)
+Validation: Joi
+
+================================================================================
+👥 USER ROLES (ประเภทผู้ใช้)
+================================================================================
+
+1. Admin
+   - สร้าง/แก้ไข/ลบบัญชีผู้ใช้ (instructor, TA)
+   - เพิ่มข้อมูลนักศึกษา (Master Directory)
+   - นำเข้ารายชื่อนักศึกษาทีละหลายคน (CSV/Excel)
+   - ดู Log ระบบ / Performance / Traffic
+
+2. Instructor (อาจารย์)
+   - สร้างรายวิชา (ชื่อ, รหัส, ปีการศึกษา, เทอม)
+   - เพิ่ม TA ให้กับวิชา
+   - แบ่ง Section ให้กับวิชา
+   - ลงทะเบียนนักศึกษาเข้ารายวิชาตาม Section
+   - สร้างงาน (กลุ่ม/เดี่ยว)
+   - สร้างและจัดการคะแนน (แก้/ขออนุมัติ/อนุมัติ)
+   - สร้างรอบเช็คชื่อ
+   - สร้างรอบจองคิวตรวจงาน (Queue Session)
+   - ออกรายงานทั้งหมด
+
+3. TA
+   - ใช้ระบบได้เกือบทั้งหมดเหมือน Instructor
+   - แก้ไขคะแนนต้องรอ Instructor อนุมัติ
+   - บางเมนูระดับระบบห้ามเข้า (เช่น Logs)
+
+4. Student (นักศึกษา)
+   - ไม่มีบัญชีผู้ใช้ทั่วไป
+   - ล็อกอินเฉพาะตอน "เช็คชื่อ" เพื่อยืนยันตัวตน
+   - ค้นหารหัสนักศึกษา เพื่อดูผลคะแนนและสถานะต่าง ๆ
+
+================================================================================
+🔧 FUNCTIONAL REQUIREMENTS (9 ระบบหลัก)
+================================================================================
+
+1. ระบบบัญชีผู้ใช้ (User Management)
+   - Login ด้วย username/password
+   - Login ด้วย Google OAuth
+   - JWT Access Token (15 นาที) + Refresh Token (7 วัน)
+   - Role-based access control
+
+2. ระบบจัดการนักศึกษา (Student Directory)
+   - Admin เพิ่มนักศึกษาครั้งเดียว (Master Directory)
+   - เก็บ: รหัสนักศึกษา, ชื่อ-สกุล, อีเมล
+   - ใช้ข้อมูลเดียวกันในทุกวิชา
+
+3. ระบบรายวิชา + Section
+   - สร้างรายวิชา (Course)
+   - เพิ่ม Section หลายอันภายในวิชา
+   - เพิ่ม TA ให้กับวิชา
+   - เพิ่มนักศึกษาเข้า Section
+
+4. ระบบเช็คชื่อ (Attendance System)
+   - สร้างรอบเช็คชื่อ (Attendance Session)
+   - ตั้งค่า: PIN Code, GPS (lat/lng), เวลาเปิด-ปิด, Radius
+   - เฉพาะ section หรือทั้งวิชา
+   - นักศึกษาต้อง Login + ส่ง PIN + GPS + SSO Identifier
+
+5. ระบบเก็บคะแนน (Scoring System)
+   - สร้าง Score Group (งานที่ 1, Quiz, Lab Assessment)
+   - Score Items แบบ Tree (ข้อใหญ่/ข้อย่อย)
+   - 3 ประเภทงาน: individual, permanent_group, temporary_group
+   - Workflow: normal → pending_approval → approved
+   - Log ประวัติการแก้ไขคะแนน
+
+6. ระบบกลุ่มนักศึกษา (Student Groups)
+   - กลุ่มถาวร (Permanent)
+   - กลุ่มชั่วคราว (Temporary)
+
+7. ระบบจองคิวตรวจงาน (Queue System)
+   - สร้าง Queue Session
+   - ระบุห้อง (Room + Layout)
+   - เชื่อมกับ Score Group
+   - นักศึกษาเลือกที่นั่ง + ประเภทการจอง (ตรวจงาน/แก้ปัญหา)
+   - สถานะ: waiting, checking, done, canceled
+
+8. ระบบผังห้อง (Room Layout)
+   - สร้างผังโต๊ะ (x, y positions)
+   - หมายเลขที่นั่ง
+   - ใช้ร่วมกับระบบจองคิว
+
+9. ระบบ Log + Monitoring
+   - บันทึกทุกกิจกรรม
+   - Admin ดูสถิติและ Error Log
+
+================================================================================
+📁 PROJECT STRUCTURE
+================================================================================
+
+project/
+├── back-end/
+│   ├── package.json
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── migrations/
+│   │   └── 001_improvements.sql
+│   ├── postman/
+│   │   ├── Project_TA_API.postman_collection.json
+│   │   └── Project_TA_API.postman_environment.json
+│   └── src/
+│       ├── app.js                    # Main entry point
+│       ├── config/
+│       │   ├── index.js              # Environment config
+│       │   ├── database.js           # Sequelize setup
+│       │   └── passport.js           # Passport strategies
+│       ├── controllers/
+│       │   ├── index.js
+│       │   └── auth.controller.js
+│       ├── middlewares/
+│       │   ├── index.js
+│       │   ├── auth.js               # JWT + Role auth
+│       │   ├── validate.js           # Joi validation
+│       │   └── errorHandler.js
+│       ├── models/
+│       │   ├── index.js              # Associations
+│       │   ├── User.js
+│       │   ├── Student.js
+│       │   ├── RefreshToken.js
+│       │   └── SystemLog.js
+│       ├── routes/
+│       │   ├── index.js
+│       │   └── auth.routes.js
+│       ├── seeds/
+│       │   └── admin.seed.js
+│       ├── utils/
+│       │   ├── index.js
+│       │   ├── logger.js
+│       │   ├── jwt.js
+│       │   ├── ApiError.js
+│       │   └── asyncHandler.js
+│       └── validations/
+│           ├── index.js
+│           └── auth.validation.js
+│
+└── front-end/                        # (Next.js - ยังไม่ได้สร้าง)
+
+================================================================================
+🗄️ DATABASE TABLES
+================================================================================
+
+1.  users                    - บัญชีผู้ใช้ (admin, instructor, ta)
+2.  students                 - ข้อมูลนักศึกษา (Master Directory)
+3.  courses                  - รายวิชา
+4.  course_sections          - Section ของวิชา
+5.  course_section_students  - นักศึกษาใน Section
+6.  course_tas               - TA ของวิชา
+7.  attendance_sessions      - รอบเช็คชื่อ
+8.  attendance_records       - บันทึกการเช็คชื่อ
+9.  score_groups             - กลุ่มคะแนน (งาน, Quiz, Lab)
+10. score_items              - รายการคะแนน (Tree structure)
+11. score_records            - คะแนนของนักศึกษา
+12. score_edit_logs          - Log การแก้ไขคะแนน
+13. student_groups           - กลุ่มนักศึกษา
+14. student_group_members    - สมาชิกในกลุ่ม
+15. rooms                    - ห้อง
+16. room_layouts             - ผังที่นั่งในห้อง
+17. queue_sessions           - รอบจองคิว
+18. queue_records            - การจองคิว
+19. refresh_tokens           - JWT Refresh Tokens
+20. system_logs              - Log กิจกรรมระบบ
+
+================================================================================
+🔐 AUTH API ENDPOINTS (สร้างแล้ว)
+================================================================================
+
+POST   /api/auth/login              - Login ด้วย username/password
+POST   /api/auth/refresh            - Refresh access token
+POST   /api/auth/logout             - Logout
+GET    /api/auth/me                 - ดูข้อมูล user ปัจจุบัน
+POST   /api/auth/change-password    - เปลี่ยนรหัสผ่าน
+GET    /api/auth/google             - Login ด้วย Google
+GET    /api/auth/google/callback    - Google callback
+
+================================================================================
+🔑 DEFAULT ADMIN ACCOUNT
+================================================================================
+
+Username: admin
+Password: osp101@admin
+
+================================================================================
+⚙️ ENVIRONMENT VARIABLES (.env)
+================================================================================
+
+# Server
+NODE_ENV=development
+PORT=3001
+
+# Database
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=project_ta_dev
+DB_USER=root
+DB_PASSWORD=your_password
+
+# JWT
+JWT_ACCESS_SECRET=your-access-secret
+JWT_REFRESH_SECRET=your-refresh-secret
+JWT_ACCESS_EXPIRES_IN=15m
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3001/api/auth/google/callback
+
+# Frontend
+FRONTEND_URL=http://localhost:3000
+
+# Cookie
+COOKIE_SECRET=your-cookie-secret
+
+================================================================================
+🚀 HOW TO RUN (วิธีรันโปรเจค)
+================================================================================
+
+# Backend
+cd back-end
+npm install
+cp .env.example .env        # แก้ไขค่าใน .env
+npm run dev                 # รันที่ port 3001
+
+# Database
+mysql -u root -p project_ta_dev < project_ta_dev.sql
+mysql -u root -p project_ta_dev < migrations/001_improvements.sql
+
+# Create admin user
+node src/seeds/admin.seed.js
+
+================================================================================
+📦 BACKEND DEPENDENCIES
+================================================================================
+
+Production:
+- express           - Web framework
+- sequelize         - ORM
+- mysql2            - MySQL driver
+- passport          - Authentication
+- passport-jwt      - JWT strategy
+- passport-local    - Local strategy
+- passport-google-oauth20 - Google OAuth
+- jsonwebtoken      - JWT utilities
+- bcryptjs          - Password hashing
+- joi               - Validation
+- cors              - CORS
+- helmet            - Security headers
+- morgan            - Logging
+- winston           - Logger
+- cookie-parser     - Cookie parsing
+- express-rate-limit - Rate limiting
+- uuid              - UUID generation
+- dotenv            - Environment variables
+
+Development:
+- nodemon           - Auto-restart
+
+================================================================================
+📝 NOTES FOR FUTURE DEVELOPMENT
+================================================================================
+
+สิ่งที่ยังต้องทำ:
+1. [ ] สร้าง Front-end (Next.js)
+2. [ ] สร้าง API สำหรับ User Management (CRUD users)
+3. [ ] สร้าง API สำหรับ Student Management (CRUD students, CSV import)
+4. [ ] สร้าง API สำหรับ Course Management
+5. [ ] สร้าง API สำหรับ Section Management
+6. [ ] สร้าง API สำหรับ Attendance System
+7. [ ] สร้าง API สำหรับ Scoring System
+8. [ ] สร้าง API สำหรับ Student Groups
+9. [ ] สร้าง API สำหรับ Queue System
+10. [ ] สร้าง API สำหรับ Room Layout
+11. [ ] เพิ่ม Socket.io สำหรับ real-time updates
+12. [ ] สร้าง Models ที่เหลือ (Course, Section, Attendance, Score, etc.)
+
+================================================================================
