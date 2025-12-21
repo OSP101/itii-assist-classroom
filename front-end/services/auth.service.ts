@@ -9,7 +9,7 @@ export interface User {
   id: number;
   username: string;
   email: string;
-  display_name: string;
+  full_name: string;
   role: 'admin' | 'instructor' | 'ta';
   is_active: boolean;
   created_at: string;

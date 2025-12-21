@@ -26,7 +26,27 @@ export const API_ENDPOINTS = {
   STUDENTS: '/students',
 
   // Courses
-  COURSES: '/courses',
+  COURSES: {
+    LIST: '/courses',
+    STATS: '/courses/stats',
+    BY_ID: (id: number) => `/courses/${id}`,
+    CREATE: '/courses',
+    UPDATE: (id: number) => `/courses/${id}`,
+    DELETE: (id: number) => `/courses/${id}`,
+    TOGGLE_STATUS: (id: number) => `/courses/${id}/toggle-status`,
+    INSTRUCTORS: '/courses/instructors',
+    TAS_LIST: '/courses/tas-list',
+    // Sections
+    ADD_SECTION: (courseId: number) => `/courses/${courseId}/sections`,
+    REMOVE_SECTION: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}`,
+    // TAs
+    ADD_TA: (courseId: number) => `/courses/${courseId}/tas`,
+    REMOVE_TA: (courseId: number, userId: number) => `/courses/${courseId}/tas/${userId}`,
+    // Students
+    SECTION_STUDENTS: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
+    ADD_STUDENT: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
+    REMOVE_STUDENT: (courseId: number, sectionId: number, studentId: number) => `/courses/${courseId}/sections/${sectionId}/students/${studentId}`,
+  },
 };
 
 export default {

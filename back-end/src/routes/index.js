@@ -4,10 +4,16 @@ const router = express.Router();
 // Import route modules
 const authRoutes = require('./auth.routes');
 const systemRoutes = require('./system.routes');
+const userRoutes = require('./user.routes');
+const studentRoutes = require('./student.routes');
+const courseRoutes = require('./course.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/system', systemRoutes);
+router.use('/users', userRoutes);
+router.use('/students', studentRoutes);
+router.use('/courses', courseRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
