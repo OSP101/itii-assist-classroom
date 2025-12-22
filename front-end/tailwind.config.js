@@ -84,32 +84,7 @@ const config = {
             },
             focus: "#60a5fa",
           },
-        },
-        dark: {
-          colors: {
-            background: "#0f172a",
-            foreground: "#f1f5f9",
-            primary: {
-              50: "#1e3a8a",
-              100: "#1e40af",
-              200: "#1d4ed8",
-              300: "#2563eb",
-              400: "#3b82f6",
-              500: "#60a5fa",
-              600: "#93c5fd",
-              700: "#bfdbfe",
-              800: "#dbeafe",
-              900: "#eff6ff",
-              DEFAULT: "#60a5fa",
-              foreground: "#0f172a",
-            },
-            secondary: {
-              DEFAULT: "#818cf8",
-              foreground: "#0f172a",
-            },
-            focus: "#60a5fa",
-          },
-        },
+        }
       },
     }),
   ],

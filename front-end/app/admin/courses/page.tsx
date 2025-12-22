@@ -393,10 +393,10 @@ export default function CoursesPage() {
         }
     };
 
-    // Navigate to course detail
+    // Navigate to course detail (opens in new tab with classroom layout)
     const handleViewCourse = (course: Course) => {
-        console.log("Navigating to course:", course);
-        router.push(`/admin/courses/${course.id}`);
+        console.log("Opening course in new tab:", course);
+        window.open(`/classroom/${course.id}`, "_blank");
     };
 
     // Render cell content

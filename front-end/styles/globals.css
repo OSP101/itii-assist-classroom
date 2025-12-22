@@ -54,18 +54,3 @@
   --color-error: #ef4444;
   --color-info: #3b82f6;
 }
-
-/* Dark Mode Variables */
-.dark {
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #cbd5e1;
-  --color-text-muted: #94a3b8;
-  --color-text-subtle: #64748b;
-
-  --color-bg-primary: #0f172a;
-  --color-bg-secondary: #1e293b;
-  --color-bg-tertiary: #334155;
-
-  --color-border-light: #334155;
-  --color-border: #475569;
-}
