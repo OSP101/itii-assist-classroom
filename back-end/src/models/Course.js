@@ -1,11 +1,12 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
+const { nanoid } = require('nanoid');
 
 const Course = sequelize.define('Course', {
   id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.STRING(21),
     primaryKey: true,
-    autoIncrement: true,
+    defaultValue: () => nanoid(),
   },
   code: {
     type: DataTypes.STRING(100),

@@ -25,7 +25,7 @@ export interface TA {
 
 export interface CourseSection {
   id: number;
-  course_id: number;
+  course_id: string;
   section_no: string;
   note: string | null;
   created_at: string;
@@ -33,7 +33,7 @@ export interface CourseSection {
 }
 
 export interface Course {
-  id: number;
+  id: string;
   code: string;
   name: string;
   year: number;
@@ -142,7 +142,7 @@ class CourseService {
   /**
    * Get single course by ID
    */
-  async getCourseById(id: number) {
+  async getCourseById(id: string) {
     return apiService.get<Course>(API_ENDPOINTS.COURSES.BY_ID(id));
   }
 
@@ -156,21 +156,21 @@ class CourseService {
   /**
    * Update course
    */
-  async updateCourse(id: number, data: UpdateCourseDto) {
+  async updateCourse(id: string, data: UpdateCourseDto) {
     return apiService.put<Course>(API_ENDPOINTS.COURSES.UPDATE(id), data);
   }
 
   /**
    * Delete course
    */
-  async deleteCourse(id: number) {
+  async deleteCourse(id: string) {
     return apiService.delete(API_ENDPOINTS.COURSES.DELETE(id));
   }
 
   /**
    * Toggle course status
    */
-  async toggleStatus(id: number) {
+  async toggleStatus(id: string) {
     return apiService.patch<Course>(API_ENDPOINTS.COURSES.TOGGLE_STATUS(id));
   }
 
@@ -192,14 +192,14 @@ class CourseService {
   /**
    * Add section to course
    */
-  async addSection(courseId: number, data: { section_no: string; note?: string }) {
+  async addSection(courseId: string, data: { section_no: string; note?: string }) {
     return apiService.post<CourseSection>(API_ENDPOINTS.COURSES.ADD_SECTION(courseId), data);
   }
 
   /**
    * Remove section from course
    */
-  async removeSection(courseId: number, sectionId: number) {
+  async removeSection(courseId: string, sectionId: number) {
     return apiService.delete(API_ENDPOINTS.COURSES.REMOVE_SECTION(courseId, sectionId));
   }
 
@@ -207,14 +207,14 @@ class CourseService {
   /**
    * Add TA to course
    */
-  async addTA(courseId: number, userId: number) {
+  async addTA(courseId: string, userId: number) {
     return apiService.post<TA>(API_ENDPOINTS.COURSES.ADD_TA(courseId), { user_id: userId });
   }
 
   /**
    * Remove TA from course
    */
-  async removeTA(courseId: number, userId: number) {
+  async removeTA(courseId: string, userId: number) {
     return apiService.delete(API_ENDPOINTS.COURSES.REMOVE_TA(courseId, userId));
   }
 
@@ -222,21 +222,21 @@ class CourseService {
   /**
    * Get students in section
    */
-  async getSectionStudents(courseId: number, sectionId: number) {
+  async getSectionStudents(courseId: string, sectionId: number) {
     return apiService.get<SectionStudent[]>(API_ENDPOINTS.COURSES.SECTION_STUDENTS(courseId, sectionId));
   }
 
   /**
    * Add student to section
    */
-  async addStudentToSection(courseId: number, sectionId: number, studentId: number) {
+  async addStudentToSection(courseId: string, sectionId: number, studentId: number) {
     return apiService.post(API_ENDPOINTS.COURSES.ADD_STUDENT(courseId, sectionId), { student_id: studentId });
   }
 
   /**
    * Remove student from section
    */
-  async removeStudentFromSection(courseId: number, sectionId: number, studentId: number) {
+  async removeStudentFromSection(courseId: string, sectionId: number, studentId: number) {
     return apiService.delete(API_ENDPOINTS.COURSES.REMOVE_STUDENT(courseId, sectionId, studentId));
   }
 }

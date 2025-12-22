@@ -395,6 +395,7 @@ export default function CoursesPage() {
 
     // Navigate to course detail
     const handleViewCourse = (course: Course) => {
+        console.log("Navigating to course:", course);
         router.push(`/admin/courses/${course.id}`);
     };
 

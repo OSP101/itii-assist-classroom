@@ -29,23 +29,23 @@ export const API_ENDPOINTS = {
   COURSES: {
     LIST: '/courses',
     STATS: '/courses/stats',
-    BY_ID: (id: number) => `/courses/${id}`,
+    BY_ID: (id: string) => `/courses/${id}`,
     CREATE: '/courses',
-    UPDATE: (id: number) => `/courses/${id}`,
-    DELETE: (id: number) => `/courses/${id}`,
-    TOGGLE_STATUS: (id: number) => `/courses/${id}/toggle-status`,
+    UPDATE: (id: string) => `/courses/${id}`,
+    DELETE: (id: string) => `/courses/${id}`,
+    TOGGLE_STATUS: (id: string) => `/courses/${id}/toggle-status`,
     INSTRUCTORS: '/courses/instructors',
     TAS_LIST: '/courses/tas-list',
     // Sections
-    ADD_SECTION: (courseId: number) => `/courses/${courseId}/sections`,
-    REMOVE_SECTION: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}`,
+    ADD_SECTION: (courseId: string) => `/courses/${courseId}/sections`,
+    REMOVE_SECTION: (courseId: string, sectionId: number) => `/courses/${courseId}/sections/${sectionId}`,
     // TAs
-    ADD_TA: (courseId: number) => `/courses/${courseId}/tas`,
-    REMOVE_TA: (courseId: number, userId: number) => `/courses/${courseId}/tas/${userId}`,
+    ADD_TA: (courseId: string) => `/courses/${courseId}/tas`,
+    REMOVE_TA: (courseId: string, userId: number) => `/courses/${courseId}/tas/${userId}`,
     // Students
-    SECTION_STUDENTS: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
-    ADD_STUDENT: (courseId: number, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
-    REMOVE_STUDENT: (courseId: number, sectionId: number, studentId: number) => `/courses/${courseId}/sections/${sectionId}/students/${studentId}`,
+    SECTION_STUDENTS: (courseId: string, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
+    ADD_STUDENT: (courseId: string, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
+    REMOVE_STUDENT: (courseId: string, sectionId: number, studentId: number) => `/courses/${courseId}/sections/${sectionId}/students/${studentId}`,
   },
 };
 
