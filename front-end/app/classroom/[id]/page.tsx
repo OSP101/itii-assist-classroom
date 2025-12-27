@@ -984,7 +984,7 @@ export default function ClassroomDetailPage() {
                                     <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-50">
                                         <Avatar
                                             name={course.instructor.full_name}
-                                            size="lg"
+                                            size="sm"
                                             className="bg-blue-500"
                                         />
                                         <div>

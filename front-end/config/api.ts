@@ -21,9 +21,11 @@ export const API_ENDPOINTS = {
 
   // Users (Admin)
   USERS: '/users',
+  USERS_STATS: '/users/stats',
 
   // Students
   STUDENTS: '/students',
+  STUDENTS_STATS: '/students/stats',
 
   // Courses
   COURSES: {
@@ -47,6 +49,14 @@ export const API_ENDPOINTS = {
     ADD_STUDENT: (courseId: string, sectionId: number) => `/courses/${courseId}/sections/${sectionId}/students`,
     REMOVE_STUDENT: (courseId: string, sectionId: number, studentId: number) => `/courses/${courseId}/sections/${sectionId}/students/${studentId}`,
   },
+
+  // Classrooms
+  CLASSROOMS: '/classrooms',
+  CLASSROOMS_STATS: '/classrooms/stats',
+
+  // System Logs
+  LOGS: '/logs',
+  LOGS_STATS: '/logs/stats',
 };
 
 export default {

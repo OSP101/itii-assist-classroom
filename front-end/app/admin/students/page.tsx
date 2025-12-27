@@ -475,82 +475,85 @@ export default function StudentsPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
                         จัดการนักศึกษา
                     </h1>
-                    <p className="text-slate-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
+                    <p className="text-sm text-slate-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full sm:w-auto">
                     <Button
                         color="secondary"
                         variant="flat"
                         startContent={<Icon icon="solar:import-bold" className="text-xl" />}
                         onPress={() => setIsImportModalOpen(true)}
-                        className="font-medium px-6 bg-emerald-300 text-emerald-900"
+                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-emerald-300 text-emerald-900"
                     >
-                        นำเข้าข้อมูล
+                        <span className="hidden sm:inline">นำเข้าข้อมูล</span>
+                        <span className="sm:hidden">นำเข้า</span>
                     </Button>
                     <Button
                         color="primary"
                         startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
                         onPress={() => setIsCreateModalOpen(true)}
-                        className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
                     >
-                        เพิ่มนักศึกษา
+                        <span className="hidden sm:inline">เพิ่มนักศึกษา</span>
+                        <span className="sm:hidden">เพิ่ม</span>
                     </Button>
                 </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-blue-600" />
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                            <Icon icon="solar:users-group-rounded-bold" className="text-xl sm:text-2xl text-blue-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-default-500">นักศึกษาทั้งหมด</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.total || 0}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                            <Icon icon="solar:check-circle-bold" className="text-2xl text-green-600" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-default-500">ใช้งานอยู่</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.byStatus?.active || 0}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500">ทั้งหมด</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-100 rounded-lg">
-                            <Icon icon="solar:close-circle-bold" className="text-2xl text-red-600" />
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+                        <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                            <Icon icon="solar:check-circle-bold" className="text-xl sm:text-2xl text-green-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-default-500">ปิดใช้งาน</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.byStatus?.inactive || 0}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500">ใช้งาน</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus?.active || 0}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
+                        <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                            <Icon icon="solar:close-circle-bold" className="text-xl sm:text-2xl text-red-600" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500">ปิดใช้งาน</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus?.inactive || 0}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
-                <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                    <Input
-                        placeholder="ค้นหารหัสนักศึกษา, ชื่อ, อีเมล..."
-                        value={search}
+            <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
+                <div className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 pb-3 sm:pb-4">
+                        <Input
+                            placeholder="ค้นหารหัสนักศึกษา, ชื่อ, อีเมล..."
+                            value={search}
                         onValueChange={setSearch}
                         startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
-                        className="flex-1 "
+                        className="w-full"
                         classNames={{
                             inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
                         }}
@@ -572,15 +575,17 @@ export default function StudentsPage() {
                             <SelectItem key={option.key}>{option.label}</SelectItem>
                         ))}
                     </Select>
-                </div>
+                    </div>
 
-                {/* Table */}
-                <Table
+                    {/* Table with horizontal scroll */}
+                    <div className="overflow-x-auto -mx-3 sm:-mx-4 px-3 sm:px-4">
+                        <div className="min-w-[600px]">
+                            <Table
                     aria-label="Students table"
                     removeWrapper
                     classNames={{
-                        th: "bg-slate-50 text-slate-600 font-semibold",
-                        td: "py-3",
+                        th: "bg-slate-50 text-slate-600 font-semibold text-xs sm:text-sm",
+                        td: "py-2 sm:py-3 text-sm",
                     }}
                 >
                     <TableHeader columns={columns}>
@@ -599,7 +604,7 @@ export default function StudentsPage() {
                     <TableBody
                         items={students}
                         isLoading={isLoading}
-                        loadingContent={<Spinner color="primary" />}
+                        loadingContent={<Spinner color="primary" label="กำลังโหลด..." />}
                         emptyContent={
                             <div className="py-10 text-center">
                                 <Icon icon="solar:user-cross-rounded-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
@@ -616,11 +621,14 @@ export default function StudentsPage() {
                         )}
                     </TableBody>
                 </Table>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100">
-                        <p className="text-sm text-slate-500">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-3 sm:px-4 py-3 border-t border-slate-100">
+                        <p className="text-xs sm:text-sm text-slate-500 order-2 sm:order-1">
                             แสดง {((page - 1) * limit) + 1} - {Math.min(page * limit, totalItems)} จาก {totalItems} รายการ
                         </p>
                         <Pagination
@@ -630,26 +638,36 @@ export default function StudentsPage() {
                             showControls
                             size="sm"
                             color="primary"
+                            className="order-1 sm:order-2"
                         />
                     </div>
                 )}
             </div>
 
             {/* Create Modal */}
-            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} size="2xl">
+            <Modal 
+                isOpen={isCreateModalOpen} 
+                onClose={() => setIsCreateModalOpen(false)} 
+                size="2xl"
+                scrollBehavior="inside"
+                classNames={{
+                    base: "mx-2 sm:mx-4",
+                    body: "py-4",
+                }}
+            >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
-                                <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
+                    <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">เพิ่มนักศึกษาใหม่</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลนักศึกษาที่ต้องการเพิ่มในระบบ</p>
+                                <h3 className="text-lg sm:text-xl font-bold text-slate-800">เพิ่มนักศึกษาใหม่</h3>
+                                <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลนักศึกษาที่ต้องการเพิ่มในระบบ</p>
                             </div>
                         </div>
                     </ModalHeader>
-                    <ModalBody className="px-6 py-6">
+                    <ModalBody className="px-4 sm:px-6 py-4 sm:py-6">
                         <div className="space-y-5">
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">

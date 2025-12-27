@@ -83,6 +83,9 @@ export default function UsersPage() {
     const [sortBy, setSortBy] = useState<string>("created_at");
     const [sortOrder, setSortOrder] = useState<"ASC" | "DESC">("DESC");
 
+    // Loading state
+    const [isLoading, setIsLoading] = useState(true);
+
     // Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -101,6 +104,7 @@ export default function UsersPage() {
 
     // Fetch users
     const fetchUsers = useCallback(async () => {
+        setIsLoading(true);
         try {
             const response = await userService.getUsers({
                 page,
@@ -124,6 +128,8 @@ export default function UsersPage() {
                 description: "ไม่สามารถโหลดข้อมูลผู้ใช้ได้",
                 color: "danger",
             });
+        } finally {
+            setIsLoading(false);
         }
     }, [page, limit, search, roleFilter, statusFilter, sortBy, sortOrder]);
 
@@ -448,12 +454,12 @@ export default function UsersPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
-                    <p className="text-default-500">จัดการผู้ใช้งานในระบบ</p>
+                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
+                    <p className="text-sm text-default-500">จัดการผู้ใช้งานในระบบ</p>
                 </div>
                 <Button
                     color="primary"
@@ -462,7 +468,7 @@ export default function UsersPage() {
                         resetForm();
                         setIsCreateModalOpen(true);
                     }}
-                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600 w-full sm:w-auto"
                 >
                     เพิ่มผู้ใช้
                 </Button>
@@ -470,143 +476,161 @@ export default function UsersPage() {
 
             {/* Stats Cards */}
             {stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-blue-600" />
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-xl sm:text-2xl text-blue-600" />
                             </div>
-                            <div>
-                                <p className="text-sm text-default-500">ผู้ใช้ทั้งหมด</p>
-                                <p className="text-2xl font-bold text-default-900">{stats.total}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-100 rounded-lg">
-                                <Icon icon="solar:shield-user-bold" className="text-2xl text-red-600" />
-                            </div>
-                            <div>
-                                <p className="text-sm text-default-500">ผู้ดูแลระบบ</p>
-                                <p className="text-2xl font-bold text-default-900">{stats.byRole.admin}</p>
+                            <div className="min-w-0">
+                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ใช้ทั้งหมด</p>
+                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.total}</p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-purple-100 rounded-lg">
-                                <Icon icon="solar:user-check-bold" className="text-2xl text-purple-600" />
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                                <Icon icon="solar:shield-user-bold" className="text-xl sm:text-2xl text-red-600" />
                             </div>
-                            <div>
-                                <p className="text-sm text-default-500">อาจารย์</p>
-                                <p className="text-2xl font-bold text-default-900">{stats.byRole.instructor}</p>
+                            <div className="min-w-0">
+                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ดูแลระบบ</p>
+                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.admin}</p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2 bg-green-100 rounded-lg">
-                                <Icon icon="solar:user-hand-up-bold" className="text-2xl text-green-600" />
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                                <Icon icon="solar:user-check-bold" className="text-xl sm:text-2xl text-purple-600" />
                             </div>
-                            <div>
-                                <p className="text-sm text-default-500">ผู้ช่วยสอน</p>
-                                <p className="text-2xl font-bold text-default-900">{stats.byRole.ta}</p>
+                            <div className="min-w-0">
+                                <p className="text-xs sm:text-sm text-default-500 truncate">อาจารย์</p>
+                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.instructor}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                                <Icon icon="solar:user-hand-up-bold" className="text-xl sm:text-2xl text-green-600" />
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ช่วยสอน</p>
+                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.ta}</p>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-4">
-                <Input
-                    className="w-full sm:w-80"
-                    placeholder="ค้นหาผู้ใช้..."
-                    value={search}
-                    onValueChange={setSearch}
-                    startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
-                    isClearable
-                    onClear={() => setSearch("")}
-                />
-                <Select
-                    className="w-full sm:w-40"
-                    placeholder="บทบาท"
-                    selectedKeys={[roleFilter]}
-                    onSelectionChange={(keys) => {
-                        const value = Array.from(keys)[0] as string;
-                        setRoleFilter(value);
-                        setPage(1);
-                    }}
-                >
-                    {roleOptions.map((option) => (
-                        <SelectItem key={option.key}>{option.label}</SelectItem>
-                    ))}
-                </Select>
-                <Select
-                    className="w-full sm:w-40"
-                    placeholder="สถานะ"
-                    selectedKeys={[statusFilter]}
-                    onSelectionChange={(keys) => {
-                        const value = Array.from(keys)[0] as string;
-                        setStatusFilter(value);
-                        setPage(1);
-                    }}
-                >
-                    {statusOptions.map((option) => (
-                        <SelectItem key={option.key}>{option.label}</SelectItem>
-                    ))}
-                </Select>
-            </div>
-
-            {/* Table */}
+            {/* Table Card with Filters */}
             <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
-                <Table
-                    aria-label="Users table"
-                    removeWrapper
-                    classNames={{
-                        th: "bg-default-100 text-default-600 font-semibold",
-                        td: "py-3",
-                    }}
-                >
-                    <TableHeader columns={columns}>
-                        {(column) => (
-                            <TableColumn
-                                key={column.key}
-                                align={column.key === "actions" ? "center" : "start"}
-                                allowsSorting={column.sortable}
-                                onClick={() => column.sortable && handleSort(column.key)}
-                                className={column.sortable ? "cursor-pointer hover:bg-default-200" : ""}
+                <div className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 pb-3 sm:pb-4">
+                        <Input
+                            className="w-full"
+                            placeholder="ค้นหาผู้ใช้..."
+                            value={search}
+                            onValueChange={setSearch}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
+                            isClearable
+                            onClear={() => setSearch("")}
+                            classNames={{
+                                inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
+                            }}
+                        />
+                        <div className="flex gap-2 flex-wrap">
+                            <Select
+                                className="flex-1 min-w-[120px]"
+                                placeholder="บทบาท"
+                                selectedKeys={[roleFilter]}
+                                onSelectionChange={(keys) => {
+                                    const value = Array.from(keys)[0] as string;
+                                    setRoleFilter(value);
+                                    setPage(1);
+                                }}
+                                classNames={{
+                                    trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
+                                }}
                             >
-                                {column.label}
+                                {roleOptions.map((option) => (
+                                    <SelectItem key={option.key}>{option.label}</SelectItem>
+                                ))}
+                            </Select>
+                            <Select
+                                className="flex-1 min-w-[120px]"
+                                placeholder="สถานะ"
+                                selectedKeys={[statusFilter]}
+                                onSelectionChange={(keys) => {
+                                    const value = Array.from(keys)[0] as string;
+                                    setStatusFilter(value);
+                                    setPage(1);
+                                }}
+                                classNames={{
+                                    trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
+                                }}
+                            >
+                                {statusOptions.map((option) => (
+                                    <SelectItem key={option.key}>{option.label}</SelectItem>
+                                ))}
+                            </Select>
+                        </div>
+                    </div>
 
-                            </TableColumn>
-                        )}
-                    </TableHeader>
-                    <TableBody
-                        items={users}
-                        emptyContent={
-                            <div className="py-10 text-center">
-                                <Icon icon="solar:users-group-rounded-linear" className="text-5xl text-default-300 mx-auto mb-3" />
-                                <p className="text-default-400">ไม่พบข้อมูลผู้ใช้</p>
-                            </div>
-                        }
-                        loadingContent={<Spinner color="primary" />}
-                    >
-                        {(item) => (
-                            <TableRow key={item.id}>
-                                {(columnKey) => (
-                                    <TableCell>{renderCell(item, columnKey)}</TableCell>
-                                )}
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                    {/* Table with horizontal scroll on mobile */}
+                    <div className="overflow-x-auto -mx-3 sm:-mx-4 px-3 sm:px-4">
+                        <div className="min-w-[700px]">
+                            <Table
+                                aria-label="Users table"
+                                removeWrapper
+                                classNames={{
+                                    th: "bg-slate-50 text-slate-600 font-semibold text-xs sm:text-sm",
+                                    td: "py-2 sm:py-3 text-sm",
+                                }}
+                            >
+                                <TableHeader columns={columns}>
+                                    {(column) => (
+                                        <TableColumn
+                                            key={column.key}
+                                            align={column.key === "actions" ? "center" : "start"}
+                                            allowsSorting={column.sortable}
+                                            onClick={() => column.sortable && handleSort(column.key)}
+                                            className={column.sortable ? "cursor-pointer hover:bg-default-200" : ""}
+                                        >
+                                            {column.label}
+
+                                        </TableColumn>
+                                    )}
+                                </TableHeader>
+                                <TableBody
+                                    items={users}
+                                    isLoading={isLoading}
+                                    emptyContent={
+                                        <div className="py-10 text-center">
+                                            <Icon icon="solar:users-group-rounded-linear" className="text-5xl text-default-300 mx-auto mb-3" />
+                                            <p className="text-default-400">ไม่พบข้อมูลผู้ใช้</p>
+                                        </div>
+                                    }
+                                    loadingContent={<Spinner color="primary" label="กำลังโหลด..." />}
+                                >
+                                    {(item) => (
+                                        <TableRow key={item.id}>
+                                            {(columnKey) => (
+                                                <TableCell>{renderCell(item, columnKey)}</TableCell>
+                                            )}
+                                        </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex items-center justify-between px-4 py-3 border-t border-default-200">
-                        <span className="text-sm text-default-500">
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-3 sm:px-4 py-3 border-t border-slate-100">
+                        <span className="text-xs sm:text-sm text-slate-500 order-2 sm:order-1">
                             แสดง {((page - 1) * limit) + 1} - {Math.min(page * limit, totalItems)} จาก {totalItems} รายการ
                         </span>
                         <Pagination
@@ -615,26 +639,37 @@ export default function UsersPage() {
                             onChange={setPage}
                             showControls
                             size="sm"
+                            color="primary"
+                            className="order-1 sm:order-2"
                         />
                     </div>
                 )}
             </div>
 
             {/* Create Modal */}
-            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} size="2xl">
+            <Modal 
+                isOpen={isCreateModalOpen} 
+                onClose={() => setIsCreateModalOpen(false)} 
+                size="2xl"
+                scrollBehavior="inside"
+                classNames={{
+                    base: "mx-2 sm:mx-4",
+                    body: "py-4",
+                }}
+            >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
-                                <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
+                    <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">เพิ่มผู้ใช้ใหม่</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลผู้ใช้ที่ต้องการเพิ่มในระบบ</p>
+                                <h3 className="text-lg sm:text-xl font-bold text-slate-800">เพิ่มผู้ใช้ใหม่</h3>
+                                <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลผู้ใช้ที่ต้องการเพิ่มในระบบ</p>
                             </div>
                         </div>
                     </ModalHeader>
-                    <ModalBody className="px-6 py-6">
+                    <ModalBody className="px-4 sm:px-6 py-4 sm:py-6">
                         <div className="space-y-5">
                             {/* ข้อมูลบัญชี */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">

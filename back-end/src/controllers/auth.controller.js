@@ -1,6 +1,7 @@
 const passport = require('passport');
 const { User, RefreshToken, SystemLog } = require('../models');
 const { jwt: jwtUtil, ApiError, asyncHandler, logger } = require('../utils');
+const { authLogger, securityLogger } = require('../middlewares/requestLogger');
 const config = require('../config');
 
 /**
@@ -14,6 +15,8 @@ const login = asyncHandler(async (req, res, next) => {
     }
     
     if (!user) {
+      // Log failed login attempt
+      await authLogger.logLoginFailed(req, req.body?.username || 'unknown', info?.message || 'Invalid credentials');
       return next(ApiError.unauthorized(info?.message || 'Invalid credentials'));
     }
     
@@ -33,10 +36,7 @@ const login = asyncHandler(async (req, res, next) => {
       });
       
       // Log the login action
-      await SystemLog.log('AUTH_LOGIN', {
-        method: 'local',
-        username: user.username,
-      }, user.id, req.ip);
+      await authLogger.logLogin(req, user, 'local');
       
       logger.info(`User ${user.username} logged in successfully`);
       
@@ -138,9 +138,7 @@ const logout = asyncHandler(async (req, res) => {
   
   // Log the logout action
   if (req.user) {
-    await SystemLog.log('AUTH_LOGOUT', {
-      username: req.user.username,
-    }, req.user.id, req.ip);
+    await authLogger.logLogout(req, req.user);
   }
   
   res.json({
@@ -193,9 +191,7 @@ const changePassword = asyncHandler(async (req, res) => {
   );
   
   // Log password change
-  await SystemLog.log('AUTH_PASSWORD_CHANGE', {
-    username: user.username,
-  }, user.id, req.ip);
+  await authLogger.logPasswordChange(req, user);
   
   res.json({
     success: true,
@@ -236,10 +232,7 @@ const googleCallback = asyncHandler(async (req, res, next) => {
       });
       
       // Log the login action
-      await SystemLog.log('AUTH_LOGIN', {
-        method: 'google',
-        username: user.username,
-      }, user.id, req.ip);
+      await authLogger.logLogin(req, user, 'google');
       
       // Redirect to frontend with tokens
       const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;

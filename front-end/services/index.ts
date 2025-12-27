@@ -32,3 +32,5 @@ export type {
   CourseStats,
   SectionStudent,
 } from './course.service';
+export { default as systemLogService } from './systemLog.service';
+export * from './systemLog.service';

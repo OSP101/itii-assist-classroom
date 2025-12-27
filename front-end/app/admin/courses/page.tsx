@@ -524,14 +524,14 @@ export default function CoursesPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
                         จัดการรายวิชา
                     </h1>
-                    <p className="text-slate-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
+                    <p className="text-sm text-slate-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
                 </div>
                 <Button
                     color="primary"
@@ -540,55 +540,55 @@ export default function CoursesPage() {
                         resetForm();
                         setIsCreateModalOpen(true);
                     }}
-                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600 w-full sm:w-auto"
                 >
                     เพิ่มรายวิชา
                 </Button>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-violet-100 rounded-lg">
-                            <Icon icon="solar:book-2-bold" className="text-2xl text-violet-600" />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-violet-100 rounded-lg">
+                            <Icon icon="solar:book-2-bold" className="text-xl sm:text-2xl text-violet-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-default-500">รายวิชาทั้งหมด</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.total || 0}</p>
-                        </div>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-lg">
-                            <Icon icon="solar:check-circle-bold" className="text-2xl text-green-600" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-default-500">ใช้งานอยู่</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.byStatus.active || 0}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500 truncate">ทั้งหมด</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-100 rounded-lg">
-                            <Icon icon="solar:close-circle-bold" className="text-2xl text-red-600" />
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                            <Icon icon="solar:check-circle-bold" className="text-xl sm:text-2xl text-green-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-default-500">ปิดใช้งาน</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.byStatus.inactive || 0}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500 truncate">ใช้งาน</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus.active || 0}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:calendar-bold" className="text-2xl text-blue-600" />
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                            <Icon icon="solar:close-circle-bold" className="text-xl sm:text-2xl text-red-600" />
                         </div>
-                        <div>
-                            <p className="text-sm text-default-500">ปีการศึกษานี้</p>
-                            <p className="text-2xl font-bold text-default-900">{stats?.thisYear || 0}</p>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500 truncate">ปิดใช้งาน</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus.inactive || 0}</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                            <Icon icon="solar:calendar-bold" className="text-xl sm:text-2xl text-blue-600" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs sm:text-sm text-default-500 truncate">ปีนี้</p>
+                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.thisYear || 0}</p>
                         </div>
                     </div>
                 </div>
@@ -597,14 +597,14 @@ export default function CoursesPage() {
             {/* Table Card */}
             <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
                 {/* Filters */}
-                <div className="p-4">
-                    <div className="flex flex-col sm:flex-row gap-4 pb-4">
+                <div className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 pb-3 sm:pb-4">
                         <Input
                             placeholder="ค้นหารหัสวิชา, ชื่อวิชา..."
                             value={search}
                             onValueChange={setSearch}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
-                            className="flex-1 "
+                            className="w-full"
                             classNames={{
                                 inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
                             }}
@@ -614,7 +614,7 @@ export default function CoursesPage() {
                                 placeholder="ปีการศึกษา"
                                 selectedKeys={[yearFilter]}
                                 onChange={(e) => setYearFilter(e.target.value)}
-                                className="w-40"
+                                className="flex-1 min-w-[100px]"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
@@ -628,7 +628,7 @@ export default function CoursesPage() {
                                 placeholder="ภาคเรียน"
                                 selectedKeys={[semesterFilter]}
                                 onChange={(e) => setSemesterFilter(e.target.value)}
-                                className="w-40"
+                                className="flex-1 min-w-[100px]"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
@@ -642,7 +642,7 @@ export default function CoursesPage() {
                                 placeholder="สถานะ"
                                 selectedKeys={[statusFilter]}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="w-36"
+                                className="flex-1 min-w-[100px]"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
@@ -656,54 +656,58 @@ export default function CoursesPage() {
                     </div>
 
 
-                    {/* Table */}
-                    <Table
-                        aria-label="Courses table"
-                        removeWrapper
-                        classNames={{
-                            th: "bg-slate-50 text-slate-600 font-semibold",
-                            td: "py-3",
-                        }}
-                    >
-                        <TableHeader columns={columns}>
-                            {(column) => (
-                                <TableColumn
-                                    key={column.key}
-                                    align={column.key === "actions" ? "center" : "start"}
-                                    allowsSorting={column.sortable}
-                                    onClick={() => column.sortable && handleSort(column.key)}
-                                    className={column.sortable ? "cursor-pointer hover:bg-default-200" : ""}
-                                >
-                                    {column.label}
-                                </TableColumn>
-                            )}
-                        </TableHeader>
-                        <TableBody
-                            items={courses}
-                            isLoading={isLoading}
-                            loadingContent={<Spinner color="primary" />}
-                            emptyContent={
-                                <div className="py-10 text-center">
-                                    <Icon icon="solar:book-2-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                                    <p className="text-slate-500">ไม่พบข้อมูลรายวิชา</p>
-                                </div>
-                            }
-                        >
-                            {(item) => (
-                                <TableRow key={item.id}>
-                                    {(columnKey) => (
-                                        <TableCell>{renderCell(item, columnKey as string)}</TableCell>
+                    {/* Table with horizontal scroll */}
+                    <div className="overflow-x-auto -mx-3 sm:-mx-4 px-3 sm:px-4">
+                        <div className="min-w-[700px]">
+                            <Table
+                                aria-label="Courses table"
+                                removeWrapper
+                                classNames={{
+                                    th: "bg-slate-50 text-slate-600 font-semibold text-xs sm:text-sm",
+                                    td: "py-2 sm:py-3 text-sm",
+                                }}
+                            >
+                                <TableHeader columns={columns}>
+                                    {(column) => (
+                                        <TableColumn
+                                            key={column.key}
+                                            align={column.key === "actions" ? "center" : "start"}
+                                            allowsSorting={column.sortable}
+                                            onClick={() => column.sortable && handleSort(column.key)}
+                                            className={column.sortable ? "cursor-pointer hover:bg-default-200" : ""}
+                                        >
+                                            {column.label}
+                                        </TableColumn>
                                     )}
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                                </TableHeader>
+                                <TableBody
+                                    items={courses}
+                                    isLoading={isLoading}
+                                    loadingContent={<Spinner color="primary" label="กำลังโหลด..." />}
+                                    emptyContent={
+                                        <div className="py-10 text-center">
+                                            <Icon icon="solar:book-2-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                            <p className="text-slate-500">ไม่พบข้อมูลรายวิชา</p>
+                                        </div>
+                                    }
+                                >
+                                    {(item) => (
+                                        <TableRow key={item.id}>
+                                            {(columnKey) => (
+                                                <TableCell>{renderCell(item, columnKey as string)}</TableCell>
+                                            )}
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                    <div className="flex justify-between items-center px-4 py-3 border-t border-slate-100">
-                        <p className="text-sm text-slate-500">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-3 px-3 sm:px-4 py-3 border-t border-slate-100">
+                        <p className="text-xs sm:text-sm text-slate-500 order-2 sm:order-1">
                             แสดง {((page - 1) * limit) + 1} - {Math.min(page * limit, totalItems)} จาก {totalItems} รายการ
                         </p>
                         <Pagination
@@ -713,26 +717,36 @@ export default function CoursesPage() {
                             showControls
                             size="sm"
                             color="primary"
+                            className="order-1 sm:order-2"
                         />
                     </div>
                 )}
             </div>
 
             {/* Create Modal */}
-            <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} size="2xl" scrollBehavior="inside">
+            <Modal 
+                isOpen={isCreateModalOpen} 
+                onClose={() => setIsCreateModalOpen(false)} 
+                size="2xl" 
+                scrollBehavior="inside"
+                classNames={{
+                    base: "mx-2 sm:mx-4",
+                    body: "py-4",
+                }}
+            >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
-                                <Icon icon="solar:book-2-bold" className="text-2xl text-white" />
+                    <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
+                        <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:book-2-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">เพิ่มรายวิชาใหม่</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลรายวิชาที่ต้องการเพิ่มในระบบ</p>
+                                <h3 className="text-lg sm:text-xl font-bold text-slate-800">เพิ่มรายวิชาใหม่</h3>
+                                <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1">กรอกข้อมูลรายวิชาที่ต้องการเพิ่มในระบบ</p>
                             </div>
                         </div>
                     </ModalHeader>
-                    <ModalBody className="px-6 py-6">
+                    <ModalBody className="px-4 sm:px-6 py-4 sm:py-6">
                         <div className="space-y-5">
                             {/* Course Image Section */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">

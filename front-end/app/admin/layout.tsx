@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { Button } from "@heroui/button";
 import { Spinner } from "@heroui/spinner";
 import { Avatar } from "@heroui/avatar";
@@ -45,17 +46,17 @@ const menuItems: MenuItem[] = [
         href: "/admin/courses",
     },
     {
+        key: "classrooms",
+        label: "ห้องเรียน",
+        icon: "solar:display-bold",
+        href: "/admin/classrooms",
+    },
+    {
         key: "logs",
         label: "System Logs",
         icon: "solar:document-text-bold",
         href: "/admin/logs",
-    },
-    {
-        key: "settings",
-        label: "ตั้งค่า",
-        icon: "solar:settings-bold",
-        href: "/admin/settings",
-    },
+    }
 ];
 
 // Page titles mapping
@@ -64,6 +65,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
     '/admin/users': { title: 'จัดการผู้ใช้งาน', subtitle: 'User Management' },
     '/admin/students': { title: 'จัดการนักศึกษา', subtitle: 'Student Management' },
     '/admin/courses': { title: 'จัดการรายวิชา', subtitle: 'Course Management' },
+    '/admin/classrooms': { title: 'จัดการห้องเรียน', subtitle: 'Classroom Management' },
     '/admin/logs': { title: 'System Logs', subtitle: 'Activity Logs' },
     '/admin/settings': { title: 'ตั้งค่าระบบ', subtitle: 'System Settings' },
     '/admin/courses/': { title: 'จัดการรายวิชา', subtitle: 'Course Management' },
@@ -79,7 +81,27 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         handleLogout,
     } = useAdmin();
 
+    // Mobile sidebar state
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
     const pageInfo = pageTitles[pathname] || { title: 'Admin Panel' };
+
+    // Close mobile sidebar when route changes
+    useEffect(() => {
+        setIsMobileSidebarOpen(false);
+    }, [pathname]);
+
+    // Prevent body scroll when mobile sidebar is open
+    useEffect(() => {
+        if (isMobileSidebarOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isMobileSidebarOpen]);
 
     if (isLoading) {
         return (
@@ -91,19 +113,39 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
     return (
         <div className="flex min-h-screen bg-slate-50">
-            {/* Sidebar */}
+            {/* Mobile Overlay */}
+            {isMobileSidebarOpen && (
+                <div 
+                    className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                />
+            )}
+
+            {/* Sidebar - Desktop: fixed, Mobile: slide-in */}
             <aside
-                className={`fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-64'
-                    }`}
+                className={`
+                    fixed left-0 top-0 z-50 h-screen bg-white border-r border-slate-200 
+                    transition-all duration-300 ease-in-out
+                    ${sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'}
+                    ${isMobileSidebarOpen ? 'translate-x-0 w-72' : '-translate-x-full lg:translate-x-0'}
+                `}
             >
+                {/* Mobile Close Button */}
+                <button
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    className="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100 lg:hidden"
+                >
+                    <Icon icon="solar:close-circle-linear" className="text-xl text-slate-500" />
+                </button>
+
                 {/* Logo */}
                 <div className="flex items-center h-16 px-4 border-b border-slate-200">
                     <Link href="/admin/dashboard" className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-500/30 flex-shrink-0">
                             <IoSchool />
                         </div>
-                        {!sidebarCollapsed && (
-                            <span className="font-bold text-slate-800 text-sm">ITII Assist Classroom</span>
+                        {(!sidebarCollapsed || isMobileSidebarOpen) && (
+                            <span className="font-bold text-slate-800 text-md">ITII Assist Classroom</span>
                         )}
                     </Link>
                 </div>
@@ -111,23 +153,24 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 {/* Navigation */}
                 <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100vh-8rem)]">
                     {menuItems.map((item) => (
-                        <Tooltip key={item.key} content={item.label} placement="right" isDisabled={!sidebarCollapsed}>
+                        <Tooltip key={item.key} content={item.label} placement="right" isDisabled={!sidebarCollapsed || isMobileSidebarOpen}>
                             <Link
                                 href={item.href || '#'}
+                                onClick={() => setIsMobileSidebarOpen(false)}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${pathname === item.href
                                     ? 'bg-blue-50 text-blue-600 font-medium'
                                     : 'text-slate-600 hover:bg-slate-100'
                                     }`}
                             >
-                                <Icon icon={item.icon} className="text-lg" />
-                                {!sidebarCollapsed && <span>{item.label}</span>}
+                                <Icon icon={item.icon} className="text-lg flex-shrink-0" />
+                                {(!sidebarCollapsed || isMobileSidebarOpen) && <span>{item.label}</span>}
                             </Link>
                         </Tooltip>
                     ))}
                 </nav>
 
-                {/* Sidebar Footer */}
-                <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-200 bg-white">
+                {/* Sidebar Footer - Hide on mobile */}
+                <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-slate-200 bg-white hidden lg:block">
                     <Tooltip content={sidebarCollapsed ? "ขยาย" : "ย่อ"} placement="right">
                         <button
                             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -143,16 +186,25 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <div className={`flex-1 transition-all duration-300 ${sidebarCollapsed ? 'ml-16' : 'ml-64'}`}>
+            {/* Main Content - Responsive margin */}
+            <div className={`flex-1 min-w-0 transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
                 {/* Header */}
-                <header className="sticky top-0 z-30 bg-white border-b border-slate-200 h-16">
-                    <div className="flex items-center justify-between h-full px-6">
-                        <div>
-                            <h1 className="text-lg font-semibold text-slate-800">{pageInfo.title}</h1>
-                            {pageInfo.subtitle && <p className="text-xs text-slate-500">{pageInfo.subtitle}</p>}
+                <header className="sticky top-0 z-30 bg-white border-b border-slate-200 h-14 sm:h-16">
+                    <div className="flex items-center justify-between h-full px-4 sm:px-6">
+                        <div className="flex items-center gap-3">
+                            {/* Mobile Menu Button */}
+                            <button
+                                onClick={() => setIsMobileSidebarOpen(true)}
+                                className="p-2 -ml-2 rounded-lg hover:bg-slate-100 lg:hidden"
+                            >
+                                <Icon icon="solar:hamburger-menu-linear" className="text-xl text-slate-600" />
+                            </button>
+                            <div className="min-w-0">
+                                <h1 className="text-base sm:text-lg font-semibold text-slate-800 truncate">{pageInfo.title}</h1>
+                                {pageInfo.subtitle && <p className="text-xs text-slate-500 hidden sm:block">{pageInfo.subtitle}</p>}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-4">
                             {/* Notifications */}
                             <Tooltip content="การแจ้งเตือน">
                                 <Button isIconOnly variant="light" size="sm">
@@ -166,15 +218,15 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                                     <Avatar
                                         name={user?.full_name}
                                         size="sm"
-                                        className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                        className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white cursor-pointer"
                                     />
                                 </DropdownTrigger>
                                 <DropdownMenu aria-label="User menu">
                                     <DropdownSection showDivider aria-label="Profile & Actions">
-                                        <DropdownItem key="profile" className="h-14 gap-2">
+                                        <DropdownItem key="profile-info" className="h-14 gap-2" textValue="Profile info">
                                             <div>
                                                 <p className="font-semibold">{user?.full_name || undefined} <Chip color="primary" variant="bordered" size="sm">{user?.role}</Chip></p>
-                                                <p className="font-light">{user?.email || undefined}</p>
+                                                <p className="font-light text-xs">{user?.email || undefined}</p>
                                             </div>
                                         </DropdownItem>
                                     </DropdownSection>
@@ -198,8 +250,8 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     </div>
                 </header>
 
-                {/* Page Content */}
-                <main className="p-6">
+                {/* Page Content - Responsive padding */}
+                <main className="p-3 sm:p-4 lg:p-6">
                     {children}
                 </main>
             </div>

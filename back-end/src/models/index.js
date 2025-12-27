@@ -7,6 +7,8 @@ const Course = require('./Course');
 const CourseSection = require('./CourseSection');
 const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
+const Classroom = require('./Classroom');
+const Desk = require('./Desk');
 
 // ============================================
 // Define Associations
@@ -122,6 +124,32 @@ CourseSectionStudent.belongsTo(Student, {
 });
 
 // ============================================
+// Classroom Associations
+// ============================================
+
+// Classroom -> User (created_by)
+Classroom.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator',
+});
+
+User.hasMany(Classroom, {
+  foreignKey: 'created_by',
+  as: 'createdClassrooms',
+});
+
+// Classroom -> Desks
+Classroom.hasMany(Desk, {
+  foreignKey: 'classroom_id',
+  as: 'desks',
+});
+
+Desk.belongsTo(Classroom, {
+  foreignKey: 'classroom_id',
+  as: 'classroom',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -134,4 +162,6 @@ module.exports = {
   CourseSection,
   CourseTA,
   CourseSectionStudent,
+  Classroom,
+  Desk,
 };

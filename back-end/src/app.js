@@ -26,12 +26,39 @@ app.set('trust proxy', 1);
 app.use(helmet());
 
 // CORS configuration
-app.use(cors({
-  origin: config.frontendUrl,
+const allowedOrigins = [
+  config.frontendUrl,
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+
+// In development, allow any local network IP
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In development, allow local network IPs (192.168.x.x, 10.x.x.x, etc.)
+    if (config.nodeEnv === 'development') {
+      const localNetworkPattern = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/;
+      if (localNetworkPattern.test(origin)) {
+        return callback(null, true);
+      }
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+};
+
+app.use(cors(corsOptions));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -79,6 +106,14 @@ if (config.nodeEnv === 'development') {
 
 // Initialize Passport
 app.use(passport.initialize());
+
+// Request Logger Middleware (บันทึก Access Log ตาม พ.ร.บ. คอมพิวเตอร์)
+const { requestLogger } = require('./middlewares');
+app.use('/api', requestLogger({
+  logBody: config.nodeEnv === 'development', // Log body only in development
+  excludePaths: ['/api/health', '/api/system/metrics', '/api/system/cpu'],
+  logAllRequests: true,
+}));
 
 // API routes
 app.use('/api', routes);

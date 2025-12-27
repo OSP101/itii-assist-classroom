@@ -101,7 +101,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3">
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
             <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
                 <CardBody className="p-0">
                     <div className="flex flex-col md:flex-row">
@@ -127,28 +127,28 @@ export default function LoginPage() {
                         </div>
 
                         {/* Right Side - Login Form */}
-                        <div className="w-full md:w-1/2 p-4 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
+                        <div className="w-full md:w-1/2 p-5 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
                             
 
                             {/* Header */}
-                            <div className="flex flex-col gap-2 mb-8">
-                                <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-800">
+                            <div className="flex flex-col gap-1 sm:gap-2 mb-6 sm:mb-8">
+                                <h1 className="text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-slate-800">
                                     ยินดีต้อนรับ
                                 </h1>
-                                <p className="text-slate-500 text-base">
+                                <p className="text-slate-500 text-sm sm:text-base">
                                     ITII Assist classroom website.
                                 </p>
                             </div>
 
                             {/* Login Form */}
-                            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+                            <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
                                 <Input
                                     label="ชื่อผู้ใช้"
                                     labelPlacement="outside"
                                     placeholder="กรอกชื่อผู้ใช้"
                                     type="text"
                                     variant="bordered"
-                                    size="lg"
+                                    size="md"
                                     value={formData.username}
                                     onChange={(e) =>
                                         setFormData({ ...formData, username: e.target.value })
@@ -156,12 +156,12 @@ export default function LoginPage() {
                                     startContent={
                                         <Icon
                                             icon="solar:user-linear"
-                                            className="text-blue-400 text-xl"
+                                            className="text-blue-400 text-lg sm:text-xl"
                                         />
                                     }
                                     classNames={{
-                                        inputWrapper: "h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                        label: "text-slate-600",
+                                        inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                        label: "text-slate-600 text-sm",
                                     }}
                                 />
 
@@ -170,7 +170,7 @@ export default function LoginPage() {
                                     labelPlacement="outside"
                                     placeholder="กรอกรหัสผ่าน"
                                     variant="bordered"
-                                    size="lg"
+                                    size="md"
                                     value={formData.password}
                                     onChange={(e) =>
                                         setFormData({ ...formData, password: e.target.value })
@@ -178,7 +178,7 @@ export default function LoginPage() {
                                     startContent={
                                         <Icon
                                             icon="solar:lock-password-linear"
-                                            className="text-blue-400 text-xl"
+                                            className="text-blue-400 text-lg sm:text-xl"
                                         />
                                     }
                                     endContent={
@@ -189,14 +189,14 @@ export default function LoginPage() {
                                         >
                                             <Icon
                                                 icon={isVisible ? "solar:eye-linear" : "solar:eye-closed-linear"}
-                                                className="text-blue-400 text-xl hover:text-blue-500 transition-colors"
+                                                className="text-blue-400 text-lg sm:text-xl hover:text-blue-500 transition-colors"
                                             />
                                         </button>
                                     }
                                     type={isVisible ? "text" : "password"}
                                     classNames={{
-                                        inputWrapper: "h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                        label: "text-slate-600",
+                                        inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                        label: "text-slate-600 text-sm",
                                     }}
                                 />
 
@@ -218,8 +218,8 @@ export default function LoginPage() {
 
                                 <Button
                                     type="submit"
-                                    size="lg"
-                                    className="w-full font-bold mt-2 h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
+                                    size="md"
+                                    className="w-full font-bold mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                     isLoading={isLoading}
                                 >
                                     เข้าสู่ระบบ
@@ -227,9 +227,9 @@ export default function LoginPage() {
                             </form>
 
                             {/* Divider */}
-                            <div className="relative flex py-6 items-center">
+                            <div className="relative flex py-4 sm:py-6 items-center">
                                 <div className="flex-grow border-t border-blue-100"></div>
-                                <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">
+                                <span className="flex-shrink-0 mx-3 sm:mx-4 text-slate-400 text-xs sm:text-sm">
                                     หรือเข้าสู่ระบบด้วย
                                 </span>
                                 <div className="flex-grow border-t border-blue-100"></div>
@@ -238,11 +238,11 @@ export default function LoginPage() {
                             {/* Google Login */}
                             <Button
                                 variant="bordered"
-                                size="lg"
-                                className="w-full h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600"
+                                size="md"
+                                className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm sm:text-base"
                                 onPress={handleGoogleLogin}
                                 startContent={
-                                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                                    <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
                                         <path
                                             fill="#4285F4"
                                             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -271,7 +271,7 @@ export default function LoginPage() {
             </Card>
 
             {/* Footer */}
-            <div className="absolute bottom-4 text-center text-slate-400 text-xs">
+            <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 text-center text-slate-400 text-[10px] sm:text-xs px-4">
                 © 2025 ITII Assist classroom - Course & Lab Management System
             </div>
         </div>
