@@ -350,20 +350,19 @@ export default function AdminDashboardPage() {
       )}
 
       {/* Main Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Users */}
         {loadingUsers ? <StatCardSkeleton /> : (
           <Link href="/admin/users">
             <Card className="border border-default-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardBody className="p-3 sm:p-4">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-default-500 mb-1">ผู้ใช้งาน</p>
-                    <p className="text-xl sm:text-2xl font-bold text-default-900">{userStats?.total || 0}</p>
-                    <p className="text-xs text-default-400 mt-1 hidden sm:block">Active: {userStats?.active || 0}</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl flex-shrink-0">
+                    <Icon icon="solar:users-group-rounded-bold" className="text-xl sm:text-2xl text-blue-600" />
                   </div>
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-blue-100 flex-shrink-0">
-                    <Icon icon="solar:users-group-rounded-bold" className="text-lg sm:text-xl text-blue-600" />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-default-500">ผู้ใช้งาน</p>
+                    <p className="text-xl sm:text-2xl font-bold text-default-900">{userStats?.total || 0}</p>
                   </div>
                 </div>
               </CardBody>
@@ -376,14 +375,13 @@ export default function AdminDashboardPage() {
           <Link href="/admin/students">
             <Card className="border border-default-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardBody className="p-3 sm:p-4">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-default-500 mb-1">นักศึกษา</p>
-                    <p className="text-xl sm:text-2xl font-bold text-default-900">{studentStats?.total || 0}</p>
-                    <p className="text-xs text-default-400 mt-1 hidden sm:block">Active: {studentStats?.byStatus?.active || 0}</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl flex-shrink-0">
+                    <Icon icon="solar:square-academic-cap-bold" className="text-xl sm:text-2xl text-green-600" />
                   </div>
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-green-100 flex-shrink-0">
-                    <Icon icon="solar:square-academic-cap-bold" className="text-lg sm:text-xl text-green-600" />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-default-500">นักศึกษา</p>
+                    <p className="text-xl sm:text-2xl font-bold text-default-900">{studentStats?.total || 0}</p>
                   </div>
                 </div>
               </CardBody>
@@ -396,14 +394,13 @@ export default function AdminDashboardPage() {
           <Link href="/admin/courses">
             <Card className="border border-default-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardBody className="p-3 sm:p-4">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-default-500 mb-1">รายวิชา</p>
-                    <p className="text-xl sm:text-2xl font-bold text-default-900">{courseStats?.total || 0}</p>
-                    <p className="text-xs text-default-400 mt-1 hidden sm:block">Active: {courseStats?.byStatus?.active || 0}</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-2.5 bg-purple-100 rounded-xl flex-shrink-0">
+                    <Icon icon="solar:book-bookmark-bold" className="text-xl sm:text-2xl text-purple-600" />
                   </div>
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-purple-100 flex-shrink-0">
-                    <Icon icon="solar:book-bookmark-bold" className="text-lg sm:text-xl text-purple-600" />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-default-500">รายวิชา</p>
+                    <p className="text-xl sm:text-2xl font-bold text-default-900">{courseStats?.total || 0}</p>
                   </div>
                 </div>
               </CardBody>
@@ -416,14 +413,13 @@ export default function AdminDashboardPage() {
           <Link href="/admin/classrooms">
             <Card className="border border-default-200 shadow-sm hover:shadow-md transition-shadow cursor-pointer h-full">
               <CardBody className="p-3 sm:p-4">
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0">
-                    <p className="text-xs sm:text-sm text-default-500 mb-1">ห้องเรียน</p>
-                    <p className="text-xl sm:text-2xl font-bold text-default-900">{classroomStats?.totalClassrooms || 0}</p>
-                    <p className="text-xs text-default-400 mt-1 hidden sm:block">โต๊ะ: {classroomStats?.totalDesks || 0}</p>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 sm:p-2.5 bg-amber-100 rounded-xl flex-shrink-0">
+                    <Icon icon="solar:buildings-3-bold" className="text-xl sm:text-2xl text-amber-600" />
                   </div>
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center bg-orange-100 flex-shrink-0">
-                    <Icon icon="solar:display-bold" className="text-lg sm:text-xl text-orange-600" />
+                  <div className="min-w-0">
+                    <p className="text-xs sm:text-sm text-default-500">ห้องเรียน</p>
+                    <p className="text-xl sm:text-2xl font-bold text-default-900">{classroomStats?.totalClassrooms || 0}</p>
                   </div>
                 </div>
               </CardBody>

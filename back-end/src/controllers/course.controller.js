@@ -23,33 +23,38 @@ const getCourses = asyncHandler(async (req, res) => {
     sortOrder = 'DESC',
   } = req.query;
 
-  // Build where clause
-  const where = {};
+  // Build where clause with proper AND/OR structure
+  const whereConditions = [];
 
-  // Search filter
-  if (search) {
-    where[Op.or] = [
-      { code: { [Op.like]: `%${search}%` } },
-      { name: { [Op.like]: `%${search}%` } },
-    ];
+  // Search filter (OR between code and name)
+  if (search && search.trim()) {
+    whereConditions.push({
+      [Op.or]: [
+        { code: { [Op.like]: `%${search.trim()}%` } },
+        { name: { [Op.like]: `%${search.trim()}%` } },
+      ],
+    });
   }
 
   // Year filter
-  if (year) {
-    where.year = parseInt(year);
+  if (year && !isNaN(parseInt(year))) {
+    whereConditions.push({ year: parseInt(year) });
   }
 
   // Semester filter
-  if (semester) {
-    where.semester = parseInt(semester);
+  if (semester && !isNaN(parseInt(semester))) {
+    whereConditions.push({ semester: parseInt(semester) });
   }
 
   // Status filter
   if (status === 'active') {
-    where.is_active = true;
+    whereConditions.push({ is_active: true });
   } else if (status === 'inactive') {
-    where.is_active = false;
+    whereConditions.push({ is_active: false });
   }
+
+  // Combine all conditions with AND
+  const where = whereConditions.length > 0 ? { [Op.and]: whereConditions } : {};
 
   // Calculate offset
   const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -212,6 +217,7 @@ const getCourseById = asyncHandler(async (req, res) => {
  */
 const createCourse = asyncHandler(async (req, res) => {
   const { code, name, year, semester, instructor_id, description, image } = req.body;
+  const currentUser = req.user;
 
   // Validate required fields
   if (!code || !name || !year || !semester) {
@@ -226,10 +232,18 @@ const createCourse = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'รายวิชานี้มีอยู่ในระบบแล้ว (รหัส-ปี-ภาคเรียน ซ้ำ)');
   }
 
+  // Determine instructor_id
+  let finalInstructorId = instructor_id || null;
+  
+  // If instructor creates the course and no instructor_id provided, use their own id
+  if (!instructor_id && currentUser.role === 'instructor') {
+    finalInstructorId = currentUser.id;
+  }
+
   // Validate instructor if provided
-  if (instructor_id) {
+  if (finalInstructorId) {
     const instructor = await User.findOne({
-      where: { id: instructor_id, role: 'instructor' },
+      where: { id: finalInstructorId, role: 'instructor' },
     });
     if (!instructor) {
       throw new ApiError(400, 'ไม่พบอาจารย์ที่ระบุในระบบ');
@@ -242,7 +256,7 @@ const createCourse = asyncHandler(async (req, res) => {
     name,
     year: parseInt(year),
     semester: parseInt(semester),
-    instructor_id: instructor_id || null,
+    instructor_id: finalInstructorId,
     description: description || null,
     image: image || null,
     is_active: true,
@@ -663,6 +677,244 @@ const getTAsList = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get my courses (for instructor/TA)
+ * @route GET /api/courses/my-courses
+ */
+const getMyCourses = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const userRole = req.user.role;
+  const {
+    page = 1,
+    limit = 12,
+    search = '',
+    year = '',
+    semester = '',
+    status = '',
+    sortBy = 'created_at',
+    sortOrder = 'DESC',
+  } = req.query;
+
+  // Debug log
+  console.log('getMyCourses params:', { page, limit, search, year, semester, status, userId, userRole });
+
+  // Build where clause with proper AND/OR structure
+  const whereConditions = [];
+
+  // For instructor - get courses they own
+  if (userRole === 'instructor') {
+    whereConditions.push({ instructor_id: userId });
+  }
+
+  // Search filter (OR between code and name)
+  if (search && search.trim()) {
+    whereConditions.push({
+      [Op.or]: [
+        { code: { [Op.like]: `%${search.trim()}%` } },
+        { name: { [Op.like]: `%${search.trim()}%` } },
+      ],
+    });
+  }
+
+  // Year filter
+  if (year && !isNaN(parseInt(year))) {
+    whereConditions.push({ year: parseInt(year) });
+  }
+
+  // Semester filter
+  if (semester && !isNaN(parseInt(semester))) {
+    whereConditions.push({ semester: parseInt(semester) });
+  }
+
+  // Status filter
+  if (status === 'active') {
+    whereConditions.push({ is_active: true });
+  } else if (status === 'inactive') {
+    whereConditions.push({ is_active: false });
+  }
+
+  // Combine all conditions with AND
+  const where = whereConditions.length > 0 ? { [Op.and]: whereConditions } : {};
+
+  // Debug log
+  console.log('getMyCourses whereConditions:', JSON.stringify(whereConditions, null, 2));
+  console.log('getMyCourses final where:', JSON.stringify(where, null, 2));
+
+  // Calculate offset
+  const offset = (parseInt(page) - 1) * parseInt(limit);
+
+  // Valid sort columns
+  const validSortColumns = ['code', 'name', 'year', 'semester', 'is_active', 'created_at', 'updated_at'];
+  const orderColumn = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
+  const orderDirection = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+  let courses, count;
+
+  if (userRole === 'ta') {
+    // For TA - get courses they are assigned to
+    const { count: taCount, rows: taCourses } = await Course.findAndCountAll({
+      where,
+      limit: parseInt(limit),
+      offset,
+      order: [[orderColumn, orderDirection]],
+      include: [
+        {
+          model: User,
+          as: 'instructor',
+          attributes: ['id', 'full_name', 'email'],
+        },
+        {
+          model: CourseSection,
+          as: 'sections',
+          attributes: ['id', 'section_no', 'note'],
+        },
+        {
+          model: User,
+          as: 'tas',
+          attributes: ['id'],
+          through: { attributes: [] },
+          where: { id: userId },
+          required: true, // INNER JOIN - only courses where this TA is assigned
+        },
+      ],
+    });
+    courses = taCourses;
+    count = taCount;
+  } else {
+    // For instructor - courses they own
+    const { count: instructorCount, rows: instructorCourses } = await Course.findAndCountAll({
+      where,
+      limit: parseInt(limit),
+      offset,
+      order: [[orderColumn, orderDirection]],
+      include: [
+        {
+          model: User,
+          as: 'instructor',
+          attributes: ['id', 'full_name', 'email'],
+        },
+        {
+          model: CourseSection,
+          as: 'sections',
+          attributes: ['id', 'section_no', 'note'],
+        },
+      ],
+    });
+    courses = instructorCourses;
+    count = instructorCount;
+  }
+
+  // Get TA count and student count for each course
+  const coursesWithCounts = await Promise.all(
+    courses.map(async (course) => {
+      const taCount = await CourseTA.count({ where: { course_id: course.id } });
+      const studentCount = await CourseSectionStudent.count({
+        include: [{
+          model: CourseSection,
+          as: 'section',
+          where: { course_id: course.id },
+          attributes: [],
+        }],
+      });
+      return {
+        ...course.toJSON(),
+        taCount,
+        studentCount,
+      };
+    })
+  );
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(count / parseInt(limit));
+
+  res.json({
+    success: true,
+    data: {
+      courses: coursesWithCounts,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages,
+        totalItems: count,
+        itemsPerPage: parseInt(limit),
+        hasMore: parseInt(page) < totalPages,
+      },
+    },
+  });
+});
+
+/**
+ * Get my courses stats (for instructor/TA)
+ * @route GET /api/courses/my-courses/stats
+ */
+const getMyCoursesStats = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  const userRole = req.user.role;
+
+  let courseIds = [];
+
+  if (userRole === 'instructor') {
+    // Get courses where user is instructor
+    const courses = await Course.findAll({
+      where: { instructor_id: userId },
+      attributes: ['id'],
+      raw: true,
+    });
+    courseIds = courses.map(c => c.id);
+  } else if (userRole === 'ta') {
+    // Get courses where user is TA
+    const taAssignments = await CourseTA.findAll({
+      where: { user_id: userId },
+      attributes: ['course_id'],
+      raw: true,
+    });
+    courseIds = taAssignments.map(t => t.course_id);
+  }
+
+  // Count stats
+  const total = courseIds.length;
+  
+  let active = 0;
+  let inactive = 0;
+  let years = [];
+  
+  if (total > 0) {
+    active = await Course.count({ 
+      where: { 
+        id: courseIds, 
+        is_active: true 
+      } 
+    });
+    inactive = await Course.count({ 
+      where: { 
+        id: courseIds, 
+        is_active: false 
+      } 
+    });
+
+    // Get unique years
+    const yearsResult = await Course.findAll({
+      where: { id: courseIds },
+      attributes: ['year'],
+      group: ['year'],
+      order: [['year', 'DESC']],
+      raw: true,
+    });
+    years = yearsResult.map(y => y.year);
+  }
+
+  res.json({
+    success: true,
+    data: {
+      total,
+      byStatus: {
+        active,
+        inactive,
+      },
+      years,
+    },
+  });
+});
+
 module.exports = {
   getCourses,
   getCourseStats,
@@ -680,4 +932,6 @@ module.exports = {
   removeStudentFromSection,
   getInstructors,
   getTAsList,
+  getMyCourses,
+  getMyCoursesStats,
 };

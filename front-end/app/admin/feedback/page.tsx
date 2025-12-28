@@ -292,7 +292,8 @@ export default function FeedbackPage() {
                     <div className="flex items-center gap-2">
                         <Avatar
                             name={feedback.user.full_name}
-                            size="sm"
+                            size="md"
+                            src={feedback.user.avatar || ""}
                             className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
                         />
                         <div>
@@ -373,59 +374,59 @@ export default function FeedbackPage() {
 
             {/* Stats */}
             {stats && (
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                                <Icon icon="solar:chat-round-dots-bold" className="text-xl text-blue-600" />
+                            <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl">
+                                <Icon icon="solar:chat-round-dots-bold" className="text-xl sm:text-2xl text-blue-600" />
                             </div>
                             <div>
-                                <p className="text-xs text-default-500">ทั้งหมด</p>
-                                <p className="text-xl font-bold text-default-900">{stats.total}</p>
+                                <p className="text-xs sm:text-sm text-default-500">ทั้งหมด</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.total}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-amber-100 rounded-lg">
-                                <Icon icon="solar:clock-circle-bold" className="text-xl text-amber-600" />
+                            <div className="p-2 sm:p-2.5 bg-amber-100 rounded-xl">
+                                <Icon icon="solar:clock-circle-bold" className="text-xl sm:text-2xl text-amber-600" />
                             </div>
                             <div>
-                                <p className="text-xs text-default-500">รอดำเนินการ</p>
-                                <p className="text-xl font-bold text-amber-600">{stats.byStatus.pending}</p>
+                                <p className="text-xs sm:text-sm text-default-500">รอดำเนินการ</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byStatus.pending}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-indigo-100 rounded-lg">
-                                <Icon icon="solar:magnifer-bold" className="text-xl text-indigo-600" />
+                            <div className="p-2 sm:p-2.5 bg-purple-100 rounded-xl">
+                                <Icon icon="solar:magnifer-bold" className="text-xl sm:text-2xl text-purple-600" />
                             </div>
                             <div>
-                                <p className="text-xs text-default-500">กำลังตรวจสอบ</p>
-                                <p className="text-xl font-bold text-indigo-600">{stats.byStatus.reviewing}</p>
+                                <p className="text-xs sm:text-sm text-default-500">กำลังตรวจสอบ</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byStatus.reviewing}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-emerald-100 rounded-lg">
-                                <Icon icon="solar:check-circle-bold" className="text-xl text-emerald-600" />
+                            <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl">
+                                <Icon icon="solar:check-circle-bold" className="text-xl sm:text-2xl text-green-600" />
                             </div>
                             <div>
-                                <p className="text-xs text-default-500">แก้ไขแล้ว</p>
-                                <p className="text-xl font-bold text-emerald-600">{stats.byStatus.resolved}</p>
+                                <p className="text-xs sm:text-sm text-default-500">แก้ไขแล้ว</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byStatus.resolved}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm col-span-2 lg:col-span-1">
                         <div className="flex items-center gap-3">
-                            <div className="p-2 bg-red-100 rounded-lg">
-                                <Icon icon="solar:bug-bold" className="text-xl text-red-600" />
+                            <div className="p-2 sm:p-2.5 bg-red-100 rounded-xl">
+                                <Icon icon="solar:bug-bold" className="text-xl sm:text-2xl text-red-600" />
                             </div>
                             <div>
-                                <p className="text-xs text-default-500">ข้อผิดพลาด</p>
-                                <p className="text-xl font-bold text-red-600">{stats.byType.bugs}</p>
+                                <p className="text-xs sm:text-sm text-default-500">ข้อผิดพลาด</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byType.bugs}</p>
                             </div>
                         </div>
                     </div>
@@ -602,7 +603,8 @@ export default function FeedbackPage() {
                                                 <>
                                                     <Avatar
                                                         name={selectedFeedback.user.full_name}
-                                                        size="sm"
+                                                        src={selectedFeedback.user.avatar || ""}
+                                                        size="md"
                                                         className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
                                                     />
                                                     <div>

@@ -113,6 +113,15 @@ export interface SectionStudent {
   enrolled_at: string;
 }
 
+export interface MyCoursesStats {
+  total: number;
+  byStatus: {
+    active: number;
+    inactive: number;
+  };
+  years: number[];
+}
+
 class CourseService {
   /**
    * Get list of courses with pagination and filters
@@ -122,14 +131,14 @@ class CourseService {
     
     if (params?.page) queryParams.page = params.page.toString();
     if (params?.limit) queryParams.limit = params.limit.toString();
-    if (params?.search) queryParams.search = params.search;
-    if (params?.year) queryParams.year = params.year.toString();
-    if (params?.semester) queryParams.semester = params.semester.toString();
-    if (params?.status) queryParams.status = params.status;
+    if (params?.search && params.search.trim()) queryParams.search = params.search.trim();
+    if (params?.year && !isNaN(params.year)) queryParams.year = params.year.toString();
+    if (params?.semester && !isNaN(params.semester)) queryParams.semester = params.semester.toString();
+    if (params?.status && params.status.trim()) queryParams.status = params.status.trim();
     if (params?.sortBy) queryParams.sortBy = params.sortBy;
     if (params?.sortOrder) queryParams.sortOrder = params.sortOrder;
 
-    return apiService.get<CourseListResponse>(API_ENDPOINTS.COURSES.LIST, queryParams);
+    return apiService.get<CourseListResponse>(API_ENDPOINTS.COURSES.LIST, { params: queryParams });
   }
 
   /**
@@ -186,6 +195,33 @@ class CourseService {
    */
   async getTAsList() {
     return apiService.get<TA[]>(API_ENDPOINTS.COURSES.TAS_LIST);
+  }
+
+  /**
+   * Get my courses (for instructor/TA)
+   */
+  async getMyCourses(params?: CourseListParams) {
+    const queryParams: Record<string, string> = {};
+    
+    if (params?.page) queryParams.page = params.page.toString();
+    if (params?.limit) queryParams.limit = params.limit.toString();
+    if (params?.search && params.search.trim()) queryParams.search = params.search.trim();
+    if (params?.year && !isNaN(params.year)) queryParams.year = params.year.toString();
+    if (params?.semester && !isNaN(params.semester)) queryParams.semester = params.semester.toString();
+    if (params?.status && params.status.trim()) queryParams.status = params.status.trim();
+    if (params?.sortBy) queryParams.sortBy = params.sortBy;
+    if (params?.sortOrder) queryParams.sortOrder = params.sortOrder;
+
+    console.log('getMyCourses queryParams:', queryParams);
+
+    return apiService.get<CourseListResponse>(API_ENDPOINTS.COURSES.MY_COURSES, { params: queryParams });
+  }
+
+  /**
+   * Get my courses statistics (for instructor/TA)
+   */
+  async getMyCoursesStats() {
+    return apiService.get<MyCoursesStats>(API_ENDPOINTS.COURSES.MY_COURSES_STATS);
   }
 
   // Section Management

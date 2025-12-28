@@ -16,6 +16,7 @@ export interface User {
   provider: 'local' | 'google';
   google_id: string | null;
   linked_student_id: number | null;
+  avatar: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +27,7 @@ export interface CreateUserDto {
   full_name: string;
   email?: string;
   role: 'admin' | 'instructor' | 'ta';
+  avatar?: string;
 }
 
 export interface UpdateUserDto {
@@ -35,6 +37,7 @@ export interface UpdateUserDto {
   email?: string;
   role?: 'admin' | 'instructor' | 'ta';
   is_active?: boolean;
+  avatar?: string;
 }
 
 export interface UserListParams {

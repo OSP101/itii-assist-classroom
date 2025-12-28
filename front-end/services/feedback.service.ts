@@ -26,6 +26,7 @@ export interface Feedback {
     full_name: string;
     email: string;
     role: string;
+    avatar: string | null;
   };
   resolver?: {
     id: number;

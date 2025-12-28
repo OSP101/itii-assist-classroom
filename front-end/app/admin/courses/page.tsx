@@ -15,6 +15,7 @@ import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Tooltip } from "@heroui/tooltip";
+import { IoSchool, IoBook, IoPeople, IoPersonAdd } from "react-icons/io5";
 import {
     Modal,
     ModalContent,
@@ -412,8 +413,8 @@ export default function CoursesPage() {
                                 className="w-10 h-10 object-cover rounded-lg border border-slate-200"
                             />
                         ) : (
-                            <div className="p-2 bg-gradient-to-br from-violet-500 to-purple-600 rounded-lg">
-                                <Icon icon="solar:book-2-bold" className="text-lg text-white" />
+                            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                                <IoBook className="text-2xl text-white" />
                             </div>
                         )}
                         <div>
@@ -528,10 +529,10 @@ export default function CoursesPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">
                         จัดการรายวิชา
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
+                    <p className="text-sm text-default-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
                 </div>
                 <Button
                     color="primary"
@@ -547,48 +548,48 @@ export default function CoursesPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-violet-100 rounded-lg">
-                            <Icon icon="solar:book-2-bold" className="text-xl sm:text-2xl text-violet-600" />
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl">
+                            <Icon icon="solar:book-bookmark-bold" className="text-xl sm:text-2xl text-blue-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ทั้งหมด</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ทั้งหมด</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl">
                             <Icon icon="solar:check-circle-bold" className="text-xl sm:text-2xl text-green-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ใช้งาน</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus.active || 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ใช้งาน</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.byStatus.active || 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-red-100 rounded-xl">
                             <Icon icon="solar:close-circle-bold" className="text-xl sm:text-2xl text-red-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ปิดใช้งาน</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus.inactive || 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ปิดใช้งาน</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.byStatus.inactive || 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:calendar-bold" className="text-xl sm:text-2xl text-blue-600" />
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-purple-100 rounded-xl">
+                            <Icon icon="solar:calendar-bold" className="text-xl sm:text-2xl text-purple-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ปีนี้</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.thisYear || 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ปีนี้</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.thisYear || 0}</p>
                         </div>
                     </div>
                 </div>

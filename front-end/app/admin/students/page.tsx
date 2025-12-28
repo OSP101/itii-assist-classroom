@@ -479,10 +479,10 @@ export default function StudentsPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">
                         จัดการนักศึกษา
                     </h1>
-                    <p className="text-sm text-slate-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
+                    <p className="text-sm text-default-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                     <Button
@@ -508,37 +508,37 @@ export default function StudentsPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-3 gap-3 sm:gap-4">
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
-                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:users-group-rounded-bold" className="text-xl sm:text-2xl text-blue-600" />
+                        <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl">
+                            <Icon icon="solar:square-academic-cap-bold" className="text-xl sm:text-2xl text-blue-600" />
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs sm:text-sm text-default-500">ทั้งหมด</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.total || 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
-                        <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                        <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl">
                             <Icon icon="solar:check-circle-bold" className="text-xl sm:text-2xl text-green-600" />
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs sm:text-sm text-default-500">ใช้งาน</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus?.active || 0}</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.byStatus?.active || 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
                     <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left">
-                        <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                        <div className="p-2 sm:p-2.5 bg-red-100 rounded-xl">
                             <Icon icon="solar:close-circle-bold" className="text-xl sm:text-2xl text-red-600" />
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs sm:text-sm text-default-500">ปิดใช้งาน</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.byStatus?.inactive || 0}</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.byStatus?.inactive || 0}</p>
                         </div>
                     </div>
                 </div>

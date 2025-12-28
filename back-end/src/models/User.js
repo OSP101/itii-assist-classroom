@@ -47,6 +47,10 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: true,
   },
+  avatar: {
+    type: DataTypes.TEXT('long'),
+    allowNull: true,
+  },
 }, {
   tableName: 'users',
   timestamps: true,

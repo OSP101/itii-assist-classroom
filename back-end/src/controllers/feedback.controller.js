@@ -85,12 +85,12 @@ const getFeedbacks = asyncHandler(async (req, res) => {
       {
         model: User,
         as: 'user',
-        attributes: ['id', 'username', 'full_name', 'email', 'role'],
+        attributes: ['id', 'username', 'full_name', 'email', 'role', 'avatar'],
       },
       {
         model: User,
         as: 'resolver',
-        attributes: ['id', 'username', 'full_name'],
+        attributes: ['id', 'username', 'full_name', 'avatar'],
       },
     ],
     order: [[sort_by, sort_order.toUpperCase()]],
@@ -124,12 +124,12 @@ const getFeedbackById = asyncHandler(async (req, res) => {
       {
         model: User,
         as: 'user',
-        attributes: ['id', 'username', 'full_name', 'email', 'role'],
+        attributes: ['id', 'username', 'full_name', 'email', 'role', 'avatar'],
       },
       {
         model: User,
         as: 'resolver',
-        attributes: ['id', 'username', 'full_name'],
+        attributes: ['id', 'username', 'full_name', 'avatar'],
       },
     ],
   });

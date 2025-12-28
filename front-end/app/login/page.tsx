@@ -59,10 +59,10 @@ export default function LoginPage() {
                         router.push('/admin/dashboard');
                         break;
                     case 'instructor':
-                        router.push('/instructor/dashboard');
+                        router.push('/home');
                         break;
                     case 'ta':
-                        router.push('/ta/dashboard');
+                        router.push('/home');
                         break;
                     default:
                         router.push('/');

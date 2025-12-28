@@ -220,7 +220,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                                 <DropdownTrigger>
                                     <Avatar
                                         name={user?.full_name}
-                                        size="sm"
+                                        size="md"
                                         className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white cursor-pointer"
                                     />
                                 </DropdownTrigger>

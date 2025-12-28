@@ -100,7 +100,11 @@ export default function UsersPage() {
         full_name: "",
         email: "",
         role: "ta",
+        avatar: "",
     });
+
+    // Avatar preview
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
     // Fetch users
     const fetchUsers = useCallback(async () => {
@@ -212,6 +216,7 @@ export default function UsersPage() {
                 full_name: formData.full_name,
                 email: formData.email || undefined,
                 role: formData.role,
+                avatar: formData.avatar,
             };
 
             // Only include password if it was changed
@@ -318,7 +323,9 @@ export default function UsersPage() {
             full_name: "",
             email: "",
             role: "ta",
+            avatar: "",
         });
+        setAvatarPreview(null);
         setSelectedUser(null);
     };
 
@@ -331,8 +338,37 @@ export default function UsersPage() {
             full_name: user.full_name,
             email: user.email || "",
             role: user.role,
+            avatar: user.avatar || "",
         });
+        setAvatarPreview(user.avatar || null);
         setIsEditModalOpen(true);
+    };
+
+    // Handle avatar upload
+    const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                addToast({
+                    title: "ไฟล์ใหญ่เกินไป",
+                    description: "กรุณาเลือกไฟล์ขนาดไม่เกิน 2MB",
+                    color: "warning",
+                });
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setAvatarPreview(reader.result as string);
+                setFormData({ ...formData, avatar: reader.result as string });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Remove avatar
+    const handleRemoveAvatar = () => {
+        setAvatarPreview(null);
+        setFormData({ ...formData, avatar: "" });
     };
 
     // Open delete modal
@@ -348,9 +384,10 @@ export default function UsersPage() {
                 return (
                     <div className="flex items-center gap-3">
                         <Avatar
-                            size="sm"
+                            size="md"
+                            src={user.avatar || undefined}
                             name={user.full_name}
-                            className="bg-gradient-to-br from-blue-500 to-purple-500 text-white"
+                            className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
                         />
                         <div>
                             <p className="font-medium">{user.username}</p>
@@ -478,46 +515,46 @@ export default function UsersPage() {
             {stats && (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl">
                                 <Icon icon="solar:users-group-rounded-bold" className="text-xl sm:text-2xl text-blue-600" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ใช้ทั้งหมด</p>
-                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.total}</p>
+                                <p className="text-xs sm:text-sm text-default-500">ผู้ใช้ทั้งหมด</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.total}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 sm:p-2.5 bg-red-100 rounded-xl">
                                 <Icon icon="solar:shield-user-bold" className="text-xl sm:text-2xl text-red-600" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ดูแลระบบ</p>
-                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.admin}</p>
+                                <p className="text-xs sm:text-sm text-default-500">ผู้ดูแลระบบ</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byRole.admin}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 sm:p-2.5 bg-purple-100 rounded-xl">
                                 <Icon icon="solar:user-check-bold" className="text-xl sm:text-2xl text-purple-600" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs sm:text-sm text-default-500 truncate">อาจารย์</p>
-                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.instructor}</p>
+                                <p className="text-xs sm:text-sm text-default-500">อาจารย์</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byRole.instructor}</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl">
                                 <Icon icon="solar:user-hand-up-bold" className="text-xl sm:text-2xl text-green-600" />
                             </div>
                             <div className="min-w-0">
-                                <p className="text-xs sm:text-sm text-default-500 truncate">ผู้ช่วยสอน</p>
-                                <p className="text-lg sm:text-2xl font-bold text-default-900">{stats.byRole.ta}</p>
+                                <p className="text-xs sm:text-sm text-default-500">ผู้ช่วยสอน</p>
+                                <p className="text-xl sm:text-2xl font-bold text-default-900">{stats.byRole.ta}</p>
                             </div>
                         </div>
                     </div>
@@ -671,6 +708,51 @@ export default function UsersPage() {
                     </ModalHeader>
                     <ModalBody className="px-4 sm:px-6 py-4 sm:py-6">
                         <div className="space-y-5">
+                            {/* รูปโปรไฟล์ */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:camera-bold" className="text-lg text-purple-500" />
+                                    <span className="text-sm font-semibold text-slate-700">รูปโปรไฟล์</span>
+                                </div>
+                                <div className="flex items-center gap-6 py-3">
+                                    <div className="relative">
+                                        <Avatar
+                                            size="lg"
+                                            src={avatarPreview || undefined}
+                                            name={formData.full_name || "User"}
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                        />
+                                        {avatarPreview && (
+                                            <Button
+                                                isIconOnly
+                                                size="sm"
+                                                color="danger"
+                                                variant="solid"
+                                                className="absolute -top-1 -right-1 min-w-6 w-6 h-6"
+                                                onPress={handleRemoveAvatar}
+                                            >
+                                                <Icon icon="solar:close-circle-bold" className="text-sm" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="cursor-pointer">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleAvatarUpload}
+                                                className="hidden"
+                                            />
+                                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-purple-400 hover:bg-purple-50/50 transition-colors">
+                                                <Icon icon="solar:cloud-upload-bold-duotone" className="text-3xl text-purple-400 mx-auto mb-2" />
+                                                <p className="text-slate-600 text-sm font-medium">คลิกเพื่ออัปโหลดรูป</p>
+                                                <p className="text-slate-400 text-xs mt-1">JPG, PNG ไม่เกิน 2MB</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* ข้อมูลบัญชี */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
@@ -812,6 +894,51 @@ export default function UsersPage() {
                     </ModalHeader>
                     <ModalBody className="px-6 py-6">
                         <div className="space-y-5">
+                            {/* รูปโปรไฟล์ */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:camera-bold" className="text-lg text-purple-500" />
+                                    <span className="text-sm font-semibold text-slate-700">รูปโปรไฟล์</span>
+                                </div>
+                                <div className="flex items-center gap-6 py-3">
+                                    <div className="relative">
+                                        <Avatar
+                                            size="lg"
+                                            src={avatarPreview || undefined}
+                                            name={formData.full_name || "User"}
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                        />
+                                        {avatarPreview && (
+                                            <Button
+                                                isIconOnly
+                                                size="sm"
+                                                color="danger"
+                                                variant="solid"
+                                                className="absolute -top-1 -right-1 min-w-6 w-6 h-6"
+                                                onPress={handleRemoveAvatar}
+                                            >
+                                                <Icon icon="solar:close-circle-bold" className="text-sm" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="cursor-pointer">
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleAvatarUpload}
+                                                className="hidden"
+                                            />
+                                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-purple-400 hover:bg-purple-50/50 transition-colors">
+                                                <Icon icon="solar:cloud-upload-bold-duotone" className="text-3xl text-purple-400 mx-auto mb-2" />
+                                                <p className="text-slate-600 text-sm font-medium">คลิกเพื่ออัปโหลดรูป</p>
+                                                <p className="text-slate-400 text-xs mt-1">JPG, PNG ไม่เกิน 2MB</p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
                             {/* ข้อมูลบัญชี */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">

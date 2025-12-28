@@ -209,6 +209,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
             <Avatar
               name={user.full_name || user.username}
+              src={user.avatar || ""}
               className="w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
             />
             <div className="text-center sm:text-left flex-1">

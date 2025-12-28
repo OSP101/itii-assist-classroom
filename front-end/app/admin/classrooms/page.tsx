@@ -693,10 +693,10 @@ export default function ClassroomsPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">
                         จัดการห้องเรียน
                     </h1>
-                    <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    <p className="text-xs sm:text-sm text-default-500 mt-1">
                         สร้างและจัดการผังห้องเรียนสำหรับระบบจองคิวตรวจงาน
                     </p>
                 </div>
@@ -726,48 +726,48 @@ export default function ClassroomsPage() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-blue-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-blue-100 rounded-xl">
                             <Icon icon="solar:buildings-3-bold" className="text-xl sm:text-2xl text-blue-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ห้องเรียนทั้งหมด</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.totalClassrooms ?? 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ห้องเรียนทั้งหมด</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.totalClassrooms ?? 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-green-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-green-100 rounded-xl">
                             <Icon icon="solar:chair-bold" className="text-xl sm:text-2xl text-green-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">โต๊ะทั้งหมด</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.totalDesks ?? 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">โต๊ะทั้งหมด</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.totalDesks ?? 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-purple-100 rounded-xl">
                             <Icon icon="solar:monitor-bold" className="text-xl sm:text-2xl text-purple-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">โต๊ะคอมพิวเตอร์</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.computerDesks ?? 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">โต๊ะคอมพิวเตอร์</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.computerDesks ?? 0}</p>
                         </div>
                     </div>
                 </div>
                 <div className="bg-white rounded-xl p-3 sm:p-4 border border-default-200 shadow-sm">
-                    <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="p-1.5 sm:p-2 bg-red-100 rounded-lg">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 sm:p-2.5 bg-red-100 rounded-xl">
                             <Icon icon="solar:trash-bin-2-bold" className="text-xl sm:text-2xl text-red-600" />
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs sm:text-sm text-default-500 truncate">ถังขยะ</p>
-                            <p className="text-lg sm:text-2xl font-bold text-default-900">{stats?.deletedClassrooms ?? 0}</p>
+                            <p className="text-xs sm:text-sm text-default-500">ถังขยะ</p>
+                            <p className="text-xl sm:text-2xl font-bold text-default-900">{stats?.deletedClassrooms ?? 0}</p>
                         </div>
                     </div>
                 </div>

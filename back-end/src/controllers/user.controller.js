@@ -95,7 +95,7 @@ const getUserById = asyncHandler(async (req, res) => {
  * @route POST /api/users
  */
 const createUser = asyncHandler(async (req, res) => {
-  const { username, password, role, full_name, email, is_active = true } = req.body;
+  const { username, password, role, full_name, email, is_active = true, avatar } = req.body;
 
   // Validation
   if (!username || !password || !role) {
@@ -129,6 +129,7 @@ const createUser = asyncHandler(async (req, res) => {
     email,
     is_active,
     provider: 'local',
+    avatar,
   });
 
   // Log action
@@ -155,7 +156,7 @@ const createUser = asyncHandler(async (req, res) => {
  */
 const updateUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { username, password, role, full_name, email, is_active } = req.body;
+  const { username, password, role, full_name, email, is_active, avatar } = req.body;
 
   const user = await User.findByPk(id);
   if (!user) {
@@ -192,6 +193,9 @@ const updateUser = asyncHandler(async (req, res) => {
   }
   if (password) {
     user.password_hash = password; // Will be hashed by beforeUpdate hook
+  }
+  if (avatar !== undefined) {
+    user.avatar = avatar;
   }
 
   await user.save();
