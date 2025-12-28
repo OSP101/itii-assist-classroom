@@ -4,8 +4,8 @@ import { fontSans } from "@/config/fonts";
 import clsx from "clsx";
 
 export const metadata = {
-  title: "เข้าสู่ระบบ - Project TA",
-  description: "เข้าสู่ระบบ Project TA - Course & Lab Management System",
+  title: "เข้าสู่ระบบ - ITII Assist Classroom",
+  description: "เข้าสู่ระบบ ITII Assist Classroom - Course & Lab Management System",
 };
 
 export default function LoginLayout({

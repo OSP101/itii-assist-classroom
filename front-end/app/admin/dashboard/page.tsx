@@ -345,12 +345,6 @@ export default function AdminDashboardPage() {
               <h2 className="text-lg sm:text-2xl font-bold mb-1">{getGreeting()}, {currentUser?.full_name || "Admin"} 👋</h2>
               <p className="text-blue-100 text-sm sm:text-base">ยินดีต้อนรับสู่ระบบจัดการ ITII Assist Classroom</p>
             </div>
-            <div className="hidden sm:flex items-center gap-3">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/20 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-                <span className="text-sm">ระบบทำงานปกติ</span>
-              </div>
-            </div>
           </div>
         </div>
       )}

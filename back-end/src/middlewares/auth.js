@@ -59,8 +59,24 @@ const optionalAuth = (req, res, next) => {
   })(req, res, next);
 };
 
+/**
+ * Admin only middleware
+ */
+const isAdmin = (req, res, next) => {
+  if (!req.user) {
+    return next(ApiError.unauthorized('Authentication required'));
+  }
+  
+  if (req.user.role !== 'admin') {
+    return next(ApiError.forbidden('Access denied. Admin only.'));
+  }
+  
+  next();
+};
+
 module.exports = {
   authenticate,
   authorize,
   optionalAuth,
+  isAdmin,
 };

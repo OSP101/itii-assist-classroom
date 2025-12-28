@@ -200,6 +200,45 @@ const changePassword = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Update user profile
+ * PUT /api/auth/profile
+ */
+const updateProfile = asyncHandler(async (req, res) => {
+  const { full_name, email } = req.body;
+  
+  const user = await User.findByPk(req.user.id);
+  
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+  
+  // Update allowed fields
+  if (full_name !== undefined) user.full_name = full_name;
+  if (email !== undefined) user.email = email;
+  
+  await user.save();
+  
+  // Log profile update
+  await SystemLog.create({
+    log_type: 'system',
+    severity: 'info',
+    actor_user_id: user.id,
+    action: 'profile_updated',
+    detail: `User ${user.username} updated their profile`,
+    ip_address: req.ip,
+    user_agent: req.get('User-Agent'),
+  });
+  
+  res.json({
+    success: true,
+    message: 'Profile updated successfully',
+    data: {
+      user: user.toSafeObject(),
+    },
+  });
+});
+
+/**
  * Google OAuth callback
  * GET /api/auth/google/callback
  */
@@ -249,6 +288,7 @@ module.exports = {
   refresh,
   logout,
   getMe,
+  updateProfile,
   changePassword,
   googleCallback,
 };

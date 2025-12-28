@@ -505,7 +505,7 @@ export default function CoursesPage() {
                                 />
                             </Button>
                         </Tooltip>
-                        <Tooltip content="ลบ" color="danger">
+                        {/* <Tooltip content="ลบ" color="danger">
                             <Button
                                 isIconOnly
                                 size="sm"
@@ -515,7 +515,7 @@ export default function CoursesPage() {
                             >
                                 <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
                             </Button>
-                        </Tooltip>
+                        </Tooltip> */}
                     </div>
                 );
             default:
@@ -598,23 +598,23 @@ export default function CoursesPage() {
             <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
                 {/* Filters */}
                 <div className="p-3 sm:p-4">
-                    <div className="flex flex-col gap-3 pb-3 sm:pb-4">
+                    <div className="flex flex-col md:flex-row gap-3 pb-3 sm:pb-4">
                         <Input
                             placeholder="ค้นหารหัสวิชา, ชื่อวิชา..."
                             value={search}
                             onValueChange={setSearch}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
-                            className="w-full"
+                            className="w-full md:flex-1"
                             classNames={{
                                 inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
                             }}
                         />
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 flex-wrap md:flex-nowrap">
                             <Select
                                 placeholder="ปีการศึกษา"
                                 selectedKeys={[yearFilter]}
                                 onChange={(e) => setYearFilter(e.target.value)}
-                                className="flex-1 min-w-[100px]"
+                                className="flex-1 min-w-[150px] sm:w-48"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
@@ -628,7 +628,7 @@ export default function CoursesPage() {
                                 placeholder="ภาคเรียน"
                                 selectedKeys={[semesterFilter]}
                                 onChange={(e) => setSemesterFilter(e.target.value)}
-                                className="flex-1 min-w-[100px]"
+                                className="flex-1 min-w-[150px] sm:w-48"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
@@ -642,7 +642,7 @@ export default function CoursesPage() {
                                 placeholder="สถานะ"
                                 selectedKeys={[statusFilter]}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="flex-1 min-w-[100px]"
+                                className="flex-1 min-w-[150px] sm:w-48"
                                 size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",

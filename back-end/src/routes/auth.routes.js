@@ -47,6 +47,18 @@ router.post(
 );
 
 /**
+ * @route   PUT /api/auth/profile
+ * @desc    Update user profile
+ * @access  Private
+ */
+router.put(
+  '/profile',
+  authenticate,
+  validate(authValidation.updateProfile),
+  authController.updateProfile
+);
+
+/**
  * @route   GET /api/auth/google
  * @desc    Initiate Google OAuth login
  * @access  Public

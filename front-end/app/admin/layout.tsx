@@ -1,8 +1,9 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@heroui/button";
 import { Spinner } from "@heroui/spinner";
 import { Avatar } from "@heroui/avatar";
@@ -12,6 +13,7 @@ import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, DropdownSection 
 import { Icon } from "@iconify/react";
 import { IoSchool } from "react-icons/io5";
 import { AdminProvider, useAdmin } from "@/contexts/AdminContext";
+import { FeedbackButton } from "@/components/feedback";
 
 interface MenuItem {
     key: string;
@@ -52,6 +54,12 @@ const menuItems: MenuItem[] = [
         href: "/admin/classrooms",
     },
     {
+        key: "feedback",
+        label: "Feedback",
+        icon: "solar:chat-round-dots-bold",
+        href: "/admin/feedback",
+    },
+    {
         key: "logs",
         label: "System Logs",
         icon: "solar:document-text-bold",
@@ -66,13 +74,15 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
     '/admin/students': { title: 'จัดการนักศึกษา', subtitle: 'Student Management' },
     '/admin/courses': { title: 'จัดการรายวิชา', subtitle: 'Course Management' },
     '/admin/classrooms': { title: 'จัดการห้องเรียน', subtitle: 'Classroom Management' },
-    '/admin/logs': { title: 'System Logs', subtitle: 'Activity Logs' },
+    '/admin/feedback': { title: 'จัดการ Feedback', subtitle: 'รายงานข้อผิดพลาดและข้อเสนอแนะ' },
+    '/admin/logs': { title: 'System Logs', subtitle: 'บันทึกการใช้งานระบบ' },
     '/admin/settings': { title: 'ตั้งค่าระบบ', subtitle: 'System Settings' },
     '/admin/courses/': { title: 'จัดการรายวิชา', subtitle: 'Course Management' },
 };
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
     const {
         user,
         isLoading,
@@ -205,13 +215,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                             </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-4">
-                            {/* Notifications */}
-                            <Tooltip content="การแจ้งเตือน">
-                                <Button isIconOnly variant="light" size="sm">
-                                    <Icon icon="solar:bell-linear" className="text-xl text-slate-600" />
-                                </Button>
-                            </Tooltip>
-
                             {/* User Menu */}
                             <Dropdown placement="bottom-end">
                                 <DropdownTrigger>
@@ -225,16 +228,17 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                                     <DropdownSection showDivider aria-label="Profile & Actions">
                                         <DropdownItem key="profile-info" className="h-14 gap-2" textValue="Profile info">
                                             <div>
-                                                <p className="font-semibold">{user?.full_name || undefined} <Chip color="primary" variant="bordered" size="sm">{user?.role}</Chip></p>
+                                                <p className="font-medium mr-1">{user?.full_name || undefined} <Chip color="primary" variant="bordered" size="sm">{user?.role}</Chip></p>
                                                 <p className="font-light text-xs">{user?.email || undefined}</p>
                                             </div>
                                         </DropdownItem>
                                     </DropdownSection>
-                                    <DropdownItem key="profile" startContent={<Icon icon="solar:user-linear" />}>
+                                    <DropdownItem 
+                                        key="profile" 
+                                        startContent={<Icon icon="solar:user-linear" />}
+                                        onPress={() => router.push("/admin/profile")}
+                                    >
                                         โปรไฟล์
-                                    </DropdownItem>
-                                    <DropdownItem key="settings" startContent={<Icon icon="solar:settings-linear" />}>
-                                        ตั้งค่า
                                     </DropdownItem>
                                     <DropdownItem
                                         key="logout"
@@ -254,6 +258,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 <main className="p-3 sm:p-4 lg:p-6">
                     {children}
                 </main>
+
+                {/* Feedback Button */}
+                <FeedbackButton userEmail={user?.email} position="bottom-right" />
             </div>
         </div>
     );

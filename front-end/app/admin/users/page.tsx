@@ -424,7 +424,7 @@ export default function UsersPage() {
                                 />
                             </Button>
                         </Tooltip>
-                        <Tooltip content="ลบ" color="danger">
+                        {/* <Tooltip content="ลบ" color="danger">
                             <Button
                                 isIconOnly
                                 size="sm"
@@ -435,7 +435,7 @@ export default function UsersPage() {
                             >
                                 <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
                             </Button>
-                        </Tooltip>
+                        </Tooltip> */}
                     </div>
                 );
             default:
@@ -527,9 +527,9 @@ export default function UsersPage() {
             {/* Table Card with Filters */}
             <div className="bg-white rounded-xl border border-default-200 shadow-sm overflow-hidden">
                 <div className="p-3 sm:p-4">
-                    <div className="flex flex-col gap-3 pb-3 sm:pb-4">
+                    <div className="flex flex-col md:flex-row gap-3 pb-3 sm:pb-4">
                         <Input
-                            className="w-full"
+                            className="w-full md:flex-1"
                             placeholder="ค้นหาผู้ใช้..."
                             value={search}
                             onValueChange={setSearch}
@@ -540,9 +540,9 @@ export default function UsersPage() {
                                 inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
                             }}
                         />
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 flex-wrap md:flex-nowrap">
                             <Select
-                                className="flex-1 min-w-[120px]"
+                                className="flex-1 min-w-[150px] sm:w-48"
                                 placeholder="บทบาท"
                                 selectedKeys={[roleFilter]}
                                 onSelectionChange={(keys) => {
@@ -559,7 +559,7 @@ export default function UsersPage() {
                                 ))}
                             </Select>
                             <Select
-                                className="flex-1 min-w-[120px]"
+                                className="flex-1 min-w-[150px] sm:w-48"
                                 placeholder="สถานะ"
                                 selectedKeys={[statusFilter]}
                                 onSelectionChange={(keys) => {

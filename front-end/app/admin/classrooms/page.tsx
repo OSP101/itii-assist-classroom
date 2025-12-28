@@ -707,7 +707,7 @@ export default function ClassroomsPage() {
                         startContent={<Icon icon="solar:trash-bin-2-bold" className="text-lg sm:text-xl" />}
                         onPress={() => setShowDeletedOnly(!showDeletedOnly)}
                         className="font-medium flex-1 sm:flex-none text-xs sm:text-sm"
-                        size="sm"
+                        size="md"
                     >
                         <span className="hidden sm:inline">{showDeletedOnly ? "แสดงห้องปกติ" : "ดูถังขยะ"}</span>
                         <span className="sm:hidden">{showDeletedOnly ? "ปกติ" : "ถังขยะ"}</span>
@@ -717,7 +717,7 @@ export default function ClassroomsPage() {
                         startContent={<Icon icon="solar:add-circle-bold" className="text-lg sm:text-xl" />}
                         onPress={() => setShowCreateModal(true)}
                         className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-xs sm:text-sm"
-                        size="sm"
+                        size="md"
                     >
                         <span className="hidden sm:inline">สร้างห้องเรียนใหม่</span>
                         <span className="sm:hidden">สร้างห้อง</span>
@@ -786,7 +786,7 @@ export default function ClassroomsPage() {
                             isClearable
                             onClear={() => setSearchQuery("")}
                             className="flex-1"
-                            size="sm"
+                            size="md"
                             classNames={{
                                 inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
                             }}
@@ -796,8 +796,8 @@ export default function ClassroomsPage() {
                                 placeholder="เลือกชั้น"
                                 selectedKeys={[floorFilter]}
                                 onSelectionChange={(keys) => setFloorFilter(Array.from(keys)[0] as string)}
-                                className="flex-1 min-w-[100px] sm:w-40"
-                                size="sm"
+                                className="flex-1 min-w-[150px] sm:w-48"
+                                size="md"
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
                                 }}

@@ -9,6 +9,7 @@ const userRoutes = require('./user.routes');
 const studentRoutes = require('./student.routes');
 const courseRoutes = require('./course.routes');
 const classroomRoutes = require('./classroom.routes');
+const feedbackRoutes = require('./feedback.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -18,6 +19,7 @@ router.use('/users', userRoutes);
 router.use('/students', studentRoutes);
 router.use('/courses', courseRoutes);
 router.use('/classrooms', classroomRoutes);
+router.use('/feedback', feedbackRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

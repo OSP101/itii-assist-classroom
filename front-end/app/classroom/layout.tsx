@@ -11,6 +11,7 @@ import { authService } from "@/services/auth.service";
 import { courseService } from "@/services/course.service";
 import Link from "next/link";
 import { IoSchool } from "react-icons/io5";
+import { FeedbackButton } from "@/components/feedback";
 
 
 interface User {
@@ -302,6 +303,9 @@ export default function ClassroomLayout({
             <main>
                 {children}
             </main>
+
+            {/* Feedback Button */}
+            <FeedbackButton userEmail={user?.email} position="bottom-right" />
         </div>
     );
 }

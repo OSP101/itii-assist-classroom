@@ -40,8 +40,20 @@ const changePassword = {
   }),
 };
 
+const updateProfile = {
+  body: Joi.object({
+    full_name: Joi.string().max(255).allow('').optional().messages({
+      'string.max': 'Full name must be less than 255 characters',
+    }),
+    email: Joi.string().email().allow('', null).optional().messages({
+      'string.email': 'Invalid email format',
+    }),
+  }),
+};
+
 module.exports = {
   login,
   refreshToken,
   changePassword,
+  updateProfile,
 };

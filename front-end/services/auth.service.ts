@@ -136,10 +136,11 @@ class AuthService {
   /**
    * Change password
    */
-  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<{ success: boolean; error?: string }> {
     const response = await apiService.post(API_ENDPOINTS.CHANGE_PASSWORD, {
       currentPassword,
       newPassword,
+      confirmPassword,
     });
 
     if (response.success) {
@@ -149,6 +150,27 @@ class AuthService {
     return {
       success: false,
       error: response.message || response.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
+    };
+  }
+
+  /**
+   * Update user profile
+   */
+  async updateProfile(data: { full_name?: string; email?: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+    const response = await apiService.put<{ user: User }>(API_ENDPOINTS.UPDATE_PROFILE, data);
+
+    if (response.success && response.data) {
+      const user = response.data.user;
+      // Update stored user
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      return { success: true, user };
+    }
+
+    return {
+      success: false,
+      error: response.message || response.error || 'อัปเดตโปรไฟล์ไม่สำเร็จ',
     };
   }
 

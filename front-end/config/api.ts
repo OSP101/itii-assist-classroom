@@ -11,6 +11,7 @@ export const API_ENDPOINTS = {
   REFRESH: '/auth/refresh',
   ME: '/auth/me',
   CHANGE_PASSWORD: '/auth/change-password',
+  UPDATE_PROFILE: '/auth/profile',
   GOOGLE_AUTH: '/auth/google',
 
   // System (Admin)
