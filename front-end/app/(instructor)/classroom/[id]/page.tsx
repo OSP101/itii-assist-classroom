@@ -12,6 +12,8 @@ import { Input } from "@heroui/input";
 import { Tooltip } from "@heroui/tooltip";
 import { Tabs, Tab } from "@heroui/tabs";
 import { Progress } from "@heroui/progress";
+import { Snippet } from "@heroui/snippet";
+import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import {
     Table,
     TableHeader,
@@ -75,6 +77,9 @@ export default function ClassroomDetailPage() {
     const [sectionSubTab, setSectionSubTab] = useState<"students" | "permanent" | "weekly">("students");
     const [sectionSearchQuery, setSectionSearchQuery] = useState("");
 
+    // Mobile sidebar state
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
     // Group/Team states
     const [permanentTeams, setPermanentTeams] = useState<PermanentTeam[]>([]);
     const [weeklyTeams, setWeeklyTeams] = useState<Record<number, WeeklyTeam[]>>({});
@@ -87,7 +92,7 @@ export default function ClassroomDetailPage() {
     const [teamFormationMethod, setTeamFormationMethod] = useState<"manual" | "random">("manual");
     const [teamSize, setTeamSize] = useState(3);
     const [selectedSectionForTeam, setSelectedSectionForTeam] = useState<number | "all">("all");
-    
+
     // Team member selection mode (select from list or paste from Excel)
     const [teamMemberMode, setTeamMemberMode] = useState<"select" | "paste">("select");
     const [teamExcelPasteData, setTeamExcelPasteData] = useState("");
@@ -108,7 +113,7 @@ export default function ClassroomDetailPage() {
     const [studentSearchQuery, setStudentSearchQuery] = useState("");
     const [sectionStudents, setSectionStudents] = useState<Record<number, SectionStudent[]>>({});
     const [expandedSections, setExpandedSections] = useState<number[]>([]);
-    
+
     // Delete confirmation modal states
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteType, setDeleteType] = useState<"student" | "team" | null>(null);
@@ -126,7 +131,10 @@ export default function ClassroomDetailPage() {
         weekNumber?: number;
         teamMembers?: TeamMember[];
     } | null>(null);
-    
+
+    // Bulk delete teams modal state
+    const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+
     // Bulk add students (Excel paste) states
     const [addStudentMode, setAddStudentMode] = useState<"select" | "paste">("select");
     const [excelPasteData, setExcelPasteData] = useState("");
@@ -703,7 +711,7 @@ export default function ClassroomDetailPage() {
     // Open delete student confirmation modal
     const openDeleteStudentModal = (sectionId: number, student: SectionStudent) => {
         const section = course?.sections?.find(s => s.id === sectionId);
-        
+
         // Find all teams this student belongs to
         const permanentTeam = permanentTeams.find(t => t.members.some(m => m.id === student.id));
         const weeklyTeamsWithStudent: { weekNumber: number; teamName: string }[] = [];
@@ -732,7 +740,7 @@ export default function ClassroomDetailPage() {
 
         const sectionId = deleteTarget.sectionId;
         const studentId = deleteTarget.studentId;
-        
+
         setIsSubmitting(true);
         try {
             const response = await courseService.removeStudentFromSection(courseId, sectionId, studentId);
@@ -797,7 +805,7 @@ export default function ClassroomDetailPage() {
     const getStudentTeamInfo = useCallback((studentId: number) => {
         const permanentTeam = permanentTeams.find(t => t.members.some(m => m.id === studentId));
         const weeklyTeamsInfo: { weekNumber: number; teamName: string }[] = [];
-        
+
         Object.entries(weeklyTeams).forEach(([weekNum, teams]) => {
             teams.forEach(team => {
                 if (team.members.some(m => m.id === studentId)) {
@@ -837,7 +845,7 @@ export default function ClassroomDetailPage() {
         const available = getAvailableStudents();
         if (!studentSearchQuery.trim()) return available;
         const query = studentSearchQuery.toLowerCase();
-        return available.filter(s => 
+        return available.filter(s =>
             s.student_id.toLowerCase().includes(query) ||
             s.full_name.toLowerCase().includes(query)
         );
@@ -871,10 +879,10 @@ export default function ClassroomDetailPage() {
 
     // Get students not in any team
     const getUnassignedStudents = useCallback((teamType: "permanent" | "weekly", weekNumber?: number) => {
-        const allStudents = selectedSectionForTeam === "all" 
+        const allStudents = selectedSectionForTeam === "all"
             ? getAllEnrolledStudents()
             : getStudentsInSection(selectedSectionForTeam as number);
-        
+
         const assignedIds = new Set<number>();
         if (teamType === "permanent") {
             permanentTeams.forEach(team => {
@@ -897,7 +905,7 @@ export default function ClassroomDetailPage() {
 
         // Get unassigned students based on current team type
         const unassignedStudents = getUnassignedStudents(
-            teamCreationType, 
+            teamCreationType,
             teamCreationType === "weekly" ? selectedWeek : undefined
         );
         const unassignedIds = new Set(unassignedStudents.map(s => s.id));
@@ -929,7 +937,7 @@ export default function ClassroomDetailPage() {
         });
 
         setParsedTeamMembers(results);
-        
+
         // Auto-select matched students
         const matchedIds = results
             .filter(r => r.status === "matched" && r.matchedStudent)
@@ -972,7 +980,7 @@ export default function ClassroomDetailPage() {
     // Handle create teams (permanent or weekly)
     const handleCreateTeam = useCallback(async () => {
         setIsSubmitting(true);
-        
+
         try {
             if (teamFormationMethod === "manual") {
                 if (!newTeamName.trim() || selectedTeamMembers.length === 0) {
@@ -1005,7 +1013,7 @@ export default function ClassroomDetailPage() {
             } else {
                 // Random team formation
                 const unassigned = getUnassignedStudents(
-                    teamCreationType, 
+                    teamCreationType,
                     teamCreationType === "weekly" ? selectedWeek : undefined
                 );
                 if (unassigned.length === 0) {
@@ -1017,10 +1025,10 @@ export default function ClassroomDetailPage() {
                     setIsSubmitting(false);
                     return;
                 }
-                
+
                 const randomTeams = createRandomTeams(unassigned, teamSize);
-                const existingCount = teamCreationType === "permanent" 
-                    ? permanentTeams.length 
+                const existingCount = teamCreationType === "permanent"
+                    ? permanentTeams.length
                     : (weeklyTeams[selectedWeek]?.length || 0);
 
                 // Call API to bulk create teams
@@ -1058,13 +1066,13 @@ export default function ClassroomDetailPage() {
             setNewTeamName("");
             setSelectedTeamMembers([]);
         }
-    }, [teamFormationMethod, newTeamName, selectedTeamMembers, teamCreationType, selectedWeek, teamSize, 
+    }, [teamFormationMethod, newTeamName, selectedTeamMembers, teamCreationType, selectedWeek, teamSize,
         permanentTeams, weeklyTeams, courseId, fetchTeams, getUnassignedStudents, createRandomTeams]);
 
     // Open delete team confirmation modal
     const openDeleteTeamModal = useCallback((teamId: number, teamType: "permanent" | "weekly", weekNumber?: number) => {
         let team: PermanentTeam | WeeklyTeam | undefined;
-        
+
         if (teamType === "permanent") {
             team = permanentTeams.find(t => t.id === teamId);
         } else if (weekNumber !== undefined) {
@@ -1089,11 +1097,11 @@ export default function ClassroomDetailPage() {
         if (!deleteTarget?.teamId || !deleteTarget?.teamType) return;
 
         const { teamId, teamType } = deleteTarget;
-        
+
         setIsSubmitting(true);
         try {
             const response = await courseService.deleteTeam(courseId, teamId);
-            
+
             if (response.success) {
                 addToast({
                     title: "ลบกลุ่มสำเร็จ",
@@ -1118,21 +1126,13 @@ export default function ClassroomDetailPage() {
         }
     }, [deleteTarget, courseId, fetchTeams]);
 
-    // Copy teams from previous week
-    const copyTeamsFromPreviousWeek = useCallback(async () => {
-        if (selectedWeek <= 1) {
-            addToast({
-                title: "ไม่สามารถคัดลอก",
-                description: "นี่คือสัปดาห์แรก ไม่มีสัปดาห์ก่อนหน้า",
-                color: "warning",
-            });
-            return;
-        }
-        const prevWeekTeams = weeklyTeams[selectedWeek - 1];
-        if (!prevWeekTeams || prevWeekTeams.length === 0) {
+    // Copy teams from specific week
+    const copyTeamsFromWeek = useCallback(async (sourceWeek: number) => {
+        const sourceWeekTeams = weeklyTeams[sourceWeek];
+        if (!sourceWeekTeams || sourceWeekTeams.length === 0) {
             addToast({
                 title: "ไม่มีกลุ่ม",
-                description: `สัปดาห์ที่ ${selectedWeek - 1} ยังไม่มีกลุ่ม`,
+                description: `สัปดาห์ที่ ${sourceWeek} ยังไม่มีกลุ่ม`,
                 color: "warning",
             });
             return;
@@ -1141,7 +1141,7 @@ export default function ClassroomDetailPage() {
         setIsSubmitting(true);
         try {
             // Copy teams to new week via API
-            const teamsData = prevWeekTeams.map((team) => ({
+            const teamsData = sourceWeekTeams.map((team) => ({
                 name: team.name,
                 member_ids: team.members.map(m => m.id),
             }));
@@ -1155,7 +1155,7 @@ export default function ClassroomDetailPage() {
             if (response.success) {
                 addToast({
                     title: "สำเร็จ",
-                    description: `คัดลอกกลุ่มจากสัปดาห์ที่ ${selectedWeek - 1} สำเร็จ`,
+                    description: `คัดลอกกลุ่มจากสัปดาห์ที่ ${sourceWeek} สำเร็จ`,
                     color: "success",
                 });
                 fetchTeams();
@@ -1172,8 +1172,8 @@ export default function ClassroomDetailPage() {
         }
     }, [selectedWeek, weeklyTeams, courseId, fetchTeams]);
 
-    // Clear all teams in current week
-    const clearWeeklyTeams = useCallback(async () => {
+    // Open bulk delete modal
+    const openBulkDeleteModal = useCallback(() => {
         const teamsToDelete = weeklyTeams[selectedWeek];
         if (!teamsToDelete || teamsToDelete.length === 0) {
             addToast({
@@ -1183,21 +1183,28 @@ export default function ClassroomDetailPage() {
             });
             return;
         }
+        setIsBulkDeleteModalOpen(true);
+    }, [selectedWeek, weeklyTeams]);
 
-        if (!confirm(`คุณต้องการล้างกลุ่มทั้งหมด ${teamsToDelete.length} กลุ่มในสัปดาห์ที่ ${selectedWeek} ใช่หรือไม่?`)) return;
-        
+    // Clear all teams in current week (called after confirmation)
+    const confirmBulkDeleteTeams = useCallback(async () => {
+        const teamsToDelete = weeklyTeams[selectedWeek];
+        if (!teamsToDelete || teamsToDelete.length === 0) return;
+
         setIsSubmitting(true);
         try {
-            // Delete all teams in current week
-            for (const team of teamsToDelete) {
-                await courseService.deleteTeam(courseId, team.id);
+            // Use bulk delete API instead of deleting one by one
+            const teamIds = teamsToDelete.map(team => team.id);
+            const response = await courseService.bulkDeleteTeams(courseId, teamIds);
+            
+            if (response.success) {
+                addToast({
+                    title: "สำเร็จ",
+                    description: `ล้างกลุ่มสำเร็จ ${response.data?.deletedCount || teamsToDelete.length} กลุ่ม`,
+                    color: "success",
+                });
+                fetchTeams();
             }
-            addToast({
-                title: "สำเร็จ",
-                description: "ล้างกลุ่มสำเร็จ",
-                color: "success",
-            });
-            fetchTeams();
         } catch (error: unknown) {
             const err = error as { message?: string };
             addToast({
@@ -1207,6 +1214,7 @@ export default function ClassroomDetailPage() {
             });
         } finally {
             setIsSubmitting(false);
+            setIsBulkDeleteModalOpen(false);
         }
     }, [selectedWeek, weeklyTeams, courseId, fetchTeams]);
 
@@ -1248,1230 +1256,1371 @@ export default function ClassroomDetailPage() {
         );
     }
 
+    // Menu items for sidebar
+    const menuItems = [
+        { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
+        { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
+        { key: "people", label: "บุคคล", icon: "solar:users-group-rounded-bold" },
+        { key: "assignments", label: "งาน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
+        { key: "scores", label: "คะแนน", icon: "solar:diploma-bold" },
+    ];
+
     return (
-        <div className="min-h-screen bg-slate-50">
-            {/* Hero Header - Blue Theme */}
-            <div className="relative overflow-hidden bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600">
-                <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-10 right-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
-                    <div className="absolute bottom-10 left-20 w-48 h-48 bg-white rounded-full blur-3xl"></div>
-                </div>
-                <div className="relative px-6 py-6">
-                    <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Chip size="sm" className="bg-white/20 text-white border-0">
-                                    {course.code}
-                                </Chip>
-                                <Chip size="sm" className="bg-white/20 text-white border-0">
-                                    {course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}
-                                </Chip>
-                            </div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
-                                {course.name}
-                            </h1>
-                            {course.instructor && (
-                                <div className="flex items-center gap-2 text-white/80 text-sm">
-                                    <span>{course.instructor.full_name}</span>
-                                </div>
-                            )}
-                        </div>
-                        {course.image ? (
-                            <img 
-                                src={course.image} 
-                                alt={course.name}
-                                className="hidden md:block w-28 h-28 object-cover rounded-2xl shadow-xl border-2 border-white/20"
-                            />
-                        ) : (
-                            <div className="hidden md:flex w-28 h-28 bg-white/10 backdrop-blur-sm rounded-2xl items-center justify-center border-2 border-white/20">
-                                <Icon icon="solar:book-2-bold-duotone" className="text-4xl text-white/60" />
-                            </div>
-                        )}
+        <div className="min-h-screen bg-slate-100">
+            {/* Mobile Header */}
+            <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 px-4 py-3">
+                <div className="flex items-center gap-3">
+                    <Button
+                        isIconOnly
+                        variant="flat"
+                        className="bg-white/20 text-white"
+                        onPress={() => setIsMobileSidebarOpen(true)}
+                    >
+                        <Icon icon="solar:hamburger-menu-linear" className="text-xl" />
+                    </Button>
+                    <div className="flex-1 min-w-0">
+                        <h1 className="text-white font-semibold truncate">{course.name}</h1>
+                        <p className="text-white/70 text-xs">{course.code}</p>
                     </div>
                 </div>
             </div>
 
-            
-
-            {/* Tabs Navigation - Sticky below stats */}
-            <div className="sticky top-14 z-40 bg-white border-b border-slate-200 shadow-sm">
-                <div className="px-6">
-                    <Tabs 
-                        selectedKey={activeTab} 
-                        onSelectionChange={(key) => setActiveTab(key as string)}
-                        variant="underlined"
-                        classNames={{
-                            tabList: "gap-6",
-                            cursor: "bg-blue-500",
-                            tab: "px-0 h-11",
-                            tabContent: "group-data-[selected=true]:text-blue-600 text-slate-500 font-medium text-sm"
-                        }}
+            {/* Mobile Sidebar Overlay */}
+            {isMobileSidebarOpen && (
+                <div
+                    className="lg:hidden fixed inset-0 bg-black/50 z-50"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                >
+                    <div
+                        className="w-72 h-full bg-white shadow-xl"
+                        onClick={(e) => e.stopPropagation()}
                     >
-                        <Tab 
-                            key="overview" 
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:chart-2-bold" className="text-lg" />
-                                    <span>ภาพรวม</span>
-                                </div>
-                            } 
-                        />
-                        <Tab 
-                            key="sections" 
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:notebook-bold" className="text-lg" />
-                                    <span>กลุ่มเรียน</span>
-                                </div>
-                            } 
-                        />
-                        <Tab 
-                            key="people" 
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:users-group-rounded-bold" className="text-lg" />
-                                    <span>บุคคล</span>
-                                </div>
-                            } 
-                        />
-                        <Tab 
-                            key="assignments" 
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:clipboard-list-bold" className="text-lg" />
-                                    <span>งาน</span>
-                                    {assignments.length > 0 && (
-                                        <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 min-w-5 px-1">
-                                            {assignments.length}
+                        {/* Mobile Sidebar Header */}
+                        <div className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 p-4">
+                            <div className="flex items-center justify-between mb-3">
+                                <Chip size="sm" className="bg-white/20 text-white border-0">
+                                    {course.code}
+                                </Chip>
+                                <Button
+                                    isIconOnly
+                                    size="sm"
+                                    variant="flat"
+                                    className="bg-white/20 text-white"
+                                    onPress={() => setIsMobileSidebarOpen(false)}
+                                >
+                                    <Icon icon="solar:close-circle-linear" className="text-lg" />
+                                </Button>
+                            </div>
+                            <h2 className="text-white font-bold text-lg leading-tight mb-1">{course.name}</h2>
+                            <p className="text-white/70 text-sm">{course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}</p>
+                            {course.instructor && (
+                                <p className="text-white/60 text-xs mt-2">{course.instructor.full_name}</p>
+                            )}
+                        </div>
+
+                        {/* Mobile Menu Items */}
+                        <nav className="p-3">
+                            {menuItems.map((item) => (
+                                <button
+                                    key={item.key}
+                                    onClick={() => {
+                                        setActiveTab(item.key);
+                                        setIsMobileSidebarOpen(false);
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all ${activeTab === item.key
+                                            ? "bg-blue-50 text-blue-600"
+                                            : "text-slate-600 hover:bg-slate-50"
+                                        }`}
+                                >
+                                    <Icon icon={item.icon} className="text-xl" />
+                                    <span className="font-medium">{item.label}</span>
+                                    {item.badge && (
+                                        <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 min-w-5 px-1 ml-auto">
+                                            {item.badge}
                                         </Chip>
                                     )}
-                                </div>
-                            } 
-                        />
-                        <Tab 
-                            key="scores" 
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:diploma-bold" className="text-lg" />
-                                    <span>คะแนน</span>
-                                </div>
-                            } 
-                        />
-                    </Tabs>
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {/* Content Area */}
-            <div className="px-6 py-6">
-                {/* Overview Tab */}
-                {activeTab === "overview" && (
-                    <div className="space-y-6">
-                        {isOverviewLoading ? (
-                            <div className="flex justify-center items-center py-20">
-                                <Spinner size="lg" />
+            <div className="flex">
+                {/* Desktop Sidebar */}
+                <aside className="hidden lg:flex flex-col w-64 min-h-[calc(100vh-3.5rem)] bg-white border-r border-slate-200 sticky top-14">
+                    {/* Sidebar Header - Course Info */}
+                    {/* <div className="p-4 border-b border-slate-100">
+                        <div className="flex items-center gap-3">
+                            {course.image ? (
+                                <img 
+                                    src={course.image} 
+                                    alt={course.name}
+                                    className="w-12 h-12 object-cover rounded-xl"
+                                />
+                            ) : (
+                                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                                    <Icon icon="solar:book-2-bold-duotone" className="text-xl text-white" />
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <h2 className="font-bold text-slate-800 text-sm leading-tight truncate">{course.name}</h2>
+                                <p className="text-slate-500 text-xs">{course.code}</p>
                             </div>
-                        ) : (
-                            <>
-                                {/* Row 1: Course Summary & Top Students */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Course Summary */}
-                                    <Card className="shadow-sm border border-slate-200">
-                                        <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                            <div className="flex items-center gap-2">
-                                                <Icon icon="solar:chart-2-bold" className="text-xl text-blue-500" />
-                                                <span className="font-semibold text-slate-800">สรุปรายวิชา</span>
-                                            </div>
-                                        </CardHeader>
-                                        <CardBody className="px-5 py-5">
-                                            {/* Summary Stats */}
-                                            <div className="grid grid-cols-3 gap-4 mb-5">
-                                                <div className="text-center p-4 bg-blue-50 rounded-xl">
-                                                    <p className="text-3xl font-bold text-blue-600">{overview?.summary.totalStudents || 0}</p>
-                                                    <p className="text-sm text-slate-600 mt-1">นักศึกษา</p>
-                                                </div>
-                                                <div className="text-center p-4 bg-amber-50 rounded-xl">
-                                                    <p className="text-3xl font-bold text-amber-600">{overview?.summary.totalSections || 0}</p>
-                                                    <p className="text-sm text-slate-600 mt-1">กลุ่มเรียน</p>
-                                                </div>
-                                                <div className="text-center p-4 bg-emerald-50 rounded-xl">
-                                                    <p className="text-3xl font-bold text-emerald-600">{overview?.summary.totalTAs || 0}</p>
-                                                    <p className="text-sm text-slate-600 mt-1">TA</p>
-                                                </div>
-                                            </div>
-                                            <Divider />
-                                            {/* Performance Stats - waiting for assignments */}
-                                            <div className="mt-5">
-                                                <p className="text-sm font-medium text-slate-700 mb-3">ประสิทธิภาพการส่งงาน</p>
-                                                {overview?.summary.totalAssignments && overview.summary.totalAssignments > 0 ? (
-                                                    <>
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-sm text-slate-600">อัตราการส่งงาน</span>
-                                                            <span className="text-lg font-bold text-blue-600">
-                                                                {overview.summary.submissionRate}%
-                                                            </span>
-                                                        </div>
-                                                        <Progress 
-                                                            value={overview.summary.submissionRate} 
-                                                            color="primary" 
-                                                            className="h-3" 
-                                                        />
-                                                    </>
-                                                ) : (
-                                                    <div className="text-center py-4 bg-slate-50 rounded-lg">
-                                                        <Icon icon="solar:document-text-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
-                                                        <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
-                                                        <p className="text-xs text-slate-400 mt-1">สร้างงานเพื่อดูสถิติการส่งงาน</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </CardBody>
-                                    </Card>
+                        </div>
+                        <div className="flex gap-2">
+                            <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                {course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}
+                            </Chip>
+                            <Chip size="sm" variant="flat" color={course.is_active ? "success" : "default"}>
+                                {course.is_active ? "เปิดใช้งาน" : "ปิด"}
+                            </Chip>
+                        </div>
+                    </div> */}
 
-                                    {/* Top Students */}
-                                    <Card className="shadow-sm border border-slate-200">
-                                        <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                            <div className="flex items-center gap-2">
-                                                <Icon icon="solar:star-bold" className="text-xl text-amber-500" />
-                                                <span className="font-semibold text-slate-800">นักศึกษาที่โดดเด่น</span>
+                    {/* Navigation Menu */}
+                    <nav className="flex-1 p-3">
+                        {/* <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">เมนู</p> */}
+                        {menuItems.map((item) => (
+                            <button
+                                key={item.key}
+                                onClick={() => setActiveTab(item.key)}
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${activeTab === item.key
+                                        ? "bg-blue-50 text-blue-600 font-medium"
+                                        : "text-slate-600 hover:bg-slate-50"
+                                    }`}
+                            >
+                                <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
+                                <span className="text-sm">{item.label}</span>
+                                {item.badge && (
+                                    <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 min-w-5 px-1 ml-auto text-xs">
+                                        {item.badge}
+                                    </Chip>
+                                )}
+                            </button>
+                        ))}
+                    </nav>
+
+                    {/* Sidebar Footer - Quick Stats */}
+                    <div className="p-4 border-t border-slate-100 bg-slate-50">
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                            <div>
+                                <p className="text-lg font-bold text-blue-600">{overview?.summary.totalStudents || course.studentCount || 0}</p>
+                                <p className="text-xs text-slate-500">นักศึกษา</p>
+                            </div>
+                            <div>
+                                <p className="text-lg font-bold text-amber-600">{course.sections?.length || 0}</p>
+                                <p className="text-xs text-slate-500">กลุ่ม</p>
+                            </div>
+                            <div>
+                                <p className="text-lg font-bold text-emerald-600">{course.tas?.length || 0}</p>
+                                <p className="text-xs text-slate-500">TA</p>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                {/* Main Content Area */}
+                <main className="flex-1 min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-3.5rem)] overflow-x-hidden">
+                    {/* Page Title Header - Desktop only */}
+                    {/* <div className="hidden lg:block bg-white border-b border-slate-200 px-6 py-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                    activeTab === "overview" ? "bg-blue-100" :
+                                    activeTab === "sections" ? "bg-amber-100" :
+                                    activeTab === "people" ? "bg-emerald-100" :
+                                    activeTab === "assignments" ? "bg-purple-100" :
+                                    "bg-rose-100"
+                                }`}>
+                                    <Icon 
+                                        icon={menuItems.find(m => m.key === activeTab)?.icon || "solar:chart-2-bold"} 
+                                        className={`text-xl ${
+                                            activeTab === "overview" ? "text-blue-600" :
+                                            activeTab === "sections" ? "text-amber-600" :
+                                            activeTab === "people" ? "text-emerald-600" :
+                                            activeTab === "assignments" ? "text-purple-600" :
+                                            "text-rose-600"
+                                        }`}
+                                    />
+                                </div>
+                                <div>
+                                    <h1 className="text-xl font-bold text-slate-800">
+                                        {menuItems.find(m => m.key === activeTab)?.label || "ภาพรวม"}
+                                    </h1>
+                                    <p className="text-sm text-slate-500">{course.code} - {course.name}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div> */}
+
+                    {/* Content */}
+                    <div className="p-4 lg:p-6">
+                        {/* Overview Tab */}
+                        {activeTab === "overview" && (
+                            <div className="space-y-6">
+                                {isOverviewLoading ? (
+                                    <div className="flex justify-center items-center py-20">
+                                        <Spinner size="lg" />
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Course Detail Card - Only show in Overview */}
+                                        <Card className="shadow-sm border border-slate-200 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white overflow-hidden">
+                                            <div className="absolute inset-0 opacity-10">
+                                                <div className="absolute top-10 right-10 w-64 h-64 bg-white rounded-full blur-3xl"></div>
+                                                <div className="absolute bottom-10 left-20 w-48 h-48 bg-white rounded-full blur-3xl"></div>
                                             </div>
-                                        </CardHeader>
-                                        <CardBody className="px-5 py-4">
-                                            {overview?.topStudents && overview.topStudents.length > 0 ? (
-                                                <div className="space-y-3">
-                                                    {overview.topStudents.map((student, index) => (
-                                                        <div key={student.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                                            <div className="flex items-center gap-3">
-                                                                <span className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-full ${
-                                                                    index === 0 ? "bg-amber-100 text-amber-600" :
-                                                                    index === 1 ? "bg-slate-200 text-slate-600" :
-                                                                    index === 2 ? "bg-orange-100 text-orange-600" :
-                                                                    "bg-blue-100 text-blue-600"
-                                                                }`}>
-                                                                    #{index + 1}
-                                                                </span>
-                                                                <div>
-                                                                    <p className="font-medium text-slate-700 text-sm">{student.full_name}</p>
-                                                                    <p className="text-xs text-slate-400">{student.student_id}</p>
-                                                                </div>
+                                            <CardBody className="relative p-5">
+                                                <div className="flex flex-col md:flex-row gap-5">
+                                                    {/* Course Image */}
+                                                    <div className="shrink-0">
+                                                        {course.image ? (
+                                                            <img
+                                                                src={course.image}
+                                                                alt={course.name}
+                                                                className="w-full md:w-32 h-32 object-cover rounded-xl border-2 border-white/20"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-full md:w-32 h-32 bg-white/10 backdrop-blur-sm rounded-xl flex items-center justify-center border-2 border-white/20">
+                                                                <Icon icon="solar:book-2-bold-duotone" className="text-4xl text-white/60" />
                                                             </div>
-                                                            <Chip size="sm" color="primary" variant="flat" className="font-semibold">
-                                                                {student.totalScore.toFixed(1)}
+                                                        )}
+                                                    </div>
+                                                    {/* Course Info */}
+                                                    <div className="flex-1">
+                                                        <div className="flex flex-wrap gap-2 mb-3">
+                                                            <Chip size="sm" className="bg-white/20 text-white border-0">{course.code}</Chip>
+                                                            <Chip size="sm" className="bg-white/20 text-white border-0">
+                                                                {course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}
+                                                            </Chip>
+                                                            <Chip size="sm" className={`border-0 ${course.is_active ? "bg-emerald-500/30 text-emerald-100" : "bg-slate-500/30 text-slate-200"}`}>
+                                                                {course.is_active ? "เปิดใช้งาน" : "ปิด"}
                                                             </Chip>
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="text-center py-8">
-                                                    <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                                                    <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
-                                                    <p className="text-xs text-slate-400 mt-1">เมื่อมีงานและมีการให้คะแนน ระบบจะแสดงนักศึกษาที่โดดเด่น</p>
-                                                </div>
-                                            )}
-                                        </CardBody>
-                                    </Card>
-                                </div>
-
-                                {/* Row 2: Students Need Attention */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                        <div className="flex items-center gap-2">
-                                            <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-500" />
-                                            <span className="font-semibold text-slate-800">นักศึกษาที่ต้องการความสนใจ</span>
-                                            <Chip size="sm" variant="flat" color="warning" className="ml-2">
-                                                คะแนนต่ำกว่า 60%
-                                            </Chip>
-                                        </div>
-                                    </CardHeader>
-                                    <CardBody className="px-5 py-4">
-                                        {overview?.lowPerformers && overview.lowPerformers.length > 0 ? (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                                {overview.lowPerformers.map((student) => (
-                                                    <div key={student.id} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="font-medium text-slate-700 text-sm truncate">{student.full_name}</p>
-                                                                <p className="text-xs text-slate-400">{student.student_id}</p>
+                                                        <h2 className="text-xl md:text-2xl font-bold mb-2">{course.name}</h2>
+                                                        {course.description && (
+                                                            <p className="text-white/80 text-sm mb-3 line-clamp-2">{course.description}</p>
+                                                        )}
+                                                        {course.instructor && (
+                                                            <div className="flex items-center gap-2 text-white/70 text-sm">
+                                                                {/* <Icon icon="solar:user-bold" className="text-lg" /> */}
+                                                                <span>{course.instructor.full_name}</span>
                                                             </div>
-                                                            <span className={`text-sm font-bold ${
-                                                                (student.percentage || 0) < 30 ? "text-red-500" : "text-amber-500"
-                                                            }`}>
-                                                                {student.percentage || 0}%
-                                                            </span>
-                                                        </div>
-                                                        <Progress 
-                                                            value={student.percentage || 0} 
-                                                            color={(student.percentage || 0) < 30 ? "danger" : "warning"} 
-                                                            className="h-1.5" 
-                                                        />
+                                                        )}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-8">
-                                                <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                                                <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
-                                                <p className="text-xs text-slate-400 mt-1">เมื่อมีงานและมีการให้คะแนน ระบบจะแสดงนักศึกษาที่ต้องการความช่วยเหลือ</p>
-                                            </div>
-                                        )}
-                                    </CardBody>
-                                </Card>
+                                                    {/* Quick Stats */}
+                                                    <div className="flex md:flex-col gap-4 md:gap-2 justify-around md:justify-center md:border-l md:border-white/20 md:pl-5">
+                                                        <div className="text-center">
+                                                            <p className="text-2xl font-bold">{overview?.summary.totalStudents || course.studentCount || 0}</p>
+                                                            <p className="text-xs text-white/70">นักศึกษา</p>
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <p className="text-2xl font-bold">{course.sections?.length || 0}</p>
+                                                            <p className="text-xs text-white/70">กลุ่มเรียน</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </CardBody>
+                                        </Card>
 
-                                {/* Row 3: Assignment Analysis Table */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                        <div className="flex items-center gap-2">
-                                            <Icon icon="solar:document-text-bold" className="text-xl text-blue-500" />
-                                            <span className="font-semibold text-slate-800">การวิเคราะห์งานแต่ละชิ้น</span>
-                                        </div>
-                                    </CardHeader>
-                                    <CardBody className="p-0">
-                                        {/* TODO: When assignments API is ready, use overview.assignments instead */}
-                                        {assignments.length > 0 ? (
-                                            <Table removeWrapper aria-label="Assignment analysis table">
-                                                <TableHeader>
-                                                    <TableColumn>งาน</TableColumn>
-                                                    <TableColumn align="center">คะแนนเฉลี่ย</TableColumn>
-                                                    <TableColumn align="center">ส่งงานแล้ว</TableColumn>
-                                                    <TableColumn align="center">ยังไม่ส่ง</TableColumn>
-                                                    <TableColumn align="center">อัตราการส่ง</TableColumn>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {assignments.map((assignment) => (
-                                                        <TableRow key={assignment.id}>
-                                                            <TableCell>
-                                                                <div>
-                                                                    <p className="font-medium text-slate-800">{assignment.name}</p>
-                                                                    <p className="text-xs text-slate-400">คะแนนเต็ม: {assignment.maxScore}</p>
+                                        {/* Row 1: Course Summary & Top Students */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* Course Summary */}
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:chart-2-bold" className="text-xl text-blue-500" />
+                                                        <span className="font-semibold text-slate-800">สรุปรายวิชา</span>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardBody className="px-5 py-5">
+                                                    {/* Summary Stats */}
+                                                    <div className="grid grid-cols-3 gap-4 mb-5">
+                                                        <div className="text-center p-4 bg-blue-50 rounded-xl">
+                                                            <p className="text-3xl font-bold text-blue-600">{overview?.summary.totalStudents || 0}</p>
+                                                            <p className="text-sm text-slate-600 mt-1">นักศึกษา</p>
+                                                        </div>
+                                                        <div className="text-center p-4 bg-amber-50 rounded-xl">
+                                                            <p className="text-3xl font-bold text-amber-600">{overview?.summary.totalSections || 0}</p>
+                                                            <p className="text-sm text-slate-600 mt-1">กลุ่มเรียน</p>
+                                                        </div>
+                                                        <div className="text-center p-4 bg-emerald-50 rounded-xl">
+                                                            <p className="text-3xl font-bold text-emerald-600">{overview?.summary.totalTAs || 0}</p>
+                                                            <p className="text-sm text-slate-600 mt-1">TA</p>
+                                                        </div>
+                                                    </div>
+                                                    <Divider />
+                                                    {/* Performance Stats - waiting for assignments */}
+                                                    <div className="mt-5">
+                                                        <p className="text-sm font-medium text-slate-700 mb-3">ประสิทธิภาพการส่งงาน</p>
+                                                        {overview?.summary.totalAssignments && overview.summary.totalAssignments > 0 ? (
+                                                            <>
+                                                                <div className="flex justify-between items-center mb-2">
+                                                                    <span className="text-sm text-slate-600">อัตราการส่งงาน</span>
+                                                                    <span className="text-lg font-bold text-blue-600">
+                                                                        {overview.summary.submissionRate}%
+                                                                    </span>
                                                                 </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <span className="text-slate-400">-</span>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Chip size="sm" color="default" variant="flat">- คน</Chip>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <Chip size="sm" color="default" variant="flat">- คน</Chip>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <span className="text-slate-400">-</span>
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        ) : (
-                                            <div className="text-center py-12">
-                                                <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                                                <p className="text-sm text-slate-400">ยังไม่มีงานที่มอบหมาย</p>
-                                                <Button
-                                                    size="sm"
-                                                    color="primary"
-                                                    variant="flat"
-                                                    className="mt-3"
-                                                    onPress={() => setActiveTab("assignments")}
-                                                >
-                                                    สร้างงานใหม่
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </CardBody>
-                                </Card>
+                                                                <Progress
+                                                                    value={overview.summary.submissionRate}
+                                                                    color="primary"
+                                                                    className="h-3"
+                                                                />
+                                                            </>
+                                                        ) : (
+                                                            <div className="text-center py-4 bg-slate-50 rounded-lg">
+                                                                <Icon icon="solar:document-text-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
+                                                                <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
+                                                                <p className="text-xs text-slate-400 mt-1">สร้างงานเพื่อดูสถิติการส่งงาน</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </CardBody>
+                                            </Card>
 
-                                {/* Row 4: TA Activity (Only for Instructor) & Course Info */}
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* TA Activity - Only visible to instructor */}
-                                    {(userRole === "instructor" || userRole === "admin") && (
+                                            {/* Top Students */}
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:star-bold" className="text-xl text-amber-500" />
+                                                        <span className="font-semibold text-slate-800">นักศึกษาที่โดดเด่น</span>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardBody className="px-5 py-4">
+                                                    {overview?.topStudents && overview.topStudents.length > 0 ? (
+                                                        <div className="space-y-3">
+                                                            {overview.topStudents.map((student, index) => (
+                                                                <div key={student.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-full ${index === 0 ? "bg-amber-100 text-amber-600" :
+                                                                                index === 1 ? "bg-slate-200 text-slate-600" :
+                                                                                    index === 2 ? "bg-orange-100 text-orange-600" :
+                                                                                        "bg-blue-100 text-blue-600"
+                                                                            }`}>
+                                                                            #{index + 1}
+                                                                        </span>
+                                                                        <div>
+                                                                            <p className="font-medium text-slate-700 text-sm">{student.full_name}</p>
+                                                                            <p className="text-xs text-slate-400">{student.student_id}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                    <Chip size="sm" color="primary" variant="flat" className="font-semibold">
+                                                                        {student.totalScore.toFixed(1)}
+                                                                    </Chip>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center py-8">
+                                                            <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                                            <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
+                                                            <p className="text-xs text-slate-400 mt-1">เมื่อมีงานและมีการให้คะแนน ระบบจะแสดงนักศึกษาที่โดดเด่น</p>
+                                                        </div>
+                                                    )}
+                                                </CardBody>
+                                            </Card>
+                                        </div>
+
+                                        {/* Row 2: Students Need Attention */}
                                         <Card className="shadow-sm border border-slate-200">
                                             <CardHeader className="px-5 py-4 border-b border-slate-100">
                                                 <div className="flex items-center gap-2">
-                                                    <Icon icon="solar:user-hands-bold" className="text-xl text-emerald-500" />
-                                                    <span className="font-semibold text-slate-800">กิจกรรม TA</span>
-                                                    <Chip size="sm" variant="flat" color="secondary" className="ml-2">
-                                                        เฉพาะอาจารย์
+                                                    <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-500" />
+                                                    <span className="font-semibold text-slate-800">นักศึกษาที่ต้องการความสนใจ</span>
+                                                    <Chip size="sm" variant="flat" color="warning" className="ml-2">
+                                                        คะแนนต่ำกว่า 60%
                                                     </Chip>
                                                 </div>
                                             </CardHeader>
                                             <CardBody className="px-5 py-4">
-                                                {overview?.taActivity && overview.taActivity.length > 0 ? (
-                                                    <div className="space-y-4">
-                                                        {overview.taActivity.map((ta) => (
-                                                            <div key={ta.id} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
-                                                                <Avatar 
-                                                                    name={ta.full_name}
-                                                                    src={ta.avatar || undefined}
-                                                                    size="md"
-                                                                    className="bg-gradient-to-br from-emerald-500 to-teal-600"
+                                                {overview?.lowPerformers && overview.lowPerformers.length > 0 ? (
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                        {overview.lowPerformers.map((student) => (
+                                                            <div key={student.id} className="bg-slate-50 rounded-xl p-3 border border-slate-100">
+                                                                <div className="flex items-center justify-between mb-2">
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="font-medium text-slate-700 text-sm truncate">{student.full_name}</p>
+                                                                        <p className="text-xs text-slate-400">{student.student_id}</p>
+                                                                    </div>
+                                                                    <span className={`text-sm font-bold ${(student.percentage || 0) < 30 ? "text-red-500" : "text-amber-500"
+                                                                        }`}>
+                                                                        {student.percentage || 0}%
+                                                                    </span>
+                                                                </div>
+                                                                <Progress
+                                                                    value={student.percentage || 0}
+                                                                    color={(student.percentage || 0) < 30 ? "danger" : "warning"}
+                                                                    className="h-1.5"
                                                                 />
-                                                                <div className="flex-1">
-                                                                    <p className="font-medium text-slate-800">{ta.full_name}</p>
-                                                                    <p className="text-xs text-slate-400">{ta.email || "ไม่มีอีเมล"}</p>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    {ta.gradedCount > 0 ? (
-                                                                        <>
-                                                                            <p className="text-sm font-semibold text-emerald-600">ตรวจงานแล้ว</p>
-                                                                            <p className="text-xs text-slate-500">{ta.gradedCount} ชิ้น</p>
-                                                                        </>
-                                                                    ) : (
-                                                                        <p className="text-xs text-slate-400">ยังไม่มีกิจกรรม</p>
-                                                                    )}
-                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
                                                 ) : (
                                                     <div className="text-center py-8">
-                                                        <Icon icon="solar:user-hands-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                                                        <p className="text-sm text-slate-400">ยังไม่มีผู้ช่วยสอน</p>
+                                                        <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                                        <p className="text-sm text-slate-500">ยังไม่มีงานที่มอบหมาย</p>
+                                                        <p className="text-xs text-slate-400 mt-1">เมื่อมีงานและมีการให้คะแนน ระบบจะแสดงนักศึกษาที่ต้องการความช่วยเหลือ</p>
                                                     </div>
                                                 )}
                                             </CardBody>
                                         </Card>
-                                    )}
 
-                                    {/* Course Info */}
-                                    <Card className="shadow-sm border border-slate-200">
-                                        <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                            <div className="flex items-center gap-2">
-                                                <Icon icon="solar:info-circle-bold" className="text-xl text-blue-500" />
-                                                <span className="font-semibold text-slate-800">ข้อมูลรายวิชา</span>
-                                            </div>
-                                        </CardHeader>
-                                        <CardBody className="px-5 py-4 space-y-4">
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="bg-slate-50 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-500 mb-1">รหัสวิชา</p>
-                                                    <p className="font-semibold text-slate-800">{course.code}</p>
+                                        {/* Row 3: Assignment Analysis Table */}
+                                        <Card className="shadow-sm border border-slate-200">
+                                            <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                                <div className="flex items-center gap-2">
+                                                    <Icon icon="solar:document-text-bold" className="text-xl text-blue-500" />
+                                                    <span className="font-semibold text-slate-800">การวิเคราะห์งานแต่ละชิ้น</span>
                                                 </div>
-                                                <div className="bg-slate-50 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-500 mb-1">ปีการศึกษา</p>
-                                                    <p className="font-semibold text-slate-800">{course.year}</p>
-                                                </div>
-                                                <div className="bg-slate-50 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-500 mb-1">ภาคเรียน</p>
-                                                    <p className="font-semibold text-slate-800">
-                                                        {course.semester === 3 ? "ภาคฤดูร้อน" : `ภาคเรียนที่ ${course.semester}`}
-                                                    </p>
-                                                </div>
-                                                <div className="bg-slate-50 rounded-lg p-3">
-                                                    <p className="text-xs text-slate-500 mb-1">อาจารย์ผู้สอน</p>
-                                                    <p className="font-semibold text-slate-800">{course.instructor?.full_name || "-"}</p>
-                                                </div>
-                                            </div>
-                                            {course.description && (
-                                                <>
-                                                    <Divider />
-                                                    <div>
-                                                        <p className="text-xs text-slate-500 mb-2">คำอธิบายรายวิชา</p>
-                                                        <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">{course.description}</p>
-                                                    </div>
-                                                </>
-                                            )}
-                                            {/* TAs List for TA view */}
-                                            {userRole === "ta" && course.tas && course.tas.length > 0 && (
-                                                <>
-                                                    <Divider />
-                                                    <div>
-                                                        <p className="text-xs text-slate-500 mb-2">ผู้ช่วยสอนในรายวิชา</p>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {course.tas.map((ta) => (
-                                                                <Chip 
-                                                                    key={ta.id}
-                                                                    variant="flat"
-                                                                    color="success"
-                                                                    size="sm"
-                                                                >
-                                                                    {ta.full_name}
-                                                                </Chip>
+                                            </CardHeader>
+                                            <CardBody className="p-0">
+                                                {/* TODO: When assignments API is ready, use overview.assignments instead */}
+                                                {assignments.length > 0 ? (
+                                                    <Table removeWrapper aria-label="Assignment analysis table">
+                                                        <TableHeader>
+                                                            <TableColumn>งาน</TableColumn>
+                                                            <TableColumn align="center">คะแนนเฉลี่ย</TableColumn>
+                                                            <TableColumn align="center">ส่งงานแล้ว</TableColumn>
+                                                            <TableColumn align="center">ยังไม่ส่ง</TableColumn>
+                                                            <TableColumn align="center">อัตราการส่ง</TableColumn>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {assignments.map((assignment) => (
+                                                                <TableRow key={assignment.id}>
+                                                                    <TableCell>
+                                                                        <div>
+                                                                            <p className="font-medium text-slate-800">{assignment.name}</p>
+                                                                            <p className="text-xs text-slate-400">คะแนนเต็ม: {assignment.maxScore}</p>
+                                                                        </div>
+                                                                    </TableCell>
+                                                                    <TableCell>
+                                                                        <span className="text-slate-400">-</span>
+                                                                    </TableCell>
+                                                                    <TableCell>
+                                                                        <Chip size="sm" color="default" variant="flat">- คน</Chip>
+                                                                    </TableCell>
+                                                                    <TableCell>
+                                                                        <Chip size="sm" color="default" variant="flat">- คน</Chip>
+                                                                    </TableCell>
+                                                                    <TableCell>
+                                                                        <span className="text-slate-400">-</span>
+                                                                    </TableCell>
+                                                                </TableRow>
                                                             ))}
-                                                        </div>
+                                                        </TableBody>
+                                                    </Table>
+                                                ) : (
+                                                    <div className="text-center py-12">
+                                                        <Icon icon="solar:document-text-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                                        <p className="text-sm text-slate-400">ยังไม่มีงานที่มอบหมาย</p>
+                                                        <Button
+                                                            size="sm"
+                                                            color="primary"
+                                                            variant="flat"
+                                                            className="mt-3"
+                                                            onPress={() => setActiveTab("assignments")}
+                                                        >
+                                                            สร้างงานใหม่
+                                                        </Button>
                                                     </div>
-                                                </>
-                                            )}
-                                        </CardBody>
-                                    </Card>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
+                                                )}
+                                            </CardBody>
+                                        </Card>
 
-                {/* Sections Tab - Redesigned with Sub-tabs */}
-                {activeTab === "sections" && (
-                    <div className="space-y-6">
-                        {/* Header Card with Sub-tabs */}
-                        <Card className="shadow-sm border border-slate-200 overflow-hidden">
-                            <div className="bg-blue-300 p-6">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                                            <Icon icon="solar:users-group-rounded-bold-duotone" className="text-3xl text-white" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-bold text-white">จัดการกลุ่มเรียน</h2>
-                                            <p className="text-white/80 text-sm">จัดการนักศึกษาและกลุ่มทำงานในรายวิชา</p>
-                                        </div>
-                                    </div>
-                                    <div className="hidden md:flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
-                                        <div className="text-center">
-                                            <p className="text-2xl font-bold text-white">{course.sections?.length || 0}</p>
-                                            <p className="text-xs text-white/70">กลุ่มเรียน</p>
-                                        </div>
-                                        <div className="w-px h-8 bg-white/20"></div>
-                                        <div className="text-center">
-                                            <p className="text-2xl font-bold text-white">{totalStudents}</p>
-                                            <p className="text-xs text-white/70">นักศึกษา</p>
-                                        </div>
-                                        <div className="w-px h-8 bg-white/20"></div>
-                                        <div className="text-center">
-                                            <p className="text-2xl font-bold text-white">{permanentTeams.length}</p>
-                                            <p className="text-xs text-white/70">กลุ่มถาวร</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            {/* Sub-tabs Navigation */}
-                            <div className="bg-white border-t border-slate-100">
-                                <div className="flex">
-                                    <button
-                                        onClick={() => setSectionSubTab("students")}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 font-medium transition-all border-b-2 ${
-                                            sectionSubTab === "students"
-                                                ? "text-amber-600 border-amber-500 bg-amber-50/50"
-                                                : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
-                                        }`}
-                                    >
-                                        <Icon icon="solar:users-group-rounded-bold" className="text-xl" />
-                                        <span>รายชื่อนักศึกษา</span>
-                                        <Chip size="sm" variant="flat" className={sectionSubTab === "students" ? "bg-amber-100 text-amber-700" : "bg-slate-100"}>
-                                            {totalStudents}
-                                        </Chip>
-                                    </button>
-                                    <button
-                                        onClick={() => setSectionSubTab("permanent")}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 font-medium transition-all border-b-2 ${
-                                            sectionSubTab === "permanent"
-                                                ? "text-purple-600 border-purple-500 bg-purple-50/50"
-                                                : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
-                                        }`}
-                                    >
-                                        <Icon icon="solar:users-group-two-rounded-bold" className="text-xl" />
-                                        <span>กลุ่มถาวร</span>
-                                        {permanentTeams.length > 0 && (
-                                            <Chip size="sm" variant="flat" className={sectionSubTab === "permanent" ? "bg-purple-100 text-purple-700" : "bg-slate-100"}>
-                                                {permanentTeams.length}
-                                            </Chip>
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => setSectionSubTab("weekly")}
-                                        className={`flex-1 flex items-center justify-center gap-2 py-4 px-6 font-medium transition-all border-b-2 ${
-                                            sectionSubTab === "weekly"
-                                                ? "text-emerald-600 border-emerald-500 bg-emerald-50/50"
-                                                : "text-slate-500 border-transparent hover:text-slate-700 hover:bg-slate-50"
-                                        }`}
-                                    >
-                                        <Icon icon="solar:calendar-bold" className="text-xl" />
-                                        <span>กลุ่มรายสัปดาห์</span>
-                                        {Object.keys(weeklyTeams).filter(k => weeklyTeams[parseInt(k)]?.length > 0).length > 0 && (
-                                            <Chip size="sm" variant="flat" className={sectionSubTab === "weekly" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100"}>
-                                                W{selectedWeek}
-                                            </Chip>
-                                        )}
-                                    </button>
-                                </div>
-                            </div>
-                        </Card>
-
-                        {/* Sub-tab: Students (Table View) */}
-                        {sectionSubTab === "students" && (
-                            <div className="space-y-4">
-                                {/* Search & Actions Bar */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-center justify-between flex-wrap gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <Input
-                                                    placeholder="ค้นหารหัสหรือชื่อนักศึกษา..."
-                                                    value={sectionSearchQuery}
-                                                    onValueChange={setSectionSearchQuery}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
-                                                    className="w-72"
-                                                    size="md"
-                                                    variant="bordered"
-                                                    isClearable
-                                                    classNames={{
-                                                        inputWrapper: "bg-slate-50 border-slate-200"
-                                                    }}
-                                                />
-                                                {/* {sectionSearchQuery && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="light"
-                                                        onPress={() => setSectionSearchQuery("")}
-                                                    >
-                                                        ล้างการค้นหา
-                                                    </Button>
-                                                )} */}
-                                            </div>
-                                            <Button
-                                                color="primary"
-                                                startContent={<Icon icon="solar:add-circle-bold" />}
-                                                onPress={() => setIsAddSectionModalOpen(true)}
-                                                className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25"
-                                            >
-                                                เพิ่มกลุ่มเรียน
-                                            </Button>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Sections with Table */}
-                                {course.sections && course.sections.length > 0 ? (
-                                    <div className="space-y-4">
-                                        {course.sections.map((section, sectionIdx) => (
-                                            <Card key={section.id} className="shadow-sm border border-slate-200 overflow-hidden">
-                                                {/* Section Header */}
-                                                <div 
-                                                    className={`flex items-center justify-between p-4 cursor-pointer transition-all ${
-                                                        expandedSections.includes(section.id)
-                                                            ? "bg-gradient-to-r from-amber-500 to-orange-500"
-                                                            : "bg-gradient-to-r from-slate-50 to-slate-100 hover:from-amber-50 hover:to-orange-50"
-                                                    }`}
-                                                    onClick={() => toggleSection(section.id)}
-                                                >
-                                                    <div className="flex items-center gap-4">
-                                                        {/* <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg ${
-                                                            expandedSections.includes(section.id)
-                                                                ? "bg-white/20 text-white"
-                                                                : "bg-amber-500 text-white"
-                                                        }`}>
-                                                            {section.section_no}
-                                                        </div> */}
-                                                        <div>
-                                                            <p className={`font-semibold ${expandedSections.includes(section.id) ? "text-white" : "text-slate-800"}`}>
-                                                                 {section.section_no}
-                                                            </p>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <Icon 
-                                                                    icon="solar:users-group-rounded-linear" 
-                                                                    className={expandedSections.includes(section.id) ? "text-white/70" : "text-slate-400"} 
-                                                                />
-                                                                <span className={`text-sm ${expandedSections.includes(section.id) ? "text-white/80" : "text-slate-500"}`}>
-                                                                    {section.studentCount || 0} นักศึกษา
-                                                                </span>
-                                                            </div>
+                                        {/* Row 4: TA Activity (Only for Instructor) & Course Info */}
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                            {/* TA Activity - Only visible to instructor */}
+                                            {(userRole === "instructor" || userRole === "admin") && (
+                                                <Card className="shadow-sm border border-slate-200">
+                                                    <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon icon="solar:user-hands-bold" className="text-xl text-emerald-500" />
+                                                            <span className="font-semibold text-slate-800">กิจกรรม TA</span>
+                                                            <Chip size="sm" variant="flat" color="secondary" className="ml-2">
+                                                                เฉพาะอาจารย์
+                                                            </Chip>
                                                         </div>
-                                                    </div>
-                                                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                        <Tooltip content="เพิ่มนักศึกษา">
-                                                            <Button
-                                                                isIconOnly
-                                                                size="sm"
-                                                                variant={expandedSections.includes(section.id) ? "flat" : "flat"}
-                                                                className={expandedSections.includes(section.id) ? "bg-white/20 text-white" : "bg-amber-100 text-amber-600"}
-                                                                onPress={() => openAddStudentModal(section.id)}
-                                                            >
-                                                                <Icon icon="solar:user-plus-bold" className="text-lg" />
-                                                            </Button>
-                                                        </Tooltip>
-                                                        <Tooltip content="ลบกลุ่มเรียน" color="danger">
-                                                            <Button
-                                                                isIconOnly
-                                                                size="sm"
-                                                                variant="flat"
-                                                                className={expandedSections.includes(section.id) ? "bg-white/20 text-white hover:bg-red-500" : "bg-red-100 text-red-600"}
-                                                                onPress={() => handleRemoveSection(section.id)}
-                                                            >
-                                                                <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
-                                                            </Button>
-                                                        </Tooltip>
-                                                        <div className={`ml-2 p-1 rounded-lg ${expandedSections.includes(section.id) ? "bg-white/20" : "bg-slate-200"}`}>
-                                                            <Icon
-                                                                icon={expandedSections.includes(section.id) ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"}
-                                                                className={`text-xl ${expandedSections.includes(section.id) ? "text-white" : "text-slate-500"}`}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Student Table (expanded) */}
-                                                {expandedSections.includes(section.id) && (
-                                                    <CardBody className="p-0 bg-white">
-                                                        {getFilteredSectionStudents(section.id).length > 0 ? (
-                                                            <Table
-                                                                aria-label={`นักศึกษากลุ่ม ${section.section_no}`}
-                                                                removeWrapper
-                                                                classNames={{
-                                                                    th: "bg-slate-50/80 text-slate-600 font-semibold text-xs uppercase tracking-wide",
-                                                                    td: "py-3 border-b border-slate-50",
-                                                                    tr: "hover:bg-amber-50/50 transition-colors",
-                                                                }}
-                                                            >
-                                                                <TableHeader>
-                                                                    <TableColumn width={60}>ลำดับ</TableColumn>
-                                                                    <TableColumn width={130}>รหัสนักศึกษา</TableColumn>
-                                                                    <TableColumn>ชื่อ-นามสกุล</TableColumn>
-                                                                    <TableColumn width={140}>กลุ่มถาวร</TableColumn>
-                                                                    <TableColumn width={100}>สถานะ</TableColumn>
-                                                                    <TableColumn width={80} align="center">จัดการ</TableColumn>
-                                                                </TableHeader>
-                                                                <TableBody>
-                                                                    {getFilteredSectionStudents(section.id).map((student, idx) => (
-                                                                        <TableRow key={student.id}>
-                                                                            <TableCell>
-                                                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
-                                                                                    <span className="text-sm font-medium text-slate-500">{idx + 1}</span>
-                                                                                </div>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <code className="px-2 py-1 bg-slate-100 rounded text-sm font-mono text-slate-700">
-                                                                                    {student.student_id}
-                                                                                </code>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <Avatar 
-                                                                                        name={student.full_name} 
-                                                                                        size="sm" 
-                                                                                        className="bg-gradient-to-br from-amber-400 to-orange-500"
-                                                                                    />
-                                                                                    <span className="font-medium text-slate-800">{student.full_name}</span>
-                                                                                </div>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                {findStudentTeam(student.id, "permanent") ? (
-                                                                                    <Chip 
-                                                                                        size="sm" 
-                                                                                        className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white"
-                                                                                        startContent={<Icon icon="solar:users-group-two-rounded-bold" className="text-xs" />}
-                                                                                    >
-                                                                                        {findStudentTeam(student.id, "permanent")}
-                                                                                    </Chip>
-                                                                                ) : (
-                                                                                    <span className="text-slate-300 text-sm">ยังไม่มีกลุ่ม</span>
-                                                                                )}
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <Chip 
-                                                                                    size="sm" 
-                                                                                    variant="dot"
-                                                                                    color={student.is_active ? "success" : "default"}
-                                                                                    classNames={{
-                                                                                        dot: student.is_active ? "bg-green-500" : "bg-slate-300"
-                                                                                    }}
-                                                                                >
-                                                                                    {student.is_active ? "ใช้งาน" : "ไม่ใช้งาน"}
-                                                                                </Chip>
-                                                                            </TableCell>
-                                                                            <TableCell>
-                                                                                <Tooltip content="นำออกจากกลุ่ม" color="danger">
-                                                                                    <Button
-                                                                                        isIconOnly
-                                                                                        size="sm"
-                                                                                        variant="light"
-                                                                                        color="danger"
-                                                                                        onPress={() => openDeleteStudentModal(section.id, student)}
-                                                                                    >
-                                                                                        <Icon icon="solar:user-minus-bold" className="text-lg" />
-                                                                                    </Button>
-                                                                                </Tooltip>
-                                                                            </TableCell>
-                                                                        </TableRow>
-                                                                    ))}
-                                                                </TableBody>
-                                                            </Table>
-                                                        ) : sectionStudents[section.id] && sectionStudents[section.id].length > 0 ? (
-                                                            <div className="text-center py-12 bg-slate-50/50">
-                                                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
-                                                                    <Icon icon="solar:magnifer-linear" className="text-3xl text-slate-400" />
-                                                                </div>
-                                                                <p className="text-slate-500 font-medium">ไม่พบนักศึกษาที่ค้นหา</p>
-                                                                <p className="text-sm text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาใหม่</p>
+                                                    </CardHeader>
+                                                    <CardBody className="px-5 py-4">
+                                                        {overview?.taActivity && overview.taActivity.length > 0 ? (
+                                                            <div className="space-y-4">
+                                                                {overview.taActivity.map((ta) => (
+                                                                    <div key={ta.id} className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl">
+                                                                        <Avatar
+                                                                            name={ta.full_name}
+                                                                            src={ta.avatar || undefined}
+                                                                            size="md"
+                                                                            className="bg-gradient-to-br from-emerald-500 to-teal-600"
+                                                                        />
+                                                                        <div className="flex-1">
+                                                                            <p className="font-medium text-slate-800">{ta.full_name}</p>
+                                                                            <p className="text-xs text-slate-400">{ta.email || "ไม่มีอีเมล"}</p>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            {ta.gradedCount > 0 ? (
+                                                                                <>
+                                                                                    <p className="text-sm font-semibold text-emerald-600">ตรวจงานแล้ว</p>
+                                                                                    <p className="text-xs text-slate-500">{ta.gradedCount} ชิ้น</p>
+                                                                                </>
+                                                                            ) : (
+                                                                                <p className="text-xs text-slate-400">ยังไม่มีกิจกรรม</p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
                                                             </div>
                                                         ) : (
-                                                            <div className="text-center py-12 bg-gradient-to-b from-slate-50 to-white">
-                                                                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
-                                                                    <Icon icon="solar:users-group-rounded-bold-duotone" className="text-4xl text-amber-500" />
-                                                                </div>
-                                                                <p className="text-slate-600 font-medium mb-1">ยังไม่มีนักศึกษาในกลุ่มนี้</p>
-                                                                <p className="text-sm text-slate-400 mb-4">เพิ่มนักศึกษาเพื่อเริ่มต้นจัดการกลุ่มเรียน</p>
-                                                                <Button
-                                                                    color="primary"
-                                                                    variant="flat"
-                                                                    startContent={<Icon icon="solar:user-plus-bold" />}
-                                                                    onPress={() => openAddStudentModal(section.id)}
-                                                                    className="bg-amber-100 text-amber-700"
-                                                                >
-                                                                    เพิ่มนักศึกษา
-                                                                </Button>
+                                                            <div className="text-center py-8">
+                                                                <Icon icon="solar:user-hands-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                                                <p className="text-sm text-slate-400">ยังไม่มีผู้ช่วยสอน</p>
                                                             </div>
                                                         )}
                                                     </CardBody>
-                                                )}
+                                                </Card>
+                                            )}
+
+                                            {/* Course Info */}
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:info-circle-bold" className="text-xl text-blue-500" />
+                                                        <span className="font-semibold text-slate-800">ข้อมูลรายวิชา</span>
+                                                    </div>
+                                                </CardHeader>
+                                                <CardBody className="px-5 py-4 space-y-4">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="bg-slate-50 rounded-lg p-3">
+                                                            <p className="text-xs text-slate-500 mb-1">รหัสวิชา</p>
+                                                            <p className="font-semibold text-slate-800">{course.code}</p>
+                                                        </div>
+                                                        <div className="bg-slate-50 rounded-lg p-3">
+                                                            <p className="text-xs text-slate-500 mb-1">ปีการศึกษา</p>
+                                                            <p className="font-semibold text-slate-800">{course.year}</p>
+                                                        </div>
+                                                        <div className="bg-slate-50 rounded-lg p-3">
+                                                            <p className="text-xs text-slate-500 mb-1">ภาคเรียน</p>
+                                                            <p className="font-semibold text-slate-800">
+                                                                {course.semester === 3 ? "ภาคฤดูร้อน" : `ภาคเรียนที่ ${course.semester}`}
+                                                            </p>
+                                                        </div>
+                                                        <div className="bg-slate-50 rounded-lg p-3">
+                                                            <p className="text-xs text-slate-500 mb-1">อาจารย์ผู้สอน</p>
+                                                            <p className="font-semibold text-slate-800">{course.instructor?.full_name || "-"}</p>
+                                                        </div>
+                                                    </div>
+                                                    {course.description && (
+                                                        <>
+                                                            <Divider />
+                                                            <div>
+                                                                <p className="text-xs text-slate-500 mb-2">คำอธิบายรายวิชา</p>
+                                                                <p className="text-sm text-slate-700 bg-slate-50 p-3 rounded-lg">{course.description}</p>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    {/* TAs List for TA view */}
+                                                    {userRole === "ta" && course.tas && course.tas.length > 0 && (
+                                                        <>
+                                                            <Divider />
+                                                            <div>
+                                                                <p className="text-xs text-slate-500 mb-2">ผู้ช่วยสอนในรายวิชา</p>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {course.tas.map((ta) => (
+                                                                        <Chip
+                                                                            key={ta.id}
+                                                                            variant="flat"
+                                                                            color="success"
+                                                                            size="sm"
+                                                                        >
+                                                                            {ta.full_name}
+                                                                        </Chip>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </CardBody>
                                             </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
-                                        <CardBody className="text-center py-16">
-                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
-                                                <Icon icon="solar:notebook-bold-duotone" className="text-5xl text-amber-500" />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มเรียน</h3>
-                                            <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                                                สร้างกลุ่มเรียนเพื่อจัดการนักศึกษาในรายวิชานี้
-                                            </p>
-                                            <Button
-                                                color="primary"
-                                                size="lg"
-                                                startContent={<Icon icon="solar:add-circle-bold" />}
-                                                onPress={() => setIsAddSectionModalOpen(true)}
-                                                className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25"
-                                            >
-                                                เพิ่มกลุ่มเรียนแรก
-                                            </Button>
-                                        </CardBody>
-                                    </Card>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         )}
 
-                        {/* Sub-tab: Permanent Teams */}
-                        {sectionSubTab === "permanent" && (
-                            <div className="space-y-4">
-                                {/* Action Bar */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-center justify-between flex-wrap gap-3">
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-2 bg-purple-100 rounded-lg">
-                                                    <Icon icon="solar:info-circle-bold" className="text-xl text-purple-500" />
+                        {/* Sections Tab - Redesigned with Sub-tabs */}
+                        {activeTab === "sections" && (
+                            <div className="space-y-6">
+                                {/* Header Card with Sub-tabs */}
+                                <div className="">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            
+                                            <div>
+                                                <h2 className="text-lg font-semibold text-slate-800">จัดการกลุ่มเรียน</h2>
+                                        <p className="text-sm text-slate-500">จัดการนักศึกษาและกลุ่มทำงานในรายวิชา</p>
+                                            </div>
+                                        </div>
+                                        {/* <div className="hidden md:flex items-center gap-3 bg-blue-500 backdrop-blur-sm rounded-xl px-4 py-2">
+                                            <div className="text-center">
+                                                <p className="text-2xl font-bold text-white">{course.sections?.length || 0}</p>
+                                                <p className="text-xs text-white/80">กลุ่มเรียน</p>
+                                            </div>
+                                            <div className="w-px h-8 bg-white/20"></div>
+                                            <div className="text-center">
+                                                <p className="text-2xl font-bold text-white">{totalStudents}</p>
+                                                <p className="text-xs text-white/80">นักศึกษา</p>
+                                            </div>
+                                            <div className="w-px h-8 bg-white/20"></div>
+                                            <div className="text-center">
+                                                <p className="text-2xl font-bold text-white">{permanentTeams.length}</p>
+                                                <p className="text-xs text-white/80">กลุ่มถาวร</p>
+                                            </div>
+                                        </div> */}
+                                    </div>
+                                </div>
+
+                                {/* Sub-tabs Navigation - Same as main tabs style */}
+                                <div className="overflow-x-auto scrollbar-hide -mx-4 px-3 lg:mx-0 lg:px-0">
+                                        <Tabs
+                                            selectedKey={sectionSubTab}
+                                            onSelectionChange={(key) => setSectionSubTab(key as "students" | "permanent" | "weekly")}
+                                            variant="underlined"
+                                            classNames={{
+                                                tabList: "gap-4 md:gap-6 flex-nowrap min-w-max",
+                                                cursor: "bg-blue-500",
+                                                tab: "px-0 h-11 whitespace-nowrap",
+                                                tabContent: "group-data-[selected=true]:text-blue-600 text-slate-500 font-medium text-sm"
+                                            }}
+                                        >
+                                            <Tab
+                                                key="students"
+                                                title={
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:users-group-rounded-bold" className="text-lg" />
+                                                        <span className="hidden sm:inline">รายชื่อนักศึกษา</span>
+                                                        <span className="sm:hidden">นักศึกษา</span>
+                                                        {totalStudents > 0 && (
+                                                            <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-700 h-5 min-w-5 px-1">
+                                                                {totalStudents}
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                }
+                                            />
+                                            <Tab
+                                                key="permanent"
+                                                title={
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:users-group-two-rounded-bold" className="text-lg" />
+                                                        <span>กลุ่มถาวร</span>
+                                                        {permanentTeams.length > 0 && (
+                                                            <Chip size="sm" variant="flat" className="bg-purple-100 text-purple-700 h-5 min-w-5 px-1">
+                                                                {permanentTeams.length}
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                }
+                                            />
+                                            <Tab
+                                                key="weekly"
+                                                title={
+                                                    <div className="flex items-center gap-2">
+                                                        <Icon icon="solar:calendar-bold" className="text-lg" />
+                                                        <span className="hidden sm:inline">กลุ่มรายสัปดาห์</span>
+                                                        <span className="sm:hidden">รายสัปดาห์</span>
+                                                        {Object.keys(weeklyTeams).filter(k => weeklyTeams[parseInt(k)]?.length > 0).length > 0 && (
+                                                            <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-700 h-5 min-w-5 px-1">
+                                                                W{selectedWeek}
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                }
+                                            />
+                                        </Tabs>
+                                </div>
+
+                                {/* Sub-tab: Students (Table View) */}
+                                {sectionSubTab === "students" && (
+                                    <div className="space-y-4">
+                                        {/* Search & Actions Bar */}
+                                        <Card className="shadow-sm border border-slate-200">
+                                            <CardBody className="py-3 px-4">
+                                                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <Input
+                                                            placeholder="ค้นหารหัสหรือชื่อนักศึกษา..."
+                                                            value={sectionSearchQuery}
+                                                            onValueChange={setSectionSearchQuery}
+                                                            startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                            className="w-full sm:max-w-72"
+                                                            size="md"
+                                                            variant="bordered"
+                                                            isClearable
+                                                            classNames={{
+                                                                inputWrapper: "bg-slate-50 border-slate-200"
+                                                            }}
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        color="primary"
+                                                        startContent={<Icon icon="solar:add-circle-bold" />}
+                                                        onPress={() => setIsAddSectionModalOpen(true)}
+                                                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25 w-full sm:w-auto"
+                                                    >
+                                                        เพิ่มกลุ่มเรียน
+                                                    </Button>
                                                 </div>
+                                            </CardBody>
+                                        </Card>
+
+                                        {/* Sections with Table */}
+                                        {course.sections && course.sections.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {course.sections.map((section, sectionIdx) => (
+                                                    <Card key={section.id} className="shadow-sm border border-slate-200 overflow-hidden">
+                                                        {/* Section Header */}
+                                                        <div
+                                                            className={`flex items-center justify-between p-4 cursor-pointer transition-all ${expandedSections.includes(section.id)
+                                                                    ? "bg-gradient-to-r from-blue-400 to-indigo-500"
+                                                                    : "bg-white hover:from-amber-50 hover:to-blue-50"
+                                                                }`}
+                                                            onClick={() => toggleSection(section.id)}
+                                                        >
+                                                            <div className="flex items-center gap-4">
+                                                                <div>
+                                                                    <p className={`font-semibold ${expandedSections.includes(section.id) ? "text-white" : "text-slate-800"}`}>
+                                                                        {section.section_no}
+                                                                    </p>
+                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                        <Icon
+                                                                            icon="solar:users-group-rounded-linear"
+                                                                            className={expandedSections.includes(section.id) ? "text-white/70" : "text-slate-400"}
+                                                                        />
+                                                                        <span className={`text-sm ${expandedSections.includes(section.id) ? "text-white/80" : "text-slate-500"}`}>
+                                                                            {section.studentCount || 0} นักศึกษา
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                                <Tooltip content="เพิ่มนักศึกษา">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className={expandedSections.includes(section.id) ? "bg-white/20 text-white" : "bg-amber-100 text-amber-600"}
+                                                                        onPress={() => openAddStudentModal(section.id)}
+                                                                    >
+                                                                        <Icon icon="solar:user-plus-bold" className="text-lg" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                                <Tooltip content="ลบกลุ่มเรียน" color="danger">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className={expandedSections.includes(section.id) ? "bg-white/20 text-white hover:bg-red-500" : "bg-red-100 text-red-600"}
+                                                                        onPress={() => handleRemoveSection(section.id)}
+                                                                    >
+                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                                <div className={`ml-2 p-1 rounded-lg ${expandedSections.includes(section.id) ? "bg-white/20" : "bg-slate-200"}`}>
+                                                                    <Icon
+                                                                        icon={expandedSections.includes(section.id) ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"}
+                                                                        className={`text-xl ${expandedSections.includes(section.id) ? "text-white" : "text-slate-500"}`}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Student Table (expanded) */}
+                                                        {expandedSections.includes(section.id) && (
+                                                            <CardBody className="p-0 bg-white overflow-hidden">
+                                                                {getFilteredSectionStudents(section.id).length > 0 ? (
+                                                                    <div className="overflow-x-auto max-w-full">
+                                                                    <Table
+                                                                        aria-label={`นักศึกษากลุ่ม ${section.section_no}`}
+                                                                        removeWrapper
+                                                                        classNames={{
+                                                                            base: "min-w-[640px]",
+                                                                            th: "bg-slate-50/80 text-slate-600 font-semibold text-xs uppercase tracking-wide",
+                                                                            td: "py-3 border-b border-slate-50",
+                                                                            tr: "hover:bg-amber-50/50 transition-colors",
+                                                                        }}
+                                                                    >
+                                                                        <TableHeader>
+                                                                            <TableColumn width={50}>ลำดับ</TableColumn>
+                                                                            <TableColumn width={100}>รหัส</TableColumn>
+                                                                            <TableColumn>ชื่อ-นามสกุล</TableColumn>
+                                                                            <TableColumn width={120}>กลุ่มถาวร</TableColumn>
+                                                                            <TableColumn width={80}>สถานะ</TableColumn>
+                                                                            <TableColumn width={50} align="center">จัดการ</TableColumn>
+                                                                        </TableHeader>
+                                                                        <TableBody>
+                                                                            {getFilteredSectionStudents(section.id).map((student, idx) => (
+                                                                                <TableRow key={student.id}>
+                                                                                    <TableCell>
+                                                                                            <div className="text-sm font-medium text-black text-center">{idx + 1}</div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                            <div className="text-xs font-medium text-black">{student.student_id}</div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <Avatar
+                                                                                                name={student.full_name}
+                                                                                                size="sm"
+                                                                                                className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex-shrink-0"
+                                                                                            />
+                                                                                            <span className="font-medium text-black text-sm">{student.full_name}</span>
+                                                                                        </div>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        {findStudentTeam(student.id, "permanent") ? (
+                                                                                            <Chip
+                                                                                                size="sm"
+                                                                                                className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white"
+                                                                                            >
+                                                                                                {findStudentTeam(student.id, "permanent")}
+                                                                                            </Chip>
+                                                                                        ) : (
+                                                                                            <span className="text-slate-300 text-xs">-</span>
+                                                                                        )}
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <Chip
+                                                                                            size="sm"
+                                                                                            variant="dot"
+                                                                                            color={student.is_active ? "success" : "default"}
+                                                                                            classNames={{
+                                                                                                base: "px-1",
+                                                                                                dot: student.is_active ? "bg-green-500" : "bg-slate-300"
+                                                                                            }}
+                                                                                        >
+                                                                                            <span className="text-xs">{student.is_active ? "ใช้งาน" : "ไม่ใช้"}</span>
+                                                                                        </Chip>
+                                                                                    </TableCell>
+                                                                                    <TableCell>
+                                                                                        <Tooltip content="นำออกจากกลุ่ม" color="danger">
+                                                                                            <Button
+                                                                                                isIconOnly
+                                                                                                size="sm"
+                                                                                                variant="light"
+                                                                                                color="danger"
+                                                                                                onPress={() => openDeleteStudentModal(section.id, student)}
+                                                                                            >
+                                                                                                <Icon icon="solar:user-minus-bold" className="text-lg" />
+                                                                                            </Button>
+                                                                                        </Tooltip>
+                                                                                    </TableCell>
+                                                                                </TableRow>
+                                                                            ))}
+                                                                        </TableBody>
+                                                                    </Table>
+                                                                    </div>
+                                                                ) : sectionStudents[section.id] && sectionStudents[section.id].length > 0 ? (
+                                                                    <div className="text-center py-12 bg-slate-50/50">
+                                                                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                                                                            <Icon icon="solar:magnifer-linear" className="text-3xl text-slate-400" />
+                                                                        </div>
+                                                                        <p className="text-slate-500 font-medium">ไม่พบนักศึกษาที่ค้นหา</p>
+                                                                        <p className="text-sm text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาใหม่</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="text-center py-12 bg-gradient-to-b from-slate-50 to-white">
+                                                                        <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-amber-100 flex items-center justify-center">
+                                                                            <Icon icon="solar:users-group-rounded-bold-duotone" className="text-4xl text-amber-500" />
+                                                                        </div>
+                                                                        <p className="text-slate-600 font-medium mb-1">ยังไม่มีนักศึกษาในกลุ่มนี้</p>
+                                                                        <p className="text-sm text-slate-400 mb-4">เพิ่มนักศึกษาเพื่อเริ่มต้นจัดการกลุ่มเรียน</p>
+                                                                        <Button
+                                                                            color="primary"
+                                                                            variant="flat"
+                                                                            startContent={<Icon icon="solar:user-plus-bold" />}
+                                                                            onPress={() => openAddStudentModal(section.id)}
+                                                                            className="bg-amber-100 text-amber-700"
+                                                                        >
+                                                                            เพิ่มนักศึกษา
+                                                                        </Button>
+                                                                    </div>
+                                                                )}
+                                                            </CardBody>
+                                                        )}
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
+                                                <CardBody className="text-center py-16">
+                                                    <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+                                                        <Icon icon="solar:notebook-bold-duotone" className="text-5xl text-amber-500" />
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มเรียน</h3>
+                                                    <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                                                        สร้างกลุ่มเรียนเพื่อจัดการนักศึกษาในรายวิชานี้
+                                                    </p>
+                                                    <Button
+                                                        color="primary"
+                                                        size="lg"
+                                                        startContent={<Icon icon="solar:add-circle-bold" />}
+                                                        onPress={() => setIsAddSectionModalOpen(true)}
+                                                        className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25"
+                                                    >
+                                                        เพิ่มกลุ่มเรียนแรก
+                                                    </Button>
+                                                </CardBody>
+                                            </Card>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Sub-tab: Permanent Teams */}
+                                {sectionSubTab === "permanent" && (
+                                    <div className="space-y-4">
+                                        {/* Action Bar */}
+                                        <Card className="shadow-sm border border-slate-200">
+                                            <CardBody className="py-3 px-4">
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
+                                                            <Icon icon="solar:info-circle-bold" className="text-xl text-purple-500" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-slate-700">กลุ่มถาวร</p>
+                                                            <p className="text-sm text-slate-500 ">กลุ่มที่ใช้ตลอดทั้งเทอม สำหรับโปรเจกต์ระยะยาว</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                                        <Button
+                                                            color="secondary"
+                                                            variant="flat"
+                                                            startContent={<Icon icon="solar:shuffle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("permanent");
+                                                                setTeamFormationMethod("random");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-purple-100 text-purple-700 flex-1 sm:flex-initial"
+                                                            size="md"
+                                                        >
+                                                            <span className="hidden sm:inline">สุ่มกลุ่มอัตโนมัติ</span>
+                                                            <span className="sm:hidden">สุ่มกลุ่ม</span>
+                                                        </Button>
+                                                        <Button
+                                                            color="primary"
+                                                            startContent={<Icon icon="solar:add-circle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("permanent");
+                                                                setTeamFormationMethod("manual");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-1 sm:flex-initial"
+                                                            size="md"
+                                                        >
+                                                            <span className="hidden sm:inline">สร้างกลุ่มใหม่</span>
+                                                            <span className="sm:hidden">สร้างกลุ่ม</span>
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardBody>
+                                        </Card>
+
+                                        {/* Teams Grid */}
+                                        {permanentTeams.length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {permanentTeams.map((team, teamIdx) => (
+                                                    <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-purple-200 transition-all group">
+                                                        <CardHeader className="px-4 py-3 bg-gradient-to-r from-purple-500 to-indigo-500">
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
+                                                                        {teamIdx + 1}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="font-semibold text-white">{team.name}</span>
+                                                                        <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
+                                                                    </div>
+                                                                </div>
+                                                                <Tooltip content="ลบกลุ่ม" color="danger">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="bg-white/20 text-white hover:bg-red-500"
+                                                                        onPress={() => openDeleteTeamModal(team.id, "permanent")}
+                                                                    >
+                                                                        <Icon icon="solar:trash-bin-trash-bold" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                            </div>
+                                                        </CardHeader>
+                                                        <CardBody className="px-4 py-3">
+                                                            <div className="space-y-2">
+                                                                {team.members.map((member, idx) => (
+                                                                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-purple-50 transition-colors">
+                                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-medium">
+                                                                            {idx + 1}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-sm font-medium text-slate-800 truncate">{member.full_name}</p>
+                                                                            <p className="text-xs text-slate-400">{member.student_id}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </CardBody>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Card className="shadow-sm border border-dashed border-purple-200 bg-purple-50/30">
+                                                <CardBody className="text-center py-16">
+                                                    <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
+                                                        <Icon icon="solar:users-group-two-rounded-bold-duotone" className="text-5xl text-purple-500" />
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มถาวร</h3>
+                                                    <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                                                        สร้างกลุ่มสำหรับโปรเจกต์หรืองานกลุ่มระยะยาวที่ต้องทำงานร่วมกันตลอดเทอม
+                                                    </p>
+                                                    <div className="flex items-center justify-center gap-3">
+                                                        <Button
+                                                            variant="flat"
+                                                            startContent={<Icon icon="solar:shuffle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("permanent");
+                                                                setTeamFormationMethod("random");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-purple-100 text-purple-700"
+                                                        >
+                                                            สุ่มกลุ่มอัตโนมัติ
+                                                        </Button>
+                                                        <Button
+                                                            color="primary"
+                                                            startContent={<Icon icon="solar:add-circle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("permanent");
+                                                                setTeamFormationMethod("manual");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25"
+                                                        >
+                                                            สร้างกลุ่มเอง
+                                                        </Button>
+                                                    </div>
+                                                </CardBody>
+                                            </Card>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Sub-tab: Weekly Teams */}
+                                {sectionSubTab === "weekly" && (
+                                    <div className="space-y-4">
+                                        {/* Week Selector Bar */}
+                                        <Card className="shadow-sm border border-slate-200">
+                                            <CardBody className="py-3 px-4">
+                                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                                    {/* Top Row - Week Info and Selector */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-emerald-100 rounded-lg flex-shrink-0">
+                                                                <Icon icon="solar:calendar-bold" className="text-xl text-emerald-500" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-slate-700">สัปดาห์ที่ {selectedWeek}</p>
+                                                                <p className="text-sm text-slate-500">
+                                                                    {weeklyTeams[selectedWeek]?.length || 0} กลุ่ม
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {/* <Select
+                                                            selectedKeys={[selectedWeek.toString()]}
+                                                            onSelectionChange={(keys) => {
+                                                                const val = Array.from(keys)[0];
+                                                                if (val) setSelectedWeek(parseInt(val.toString()));
+                                                            }}
+                                                            className="w-32 sm:w-40"
+                                                            size="sm"
+                                                            variant="bordered"
+                                                        >
+                                                            {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((week) => (
+                                                                <SelectItem key={week.toString()}>
+                                                                    สัปดาห์ที่ {week} {weeklyTeams[week]?.length > 0 ? `(${weeklyTeams[week].length} กลุ่ม)` : ""}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </Select> */}
+                                                    </div>
+                                                    {/* Bottom Row - Actions */}
+                                                    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
+                                                        {/* Copy from week dropdown - แสดงเฉพาะเมื่อสัปดาห์นี้ยังไม่มีกลุ่ม และมีสัปดาห์อื่นที่มีกลุ่มอยู่ */}
+                                                        {!weeklyTeams[selectedWeek]?.length && 
+                                                         Object.keys(weeklyTeams).some(k => parseInt(k) !== selectedWeek && weeklyTeams[parseInt(k)]?.length > 0) && (
+                                                            <Dropdown>
+                                                                <DropdownTrigger>
+                                                                    <Button
+                                                                        variant="flat"
+                                                                        size="md"
+                                                                        startContent={<Icon icon="solar:copy-bold" />}
+                                                                        endContent={<Icon icon="solar:alt-arrow-down-linear" className="text-sm" />}
+                                                                        className="bg-slate-100 flex-shrink-0"
+                                                                    >
+                                                                        <span className="hidden sm:inline">คัดลอกจาก</span>
+                                                                        <span className="sm:hidden">คัดลอก</span>
+                                                                    </Button>
+                                                                </DropdownTrigger>
+                                                                <DropdownMenu 
+                                                                    aria-label="เลือกสัปดาห์ที่จะคัดลอก"
+                                                                    onAction={(key) => copyTeamsFromWeek(parseInt(key as string))}
+                                                                >
+                                                                    {Array.from({ length: totalWeeks }, (_, i) => i + 1)
+                                                                        .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
+                                                                        .map((week) => (
+                                                                            <DropdownItem 
+                                                                                key={week.toString()}
+                                                                                startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
+                                                                                description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}
+                                                                            >
+                                                                                สัปดาห์ที่ {week}
+                                                                            </DropdownItem>
+                                                                        ))
+                                                                    }
+                                                                </DropdownMenu>
+                                                            </Dropdown>
+                                                        )}
+                                                        {weeklyTeams[selectedWeek]?.length > 0 && (
+                                                            <Button
+                                                                variant="flat"
+                                                                size="md"
+                                                                color="danger"
+                                                                startContent={<Icon icon="solar:eraser-bold" />}
+                                                                onPress={openBulkDeleteModal}
+                                                                className="flex-shrink-0"
+                                                            >
+                                                                <span className="hidden sm:inline">ล้างทั้งหมด</span>
+                                                                <span className="sm:hidden">ล้าง</span>
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            variant="flat"
+                                                            size="md"
+                                                            startContent={<Icon icon="solar:shuffle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("weekly");
+                                                                setTeamFormationMethod("random");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-emerald-100 text-emerald-700 flex-shrink-0"
+                                                        >
+                                                            สุ่มกลุ่ม
+                                                        </Button>
+                                                        <Button
+                                                            color="primary"
+                                                            size="md"
+                                                            startContent={<Icon icon="solar:add-circle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("weekly");
+                                                                setTeamFormationMethod("manual");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0"
+                                                        >
+                                                            สร้างกลุ่ม
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardBody>
+                                        </Card>
+
+                                        {/* Week Navigation Pills */}
+                                        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2 -mx-4 px-4 lg:mx-0 lg:px-1">
+                                            {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((week) => {
+                                                const hasTeams = weeklyTeams[week] && weeklyTeams[week].length > 0;
+                                                const isSelected = week === selectedWeek;
+                                                return (
+                                                    <button
+                                                        key={week}
+                                                        onClick={() => setSelectedWeek(week)}
+                                                        className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all ${isSelected
+                                                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
+                                                                : hasTeams
+                                                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                                                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                                            }`}
+                                                    >
+                                                        W{week}
+                                                        {hasTeams && !isSelected && (
+                                                            <Icon icon="solar:check-circle-bold" className="ml-1 text-emerald-500" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Teams Grid */}
+                                        {weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 ? (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                {weeklyTeams[selectedWeek].map((team, teamIdx) => (
+                                                    <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-emerald-200 transition-all group">
+                                                        <CardHeader className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500">
+                                                            <div className="flex items-center justify-between w-full">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
+                                                                        {teamIdx + 1}
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="font-semibold text-white">{team.name}</span>
+                                                                        <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
+                                                                    </div>
+                                                                </div>
+                                                                <Tooltip content="ลบกลุ่ม" color="danger">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="bg-white/20 text-white hover:bg-red-500"
+                                                                        onPress={() => openDeleteTeamModal(team.id, "weekly", selectedWeek)}
+                                                                    >
+                                                                        <Icon icon="solar:trash-bin-trash-bold" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                            </div>
+                                                        </CardHeader>
+                                                        <CardBody className="px-4 py-3">
+                                                            <div className="space-y-2">
+                                                                {team.members.map((member, idx) => (
+                                                                    <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-emerald-50 transition-colors">
+                                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-medium">
+                                                                            {idx + 1}
+                                                                        </div>
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <p className="text-sm font-medium text-slate-800 truncate">{member.full_name}</p>
+                                                                            <p className="text-xs text-slate-400">{member.student_id}</p>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </CardBody>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <Card className="shadow-sm border border-dashed border-emerald-200 bg-emerald-50/30">
+                                                <CardBody className="text-center py-16">
+                                                    <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+                                                        <Icon icon="solar:calendar-bold-duotone" className="text-5xl text-emerald-500" />
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มสำหรับสัปดาห์ที่ {selectedWeek}</h3>
+                                                    <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                                                        สร้างกลุ่มใหม่หรือคัดลอกจากสัปดาห์ก่อนหน้าเพื่อเริ่มต้น
+                                                    </p>
+                                                    <div className="flex flex-wrap items-center justify-center gap-3">
+                                                        {/* Copy dropdown - แสดงเฉพาะเมื่อมีสัปดาห์อื่นที่มีกลุ่ม */}
+                                                        {Object.keys(weeklyTeams).some(k => parseInt(k) !== selectedWeek && weeklyTeams[parseInt(k)]?.length > 0) && (
+                                                            <Dropdown>
+                                                                <DropdownTrigger>
+                                                                    <Button
+                                                                        variant="flat"
+                                                                        startContent={<Icon icon="solar:copy-bold" />}
+                                                                        endContent={<Icon icon="solar:alt-arrow-down-linear" className="text-sm" />}
+                                                                        className="bg-slate-100"
+                                                                    >
+                                                                        คัดลอกจากสัปดาห์อื่น
+                                                                    </Button>
+                                                                </DropdownTrigger>
+                                                                <DropdownMenu 
+                                                                    aria-label="เลือกสัปดาห์ที่จะคัดลอก"
+                                                                    onAction={(key) => copyTeamsFromWeek(parseInt(key as string))}
+                                                                >
+                                                                    {Array.from({ length: totalWeeks }, (_, i) => i + 1)
+                                                                        .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
+                                                                        .map((week) => (
+                                                                            <DropdownItem 
+                                                                                key={week.toString()}
+                                                                                startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
+                                                                                description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}
+                                                                            >
+                                                                                สัปดาห์ที่ {week}
+                                                                            </DropdownItem>
+                                                                        ))
+                                                                    }
+                                                                </DropdownMenu>
+                                                            </Dropdown>
+                                                        )}
+                                                        <Button
+                                                            variant="flat"
+                                                            startContent={<Icon icon="solar:shuffle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("weekly");
+                                                                setTeamFormationMethod("random");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-emerald-100 text-emerald-700"
+                                                        >
+                                                            สุ่มกลุ่มอัตโนมัติ
+                                                        </Button>
+                                                        <Button
+                                                            color="primary"
+                                                            startContent={<Icon icon="solar:add-circle-bold" />}
+                                                            onPress={() => {
+                                                                setTeamCreationType("weekly");
+                                                                setTeamFormationMethod("manual");
+                                                                setIsCreateTeamModalOpen(true);
+                                                            }}
+                                                            className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25"
+                                                        >
+                                                            สร้างกลุ่มเอง
+                                                        </Button>
+                                                    </div>
+                                                </CardBody>
+                                            </Card>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* People Tab */}
+                        {activeTab === "people" && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Instructor */}
+                                <Card className="shadow-sm border border-slate-200">
+                                    <CardHeader className="px-5 py-4 border-b border-slate-100">
+                                        <div className="flex items-center gap-2">
+                                            <Icon icon="solar:user-circle-bold" className="text-xl text-blue-500" />
+                                            <span className="font-semibold text-slate-800">อาจารย์ผู้สอน</span>
+                                        </div>
+                                    </CardHeader>
+                                    <CardBody className="px-5 py-4">
+                                        {course.instructor ? (
+                                            <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-50">
+                                                <Avatar
+                                                    name={course.instructor.full_name}
+                                                    size="sm"
+                                                    className="bg-blue-500"
+                                                />
                                                 <div>
-                                                    <p className="font-medium text-slate-700">กลุ่มถาวร</p>
-                                                    <p className="text-sm text-slate-500">กลุ่มที่ใช้ตลอดทั้งเทอม สำหรับโปรเจกต์ระยะยาว</p>
+                                                    <p className="font-semibold text-slate-800">{course.instructor.full_name}</p>
+                                                    <p className="text-sm text-slate-500">{course.instructor.email}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    color="secondary"
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:shuffle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("permanent");
-                                                        setTeamFormationMethod("random");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-purple-100 text-purple-700"
-                                                >
-                                                    สุ่มกลุ่มอัตโนมัติ
-                                                </Button>
-                                                <Button
-                                                    color="primary"
-                                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("permanent");
-                                                        setTeamFormationMethod("manual");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25"
-                                                >
-                                                    สร้างกลุ่มใหม่
-                                                </Button>
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:user-circle-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-sm text-slate-400">ยังไม่กำหนดอาจารย์ผู้สอน</p>
                                             </div>
-                                        </div>
+                                        )}
                                     </CardBody>
                                 </Card>
 
-                                {/* Teams Grid */}
-                                {permanentTeams.length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {permanentTeams.map((team, teamIdx) => (
-                                            <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-purple-200 transition-all group">
-                                                <CardHeader className="px-4 py-3 bg-gradient-to-r from-purple-500 to-indigo-500">
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
-                                                                {teamIdx + 1}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-semibold text-white">{team.name}</span>
-                                                                <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
-                                                            </div>
-                                                        </div>
-                                                        <Tooltip content="ลบกลุ่ม" color="danger">
-                                                            <Button
-                                                                isIconOnly
-                                                                size="sm"
-                                                                variant="flat"
-                                                                className="bg-white/20 text-white hover:bg-red-500"
-                                                                onPress={() => openDeleteTeamModal(team.id, "permanent")}
-                                                            >
-                                                                <Icon icon="solar:trash-bin-trash-bold" />
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardBody className="px-4 py-3">
-                                                    <div className="space-y-2">
-                                                        {team.members.map((member, idx) => (
-                                                            <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-purple-50 transition-colors">
-                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-medium">
-                                                                    {idx + 1}
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium text-slate-800 truncate">{member.full_name}</p>
-                                                                    <p className="text-xs text-slate-400">{member.student_id}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </CardBody>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <Card className="shadow-sm border border-dashed border-purple-200 bg-purple-50/30">
-                                        <CardBody className="text-center py-16">
-                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
-                                                <Icon icon="solar:users-group-two-rounded-bold-duotone" className="text-5xl text-purple-500" />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มถาวร</h3>
-                                            <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                                                สร้างกลุ่มสำหรับโปรเจกต์หรืองานกลุ่มระยะยาวที่ต้องทำงานร่วมกันตลอดเทอม
-                                            </p>
-                                            <div className="flex items-center justify-center gap-3">
-                                                <Button
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:shuffle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("permanent");
-                                                        setTeamFormationMethod("random");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-purple-100 text-purple-700"
-                                                >
-                                                    สุ่มกลุ่มอัตโนมัติ
-                                                </Button>
-                                                <Button
-                                                    color="primary"
-                                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("permanent");
-                                                        setTeamFormationMethod("manual");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25"
-                                                >
-                                                    สร้างกลุ่มเอง
-                                                </Button>
-                                            </div>
-                                        </CardBody>
-                                    </Card>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Sub-tab: Weekly Teams */}
-                        {sectionSubTab === "weekly" && (
-                            <div className="space-y-4">
-                                {/* Week Selector Bar */}
+                                {/* TAs */}
                                 <Card className="shadow-sm border border-slate-200">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-center justify-between flex-wrap gap-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-emerald-100 rounded-lg">
-                                                        <Icon icon="solar:calendar-bold" className="text-xl text-emerald-500" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-slate-700">สัปดาห์ที่ {selectedWeek}</p>
-                                                        <p className="text-sm text-slate-500">
-                                                            {weeklyTeams[selectedWeek]?.length || 0} กลุ่ม
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <Select
-                                                    selectedKeys={[selectedWeek.toString()]}
-                                                    onSelectionChange={(keys) => {
-                                                        const val = Array.from(keys)[0];
-                                                        if (val) setSelectedWeek(parseInt(val.toString()));
-                                                    }}
-                                                    className="w-40"
-                                                    size="sm"
-                                                    variant="bordered"
-                                                >
-                                                    {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((week) => (
-                                                        <SelectItem key={week.toString()}>
-                                                            สัปดาห์ที่ {week} {weeklyTeams[week]?.length > 0 ? `(${weeklyTeams[week].length} กลุ่ม)` : ""}
-                                                        </SelectItem>
-                                                    ))}
-                                                </Select>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {selectedWeek > 1 && (
-                                                    <Button
-                                                        variant="flat"
-                                                        size="sm"
-                                                        startContent={<Icon icon="solar:copy-bold" />}
-                                                        onPress={copyTeamsFromPreviousWeek}
-                                                        className="bg-slate-100"
-                                                    >
-                                                        คัดลอกจาก W{selectedWeek - 1}
-                                                    </Button>
-                                                )}
-                                                {weeklyTeams[selectedWeek]?.length > 0 && (
-                                                    <Button
-                                                        variant="flat"
-                                                        size="sm"
-                                                        color="danger"
-                                                        startContent={<Icon icon="solar:eraser-bold" />}
-                                                        onPress={clearWeeklyTeams}
-                                                    >
-                                                        ล้างทั้งหมด
-                                                    </Button>
-                                                )}
-                                                <Button
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:shuffle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("weekly");
-                                                        setTeamFormationMethod("random");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-emerald-100 text-emerald-700"
-                                                >
-                                                    สุ่มกลุ่ม
-                                                </Button>
-                                                <Button
-                                                    color="primary"
-                                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("weekly");
-                                                        setTeamFormationMethod("manual");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25"
-                                                >
-                                                    สร้างกลุ่ม
-                                                </Button>
-                                            </div>
+                                    <CardHeader className="flex justify-between items-center px-5 py-4 border-b border-slate-100">
+                                        <div className="flex items-center gap-2">
+                                            <Icon icon="solar:user-hands-bold" className="text-xl text-emerald-500" />
+                                            <span className="font-semibold text-slate-800">ผู้ช่วยสอน (TA)</span>
                                         </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Week Navigation Pills */}
-                                <div className="flex items-center gap-2 overflow-x-auto pb-2 px-1">
-                                    {Array.from({ length: totalWeeks }, (_, i) => i + 1).map((week) => {
-                                        const hasTeams = weeklyTeams[week] && weeklyTeams[week].length > 0;
-                                        const isSelected = week === selectedWeek;
-                                        return (
-                                            <button
-                                                key={week}
-                                                onClick={() => setSelectedWeek(week)}
-                                                className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-                                                    isSelected
-                                                        ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
-                                                        : hasTeams
-                                                            ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                                            : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                                                }`}
-                                            >
-                                                W{week}
-                                                {hasTeams && !isSelected && (
-                                                    <Icon icon="solar:check-circle-bold" className="ml-1 text-emerald-500" />
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* Teams Grid */}
-                                {weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {weeklyTeams[selectedWeek].map((team, teamIdx) => (
-                                            <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-emerald-200 transition-all group">
-                                                <CardHeader className="px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500">
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
-                                                                {teamIdx + 1}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-semibold text-white">{team.name}</span>
-                                                                <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
-                                                            </div>
-                                                        </div>
-                                                        <Tooltip content="ลบกลุ่ม" color="danger">
-                                                            <Button
-                                                                isIconOnly
-                                                                size="sm"
-                                                                variant="flat"
-                                                                className="bg-white/20 text-white hover:bg-red-500"
-                                                                onPress={() => openDeleteTeamModal(team.id, "weekly", selectedWeek)}
-                                                            >
-                                                                <Icon icon="solar:trash-bin-trash-bold" />
-                                                            </Button>
-                                                        </Tooltip>
-                                                    </div>
-                                                </CardHeader>
-                                                <CardBody className="px-4 py-3">
-                                                    <div className="space-y-2">
-                                                        {team.members.map((member, idx) => (
-                                                            <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-emerald-50 transition-colors">
-                                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white text-xs font-medium">
-                                                                    {idx + 1}
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium text-slate-800 truncate">{member.full_name}</p>
-                                                                    <p className="text-xs text-slate-400">{member.student_id}</p>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </CardBody>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <Card className="shadow-sm border border-dashed border-emerald-200 bg-emerald-50/30">
-                                        <CardBody className="text-center py-16">
-                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-                                                <Icon icon="solar:calendar-bold-duotone" className="text-5xl text-emerald-500" />
-                                            </div>
-                                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มสำหรับสัปดาห์ที่ {selectedWeek}</h3>
-                                            <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                                                สร้างกลุ่มใหม่หรือคัดลอกจากสัปดาห์ก่อนหน้าเพื่อเริ่มต้น
-                                            </p>
-                                            <div className="flex items-center justify-center gap-3">
-                                                {selectedWeek > 1 && weeklyTeams[selectedWeek - 1]?.length > 0 && (
-                                                    <Button
-                                                        variant="flat"
-                                                        startContent={<Icon icon="solar:copy-bold" />}
-                                                        onPress={copyTeamsFromPreviousWeek}
-                                                        className="bg-slate-100"
-                                                    >
-                                                        คัดลอกจาก W{selectedWeek - 1}
-                                                    </Button>
-                                                )}
-                                                <Button
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:shuffle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("weekly");
-                                                        setTeamFormationMethod("random");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-emerald-100 text-emerald-700"
-                                                >
-                                                    สุ่มกลุ่มอัตโนมัติ
-                                                </Button>
-                                                <Button
-                                                    color="primary"
-                                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                                    onPress={() => {
-                                                        setTeamCreationType("weekly");
-                                                        setTeamFormationMethod("manual");
-                                                        setIsCreateTeamModalOpen(true);
-                                                    }}
-                                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25"
-                                                >
-                                                    สร้างกลุ่มเอง
-                                                </Button>
-                                            </div>
-                                        </CardBody>
-                                    </Card>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* People Tab */}
-                {activeTab === "people" && (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Instructor */}
-                        <Card className="shadow-sm border border-slate-200">
-                            <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:user-circle-bold" className="text-xl text-blue-500" />
-                                    <span className="font-semibold text-slate-800">อาจารย์ผู้สอน</span>
-                                </div>
-                            </CardHeader>
-                            <CardBody className="px-5 py-4">
-                                {course.instructor ? (
-                                    <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-50">
-                                        <Avatar
-                                            name={course.instructor.full_name}
-                                            size="sm"
-                                            className="bg-blue-500"
-                                        />
-                                        <div>
-                                            <p className="font-semibold text-slate-800">{course.instructor.full_name}</p>
-                                            <p className="text-sm text-slate-500">{course.instructor.email}</p>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6">
-                                        <Icon icon="solar:user-circle-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                        <p className="text-sm text-slate-400">ยังไม่กำหนดอาจารย์ผู้สอน</p>
-                                    </div>
-                                )}
-                            </CardBody>
-                        </Card>
-
-                        {/* TAs */}
-                        <Card className="shadow-sm border border-slate-200">
-                            <CardHeader className="flex justify-between items-center px-5 py-4 border-b border-slate-100">
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:user-hands-bold" className="text-xl text-emerald-500" />
-                                    <span className="font-semibold text-slate-800">ผู้ช่วยสอน (TA)</span>
-                                </div>
-                                <Button
-                                    size="sm"
-                                    color="primary"
-                                    variant="flat"
-                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                    onPress={() => setIsAddTAModalOpen(true)}
-                                    isDisabled={availableTAs.length === 0}
-                                >
-                                    เพิ่ม TA
-                                </Button>
-                            </CardHeader>
-                            <CardBody className="px-5 py-4">
-                                {course.tas && course.tas.length > 0 ? (
-                                    <div className="space-y-3">
-                                        {course.tas.map((ta) => (
-                                            <div
-                                                key={ta.id}
-                                                className="flex items-center justify-between p-3 rounded-xl bg-emerald-50"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar name={ta.full_name} size="sm" className="bg-emerald-500" />
-                                                    <div>
-                                                        <p className="font-medium text-slate-800">{ta.full_name}</p>
-                                                        <p className="text-xs text-slate-500">{ta.email || ta.username}</p>
-                                                    </div>
-                                                </div>
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    color="danger"
-                                                    onPress={() => handleRemoveTA(ta.id)}
-                                                >
-                                                    <Icon icon="solar:close-circle-linear" className="text-lg" />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-6">
-                                        <Icon icon="solar:user-hands-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                        <p className="text-sm text-slate-400 mb-3">ยังไม่มีผู้ช่วยสอน</p>
                                         <Button
                                             size="sm"
                                             color="primary"
@@ -2482,295 +2631,337 @@ export default function ClassroomDetailPage() {
                                         >
                                             เพิ่ม TA
                                         </Button>
-                                    </div>
-                                )}
-                            </CardBody>
-                        </Card>
-                    </div>
-                )}
-
-                {/* Assignments Tab */}
-                {activeTab === "assignments" && (
-                    <div className="space-y-4">
-                        {/* Header */}
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-lg font-semibold text-slate-800">งานทั้งหมด</h2>
-                                <p className="text-sm text-slate-500">สร้างและจัดการหัวข้องานสำหรับการลงคะแนน</p>
-                            </div>
-                            <Button
-                                color="primary"
-                                startContent={<Icon icon="solar:add-circle-bold" />}
-                                onPress={() => {
-                                    setNewAssignment({
-                                        name: "",
-                                        type: "individual",
-                                        hasSubItems: false,
-                                        subItems: [],
-                                        maxScore: 10,
-                                        dueDate: "",
-                                        description: "",
-                                        groupSize: 3,
-                                        groupFormation: "manual",
-                                    });
-                                    setEditingAssignment(null);
-                                    setIsAddAssignmentModalOpen(true);
-                                }}
-                                className="bg-blue-500"
-                            >
-                                สร้างงานใหม่
-                            </Button>
-                        </div>
-
-                        {/* Assignment Stats */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="p-4 text-center">
-                                    <Icon icon="solar:clipboard-list-bold" className="text-2xl text-blue-500 mx-auto mb-1" />
-                                    <p className="text-2xl font-bold text-slate-800">{assignments.length}</p>
-                                    <p className="text-xs text-slate-500">งานทั้งหมด</p>
-                                </CardBody>
-                            </Card>
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="p-4 text-center">
-                                    <Icon icon="solar:user-bold" className="text-2xl text-indigo-500 mx-auto mb-1" />
-                                    <p className="text-2xl font-bold text-slate-800">{assignments.filter(a => a.type === "individual").length}</p>
-                                    <p className="text-xs text-slate-500">งานเดี่ยว</p>
-                                </CardBody>
-                            </Card>
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="p-4 text-center">
-                                    <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-emerald-500 mx-auto mb-1" />
-                                    <p className="text-2xl font-bold text-slate-800">{assignments.filter(a => a.type === "group").length}</p>
-                                    <p className="text-xs text-slate-500">งานกลุ่ม</p>
-                                </CardBody>
-                            </Card>
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="p-4 text-center">
-                                    <Icon icon="solar:medal-star-bold" className="text-2xl text-amber-500 mx-auto mb-1" />
-                                    <p className="text-2xl font-bold text-slate-800">
-                                        {assignments.reduce((acc, a) => acc + (a.hasSubItems ? a.subItems.reduce((s, sub) => s + sub.maxScore, 0) : a.maxScore), 0)}
-                                    </p>
-                                    <p className="text-xs text-slate-500">คะแนนรวม</p>
-                                </CardBody>
-                            </Card>
-                        </div>
-
-                        {/* Assignments List */}
-                        {assignments.length > 0 ? (
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="p-0 divide-y divide-slate-100">
-                                    {assignments.map((assignment) => (
-                                        <div key={assignment.id}>
-                                            <div
-                                                className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                                                onClick={() => {
-                                                    if (assignment.hasSubItems) {
-                                                        setExpandedAssignments(prev => 
-                                                            prev.includes(assignment.id) 
-                                                                ? prev.filter(id => id !== assignment.id)
-                                                                : [...prev, assignment.id]
-                                                        );
-                                                    }
-                                                }}
-                                            >
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`p-2.5 rounded-xl ${
-                                                        assignment.type === "individual" 
-                                                            ? "bg-indigo-100" 
-                                                            : "bg-emerald-100"
-                                                    }`}>
-                                                        <Icon 
-                                                            icon={assignment.type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"} 
-                                                            className={`text-xl ${
-                                                                assignment.type === "individual" 
-                                                                    ? "text-indigo-600" 
-                                                                    : "text-emerald-600"
-                                                            }`} 
-                                                        />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-semibold text-slate-800">{assignment.name}</p>
-                                                            <Chip 
-                                                                size="sm" 
-                                                                variant="flat" 
-                                                                className={assignment.type === "individual" 
-                                                                    ? "bg-indigo-50 text-indigo-600" 
-                                                                    : "bg-emerald-50 text-emerald-600"
-                                                                }
-                                                            >
-                                                                {assignment.type === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
-                                                            </Chip>
-                                                            {assignment.hasSubItems && (
-                                                                <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600">
-                                                                    {assignment.subItems.length} ข้อย่อย
-                                                                </Chip>
-                                                            )}
-                                                            {assignment.type === "group" && assignment.groupSize && (
-                                                                <Chip size="sm" variant="flat" className="bg-purple-50 text-purple-600">
-                                                                    <Icon icon={assignment.groupFormation === "random" ? "solar:shuffle-linear" : "solar:hand-shake-linear"} className="mr-1" />
-                                                                    {assignment.groupSize} คน/กลุ่ม
-                                                                </Chip>
-                                                            )}
+                                    </CardHeader>
+                                    <CardBody className="px-5 py-4">
+                                        {course.tas && course.tas.length > 0 ? (
+                                            <div className="space-y-3">
+                                                {course.tas.map((ta) => (
+                                                    <div
+                                                        key={ta.id}
+                                                        className="flex items-center justify-between p-3 rounded-xl bg-emerald-50"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar name={ta.full_name} size="sm" className="bg-emerald-500" />
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{ta.full_name}</p>
+                                                                <p className="text-xs text-slate-500">{ta.email || ta.username}</p>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-3 mt-1">
-                                                            <span className="text-sm text-slate-500 flex items-center gap-1">
-                                                                <Icon icon="solar:medal-star-linear" className="text-amber-500" />
-                                                                {assignment.hasSubItems 
-                                                                    ? assignment.subItems.reduce((acc, sub) => acc + sub.maxScore, 0)
-                                                                    : assignment.maxScore
-                                                                } คะแนน
-                                                            </span>
-                                                            {assignment.type === "group" && (
-                                                                <span className="text-sm text-slate-500 flex items-center gap-1">
-                                                                    <Icon icon="solar:users-group-rounded-linear" className="text-emerald-500" />
-                                                                    {assignment.teams?.length || 0} กลุ่ม
-                                                                </span>
-                                                            )}
-                                                            {assignment.dueDate && (
-                                                                <span className="text-sm text-slate-500 flex items-center gap-1">
-                                                                    <Icon icon="solar:calendar-linear" />
-                                                                    {new Date(assignment.dueDate).toLocaleDateString("th-TH", {
-                                                                        day: "numeric",
-                                                                        month: "short",
-                                                                        year: "numeric"
-                                                                    })}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                    <Tooltip content="แก้ไข">
-                                                        <Button
-                                                            isIconOnly
-                                                            size="sm"
-                                                            variant="light"
-                                                            color="primary"
-                                                            onPress={() => {
-                                                                setEditingAssignment(assignment);
-                                                                setNewAssignment({
-                                                                    name: assignment.name,
-                                                                    type: assignment.type,
-                                                                    hasSubItems: assignment.hasSubItems,
-                                                                    subItems: assignment.subItems,
-                                                                    maxScore: assignment.maxScore,
-                                                                    dueDate: assignment.dueDate || "",
-                                                                    description: assignment.description || "",
-                                                                    groupSize: assignment.groupSize || 3,
-                                                                    groupFormation: assignment.groupFormation || "manual",
-                                                                });
-                                                                setIsAddAssignmentModalOpen(true);
-                                                            }}
-                                                        >
-                                                            <Icon icon="solar:pen-linear" className="text-lg" />
-                                                        </Button>
-                                                    </Tooltip>
-                                                    {assignment.type === "group" && (
-                                                        <Tooltip content="จัดการกลุ่ม">
-                                                            <Button
-                                                                isIconOnly
-                                                                size="sm"
-                                                                variant="light"
-                                                                color="success"
-                                                                onPress={() => {
-                                                                    addToast({
-                                                                        title: "กำลังพัฒนา",
-                                                                        description: "ระบบจัดการกลุ่มกำลังพัฒนา",
-                                                                        color: "warning",
-                                                                    });
-                                                                }}
-                                                            >
-                                                                <Icon icon="solar:users-group-rounded-linear" className="text-lg" />
-                                                            </Button>
-                                                        </Tooltip>
-                                                    )}
-                                                    <Tooltip content="ลบงาน" color="danger">
                                                         <Button
                                                             isIconOnly
                                                             size="sm"
                                                             variant="light"
                                                             color="danger"
-                                                            onPress={() => {
-                                                                if (confirm("คุณต้องการลบงานนี้ใช่หรือไม่?")) {
-                                                                    setAssignments(prev => prev.filter(a => a.id !== assignment.id));
-                                                                    addToast({
-                                                                        title: "สำเร็จ",
-                                                                        description: "ลบงานเรียบร้อยแล้ว",
-                                                                        color: "success",
-                                                                    });
-                                                                }
-                                                            }}
+                                                            onPress={() => handleRemoveTA(ta.id)}
                                                         >
-                                                            <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
+                                                            <Icon icon="solar:close-circle-linear" className="text-lg" />
                                                         </Button>
-                                                    </Tooltip>
-                                                    {assignment.hasSubItems && (
-                                                        <Icon
-                                                            icon={expandedAssignments.includes(assignment.id) ? "solar:alt-arrow-up-linear" : "solar:alt-arrow-down-linear"}
-                                                            className="text-xl text-slate-400 ml-2"
-                                                        />
-                                                    )}
-                                                </div>
-                                            </div>
-                                            {/* Sub Items */}
-                                            {assignment.hasSubItems && expandedAssignments.includes(assignment.id) && (
-                                                <div className="px-4 pb-4 bg-slate-50">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                                                        {assignment.subItems.map((subItem, idx) => (
-                                                            <div
-                                                                key={subItem.id}
-                                                                className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-100"
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold rounded-full">
-                                                                        {idx + 1}
-                                                                    </span>
-                                                                    <div>
-                                                                        <p className="font-medium text-slate-800 text-sm">{subItem.name}</p>
-                                                                        <p className="text-xs text-slate-500">{subItem.maxScore} คะแนน</p>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </CardBody>
-                            </Card>
-                        ) : (
-                            <Card className="shadow-sm border border-slate-200">
-                                <CardBody className="text-center py-16">
-                                    <Icon icon="solar:clipboard-list-linear" className="text-6xl text-slate-300 mx-auto mb-4" />
-                                    <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีงาน</h3>
-                                    <p className="text-slate-500 mb-6">เริ่มสร้างงานเพื่อกำหนดหัวข้อการลงคะแนน</p>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:user-hands-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-sm text-slate-400 mb-3">ยังไม่มีผู้ช่วยสอน</p>
+                                                <Button
+                                                    size="sm"
+                                                    color="primary"
+                                                    variant="flat"
+                                                    startContent={<Icon icon="solar:add-circle-bold" />}
+                                                    onPress={() => setIsAddTAModalOpen(true)}
+                                                    isDisabled={availableTAs.length === 0}
+                                                >
+                                                    เพิ่ม TA
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </CardBody>
+                                </Card>
+                            </div>
+                        )}
+
+                        {/* Assignments Tab */}
+                        {activeTab === "assignments" && (
+                            <div className="space-y-4">
+                                {/* Header */}
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-slate-800">งานทั้งหมด</h2>
+                                        <p className="text-sm text-slate-500">สร้างและจัดการหัวข้องานสำหรับการลงคะแนน</p>
+                                    </div>
                                     <Button
                                         color="primary"
                                         startContent={<Icon icon="solar:add-circle-bold" />}
-                                        onPress={() => setIsAddAssignmentModalOpen(true)}
+                                        onPress={() => {
+                                            setNewAssignment({
+                                                name: "",
+                                                type: "individual",
+                                                hasSubItems: false,
+                                                subItems: [],
+                                                maxScore: 10,
+                                                dueDate: "",
+                                                description: "",
+                                                groupSize: 3,
+                                                groupFormation: "manual",
+                                            });
+                                            setEditingAssignment(null);
+                                            setIsAddAssignmentModalOpen(true);
+                                        }}
                                         className="bg-blue-500"
                                     >
                                         สร้างงานใหม่
                                     </Button>
+                                </div>
+
+                                {/* Assignment Stats */}
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="p-4 text-center">
+                                            <Icon icon="solar:clipboard-list-bold" className="text-2xl text-blue-500 mx-auto mb-1" />
+                                            <p className="text-2xl font-bold text-slate-800">{assignments.length}</p>
+                                            <p className="text-xs text-slate-500">งานทั้งหมด</p>
+                                        </CardBody>
+                                    </Card>
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="p-4 text-center">
+                                            <Icon icon="solar:user-bold" className="text-2xl text-indigo-500 mx-auto mb-1" />
+                                            <p className="text-2xl font-bold text-slate-800">{assignments.filter(a => a.type === "individual").length}</p>
+                                            <p className="text-xs text-slate-500">งานเดี่ยว</p>
+                                        </CardBody>
+                                    </Card>
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="p-4 text-center">
+                                            <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-emerald-500 mx-auto mb-1" />
+                                            <p className="text-2xl font-bold text-slate-800">{assignments.filter(a => a.type === "group").length}</p>
+                                            <p className="text-xs text-slate-500">งานกลุ่ม</p>
+                                        </CardBody>
+                                    </Card>
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="p-4 text-center">
+                                            <Icon icon="solar:medal-star-bold" className="text-2xl text-amber-500 mx-auto mb-1" />
+                                            <p className="text-2xl font-bold text-slate-800">
+                                                {assignments.reduce((acc, a) => acc + (a.hasSubItems ? a.subItems.reduce((s, sub) => s + sub.maxScore, 0) : a.maxScore), 0)}
+                                            </p>
+                                            <p className="text-xs text-slate-500">คะแนนรวม</p>
+                                        </CardBody>
+                                    </Card>
+                                </div>
+
+                                {/* Assignments List */}
+                                {assignments.length > 0 ? (
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="p-0 divide-y divide-slate-100">
+                                            {assignments.map((assignment) => (
+                                                <div key={assignment.id}>
+                                                    <div
+                                                        className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                                                        onClick={() => {
+                                                            if (assignment.hasSubItems) {
+                                                                setExpandedAssignments(prev =>
+                                                                    prev.includes(assignment.id)
+                                                                        ? prev.filter(id => id !== assignment.id)
+                                                                        : [...prev, assignment.id]
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`p-2.5 rounded-xl ${assignment.type === "individual"
+                                                                    ? "bg-indigo-100"
+                                                                    : "bg-emerald-100"
+                                                                }`}>
+                                                                <Icon
+                                                                    icon={assignment.type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"}
+                                                                    className={`text-xl ${assignment.type === "individual"
+                                                                            ? "text-indigo-600"
+                                                                            : "text-emerald-600"
+                                                                        }`}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="font-semibold text-slate-800">{assignment.name}</p>
+                                                                    <Chip
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className={assignment.type === "individual"
+                                                                            ? "bg-indigo-50 text-indigo-600"
+                                                                            : "bg-emerald-50 text-emerald-600"
+                                                                        }
+                                                                    >
+                                                                        {assignment.type === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}
+                                                                    </Chip>
+                                                                    {assignment.hasSubItems && (
+                                                                        <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600">
+                                                                            {assignment.subItems.length} ข้อย่อย
+                                                                        </Chip>
+                                                                    )}
+                                                                    {assignment.type === "group" && assignment.groupSize && (
+                                                                        <Chip size="sm" variant="flat" className="bg-purple-50 text-purple-600">
+                                                                            <Icon icon={assignment.groupFormation === "random" ? "solar:shuffle-linear" : "solar:hand-shake-linear"} className="mr-1" />
+                                                                            {assignment.groupSize} คน/กลุ่ม
+                                                                        </Chip>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex items-center gap-3 mt-1">
+                                                                    <span className="text-sm text-slate-500 flex items-center gap-1">
+                                                                        <Icon icon="solar:medal-star-linear" className="text-amber-500" />
+                                                                        {assignment.hasSubItems
+                                                                            ? assignment.subItems.reduce((acc, sub) => acc + sub.maxScore, 0)
+                                                                            : assignment.maxScore
+                                                                        } คะแนน
+                                                                    </span>
+                                                                    {assignment.type === "group" && (
+                                                                        <span className="text-sm text-slate-500 flex items-center gap-1">
+                                                                            <Icon icon="solar:users-group-rounded-linear" className="text-emerald-500" />
+                                                                            {assignment.teams?.length || 0} กลุ่ม
+                                                                        </span>
+                                                                    )}
+                                                                    {assignment.dueDate && (
+                                                                        <span className="text-sm text-slate-500 flex items-center gap-1">
+                                                                            <Icon icon="solar:calendar-linear" />
+                                                                            {new Date(assignment.dueDate).toLocaleDateString("th-TH", {
+                                                                                day: "numeric",
+                                                                                month: "short",
+                                                                                year: "numeric"
+                                                                            })}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                            <Tooltip content="แก้ไข">
+                                                                <Button
+                                                                    isIconOnly
+                                                                    size="sm"
+                                                                    variant="light"
+                                                                    color="primary"
+                                                                    onPress={() => {
+                                                                        setEditingAssignment(assignment);
+                                                                        setNewAssignment({
+                                                                            name: assignment.name,
+                                                                            type: assignment.type,
+                                                                            hasSubItems: assignment.hasSubItems,
+                                                                            subItems: assignment.subItems,
+                                                                            maxScore: assignment.maxScore,
+                                                                            dueDate: assignment.dueDate || "",
+                                                                            description: assignment.description || "",
+                                                                            groupSize: assignment.groupSize || 3,
+                                                                            groupFormation: assignment.groupFormation || "manual",
+                                                                        });
+                                                                        setIsAddAssignmentModalOpen(true);
+                                                                    }}
+                                                                >
+                                                                    <Icon icon="solar:pen-linear" className="text-lg" />
+                                                                </Button>
+                                                            </Tooltip>
+                                                            {assignment.type === "group" && (
+                                                                <Tooltip content="จัดการกลุ่ม">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="light"
+                                                                        color="success"
+                                                                        onPress={() => {
+                                                                            addToast({
+                                                                                title: "กำลังพัฒนา",
+                                                                                description: "ระบบจัดการกลุ่มกำลังพัฒนา",
+                                                                                color: "warning",
+                                                                            });
+                                                                        }}
+                                                                    >
+                                                                        <Icon icon="solar:users-group-rounded-linear" className="text-lg" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                            )}
+                                                            <Tooltip content="ลบงาน" color="danger">
+                                                                <Button
+                                                                    isIconOnly
+                                                                    size="sm"
+                                                                    variant="light"
+                                                                    color="danger"
+                                                                    onPress={() => {
+                                                                        if (confirm("คุณต้องการลบงานนี้ใช่หรือไม่?")) {
+                                                                            setAssignments(prev => prev.filter(a => a.id !== assignment.id));
+                                                                            addToast({
+                                                                                title: "สำเร็จ",
+                                                                                description: "ลบงานเรียบร้อยแล้ว",
+                                                                                color: "success",
+                                                                            });
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
+                                                                </Button>
+                                                            </Tooltip>
+                                                            {assignment.hasSubItems && (
+                                                                <Icon
+                                                                    icon={expandedAssignments.includes(assignment.id) ? "solar:alt-arrow-up-linear" : "solar:alt-arrow-down-linear"}
+                                                                    className="text-xl text-slate-400 ml-2"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {/* Sub Items */}
+                                                    {assignment.hasSubItems && expandedAssignments.includes(assignment.id) && (
+                                                        <div className="px-4 pb-4 bg-slate-50">
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                                                {assignment.subItems.map((subItem, idx) => (
+                                                                    <div
+                                                                        key={subItem.id}
+                                                                        className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-100"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="w-7 h-7 flex items-center justify-center bg-blue-100 text-blue-600 text-xs font-bold rounded-full">
+                                                                                {idx + 1}
+                                                                            </span>
+                                                                            <div>
+                                                                                <p className="font-medium text-slate-800 text-sm">{subItem.name}</p>
+                                                                                <p className="text-xs text-slate-500">{subItem.maxScore} คะแนน</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </CardBody>
+                                    </Card>
+                                ) : (
+                                    <Card className="shadow-sm border border-slate-200">
+                                        <CardBody className="text-center py-16">
+                                            <Icon icon="solar:clipboard-list-linear" className="text-6xl text-slate-300 mx-auto mb-4" />
+                                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีงาน</h3>
+                                            <p className="text-slate-500 mb-6">เริ่มสร้างงานเพื่อกำหนดหัวข้อการลงคะแนน</p>
+                                            <Button
+                                                color="primary"
+                                                startContent={<Icon icon="solar:add-circle-bold" />}
+                                                onPress={() => setIsAddAssignmentModalOpen(true)}
+                                                className="bg-blue-500"
+                                            >
+                                                สร้างงานใหม่
+                                            </Button>
+                                        </CardBody>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Scores Tab */}
+                        {activeTab === "scores" && (
+                            <Card className="shadow-sm border border-slate-200">
+                                <CardBody className="text-center py-16">
+                                    <Icon icon="solar:chart-2-linear" className="text-6xl text-slate-300 mx-auto mb-4" />
+                                    <h3 className="text-lg font-semibold text-slate-700 mb-2">ระบบคะแนน</h3>
+                                    <p className="text-slate-500">กำลังพัฒนา...</p>
                                 </CardBody>
                             </Card>
                         )}
                     </div>
-                )}
-
-                {/* Scores Tab */}
-                {activeTab === "scores" && (
-                    <Card className="shadow-sm border border-slate-200">
-                        <CardBody className="text-center py-16">
-                            <Icon icon="solar:chart-2-linear" className="text-6xl text-slate-300 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ระบบคะแนน</h3>
-                            <p className="text-slate-500">กำลังพัฒนา...</p>
-                        </CardBody>
-                    </Card>
-                )}
+                </main>
             </div>
 
             {/* Add Section Modal */}
@@ -2897,8 +3088,8 @@ export default function ClassroomDetailPage() {
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">เพิ่มนักศึกษา</h3>
                                 <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {addStudentMode === "select" 
-                                        ? "ค้นหานักศึกษาที่ต้องการเพิ่มในกลุ่มเรียน" 
+                                    {addStudentMode === "select"
+                                        ? "ค้นหานักศึกษาที่ต้องการเพิ่มในกลุ่มเรียน"
                                         : "วางรายชื่อจาก Excel เพื่อเพิ่มหลายคนพร้อมกัน"
                                     }
                                 </p>
@@ -2911,22 +3102,20 @@ export default function ClassroomDetailPage() {
                             <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                                 <button
                                     onClick={() => setAddStudentMode("select")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                        addStudentMode === "select"
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${addStudentMode === "select"
                                             ? "bg-white text-blue-600 shadow-sm"
                                             : "text-slate-600 hover:bg-slate-200"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon icon="solar:magnifer-linear" />
                                     เลือกจากรายชื่อ
                                 </button>
                                 <button
                                     onClick={() => setAddStudentMode("paste")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                        addStudentMode === "paste"
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${addStudentMode === "paste"
                                             ? "bg-white text-blue-600 shadow-sm"
                                             : "text-slate-600 hover:bg-slate-200"
-                                    }`}
+                                        }`}
                                 >
                                     <Icon icon="solar:clipboard-list-linear" />
                                     วางจาก Excel
@@ -2950,11 +3139,11 @@ export default function ClassroomDetailPage() {
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
-                                    
+
                                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
                                             <p className="text-sm text-slate-600">
-                                                {studentSearchQuery.trim() 
+                                                {studentSearchQuery.trim()
                                                     ? `พบ ${filteredStudents().length} รายการ`
                                                     : `นักศึกษาที่สามารถเพิ่มได้ ${getAvailableStudents().length} คน`
                                                 }
@@ -2966,11 +3155,10 @@ export default function ClassroomDetailPage() {
                                                     <div
                                                         key={student.id}
                                                         onClick={() => setSelectedStudentId(student.id.toString())}
-                                                        className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${
-                                                            selectedStudentId === student.id.toString()
+                                                        className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${selectedStudentId === student.id.toString()
                                                                 ? "bg-blue-50 border-l-4 border-l-blue-500"
                                                                 : "hover:bg-slate-50"
-                                                        }`}
+                                                            }`}
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             <Avatar name={student.full_name} size="sm" className="bg-blue-500" />
@@ -2988,7 +3176,7 @@ export default function ClassroomDetailPage() {
                                                 <div className="text-center py-8">
                                                     <Icon icon="solar:user-cross-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
                                                     <p className="text-slate-400">
-                                                        {studentSearchQuery.trim() 
+                                                        {studentSearchQuery.trim()
                                                             ? "ไม่พบนักศึกษาที่ค้นหา"
                                                             : "ไม่มีนักศึกษาที่สามารถเพิ่มได้"
                                                         }
@@ -3044,10 +3232,9 @@ export default function ClassroomDetailPage() {
                                                 {parsedStudents.map((result, idx) => (
                                                     <div
                                                         key={idx}
-                                                        className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
-                                                            result.status === "matched" ? "bg-green-50" :
-                                                            result.status === "already_enrolled" ? "bg-amber-50" : "bg-red-50"
-                                                        }`}
+                                                        className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${result.status === "matched" ? "bg-green-50" :
+                                                                result.status === "already_enrolled" ? "bg-amber-50" : "bg-red-50"
+                                                            }`}
                                                     >
                                                         <div className="flex items-center gap-3">
                                                             {result.matchedStudent ? (
@@ -3133,12 +3320,12 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Add/Edit Assignment Modal */}
-            <Modal 
-                isOpen={isAddAssignmentModalOpen} 
+            <Modal
+                isOpen={isAddAssignmentModalOpen}
                 onClose={() => {
                     setIsAddAssignmentModalOpen(false);
                     setEditingAssignment(null);
-                }} 
+                }}
                 size="2xl"
                 scrollBehavior="inside"
             >
@@ -3183,35 +3370,29 @@ export default function ClassroomDetailPage() {
                                     <button
                                         type="button"
                                         onClick={() => setNewAssignment(prev => ({ ...prev, type: "individual" }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${
-                                            newAssignment.type === "individual"
+                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.type === "individual"
                                                 ? "border-indigo-500 bg-indigo-50"
                                                 : "border-slate-200 hover:border-slate-300"
-                                        }`}
+                                            }`}
                                     >
-                                        <Icon icon="solar:user-bold" className={`text-3xl mx-auto mb-2 ${
-                                            newAssignment.type === "individual" ? "text-indigo-500" : "text-slate-400"
-                                        }`} />
-                                        <p className={`font-semibold ${
-                                            newAssignment.type === "individual" ? "text-indigo-600" : "text-slate-600"
-                                        }`}>งานเดี่ยว</p>
+                                        <Icon icon="solar:user-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.type === "individual" ? "text-indigo-500" : "text-slate-400"
+                                            }`} />
+                                        <p className={`font-semibold ${newAssignment.type === "individual" ? "text-indigo-600" : "text-slate-600"
+                                            }`}>งานเดี่ยว</p>
                                         <p className="text-xs text-slate-500 mt-1">คะแนนรายบุคคล</p>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setNewAssignment(prev => ({ ...prev, type: "group" }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${
-                                            newAssignment.type === "group"
+                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.type === "group"
                                                 ? "border-emerald-500 bg-emerald-50"
                                                 : "border-slate-200 hover:border-slate-300"
-                                        }`}
+                                            }`}
                                     >
-                                        <Icon icon="solar:users-group-rounded-bold" className={`text-3xl mx-auto mb-2 ${
-                                            newAssignment.type === "group" ? "text-emerald-500" : "text-slate-400"
-                                        }`} />
-                                        <p className={`font-semibold ${
-                                            newAssignment.type === "group" ? "text-emerald-600" : "text-slate-600"
-                                        }`}>งานกลุ่ม</p>
+                                        <Icon icon="solar:users-group-rounded-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.type === "group" ? "text-emerald-500" : "text-slate-400"
+                                            }`} />
+                                        <p className={`font-semibold ${newAssignment.type === "group" ? "text-emerald-600" : "text-slate-600"
+                                            }`}>งานกลุ่ม</p>
                                         <p className="text-xs text-slate-500 mt-1">จับกลุ่มทำงานร่วมกัน</p>
                                     </button>
                                 </div>
@@ -3224,7 +3405,7 @@ export default function ClassroomDetailPage() {
                                         <Icon icon="solar:settings-bold" className="text-emerald-600" />
                                         <span className="font-semibold text-emerald-800">ตั้งค่างานกลุ่ม</span>
                                     </div>
-                                    
+
                                     {/* Group Size */}
                                     <div>
                                         <label className="text-slate-600 font-medium text-sm mb-2 block">จำนวนสมาชิกต่อกลุ่ม</label>
@@ -3233,9 +3414,9 @@ export default function ClassroomDetailPage() {
                                                 isIconOnly
                                                 size="sm"
                                                 variant="flat"
-                                                onPress={() => setNewAssignment(prev => ({ 
-                                                    ...prev, 
-                                                    groupSize: Math.max(2, prev.groupSize - 1) 
+                                                onPress={() => setNewAssignment(prev => ({
+                                                    ...prev,
+                                                    groupSize: Math.max(2, prev.groupSize - 1)
                                                 }))}
                                             >
                                                 <Icon icon="solar:minus-circle-linear" />
@@ -3249,9 +3430,9 @@ export default function ClassroomDetailPage() {
                                                 isIconOnly
                                                 size="sm"
                                                 variant="flat"
-                                                onPress={() => setNewAssignment(prev => ({ 
-                                                    ...prev, 
-                                                    groupSize: Math.min(10, prev.groupSize + 1) 
+                                                onPress={() => setNewAssignment(prev => ({
+                                                    ...prev,
+                                                    groupSize: Math.min(10, prev.groupSize + 1)
                                                 }))}
                                             >
                                                 <Icon icon="solar:add-circle-linear" />
@@ -3266,35 +3447,29 @@ export default function ClassroomDetailPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setNewAssignment(prev => ({ ...prev, groupFormation: "manual" }))}
-                                                className={`p-3 rounded-xl border-2 transition-all ${
-                                                    newAssignment.groupFormation === "manual"
+                                                className={`p-3 rounded-xl border-2 transition-all ${newAssignment.groupFormation === "manual"
                                                         ? "border-emerald-500 bg-white"
                                                         : "border-slate-200 bg-white hover:border-slate-300"
-                                                }`}
+                                                    }`}
                                             >
-                                                <Icon icon="solar:hand-shake-bold" className={`text-2xl mx-auto mb-1 ${
-                                                    newAssignment.groupFormation === "manual" ? "text-emerald-500" : "text-slate-400"
-                                                }`} />
-                                                <p className={`font-medium text-sm ${
-                                                    newAssignment.groupFormation === "manual" ? "text-emerald-600" : "text-slate-600"
-                                                }`}>จับกลุ่มเอง</p>
+                                                <Icon icon="solar:hand-shake-bold" className={`text-2xl mx-auto mb-1 ${newAssignment.groupFormation === "manual" ? "text-emerald-500" : "text-slate-400"
+                                                    }`} />
+                                                <p className={`font-medium text-sm ${newAssignment.groupFormation === "manual" ? "text-emerald-600" : "text-slate-600"
+                                                    }`}>จับกลุ่มเอง</p>
                                                 <p className="text-xs text-slate-500 mt-0.5">นักศึกษาเลือกสมาชิก</p>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => setNewAssignment(prev => ({ ...prev, groupFormation: "random" }))}
-                                                className={`p-3 rounded-xl border-2 transition-all ${
-                                                    newAssignment.groupFormation === "random"
+                                                className={`p-3 rounded-xl border-2 transition-all ${newAssignment.groupFormation === "random"
                                                         ? "border-purple-500 bg-white"
                                                         : "border-slate-200 bg-white hover:border-slate-300"
-                                                }`}
+                                                    }`}
                                             >
-                                                <Icon icon="solar:shuffle-bold" className={`text-2xl mx-auto mb-1 ${
-                                                    newAssignment.groupFormation === "random" ? "text-purple-500" : "text-slate-400"
-                                                }`} />
-                                                <p className={`font-medium text-sm ${
-                                                    newAssignment.groupFormation === "random" ? "text-purple-600" : "text-slate-600"
-                                                }`}>สุ่มกลุ่ม</p>
+                                                <Icon icon="solar:shuffle-bold" className={`text-2xl mx-auto mb-1 ${newAssignment.groupFormation === "random" ? "text-purple-500" : "text-slate-400"
+                                                    }`} />
+                                                <p className={`font-medium text-sm ${newAssignment.groupFormation === "random" ? "text-purple-600" : "text-slate-600"
+                                                    }`}>สุ่มกลุ่ม</p>
                                                 <p className="text-xs text-slate-500 mt-0.5">ระบบจับกลุ่มให้อัตโนมัติ</p>
                                             </button>
                                         </div>
@@ -3320,46 +3495,40 @@ export default function ClassroomDetailPage() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
                                         type="button"
-                                        onClick={() => setNewAssignment(prev => ({ 
-                                            ...prev, 
+                                        onClick={() => setNewAssignment(prev => ({
+                                            ...prev,
                                             hasSubItems: false,
                                             subItems: []
                                         }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${
-                                            !newAssignment.hasSubItems
+                                        className={`p-4 rounded-xl border-2 transition-all ${!newAssignment.hasSubItems
                                                 ? "border-blue-500 bg-blue-50"
                                                 : "border-slate-200 hover:border-slate-300"
-                                        }`}
+                                            }`}
                                     >
-                                        <Icon icon="solar:document-bold" className={`text-3xl mx-auto mb-2 ${
-                                            !newAssignment.hasSubItems ? "text-blue-500" : "text-slate-400"
-                                        }`} />
-                                        <p className={`font-semibold ${
-                                            !newAssignment.hasSubItems ? "text-blue-600" : "text-slate-600"
-                                        }`}>คะแนนเดียว</p>
+                                        <Icon icon="solar:document-bold" className={`text-3xl mx-auto mb-2 ${!newAssignment.hasSubItems ? "text-blue-500" : "text-slate-400"
+                                            }`} />
+                                        <p className={`font-semibold ${!newAssignment.hasSubItems ? "text-blue-600" : "text-slate-600"
+                                            }`}>คะแนนเดียว</p>
                                         <p className="text-xs text-slate-500 mt-1">ให้คะแนนรวมทั้งงาน</p>
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setNewAssignment(prev => ({ 
-                                            ...prev, 
+                                        onClick={() => setNewAssignment(prev => ({
+                                            ...prev,
                                             hasSubItems: true,
                                             subItems: prev.subItems.length > 0 ? prev.subItems : [
                                                 { id: `sub_${Date.now()}`, name: "ข้อ 1", maxScore: 5 }
                                             ]
                                         }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${
-                                            newAssignment.hasSubItems
+                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.hasSubItems
                                                 ? "border-amber-500 bg-amber-50"
                                                 : "border-slate-200 hover:border-slate-300"
-                                        }`}
+                                            }`}
                                     >
-                                        <Icon icon="solar:checklist-bold" className={`text-3xl mx-auto mb-2 ${
-                                            newAssignment.hasSubItems ? "text-amber-500" : "text-slate-400"
-                                        }`} />
-                                        <p className={`font-semibold ${
-                                            newAssignment.hasSubItems ? "text-amber-600" : "text-slate-600"
-                                        }`}>มีข้อย่อย</p>
+                                        <Icon icon="solar:checklist-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.hasSubItems ? "text-amber-500" : "text-slate-400"
+                                            }`} />
+                                        <p className={`font-semibold ${newAssignment.hasSubItems ? "text-amber-600" : "text-slate-600"
+                                            }`}>มีข้อย่อย</p>
                                         <p className="text-xs text-slate-500 mt-1">แบ่งเป็นหลายข้อย่อย</p>
                                     </button>
                                 </div>
@@ -3407,10 +3576,10 @@ export default function ClassroomDetailPage() {
                                                         ...prev,
                                                         subItems: [
                                                             ...prev.subItems,
-                                                            { 
-                                                                id: `sub_${Date.now()}`, 
-                                                                name: `ข้อ ${prev.subItems.length + 1}`, 
-                                                                maxScore: 5 
+                                                            {
+                                                                id: `sub_${Date.now()}`,
+                                                                name: `ข้อ ${prev.subItems.length + 1}`,
+                                                                maxScore: 5
                                                             }
                                                         ]
                                                     }));
@@ -3422,8 +3591,8 @@ export default function ClassroomDetailPage() {
                                     </div>
                                     <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                                         {newAssignment.subItems.map((subItem, idx) => (
-                                            <div 
-                                                key={subItem.id} 
+                                            <div
+                                                key={subItem.id}
                                                 className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"
                                             >
                                                 <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 text-sm font-bold rounded-full flex-shrink-0">
@@ -3437,7 +3606,7 @@ export default function ClassroomDetailPage() {
                                                     onValueChange={(val) => {
                                                         setNewAssignment(prev => ({
                                                             ...prev,
-                                                            subItems: prev.subItems.map(s => 
+                                                            subItems: prev.subItems.map(s =>
                                                                 s.id === subItem.id ? { ...s, name: val } : s
                                                             )
                                                         }));
@@ -3456,7 +3625,7 @@ export default function ClassroomDetailPage() {
                                                     onValueChange={(val) => {
                                                         setNewAssignment(prev => ({
                                                             ...prev,
-                                                            subItems: prev.subItems.map(s => 
+                                                            subItems: prev.subItems.map(s =>
                                                                 s.id === subItem.id ? { ...s, maxScore: parseInt(val) || 0 } : s
                                                             )
                                                         }));
@@ -3522,14 +3691,14 @@ export default function ClassroomDetailPage() {
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <div className="flex items-center justify-between w-full">
                             <div className="text-sm text-slate-500">
-                                {newAssignment.hasSubItems 
+                                {newAssignment.hasSubItems
                                     ? `คะแนนรวม: ${newAssignment.subItems.reduce((acc, sub) => acc + sub.maxScore, 0)} คะแนน`
                                     : `คะแนนเต็ม: ${newAssignment.maxScore} คะแนน`
                                 }
                             </div>
                             <div className="flex gap-2">
-                                <Button 
-                                    variant="light" 
+                                <Button
+                                    variant="light"
                                     onPress={() => {
                                         setIsAddAssignmentModalOpen(false);
                                         setEditingAssignment(null);
@@ -3559,7 +3728,7 @@ export default function ClassroomDetailPage() {
 
                                         if (editingAssignment) {
                                             // Update existing
-                                            setAssignments(prev => prev.map(a => 
+                                            setAssignments(prev => prev.map(a =>
                                                 a.id === editingAssignment.id
                                                     ? {
                                                         ...a,
@@ -3599,7 +3768,7 @@ export default function ClassroomDetailPage() {
                                             setAssignments(prev => [...prev, newAssignmentData]);
                                             addToast({
                                                 title: "สำเร็จ",
-                                                description: newAssignment.type === "group" 
+                                                description: newAssignment.type === "group"
                                                     ? "สร้างงานกลุ่มเรียบร้อยแล้ว สามารถจัดการกลุ่มได้ในหน้างาน"
                                                     : "สร้างงานใหม่เรียบร้อยแล้ว",
                                                 color: "success",
@@ -3621,25 +3790,24 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Create Team Modal */}
-            <Modal 
-                isOpen={isCreateTeamModalOpen} 
-                onClose={resetTeamModal} 
+            <Modal
+                isOpen={isCreateTeamModalOpen}
+                onClose={resetTeamModal}
                 size="xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${
-                                teamCreationType === "permanent" 
-                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600" 
+                            <div className={`p-3 rounded-xl shadow-lg ${teamCreationType === "permanent"
+                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
                                     : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                            }`}>
+                                }`}>
                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">
-                                    {teamFormationMethod === "random" 
+                                    {teamFormationMethod === "random"
                                         ? "สุ่มกลุ่มอัตโนมัติ"
                                         : `สร้าง${teamCreationType === "permanent" ? "กลุ่มถาวร" : "กลุ่มรายสัปดาห์"}ใหม่`
                                     }
@@ -3647,8 +3815,8 @@ export default function ClassroomDetailPage() {
                                 <p className="text-sm text-slate-500 font-normal mt-1">
                                     {teamFormationMethod === "random"
                                         ? `สุ่มจับกลุ่ม${teamCreationType === "permanent" ? "ถาวร" : `สัปดาห์ที่ ${selectedWeek}`}`
-                                        : teamCreationType === "permanent" 
-                                            ? "กลุ่มที่ใช้ตลอดทั้งเทอม" 
+                                        : teamCreationType === "permanent"
+                                            ? "กลุ่มที่ใช้ตลอดทั้งเทอม"
                                             : `กลุ่มสำหรับสัปดาห์ที่ ${selectedWeek}`
                                     }
                                 </p>
@@ -3709,11 +3877,10 @@ export default function ClassroomDetailPage() {
                                                 setTeamExcelPasteData("");
                                                 setParsedTeamMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                                teamMemberMode === "select"
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${teamMemberMode === "select"
                                                     ? `bg-white shadow-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"}`
                                                     : "text-slate-600 hover:bg-slate-200"
-                                            }`}
+                                                }`}
                                         >
                                             <Icon icon="solar:checklist-linear" />
                                             เลือกจากรายชื่อ
@@ -3723,11 +3890,10 @@ export default function ClassroomDetailPage() {
                                                 setTeamMemberMode("paste");
                                                 setSelectedTeamMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                                teamMemberMode === "paste"
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${teamMemberMode === "paste"
                                                     ? `bg-white shadow-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"}`
                                                     : "text-slate-600 hover:bg-slate-200"
-                                            }`}
+                                                }`}
                                         >
                                             <Icon icon="solar:clipboard-list-linear" />
                                             วางจาก Excel
@@ -3770,13 +3936,12 @@ export default function ClassroomDetailPage() {
                                                                         setSelectedTeamMembers(prev => [...prev, student.id]);
                                                                     }
                                                                 }}
-                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${
-                                                                    selectedTeamMembers.includes(student.id)
-                                                                        ? teamCreationType === "permanent" 
+                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${selectedTeamMembers.includes(student.id)
+                                                                        ? teamCreationType === "permanent"
                                                                             ? "bg-purple-50 border-l-4 border-l-purple-500"
                                                                             : "bg-emerald-50 border-l-4 border-l-emerald-500"
                                                                         : "hover:bg-slate-50"
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     <Avatar name={student.full_name} size="sm" className={
@@ -3788,9 +3953,8 @@ export default function ClassroomDetailPage() {
                                                                     </div>
                                                                 </div>
                                                                 {selectedTeamMembers.includes(student.id) && (
-                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${
-                                                                        teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                                    }`} />
+                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                                        }`} />
                                                                 )}
                                                             </div>
                                                         ))
@@ -3822,11 +3986,10 @@ export default function ClassroomDetailPage() {
                                                         parseTeamExcelData(e.target.value);
                                                     }}
                                                     placeholder={"64070001\n64070002\n64070003\n..."}
-                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${
-                                                        teamCreationType === "permanent" 
-                                                            ? "border-purple-200 focus:ring-purple-400" 
+                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${teamCreationType === "permanent"
+                                                            ? "border-purple-200 focus:ring-purple-400"
                                                             : "border-emerald-200 focus:ring-emerald-400"
-                                                    }`}
+                                                        }`}
                                                 />
                                             </div>
 
@@ -3838,11 +4001,10 @@ export default function ClassroomDetailPage() {
                                                             ผลการตรวจสอบ ({parsedTeamMembers.length} รายการ)
                                                         </p>
                                                         <div className="flex gap-2 text-xs">
-                                                            <span className={`px-2 py-1 rounded-full ${
-                                                                teamCreationType === "permanent" 
-                                                                    ? "bg-purple-100 text-purple-700" 
+                                                            <span className={`px-2 py-1 rounded-full ${teamCreationType === "permanent"
+                                                                    ? "bg-purple-100 text-purple-700"
                                                                     : "bg-emerald-100 text-emerald-700"
-                                                            }`}>
+                                                                }`}>
                                                                 พบ {parsedTeamMembers.filter(p => p.status === "matched").length}
                                                             </span>
                                                             <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
@@ -3857,17 +4019,16 @@ export default function ClassroomDetailPage() {
                                                         {parsedTeamMembers.map((result, idx) => (
                                                             <div
                                                                 key={idx}
-                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
-                                                                    result.status === "matched" 
+                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${result.status === "matched"
                                                                         ? teamCreationType === "permanent" ? "bg-purple-50" : "bg-emerald-50"
                                                                         : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
-                                                                }`}
+                                                                    }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     {result.matchedStudent ? (
                                                                         <>
                                                                             <Avatar name={result.matchedStudent.full_name} size="sm" className={
-                                                                                result.status === "matched" 
+                                                                                result.status === "matched"
                                                                                     ? teamCreationType === "permanent" ? "bg-purple-500" : "bg-emerald-500"
                                                                                     : "bg-amber-500"
                                                                             } />
@@ -3890,11 +4051,10 @@ export default function ClassroomDetailPage() {
                                                                 </div>
                                                                 <div>
                                                                     {result.status === "matched" && (
-                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                                                                            teamCreationType === "permanent"
+                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamCreationType === "permanent"
                                                                                 ? "bg-purple-200 text-purple-700"
                                                                                 : "bg-emerald-200 text-emerald-700"
-                                                                        }`}>
+                                                                            }`}>
                                                                             <Icon icon="solar:check-circle-bold" className="text-sm" />
                                                                             พร้อมเพิ่ม
                                                                         </span>
@@ -3934,11 +4094,10 @@ export default function ClassroomDetailPage() {
                                             >
                                                 <Icon icon="solar:minus-circle-linear" />
                                             </Button>
-                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                                                teamCreationType === "permanent" 
-                                                    ? "bg-purple-50 border-purple-200" 
+                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${teamCreationType === "permanent"
+                                                    ? "bg-purple-50 border-purple-200"
                                                     : "bg-emerald-50 border-emerald-200"
-                                            }`}>
+                                                }`}>
                                                 <Icon icon="solar:users-group-rounded-linear" className={
                                                     teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
                                                 } />
@@ -3957,23 +4116,19 @@ export default function ClassroomDetailPage() {
                                     </div>
 
                                     {/* Preview */}
-                                    <Card className={`shadow-sm border ${
-                                        teamCreationType === "permanent" 
-                                            ? "border-purple-100 bg-purple-50/50" 
+                                    <Card className={`shadow-sm border ${teamCreationType === "permanent"
+                                            ? "border-purple-100 bg-purple-50/50"
                                             : "border-emerald-100 bg-emerald-50/50"
-                                    }`}>
+                                        }`}>
                                         <CardBody className="py-3 px-4">
                                             <div className="flex items-start gap-3">
-                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${
-                                                    teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                }`} />
+                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                    }`} />
                                                 <div>
-                                                    <p className={`font-medium ${
-                                                        teamCreationType === "permanent" ? "text-purple-800" : "text-emerald-800"
-                                                    }`}>ตัวอย่างการจับกลุ่ม</p>
-                                                    <p className={`text-sm ${
-                                                        teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"
-                                                    }`}>
+                                                    <p className={`font-medium ${teamCreationType === "permanent" ? "text-purple-800" : "text-emerald-800"
+                                                        }`}>ตัวอย่างการจับกลุ่ม</p>
+                                                    <p className={`text-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"
+                                                        }`}>
                                                         {(() => {
                                                             const unassigned = getUnassignedStudents(teamCreationType, teamCreationType === "weekly" ? selectedWeek : undefined);
                                                             const numTeams = Math.ceil(unassigned.length / teamSize);
@@ -3981,9 +4136,8 @@ export default function ClassroomDetailPage() {
                                                             if (unassigned.length === 0) {
                                                                 return "ไม่มีนักศึกษาที่ยังไม่อยู่ในกลุ่ม";
                                                             }
-                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${
-                                                                remainder > 0 ? `(${numTeams - 1} กลุ่ม ${teamSize} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${teamSize} คน)`
-                                                            }`;
+                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${remainder > 0 ? `(${numTeams - 1} กลุ่ม ${teamSize} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${teamSize} คน)`
+                                                                }`;
                                                         })()}
                                                     </p>
                                                 </div>
@@ -3995,8 +4149,8 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={resetTeamModal}
                         >
                             ยกเลิก
@@ -4008,8 +4162,8 @@ export default function ClassroomDetailPage() {
                             className={teamCreationType === "permanent" ? "bg-purple-500" : "bg-emerald-500"}
                             startContent={!isSubmitting && <Icon icon={teamFormationMethod === "random" ? "solar:shuffle-bold" : "solar:add-circle-bold"} />}
                         >
-                            {teamFormationMethod === "random" 
-                                ? "สุ่มกลุ่ม" 
+                            {teamFormationMethod === "random"
+                                ? "สุ่มกลุ่ม"
                                 : `สร้างกลุ่ม${selectedTeamMembers.length > 0 ? ` (${selectedTeamMembers.length} คน)` : ""}`
                             }
                         </Button>
@@ -4018,8 +4172,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Delete Confirmation Modal */}
-            <Modal 
-                isOpen={isDeleteModalOpen} 
+            <Modal
+                isOpen={isDeleteModalOpen}
                 onClose={() => {
                     setIsDeleteModalOpen(false);
                     setDeleteTarget(null);
@@ -4050,9 +4204,9 @@ export default function ClassroomDetailPage() {
                                 <Card className="border border-red-100 bg-red-50/50">
                                     <CardBody className="py-4 px-4">
                                         <div className="flex items-center gap-4">
-                                            <Avatar 
-                                                name={deleteTarget.studentName} 
-                                                size="lg" 
+                                            <Avatar
+                                                name={deleteTarget.studentName}
+                                                size="lg"
                                                 className="bg-red-500"
                                             />
                                             <div>
@@ -4074,7 +4228,7 @@ export default function ClassroomDetailPage() {
                                 {(() => {
                                     const teamInfo = getStudentTeamInfo(deleteTarget.studentId!);
                                     const hasTeams = teamInfo.permanentTeam || teamInfo.weeklyTeams.length > 0;
-                                    
+
                                     if (hasTeams) {
                                         return (
                                             <Card className="border border-amber-200 bg-amber-50">
@@ -4121,7 +4275,7 @@ export default function ClassroomDetailPage() {
                                             <div>
                                                 <p className="font-medium text-blue-800">เกี่ยวกับคะแนน</p>
                                                 <p className="text-sm text-blue-600 mt-1">
-                                                    คะแนนที่เคยลงให้นักศึกษาคนนี้จะยังคงอยู่ในระบบ และจะแสดงเป็น 
+                                                    คะแนนที่เคยลงให้นักศึกษาคนนี้จะยังคงอยู่ในระบบ และจะแสดงเป็น
                                                     <span className="font-medium"> &quot;นักศึกษาที่ถูกนำออก&quot; </span>
                                                     ในหน้าคะแนน
                                                 </p>
@@ -4150,18 +4304,16 @@ export default function ClassroomDetailPage() {
                         {deleteType === "team" && deleteTarget && (
                             <div className="space-y-4">
                                 {/* Team Info */}
-                                <Card className={`border ${
-                                    deleteTarget.teamType === "permanent" 
-                                        ? "border-purple-200 bg-purple-50" 
+                                <Card className={`border ${deleteTarget.teamType === "permanent"
+                                        ? "border-purple-200 bg-purple-50"
                                         : "border-emerald-200 bg-emerald-50"
-                                }`}>
+                                    }`}>
                                     <CardBody className="py-4 px-4">
                                         <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                                                deleteTarget.teamType === "permanent"
+                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${deleteTarget.teamType === "permanent"
                                                     ? "bg-gradient-to-br from-purple-500 to-indigo-600"
                                                     : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                            }`}>
+                                                }`}>
                                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                                             </div>
                                             <div>
@@ -4169,8 +4321,8 @@ export default function ClassroomDetailPage() {
                                                     {deleteTarget.teamName}
                                                 </p>
                                                 <p className="text-sm text-slate-500">
-                                                    {deleteTarget.teamType === "permanent" 
-                                                        ? "กลุ่มถาวร" 
+                                                    {deleteTarget.teamType === "permanent"
+                                                        ? "กลุ่มถาวร"
                                                         : `กลุ่มรายสัปดาห์ (สัปดาห์ที่ ${deleteTarget.weekNumber})`
                                                     }
                                                 </p>
@@ -4180,7 +4332,7 @@ export default function ClassroomDetailPage() {
                                 </Card>
 
                                 {/* Members */}
-                                {deleteTarget.teamMembers && deleteTarget.teamMembers.length > 0 && (
+                                {/* {deleteTarget.teamMembers && deleteTarget.teamMembers.length > 0 && (
                                     <div className="border border-slate-200 rounded-xl overflow-hidden">
                                         <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
                                             <p className="text-sm font-medium text-slate-600">
@@ -4201,7 +4353,7 @@ export default function ClassroomDetailPage() {
                                             ))}
                                         </div>
                                     </div>
-                                )}
+                                )} */}
 
                                 {/* Info */}
                                 <Card className="border border-blue-200 bg-blue-50">
@@ -4211,8 +4363,24 @@ export default function ClassroomDetailPage() {
                                             <div>
                                                 <p className="font-medium text-blue-800">สิ่งที่จะเกิดขึ้น</p>
                                                 <p className="text-sm text-blue-600 mt-1">
-                                                    สมาชิกทุกคนในกลุ่มจะกลับไปเป็นนักศึกษาที่ยังไม่มีกลุ่ม 
+                                                    สมาชิกทุกคนในกลุ่มจะกลับไปเป็นนักศึกษาที่ยังไม่มีกลุ่ม
                                                     และสามารถจัดกลุ่มใหม่ได้
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Score Warning */}
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:document-text-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-amber-800">เกี่ยวกับคะแนน</p>
+                                                <p className="text-sm text-amber-700 mt-1">
+                                                    หากมีการลงคะแนนให้กลุ่มนี้ไว้แล้ว คะแนนจะยังคงอยู่ในระบบ
+                                                    โดยผูกกับนักศึกษาแต่ละคน ไม่ได้ถูกลบไปด้วย
                                                 </p>
                                             </div>
                                         </div>
@@ -4237,8 +4405,8 @@ export default function ClassroomDetailPage() {
                         )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={() => {
                                 setIsDeleteModalOpen(false);
                                 setDeleteTarget(null);
@@ -4255,6 +4423,141 @@ export default function ClassroomDetailPage() {
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
                         >
                             {deleteType === "student" ? "นำนักศึกษาออก" : "ลบกลุ่ม"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Bulk Delete Teams Modal */}
+            <Modal
+                isOpen={isBulkDeleteModalOpen}
+                onClose={() => setIsBulkDeleteModalOpen(false)}
+                size="lg"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+                                <Icon icon="solar:trash-bin-2-bold" className="text-2xl text-red-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ล้างกลุ่มทั้งหมด</h3>
+                                <p className="text-sm text-slate-500">สัปดาห์ที่ {selectedWeek}</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            {/* Teams Summary */}
+                            <Card className="border border-emerald-200 bg-emerald-50">
+                                <CardBody className="py-4 px-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                                                <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-lg text-slate-800">
+                                                    {weeklyTeams[selectedWeek]?.length || 0} กลุ่ม
+                                                </p>
+                                                <p className="text-sm text-slate-500">
+                                                    จำนวนสมาชิกทั้งหมด {weeklyTeams[selectedWeek]?.reduce((acc, t) => acc + t.members.length, 0) || 0} คน
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+
+                            {/* Teams List Preview */}
+                            {/* {weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 && (
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                                        <p className="text-sm font-medium text-slate-600">
+                                            กลุ่มที่จะถูกลบ
+                                        </p>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {weeklyTeams[selectedWeek].map((team, idx) => (
+                                            <div key={team.id} className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-medium text-sm">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-slate-800">{team.name}</p>
+                                                        <p className="text-xs text-slate-400">{team.members.length} สมาชิก</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )} */}
+
+                            {/* Info */}
+                            <Card className="border border-blue-200 bg-blue-50">
+                                <CardBody className="py-3 px-4">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:info-circle-bold" className="text-xl text-blue-600 mt-0.5" />
+                                        <div>
+                                            <p className="font-medium text-blue-800">สิ่งที่จะเกิดขึ้น</p>
+                                            <p className="text-sm text-blue-600 mt-1">
+                                                สมาชิกทุกคนในทุกกลุ่มของสัปดาห์นี้จะกลับไปเป็นนักศึกษาที่ยังไม่มีกลุ่ม
+                                                และสามารถจัดกลุ่มใหม่ได้
+                                            </p>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+
+                            {/* Score Warning */}
+                            <Card className="border border-amber-200 bg-amber-50">
+                                <CardBody className="py-3 px-4">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:document-text-bold" className="text-xl text-amber-600 mt-0.5" />
+                                        <div>
+                                            <p className="font-medium text-amber-800">เกี่ยวกับคะแนน</p>
+                                            <p className="text-sm text-amber-700 mt-1">
+                                                หากมีการลงคะแนนให้กลุ่มเหล่านี้ไว้แล้ว คะแนนจะยังคงอยู่ในระบบ
+                                                โดยผูกกับนักศึกษาแต่ละคน ไม่ได้ถูกลบไปด้วย
+                                            </p>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+
+                            {/* Warning */}
+                            <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                <div className="flex items-center gap-3">
+                                    <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                    <div>
+                                        <p className="font-semibold text-red-800">
+                                            คุณต้องการล้างกลุ่มทั้งหมดใช่หรือไม่?
+                                        </p>
+                                        <p className="text-sm text-red-600">
+                                            การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            variant="light"
+                            onPress={() => setIsBulkDeleteModalOpen(false)}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="danger"
+                            onPress={confirmBulkDeleteTeams}
+                            isLoading={isSubmitting}
+                            className="bg-red-500"
+                            startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
+                        >
+                            ล้างทั้งหมด ({weeklyTeams[selectedWeek]?.length || 0} กลุ่ม)
                         </Button>
                     </ModalFooter>
                 </ModalContent>

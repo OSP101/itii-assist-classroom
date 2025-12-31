@@ -436,6 +436,13 @@ class CourseService {
   }
 
   /**
+   * Bulk delete teams
+   */
+  async bulkDeleteTeams(courseId: string, teamIds: number[]) {
+    return apiService.post<{ deletedCount: number }>(`/courses/${courseId}/teams/bulk-delete`, { team_ids: teamIds });
+  }
+
+  /**
    * Add member to team
    */
   async addMemberToTeam(courseId: string, teamId: number, studentId: number) {

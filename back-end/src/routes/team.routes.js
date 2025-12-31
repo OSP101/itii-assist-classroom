@@ -15,6 +15,9 @@ router.post('/', authorize('admin', 'instructor', 'ta'), teamController.createTe
 // Bulk create teams (for random formation)
 router.post('/bulk', authorize('admin', 'instructor', 'ta'), teamController.bulkCreateTeams);
 
+// Bulk delete teams
+router.post('/bulk-delete', authorize('admin', 'instructor', 'ta'), teamController.bulkDeleteTeams);
+
 // Update a team
 router.put('/:teamId', authorize('admin', 'instructor', 'ta'), teamController.updateTeam);
 

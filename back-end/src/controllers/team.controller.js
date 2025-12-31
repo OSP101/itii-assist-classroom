@@ -329,6 +329,58 @@ const updateTeam = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Bulk delete teams
+ * @route POST /api/courses/:id/teams/bulk-delete
+ */
+const bulkDeleteTeams = asyncHandler(async (req, res) => {
+  const { id: courseId } = req.params;
+  const { team_ids } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(courseId, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
+
+  if (!team_ids || !Array.isArray(team_ids) || team_ids.length === 0) {
+    throw new ApiError(400, 'กรุณาระบุรายการกลุ่มที่ต้องการลบ');
+  }
+
+  const transaction = await sequelize.transaction();
+  
+  try {
+    // Delete members first
+    await StudentGroupMember.destroy({
+      where: { group_id: team_ids },
+      transaction,
+    });
+
+    // Delete teams
+    const deletedCount = await StudentGroup.destroy({
+      where: { 
+        id: team_ids,
+        course_id: courseId 
+      },
+      transaction,
+    });
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: `ลบกลุ่มสำเร็จ ${deletedCount} กลุ่ม`,
+      data: {
+        deletedCount,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
+
+/**
  * Delete a team
  * @route DELETE /api/courses/:id/teams/:teamId
  */
@@ -457,6 +509,7 @@ module.exports = {
   getTeams,
   createTeam,
   bulkCreateTeams,
+  bulkDeleteTeams,
   updateTeam,
   deleteTeam,
   addMemberToTeam,
