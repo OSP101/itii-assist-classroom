@@ -8,6 +8,29 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
 /**
+ * Check if user has access to course (is admin, instructor, or TA of course)
+ */
+const checkCourseAccess = async (courseId, user) => {
+  if (user.role === 'admin') return true;
+  
+  const course = await Course.findByPk(courseId);
+  if (!course) return false;
+  
+  // Check if user is the instructor
+  if (user.role === 'instructor' && course.instructor_id === user.id) return true;
+  
+  // Check if user is a TA of this course
+  if (user.role === 'ta' || user.role === 'instructor') {
+    const isTA = await CourseTA.findOne({
+      where: { course_id: courseId, user_id: user.id }
+    });
+    if (isTA) return true;
+  }
+  
+  return false;
+};
+
+/**
  * Get all courses with pagination and filters
  * @route GET /api/courses
  */
@@ -424,6 +447,13 @@ const toggleCourseStatus = asyncHandler(async (req, res) => {
 const addSection = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { section_no, note } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
 
   const course = await Course.findByPk(id);
   if (!course) {
@@ -461,6 +491,13 @@ const addSection = asyncHandler(async (req, res) => {
  */
 const removeSection = asyncHandler(async (req, res) => {
   const { id, sectionId } = req.params;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
 
   const section = await CourseSection.findOne({
     where: { id: sectionId, course_id: id },
@@ -493,6 +530,15 @@ const removeSection = asyncHandler(async (req, res) => {
 const addTA = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { user_id } = req.body;
+  const currentUser = req.user;
+
+  // Check course access (only admin or instructor of this course)
+  if (currentUser.role !== 'admin') {
+    const course = await Course.findByPk(id);
+    if (!course || course.instructor_id !== currentUser.id) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์เพิ่มผู้ช่วยสอนในรายวิชานี้');
+    }
+  }
 
   const course = await Course.findByPk(id);
   if (!course) {
@@ -529,6 +575,15 @@ const addTA = asyncHandler(async (req, res) => {
  */
 const removeTA = asyncHandler(async (req, res) => {
   const { id, userId } = req.params;
+  const currentUser = req.user;
+
+  // Check course access (only admin or instructor of this course)
+  if (currentUser.role !== 'admin') {
+    const course = await Course.findByPk(id);
+    if (!course || course.instructor_id !== currentUser.id) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์นำผู้ช่วยสอนออกจากรายวิชานี้');
+    }
+  }
 
   const deleted = await CourseTA.destroy({
     where: { course_id: id, user_id: userId },
@@ -554,6 +609,13 @@ const removeTA = asyncHandler(async (req, res) => {
  */
 const getSectionStudents = asyncHandler(async (req, res) => {
   const { id, sectionId } = req.params;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
 
   const section = await CourseSection.findOne({
     where: { id: sectionId, course_id: id },
@@ -589,6 +651,13 @@ const getSectionStudents = asyncHandler(async (req, res) => {
 const addStudentToSection = asyncHandler(async (req, res) => {
   const { id, sectionId } = req.params;
   const { student_id } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
 
   const section = await CourseSection.findOne({
     where: { id: sectionId, course_id: id },
@@ -602,12 +671,21 @@ const addStudentToSection = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'ไม่พบนักศึกษาที่ระบุ');
   }
 
-  // Check duplicate
-  const existing = await CourseSectionStudent.findOne({
-    where: { course_section_id: sectionId, student_id },
+  // Check if student already in ANY section of this course
+  const sectionsInCourse = await CourseSection.findAll({
+    where: { course_id: id },
+    attributes: ['id'],
   });
-  if (existing) {
-    throw new ApiError(400, 'นักศึกษานี้อยู่ในกลุ่มเรียนแล้ว');
+  const sectionIds = sectionsInCourse.map(s => s.id);
+  
+  const existingInCourse = await CourseSectionStudent.findOne({
+    where: { 
+      course_section_id: { [Op.in]: sectionIds },
+      student_id 
+    },
+  });
+  if (existingInCourse) {
+    throw new ApiError(400, 'นักศึกษานี้อยู่ในรายวิชานี้แล้ว');
   }
 
   await CourseSectionStudent.create({
@@ -623,11 +701,93 @@ const addStudentToSection = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Bulk add students to section
+ * @route POST /api/courses/:id/sections/:sectionId/students/bulk
+ */
+const bulkAddStudentsToSection = asyncHandler(async (req, res) => {
+  const { id, sectionId } = req.params;
+  const { student_ids } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
+
+  const section = await CourseSection.findOne({
+    where: { id: sectionId, course_id: id },
+  });
+  if (!section) {
+    throw new ApiError(404, 'ไม่พบกลุ่มเรียน');
+  }
+
+  if (!student_ids || !Array.isArray(student_ids) || student_ids.length === 0) {
+    throw new ApiError(400, 'กรุณาระบุรายชื่อนักศึกษา');
+  }
+
+  // Get all sections in this course to check for duplicates
+  const sectionsInCourse = await CourseSection.findAll({
+    where: { course_id: id },
+    attributes: ['id'],
+  });
+  const sectionIds = sectionsInCourse.map(s => s.id);
+
+  // Get already enrolled students in this course
+  const existingEnrollments = await CourseSectionStudent.findAll({
+    where: { 
+      course_section_id: { [Op.in]: sectionIds },
+      student_id: { [Op.in]: student_ids }
+    },
+    attributes: ['student_id'],
+  });
+  const alreadyEnrolledIds = new Set(existingEnrollments.map(e => e.student_id));
+
+  // Filter out already enrolled students
+  const newStudentIds = student_ids.filter(id => !alreadyEnrolledIds.has(id));
+
+  if (newStudentIds.length === 0) {
+    throw new ApiError(400, 'นักศึกษาทั้งหมดอยู่ในรายวิชานี้แล้ว');
+  }
+
+  // Verify all students exist
+  const students = await Student.findAll({
+    where: { id: { [Op.in]: newStudentIds } },
+  });
+  const validStudentIds = students.map(s => s.id);
+
+  // Bulk create enrollments
+  const enrollments = validStudentIds.map(studentId => ({
+    course_section_id: parseInt(sectionId),
+    student_id: studentId,
+  }));
+
+  await CourseSectionStudent.bulkCreate(enrollments, { ignoreDuplicates: true });
+
+  res.status(201).json({
+    success: true,
+    message: `เพิ่มนักศึกษาสำเร็จ ${validStudentIds.length} คน`,
+    data: {
+      addedCount: validStudentIds.length,
+      skippedCount: student_ids.length - validStudentIds.length,
+      addedStudentIds: validStudentIds,
+    },
+  });
+});
+
+/**
  * Remove student from section
  * @route DELETE /api/courses/:id/sections/:sectionId/students/:studentId
  */
 const removeStudentFromSection = asyncHandler(async (req, res) => {
-  const { sectionId, studentId } = req.params;
+  const { id, sectionId, studentId } = req.params;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
 
   const deleted = await CourseSectionStudent.destroy({
     where: { course_section_id: sectionId, student_id: studentId },
@@ -915,6 +1075,107 @@ const getMyCoursesStats = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Get course overview dashboard data
+ * @route GET /api/courses/:id/overview
+ */
+const getCourseOverview = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  // Get course with sections
+  const course = await Course.findByPk(id, {
+    include: [
+      {
+        model: CourseSection,
+        as: 'sections',
+        attributes: ['id', 'section_no'],
+      },
+      {
+        model: User,
+        as: 'tas',
+        attributes: ['id', 'full_name', 'email', 'avatar'],
+        through: { attributes: ['assigned_at'] },
+      },
+    ],
+  });
+
+  if (!course) {
+    throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
+  }
+
+  // Get all students in course
+  const sectionIds = course.sections.map(s => s.id);
+  
+  let allStudents = [];
+  let totalStudents = 0;
+
+  if (sectionIds.length > 0) {
+    const enrollments = await CourseSectionStudent.findAll({
+      where: { course_section_id: sectionIds },
+      include: [
+        {
+          model: Student,
+          as: 'student',
+          attributes: ['id', 'student_id', 'full_name', 'email', 'is_active'],
+        },
+        {
+          model: CourseSection,
+          as: 'section',
+          attributes: ['id', 'section_no'],
+        },
+      ],
+    });
+
+    allStudents = enrollments.map(e => ({
+      id: e.student.id,
+      student_id: e.student.student_id,
+      full_name: e.student.full_name,
+      email: e.student.email,
+      section_id: e.section.id,
+      section_no: e.section.section_no,
+      enrolled_at: e.enrolled_at || e.createdAt,
+    }));
+
+    totalStudents = allStudents.length;
+  }
+
+  // Real data - no mock (waiting for Assignment model)
+  // When Assignment model exists, calculate from actual submissions
+  
+  // TA activity - real data only
+  const taActivity = (course.tas || []).map(ta => ({
+    id: ta.id,
+    full_name: ta.full_name,
+    email: ta.email,
+    assignedAt: ta.CourseTA?.assigned_at,
+    gradedCount: 0, // Will be real when assignments exist
+    lastActive: null, // Will be real when assignments exist
+    avatar: ta.avatar,
+  }));
+
+  // Course summary - real data only
+  const summary = {
+    totalStudents,
+    totalSections: course.sections.length,
+    totalTAs: (course.tas || []).length,
+    totalAssignments: 0, // Will be real when assignments exist
+    submissionRate: 0, // Will be real when assignments exist
+    trend: null, // Will be real when assignments exist
+    trendValue: 0,
+  };
+
+  res.json({
+    success: true,
+    data: {
+      summary,
+      topStudents: [], // Will be real when assignments exist (need scores)
+      lowPerformers: [], // Will be real when assignments exist (need scores)
+      taActivity,
+      assignments: [], // Will be real when assignments exist
+    },
+  });
+});
+
 module.exports = {
   getCourses,
   getCourseStats,
@@ -929,9 +1190,11 @@ module.exports = {
   removeTA,
   getSectionStudents,
   addStudentToSection,
+  bulkAddStudentsToSection,
   removeStudentFromSection,
   getInstructors,
   getTAsList,
   getMyCourses,
   getMyCoursesStats,
+  getCourseOverview,
 };

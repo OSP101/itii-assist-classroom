@@ -10,6 +10,7 @@ const studentRoutes = require('./student.routes');
 const courseRoutes = require('./course.routes');
 const classroomRoutes = require('./classroom.routes');
 const feedbackRoutes = require('./feedback.routes');
+const teamRoutes = require('./team.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -18,6 +19,7 @@ router.use('/logs', systemLogRoutes);
 router.use('/users', userRoutes);
 router.use('/students', studentRoutes);
 router.use('/courses', courseRoutes);
+router.use('/courses/:id/teams', teamRoutes); // Team routes nested under courses
 router.use('/classrooms', classroomRoutes);
 router.use('/feedback', feedbackRoutes);
 

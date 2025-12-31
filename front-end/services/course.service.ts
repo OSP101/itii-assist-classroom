@@ -113,6 +113,53 @@ export interface SectionStudent {
   enrolled_at: string;
 }
 
+// Team Types
+export interface TeamMember {
+  id: number;
+  student_id: string;
+  full_name: string;
+  email?: string | null;
+  joined_at?: string;
+}
+
+export interface Team {
+  id: number;
+  name: string;
+  group_type: 'permanent' | 'temporary';
+  week_number: number | null;
+  members: TeamMember[];
+  created_at: string;
+}
+
+export interface CreateTeamDto {
+  name: string;
+  group_type: 'permanent' | 'temporary';
+  week_number?: number;
+  member_ids: number[];
+}
+
+export interface BulkCreateTeamDto {
+  teams: Array<{
+    name: string;
+    member_ids: number[];
+  }>;
+  group_type: 'permanent' | 'temporary';
+  week_number?: number;
+}
+export interface BulkCreateTeamsResponse {
+  createdCount: number;
+  teams: Array<{
+    id: number;
+    name: string;
+    memberCount: number;
+  }>;
+}
+export interface BulkAddStudentsResponse {
+  addedCount: number;
+  skippedCount: number;
+  addedStudentIds: number[];
+}
+
 export interface MyCoursesStats {
   total: number;
   byStatus: {
@@ -120,6 +167,61 @@ export interface MyCoursesStats {
     inactive: number;
   };
   years: number[];
+}
+
+// Course Overview Types
+export interface OverviewStudent {
+  id: number;
+  student_id: string;
+  full_name: string;
+  email: string | null;
+  section_id: number;
+  section_no: string;
+  totalScore: number;
+  submissionCount: number;
+  missedCount: number;
+  percentage?: number;
+}
+
+export interface TAActivity {
+  id: number;
+  full_name: string;
+  email: string | null;
+  assignedAt: string;
+  gradedCount: number;
+  lastActive: string;
+  avatar: string | null;
+}
+
+export interface OverviewAssignment {
+  id: number;
+  name: string;
+  maxScore: number;
+  dueDate: string;
+  submittedCount: number;
+  notSubmittedCount: number;
+  submissionRate: number;
+  averageScore: number;
+  modeScore: number;
+  trend: number;
+}
+
+export interface CourseOverviewSummary {
+  totalStudents: number;
+  totalSections: number;
+  totalTAs: number;
+  totalAssignments: number;
+  submissionRate: number;
+  trend: 'up' | 'stable' | 'down';
+  trendValue: number;
+}
+
+export interface CourseOverview {
+  summary: CourseOverviewSummary;
+  topStudents: OverviewStudent[];
+  lowPerformers: OverviewStudent[];
+  taActivity: TAActivity[];
+  assignments: OverviewAssignment[];
 }
 
 class CourseService {
@@ -270,10 +372,81 @@ class CourseService {
   }
 
   /**
+   * Bulk add students to section
+   */
+  async bulkAddStudentsToSection(courseId: string, sectionId: number, studentIds: number[]) {
+    return apiService.post<BulkAddStudentsResponse>(`/courses/${courseId}/sections/${sectionId}/students/bulk`, { student_ids: studentIds });
+  }
+
+  /**
    * Remove student from section
    */
   async removeStudentFromSection(courseId: string, sectionId: number, studentId: number) {
     return apiService.delete(API_ENDPOINTS.COURSES.REMOVE_STUDENT(courseId, sectionId, studentId));
+  }
+
+  /**
+   * Get course overview dashboard data
+   */
+  async getCourseOverview(courseId: string) {
+    return apiService.get<CourseOverview>(API_ENDPOINTS.COURSES.OVERVIEW(courseId));
+  }
+
+  // ============================================
+  // Team Management
+  // ============================================
+
+  /**
+   * Get all teams for a course
+   */
+  async getTeams(courseId: string, type?: 'permanent' | 'temporary', weekNumber?: number) {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    if (weekNumber) params.append('week', weekNumber.toString());
+    const queryString = params.toString();
+    return apiService.get<Team[]>(`/courses/${courseId}/teams${queryString ? `?${queryString}` : ''}`);
+  }
+
+  /**
+   * Create a new team
+   */
+  async createTeam(courseId: string, data: CreateTeamDto) {
+    return apiService.post<Team>(`/courses/${courseId}/teams`, data);
+  }
+
+  /**
+   * Bulk create teams (for random formation)
+   */
+  async bulkCreateTeams(courseId: string, data: BulkCreateTeamDto) {
+    return apiService.post<BulkCreateTeamsResponse>(`/courses/${courseId}/teams/bulk`, data);
+  }
+
+  /**
+   * Update a team
+   */
+  async updateTeam(courseId: string, teamId: number, data: { name?: string; member_ids?: number[] }) {
+    return apiService.put<Team>(`/courses/${courseId}/teams/${teamId}`, data);
+  }
+
+  /**
+   * Delete a team
+   */
+  async deleteTeam(courseId: string, teamId: number) {
+    return apiService.delete(`/courses/${courseId}/teams/${teamId}`);
+  }
+
+  /**
+   * Add member to team
+   */
+  async addMemberToTeam(courseId: string, teamId: number, studentId: number) {
+    return apiService.post(`/courses/${courseId}/teams/${teamId}/members`, { student_id: studentId });
+  }
+
+  /**
+   * Remove member from team
+   */
+  async removeMemberFromTeam(courseId: string, teamId: number, studentId: number) {
+    return apiService.delete(`/courses/${courseId}/teams/${teamId}/members/${studentId}`);
   }
 }
 

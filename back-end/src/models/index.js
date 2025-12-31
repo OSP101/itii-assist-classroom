@@ -10,6 +10,8 @@ const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
 const Desk = require('./Desk');
 const Feedback = require('./Feedback');
+const StudentGroup = require('./StudentGroup');
+const StudentGroupMember = require('./StudentGroupMember');
 
 // ============================================
 // Define Associations
@@ -167,6 +169,46 @@ User.hasMany(Feedback, {
 });
 
 // ============================================
+// Student Group Associations
+// ============================================
+
+// StudentGroup -> Course
+StudentGroup.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(StudentGroup, {
+  foreignKey: 'course_id',
+  as: 'studentGroups',
+});
+
+// StudentGroup -> Members (through StudentGroupMember)
+StudentGroup.belongsToMany(Student, {
+  through: StudentGroupMember,
+  foreignKey: 'group_id',
+  otherKey: 'student_id',
+  as: 'members',
+});
+
+Student.belongsToMany(StudentGroup, {
+  through: StudentGroupMember,
+  foreignKey: 'student_id',
+  otherKey: 'group_id',
+  as: 'groups',
+});
+
+StudentGroupMember.belongsTo(StudentGroup, {
+  foreignKey: 'group_id',
+  as: 'group',
+});
+
+StudentGroupMember.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -182,4 +224,6 @@ module.exports = {
   Classroom,
   Desk,
   Feedback,
+  StudentGroup,
+  StudentGroupMember,
 };

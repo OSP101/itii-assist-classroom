@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
     MY_COURSES: '/courses/my-courses',
     MY_COURSES_STATS: '/courses/my-courses/stats',
     BY_ID: (id: string) => `/courses/${id}`,
+    OVERVIEW: (id: string) => `/courses/${id}/overview`,
     CREATE: '/courses',
     UPDATE: (id: string) => `/courses/${id}`,
     DELETE: (id: string) => `/courses/${id}`,

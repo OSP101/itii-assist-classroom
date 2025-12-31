@@ -20,22 +20,24 @@ router.get('/stats', authorize('admin', 'instructor'), courseController.getCours
 // Course CRUD
 router.get('/', authorize('admin', 'instructor', 'ta'), courseController.getCourses);
 router.get('/:id', authorize('admin', 'instructor', 'ta'), courseController.getCourseById);
+router.get('/:id/overview', authorize('admin', 'instructor', 'ta'), courseController.getCourseOverview);
 router.post('/', authorize('admin', 'instructor'), courseController.createCourse);
 router.put('/:id', authorize('admin', 'instructor'), courseController.updateCourse);
 router.delete('/:id', authorize('admin'), courseController.deleteCourse);
 router.patch('/:id/toggle-status', authorize('admin', 'instructor'), courseController.toggleCourseStatus);
 
-// Section management (admin only)
-router.post('/:id/sections', authorize('admin'), courseController.addSection);
-router.delete('/:id/sections/:sectionId', authorize('admin'), courseController.removeSection);
+// Section management (admin or course owner/TA)
+router.post('/:id/sections', authorize('admin', 'instructor', 'ta'), courseController.addSection);
+router.delete('/:id/sections/:sectionId', authorize('admin', 'instructor', 'ta'), courseController.removeSection);
 
-// TA management (admin only)
-router.post('/:id/tas', authorize('admin'), courseController.addTA);
-router.delete('/:id/tas/:userId', authorize('admin'), courseController.removeTA);
+// TA management (admin or course instructor only)
+router.post('/:id/tas', authorize('admin', 'instructor'), courseController.addTA);
+router.delete('/:id/tas/:userId', authorize('admin', 'instructor'), courseController.removeTA);
 
-// Student management in sections
+// Student management in sections (admin, instructor, or TA of course)
 router.get('/:id/sections/:sectionId/students', authorize('admin', 'instructor', 'ta'), courseController.getSectionStudents);
-router.post('/:id/sections/:sectionId/students', authorize('admin'), courseController.addStudentToSection);
-router.delete('/:id/sections/:sectionId/students/:studentId', authorize('admin'), courseController.removeStudentFromSection);
+router.post('/:id/sections/:sectionId/students', authorize('admin', 'instructor', 'ta'), courseController.addStudentToSection);
+router.post('/:id/sections/:sectionId/students/bulk', authorize('admin', 'instructor', 'ta'), courseController.bulkAddStudentsToSection);
+router.delete('/:id/sections/:sectionId/students/:studentId', authorize('admin', 'instructor', 'ta'), courseController.removeStudentFromSection);
 
 module.exports = router;
