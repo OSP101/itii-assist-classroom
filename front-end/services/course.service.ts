@@ -11,6 +11,7 @@ export interface Instructor {
   full_name: string;
   email: string | null;
   username: string;
+  avatar: string | null;
 }
 
 export interface TA {
@@ -18,6 +19,7 @@ export interface TA {
   full_name: string;
   email: string | null;
   username: string;
+  avatar: string | null;
   CourseTA?: {
     assigned_at: string;
   };

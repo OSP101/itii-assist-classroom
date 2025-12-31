@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
+import { Skeleton } from "@heroui/skeleton";
 import { Avatar } from "@heroui/avatar";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Divider } from "@heroui/divider";
@@ -30,6 +31,7 @@ import {
     ModalFooter,
 } from "@heroui/modal";
 import { Select, SelectItem } from "@heroui/select";
+import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import { courseService } from "@/services/course.service";
@@ -37,6 +39,129 @@ import { studentService } from "@/services/student.service";
 import { authService } from "@/services/auth.service";
 import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember } from "@/services/course.service";
 import type { Student } from "@/services/student.service";
+
+// Skeleton Components for Progressive Loading
+const OverviewSkeleton = () => (
+    <div className="space-y-6">
+        {/* Course Detail Card Skeleton */}
+        <Card className="shadow-sm border border-slate-200 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 overflow-hidden">
+            <CardBody className="p-5">
+                <div className="flex flex-col md:flex-row gap-5">
+                    <Skeleton className="w-full md:w-32 h-32 rounded-xl" />
+                    <div className="flex-1 space-y-3">
+                        <div className="flex gap-2">
+                            <Skeleton className="w-20 h-6 rounded-full" />
+                            <Skeleton className="w-24 h-6 rounded-full" />
+                        </div>
+                        <Skeleton className="w-3/4 h-8 rounded-lg" />
+                        <Skeleton className="w-1/2 h-4 rounded-lg" />
+                        <Skeleton className="w-40 h-4 rounded-lg" />
+                    </div>
+                    <div className="flex md:flex-col gap-4 justify-around md:border-l md:border-white/20 md:pl-5">
+                        <div className="text-center space-y-1">
+                            <Skeleton className="w-12 h-8 rounded-lg mx-auto" />
+                            <Skeleton className="w-16 h-3 rounded-lg" />
+                        </div>
+                        <div className="text-center space-y-1">
+                            <Skeleton className="w-12 h-8 rounded-lg mx-auto" />
+                            <Skeleton className="w-16 h-3 rounded-lg" />
+                        </div>
+                    </div>
+                </div>
+            </CardBody>
+        </Card>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[1, 2].map(i => (
+                <Card key={i} className="shadow-sm border border-slate-200">
+                    <CardHeader className="px-5 py-4 border-b border-slate-100">
+                        <Skeleton className="w-32 h-5 rounded-lg" />
+                    </CardHeader>
+                    <CardBody className="px-5 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            {[1, 2, 3, 4].map(j => (
+                                <div key={j} className="text-center p-3 rounded-xl bg-slate-50">
+                                    <Skeleton className="w-10 h-10 rounded-full mx-auto mb-2" />
+                                    <Skeleton className="w-8 h-6 rounded-lg mx-auto mb-1" />
+                                    <Skeleton className="w-16 h-3 rounded-lg mx-auto" />
+                                </div>
+                            ))}
+                        </div>
+                    </CardBody>
+                </Card>
+            ))}
+        </div>
+    </div>
+);
+
+const PeopleTableSkeleton = () => (
+    <Card className="shadow-sm border border-slate-200">
+        <CardBody className="p-0">
+            <div className="p-4 space-y-3">
+                {[1, 2, 3].map(i => (
+                    <div key={i} className="flex items-center gap-4 p-3 rounded-xl bg-slate-50">
+                        <Skeleton className="w-10 h-10 rounded-full" />
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className="w-32 h-4 rounded-lg" />
+                            <Skeleton className="w-48 h-3 rounded-lg" />
+                        </div>
+                        <Skeleton className="w-20 h-6 rounded-full" />
+                        <Skeleton className="w-8 h-8 rounded-lg" />
+                    </div>
+                ))}
+            </div>
+        </CardBody>
+    </Card>
+);
+
+const TeamsGridSkeleton = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {[1, 2, 3, 4, 5, 6].map(i => (
+            <Card key={i} className="shadow-sm border border-slate-200">
+                <CardHeader className="px-4 py-3 bg-slate-100">
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="w-8 h-8 rounded-lg" />
+                            <Skeleton className="w-24 h-5 rounded-lg" />
+                        </div>
+                        <Skeleton className="w-8 h-8 rounded-lg" />
+                    </div>
+                </CardHeader>
+                <CardBody className="px-4 py-3">
+                    <div className="space-y-2">
+                        {[1, 2, 3].map(j => (
+                            <div key={j} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50">
+                                <Skeleton className="w-6 h-6 rounded-full" />
+                                <Skeleton className="w-28 h-4 rounded-lg" />
+                            </div>
+                        ))}
+                    </div>
+                </CardBody>
+            </Card>
+        ))}
+    </div>
+);
+
+const SectionStudentsSkeleton = () => (
+    <div className="space-y-4">
+        {[1, 2].map(i => (
+            <Card key={i} className="shadow-sm border border-slate-200">
+                <div className="flex items-center justify-between p-4 border-b border-slate-100">
+                    <div className="flex items-center gap-3">
+                        <Skeleton className="w-10 h-10 rounded-xl" />
+                        <div className="space-y-1">
+                            <Skeleton className="w-24 h-5 rounded-lg" />
+                            <Skeleton className="w-32 h-3 rounded-lg" />
+                        </div>
+                    </div>
+                    <Skeleton className="w-20 h-8 rounded-lg" />
+                </div>
+            </Card>
+        ))}
+    </div>
+);
+
 
 // Team/Group Types (local extension of service types)
 interface TeamMember {
@@ -68,7 +193,12 @@ export default function ClassroomDetailPage() {
     const [activeTab, setActiveTab] = useState("overview");
     const [userRole, setUserRole] = useState<string>("");
     const [overview, setOverview] = useState<CourseOverview | null>(null);
-    const [isOverviewLoading, setIsOverviewLoading] = useState(false);
+    const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+
+    // Progressive loading states - แยก loading state แต่ละส่วน
+    const [isTeamsLoading, setIsTeamsLoading] = useState(true);
+    const [isPeopleLoading, setIsPeopleLoading] = useState(true); // สำหรับ TAs list
+    const [isStudentsLoading, setIsStudentsLoading] = useState(true); // สำหรับ students list
 
     // Section states
     const [isAddSectionModalOpen, setIsAddSectionModalOpen] = useState(false);
@@ -237,19 +367,24 @@ export default function ClassroomDetailPage() {
     }, [courseId]);
 
     // Fetch TAs list for dropdown
-    const fetchTAsList = async () => {
+    const fetchTAsList = useCallback(async () => {
+        setIsPeopleLoading(true);
         try {
             const response = await courseService.getTAsList();
             if (response.success && response.data) {
                 setTasList(response.data);
+                console.log("Fetched TAs:", response.data);
             }
         } catch (error) {
             console.error("Error fetching TAs:", error);
+        } finally {
+            setIsPeopleLoading(false);
         }
-    };
+    }, []);
 
     // Fetch students list for dropdown
-    const fetchStudentsList = async () => {
+    const fetchStudentsList = useCallback(async () => {
+        setIsStudentsLoading(true);
         try {
             const response = await studentService.getStudents({ limit: 1000, status: "active" });
             if (response.success && response.data) {
@@ -257,8 +392,10 @@ export default function ClassroomDetailPage() {
             }
         } catch (error) {
             console.error("Error fetching students:", error);
+        } finally {
+            setIsStudentsLoading(false);
         }
-    };
+    }, []);
 
     // Fetch students in section
     const fetchSectionStudents = async (sectionId: number) => {
@@ -289,6 +426,7 @@ export default function ClassroomDetailPage() {
 
     // Fetch teams from backend
     const fetchTeams = useCallback(async () => {
+        setIsTeamsLoading(true);
         try {
             // Fetch permanent teams
             const permanentResponse = await courseService.getTeams(courseId, 'permanent');
@@ -330,14 +468,20 @@ export default function ClassroomDetailPage() {
             }
         } catch (error) {
             console.error("Error fetching teams:", error);
+        } finally {
+            setIsTeamsLoading(false);
         }
     }, [courseId]);
 
+    // Initial data loading - fetch all data in parallel
     useEffect(() => {
+        // เรียกทุก API พร้อมกัน แต่ละตัวจัดการ loading state ของตัวเอง
         fetchCourse();
         fetchOverview();
         fetchTAsList();
         fetchStudentsList();
+        fetchTeams(); // เรียกเลยไม่ต้องรอ course
+
         // Fetch user role
         const fetchUserRole = async () => {
             const user = await authService.getCurrentUser();
@@ -346,15 +490,14 @@ export default function ClassroomDetailPage() {
             }
         };
         fetchUserRole();
-    }, [fetchCourse, fetchOverview]);
+    }, [fetchCourse, fetchOverview, fetchTAsList, fetchStudentsList, fetchTeams]);
 
-    // Fetch all section students and teams after course is loaded
+    // Fetch all section students after course is loaded
     useEffect(() => {
         if (course?.sections && course.sections.length > 0) {
             fetchAllSectionStudents();
-            fetchTeams();
         }
-    }, [course?.sections, fetchAllSectionStudents, fetchTeams]);
+    }, [course?.sections, fetchAllSectionStudents]);
 
     // Toggle section expansion
     const toggleSection = (sectionId: number) => {
@@ -385,7 +528,23 @@ export default function ClassroomDetailPage() {
                 section_no: newSectionNo,
                 note: newSectionNote || undefined,
             });
-            if (response.success) {
+            if (response.success && response.data) {
+                // อัปเดต local state แทนการรีโหลดทั้งหน้า
+                const newSection = response.data;
+                setCourse(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        sections: [...(prev.sections || []), {
+                            id: newSection.id,
+                            course_id: courseId,
+                            section_no: newSection.section_no,
+                            note: newSection.note,
+                            created_at: newSection.created_at,
+                            studentCount: 0
+                        }]
+                    };
+                });
                 addToast({
                     title: "สำเร็จ",
                     description: "เพิ่มกลุ่มเรียนสำเร็จ",
@@ -394,7 +553,6 @@ export default function ClassroomDetailPage() {
                 setIsAddSectionModalOpen(false);
                 setNewSectionNo("");
                 setNewSectionNote("");
-                fetchCourse();
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -415,12 +573,27 @@ export default function ClassroomDetailPage() {
         try {
             const response = await courseService.removeSection(courseId, sectionId);
             if (response.success) {
+                // อัปเดต local state แทนการรีโหลดทั้งหน้า
+                setCourse(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        sections: prev.sections?.filter(s => s.id !== sectionId) || []
+                    };
+                });
+                // ลบ students ของ section นี้ออกจาก state ด้วย
+                setSectionStudents(prev => {
+                    const updated = { ...prev };
+                    delete updated[sectionId];
+                    return updated;
+                });
+                // ลบออกจาก expanded sections
+                setExpandedSections(prev => prev.filter(id => id !== sectionId));
                 addToast({
                     title: "สำเร็จ",
                     description: "ลบกลุ่มเรียนสำเร็จ",
                     color: "success",
                 });
-                fetchCourse();
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -446,7 +619,25 @@ export default function ClassroomDetailPage() {
         setIsSubmitting(true);
         try {
             const response = await courseService.addTA(courseId, parseInt(selectedTAId));
-            if (response.success) {
+            if (response.success && response.data) {
+                // หา TA info จาก tasList และอัปเดต local state
+                const addedTA = tasList.find(ta => ta.id === parseInt(selectedTAId));
+                if (addedTA) {
+                    setCourse(prev => {
+                        if (!prev) return prev;
+                        return {
+                            ...prev,
+                            tas: [...(prev.tas || []), {
+                                id: addedTA.id,
+                                full_name: addedTA.full_name,
+                                email: addedTA.email,
+                                username: addedTA.username,
+                                avatar: addedTA.avatar,
+                                CourseTA: { assigned_at: new Date().toISOString() }
+                            }]
+                        };
+                    });
+                }
                 addToast({
                     title: "สำเร็จ",
                     description: "เพิ่มผู้ช่วยสอนสำเร็จ",
@@ -454,7 +645,6 @@ export default function ClassroomDetailPage() {
                 });
                 setIsAddTAModalOpen(false);
                 setSelectedTAId("");
-                fetchCourse();
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -475,12 +665,19 @@ export default function ClassroomDetailPage() {
         try {
             const response = await courseService.removeTA(courseId, userId);
             if (response.success) {
+                // อัปเดต local state แทนการรีโหลดทั้งหน้า
+                setCourse(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        tas: prev.tas?.filter(ta => ta.id !== userId) || []
+                    };
+                });
                 addToast({
                     title: "สำเร็จ",
                     description: "นำผู้ช่วยสอนออกสำเร็จ",
                     color: "success",
                 });
-                fetchCourse();
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -1265,8 +1462,10 @@ export default function ClassroomDetailPage() {
         { key: "scores", label: "คะแนน", icon: "solar:diploma-bold" },
     ];
 
+    // console.log("Course data:", course);
+
     return (
-        <div className="min-h-screen bg-slate-100">
+        <div className="min-h-[calc(100vh-3.2rem)] bg-slate-100">
             {/* Mobile Header */}
             <div className="lg:hidden sticky top-0 z-50 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -1347,8 +1546,8 @@ export default function ClassroomDetailPage() {
             )}
 
             <div className="flex">
-                {/* Desktop Sidebar */}
-                <aside className="hidden lg:flex flex-col w-64 min-h-[calc(100vh-3.5rem)] bg-white border-r border-slate-200 sticky top-14">
+                {/* Desktop Sidebar - Fixed position */}
+                <aside className="hidden lg:flex flex-col w-64 h-[calc(100vh)] bg-white border-r border-slate-200 fixed top-12 left-0 overflow-y-auto z-40">
                     {/* Sidebar Header - Course Info */}
                     {/* <div className="p-4 border-b border-slate-100">
                         <div className="flex items-center gap-3">
@@ -1402,7 +1601,7 @@ export default function ClassroomDetailPage() {
                     </nav>
 
                     {/* Sidebar Footer - Quick Stats */}
-                    <div className="p-4 border-t border-slate-100 bg-slate-50">
+                    {/* <div className="p-4 border-t border-slate-100 bg-slate-50">
                         <div className="grid grid-cols-3 gap-2 text-center">
                             <div>
                                 <p className="text-lg font-bold text-blue-600">{overview?.summary.totalStudents || course.studentCount || 0}</p>
@@ -1417,11 +1616,11 @@ export default function ClassroomDetailPage() {
                                 <p className="text-xs text-slate-500">TA</p>
                             </div>
                         </div>
-                    </div>
+                    </div> */}
                 </aside>
 
-                {/* Main Content Area */}
-                <main className="flex-1 min-h-[calc(100vh-3.5rem)] lg:min-h-[calc(100vh-3.5rem)] overflow-x-hidden">
+                {/* Main Content Area - Add left margin for fixed sidebar */}
+                <main className="flex-1 lg:ml-64 overflow-x-hidden">
                     {/* Page Title Header - Desktop only */}
                     {/* <div className="hidden lg:block bg-white border-b border-slate-200 px-6 py-4">
                         <div className="flex items-center justify-between">
@@ -1459,10 +1658,9 @@ export default function ClassroomDetailPage() {
                         {/* Overview Tab */}
                         {activeTab === "overview" && (
                             <div className="space-y-6">
-                                {isOverviewLoading ? (
-                                    <div className="flex justify-center items-center py-20">
-                                        <Spinner size="lg" />
-                                    </div>
+                                {/* Course Detail Card - แสดงเลย ไม่ต้องรอ overview */}
+                                {isLoading ? (
+                                    <OverviewSkeleton />
                                 ) : (
                                     <>
                                         {/* Course Detail Card - Only show in Overview */}
@@ -1849,7 +2047,7 @@ export default function ClassroomDetailPage() {
 
                         {/* Sections Tab - Redesigned with Sub-tabs */}
                         {activeTab === "sections" && (
-                            <div className="space-y-6">
+                            <div className="space-y-6 h-auto">
                                 {/* Header Card with Sub-tabs */}
                                 <div className="">
                                     <div className="flex items-center justify-between">
@@ -2203,6 +2401,7 @@ export default function ClassroomDetailPage() {
                                                             }}
                                                             className="bg-purple-100 text-purple-700 flex-1 sm:flex-initial"
                                                             size="md"
+                                                            isDisabled={isTeamsLoading}
                                                         >
                                                             <span className="hidden sm:inline">สุ่มกลุ่มอัตโนมัติ</span>
                                                             <span className="sm:hidden">สุ่มกลุ่ม</span>
@@ -2217,6 +2416,7 @@ export default function ClassroomDetailPage() {
                                                             }}
                                                             className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-1 sm:flex-initial"
                                                             size="md"
+                                                            isDisabled={isTeamsLoading}
                                                         >
                                                             <span className="hidden sm:inline">สร้างกลุ่มใหม่</span>
                                                             <span className="sm:hidden">สร้างกลุ่ม</span>
@@ -2226,8 +2426,10 @@ export default function ClassroomDetailPage() {
                                             </CardBody>
                                         </Card>
 
-                                        {/* Teams Grid */}
-                                        {permanentTeams.length > 0 ? (
+                                        {/* Teams Grid - with loading state */}
+                                        {isTeamsLoading ? (
+                                            <TeamsGridSkeleton />
+                                        ) : permanentTeams.length > 0 ? (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 {permanentTeams.map((team, teamIdx) => (
                                                     <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-purple-200 transition-all group">
@@ -2458,8 +2660,10 @@ export default function ClassroomDetailPage() {
                                             })}
                                         </div>
 
-                                        {/* Teams Grid */}
-                                        {weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 ? (
+                                        {/* Teams Grid - with loading state */}
+                                        {isTeamsLoading ? (
+                                            <TeamsGridSkeleton />
+                                        ) : weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 ? (
                                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                                 {weeklyTeams[selectedWeek].map((team, teamIdx) => (
                                                     <Card key={team.id} className="shadow-sm border border-slate-200 hover:shadow-lg hover:border-emerald-200 transition-all group">
@@ -2583,100 +2787,234 @@ export default function ClassroomDetailPage() {
 
                         {/* People Tab */}
                         {activeTab === "people" && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                {/* Instructor */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardHeader className="px-5 py-4 border-b border-slate-100">
-                                        <div className="flex items-center gap-2">
-                                            <Icon icon="solar:user-circle-bold" className="text-xl text-blue-500" />
-                                            <span className="font-semibold text-slate-800">อาจารย์ผู้สอน</span>
-                                        </div>
-                                    </CardHeader>
-                                    <CardBody className="px-5 py-4">
-                                        {course.instructor ? (
-                                            <div className="flex items-center gap-4 p-4 rounded-xl bg-blue-50">
-                                                <Avatar
-                                                    name={course.instructor.full_name}
-                                                    size="sm"
-                                                    className="bg-blue-500"
-                                                />
-                                                <div>
-                                                    <p className="font-semibold text-slate-800">{course.instructor.full_name}</p>
-                                                    <p className="text-sm text-slate-500">{course.instructor.email}</p>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-6">
-                                                <Icon icon="solar:user-circle-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                                <p className="text-sm text-slate-400">ยังไม่กำหนดอาจารย์ผู้สอน</p>
-                                            </div>
-                                        )}
-                                    </CardBody>
-                                </Card>
+                            <div className="space-y-4">
+                                {/* Header */}
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-slate-800">บุคลากรในรายวิชา</h2>
+                                        <p className="text-sm text-slate-500">จัดการอาจารย์ผู้สอนและผู้ช่วยสอน (TA)</p>
+                                    </div>
+                                    <Button
+                                        color="primary"
+                                        startContent={<Icon icon="solar:user-plus-bold" />}
+                                        onPress={() => setIsAddTAModalOpen(true)}
+                                        isDisabled={ isPeopleLoading}
+                                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                                    >
+                                        เพิ่มผู้ช่วยสอน
+                                    </Button>
+                                </div>
 
-                                {/* TAs */}
-                                <Card className="shadow-sm border border-slate-200">
-                                    <CardHeader className="flex justify-between items-center px-5 py-4 border-b border-slate-100">
-                                        <div className="flex items-center gap-2">
-                                            <Icon icon="solar:user-hands-bold" className="text-xl text-emerald-500" />
-                                            <span className="font-semibold text-slate-800">ผู้ช่วยสอน (TA)</span>
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            color="primary"
-                                            variant="flat"
-                                            startContent={<Icon icon="solar:add-circle-bold" />}
-                                            onPress={() => setIsAddTAModalOpen(true)}
-                                            isDisabled={availableTAs.length === 0}
-                                        >
-                                            เพิ่ม TA
-                                        </Button>
-                                    </CardHeader>
-                                    <CardBody className="px-5 py-4">
-                                        {course.tas && course.tas.length > 0 ? (
-                                            <div className="space-y-3">
-                                                {course.tas.map((ta) => (
-                                                    <div
-                                                        key={ta.id}
-                                                        className="flex items-center justify-between p-3 rounded-xl bg-emerald-50"
-                                                    >
+                                {/* Loading state */}
+                                {isLoading ? (
+                                    <>
+                                        {/* Stats Skeleton */}
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {[1, 2, 3].map(i => (
+                                                <Card key={i} className="shadow-sm border border-slate-200">
+                                                    <CardBody className="p-4">
                                                         <div className="flex items-center gap-3">
-                                                            <Avatar name={ta.full_name} size="sm" className="bg-emerald-500" />
-                                                            <div>
-                                                                <p className="font-medium text-slate-800">{ta.full_name}</p>
-                                                                <p className="text-xs text-slate-500">{ta.email || ta.username}</p>
+                                                            <Skeleton className="w-12 h-12 rounded-xl" />
+                                                            <div className="space-y-2">
+                                                                <Skeleton className="w-20 h-3 rounded-lg" />
+                                                                <Skeleton className="w-8 h-6 rounded-lg" />
                                                             </div>
                                                         </div>
-                                                        <Button
-                                                            isIconOnly
-                                                            size="sm"
-                                                            variant="light"
-                                                            color="danger"
-                                                            onPress={() => handleRemoveTA(ta.id)}
-                                                        >
-                                                            <Icon icon="solar:close-circle-linear" className="text-lg" />
-                                                        </Button>
+                                                    </CardBody>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                        <PeopleTableSkeleton />
+                                    </>
+                                ) : (
+                                    <>
+                                        {/* Stats Cards */}
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardBody className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2.5 bg-blue-100 rounded-xl">
+                                                            <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-blue-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-slate-500">บุคลากรทั้งหมด</p>
+                                                            <p className="text-2xl font-bold text-slate-800">
+                                                                {(course.instructor ? 1 : 0) + (course.tas?.length || 0)}
+                                                            </p>
+                                                        </div>
                                                     </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div className="text-center py-6">
-                                                <Icon icon="solar:user-hands-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                                <p className="text-sm text-slate-400 mb-3">ยังไม่มีผู้ช่วยสอน</p>
-                                                <Button
-                                                    size="sm"
-                                                    color="primary"
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:add-circle-bold" />}
-                                                    onPress={() => setIsAddTAModalOpen(true)}
-                                                    isDisabled={availableTAs.length === 0}
-                                                >
-                                                    เพิ่ม TA
-                                                </Button>
-                                            </div>
-                                        )}
+                                                </CardBody>
+                                            </Card>
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardBody className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2.5 bg-indigo-100 rounded-xl">
+                                                            <Icon icon="solar:user-circle-bold" className="text-2xl text-indigo-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-slate-500">อาจารย์ผู้สอน</p>
+                                                            <p className="text-2xl font-bold text-slate-800">{course.instructor ? 1 : 0}</p>
+                                                        </div>
+                                                    </div>
+                                                </CardBody>
+                                            </Card>
+                                            <Card className="shadow-sm border border-slate-200">
+                                                <CardBody className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-2.5 bg-emerald-100 rounded-xl">
+                                                            <Icon icon="solar:user-hands-bold" className="text-2xl text-emerald-600" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-slate-500">ผู้ช่วยสอน (TA)</p>
+                                                            <p className="text-2xl font-bold text-slate-800">{course.tas?.length || 0}</p>
+                                                        </div>
+                                                    </div>
+                                                </CardBody>
+                                            </Card>
+                                        </div>
+
+
+                                {/* People Table */}
+                                <Card className="shadow-sm border border-slate-200">
+                                    <CardBody className="p-2">
+                                        <div className="overflow-x-auto">
+                                            <Table
+                                                aria-label="People table"
+                                                removeWrapper
+                                                classNames={{
+                                                    th: "bg-slate-50 text-slate-600 font-semibold text-sm",
+                                                    td: "py-3",
+                                                }}
+                                            >
+                                                <TableHeader>
+                                                    <TableColumn>ชื่อ-นามสกุล</TableColumn>
+                                                    <TableColumn>อีเมล / Username</TableColumn>
+                                                    <TableColumn>บทบาท</TableColumn>
+                                                    <TableColumn align="center">จัดการ</TableColumn>
+                                                </TableHeader>
+                                                <TableBody emptyContent={
+                                                    <div className="py-10 text-center">
+                                                        <Icon icon="solar:users-group-rounded-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
+                                                        <p className="text-slate-400">ยังไม่มีบุคลากรในรายวิชานี้</p>
+                                                    </div>
+                                                }>
+                                                    {[
+                                                        // Instructor Row
+                                                        ...(course.instructor ? [{
+                                                            id: `instructor-${course.instructor.id}`,
+                                                            type: 'instructor' as const,
+                                                            full_name: course.instructor.full_name,
+                                                            email: course.instructor.email || "-",
+                                                            avatar: course.instructor.avatar,
+                                                        }] : []),
+                                                        // TA Rows
+                                                        ...(course.tas?.map(ta => ({
+                                                            id: `ta-${ta.id}`,
+                                                            type: 'ta' as const,
+                                                            full_name: ta.full_name,
+                                                            email: ta.email || ta.username || "-",
+                                                            taId: ta.id,
+                                                            avatar: ta.avatar,
+                                                        })) || [])
+                                                    ].map((person) => (
+                                                        <TableRow key={person.id}>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-3">
+                                                                    <Avatar
+                                                                        name={person.full_name}
+                                                                        src={person.avatar || undefined}
+                                                                        size="sm"
+                                                                        className={person.type === 'instructor' 
+                                                                            ? "bg-gradient-to-br from-blue-500 to-indigo-500"
+                                                                            : "bg-gradient-to-br from-emerald-500 to-teal-500"
+                                                                        }
+                                                                    />
+                                                                    <div>
+                                                                        <p className="font-medium text-slate-800">{person.full_name}</p>
+                                                                    </div>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <span className="text-slate-600">{person.email}</span>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {person.type === 'instructor' ? (
+                                                                    <Chip
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="bg-blue-100 text-blue-700"
+                                                                        startContent={<Icon icon="solar:crown-bold" className="text-sm" />}
+                                                                    >
+                                                                        อาจารย์ผู้สอน
+                                                                    </Chip>
+                                                                ) : (
+                                                                    <Chip
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className="bg-emerald-100 text-emerald-700"
+                                                                        startContent={<Icon icon="solar:user-hands-bold" className="text-sm" />}
+                                                                    >
+                                                                        ผู้ช่วยสอน
+                                                                    </Chip>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    {person.type === 'instructor' ? (
+                                                                        <Tooltip content="อาจารย์ผู้สอนไม่สามารถลบได้">
+                                                                            <span className="text-slate-300">
+                                                                                <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
+                                                                            </span>
+                                                                        </Tooltip>
+                                                                    ) : (
+                                                                        <Tooltip content="ลบออกจากรายวิชา" color="danger">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="danger"
+                                                                                onPress={() => 'taId' in person && handleRemoveTA(person.taId as number)}
+                                                                            >
+                                                                                <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </div>
                                     </CardBody>
+
                                 </Card>
+
+                                {/* Empty state when no people at all */}
+                                {!course.instructor && (!course.tas || course.tas.length === 0) && (
+                                    <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
+                                        <CardBody className="text-center py-16">
+                                            <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                                <Icon icon="solar:users-group-rounded-bold-duotone" className="text-5xl text-blue-500" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีบุคลากร</h3>
+                                            <p className="text-slate-500 mb-6 max-w-md mx-auto">
+                                                เพิ่มผู้ช่วยสอน (TA) เพื่อช่วยจัดการรายวิชานี้
+                                            </p>
+                                            <Button
+                                                color="primary"
+                                                startContent={<Icon icon="solar:user-plus-bold" />}
+                                                onPress={() => setIsAddTAModalOpen(true)}
+                                                isDisabled={availableTAs.length === 0}
+                                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                                            >
+                                                เพิ่มผู้ช่วยสอน
+                                            </Button>
+                                        </CardBody>
+                                    </Card>
+                                )}
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -3031,7 +3369,7 @@ export default function ClassroomDetailPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
                                 <Icon icon="solar:user-hands-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -3041,25 +3379,107 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
-                        <Select
-                            label="เลือกผู้ช่วยสอน"
+                        {/* แสดงจำนวน TA ในระบบ */}
+                        <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
+                            <Icon icon="solar:users-group-rounded-bold" className="text-blue-500" />
+                            <span>ผู้ช่วยสอนในระบบทั้งหมด <span className="font-semibold text-blue-600">{tasList.length}</span> คน</span>
+                            {course?.tas && course.tas.length > 0 && (
+                                <span className="text-slate-400">
+                                    (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.tas.length}</span> คน)
+                                </span>
+                            )}
+                        </div>
+                        
+                        <Autocomplete
+                            label="ค้นหาผู้ช่วยสอน"
                             labelPlacement="outside"
-                            placeholder="เลือกผู้ช่วยสอน"
+                            placeholder="พิมพ์ชื่อหรืออีเมลเพื่อค้นหา..."
                             variant="bordered"
                             size="lg"
-                            selectedKeys={selectedTAId ? [selectedTAId] : []}
-                            onChange={(e) => setSelectedTAId(e.target.value)}
+                            selectedKey={selectedTAId}
+                            onSelectionChange={(key) => setSelectedTAId(key?.toString() || "")}
+                            disabledKeys={course?.tas?.map(ta => ta.id.toString()) || []}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                            listboxProps={{
+                                emptyContent: "ไม่พบผู้ช่วยสอนที่ค้นหา",
+                            }}
                             classNames={{
-                                trigger: "h-12 bg-white border-slate-200 hover:border-blue-300",
-                                label: "text-slate-600 font-medium text-sm",
+                                base: "w-full",
+                                listboxWrapper: "max-h-[300px]",
+                            }}
+                            inputProps={{
+                                classNames: {
+                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-500 focus-within:!border-blue-500",
+                                    label: "text-slate-600 font-medium text-sm",
+                                },
                             }}
                         >
-                            {availableTAs.map((ta) => (
-                                <SelectItem key={ta.id.toString()}>
-                                    {ta.full_name}
-                                </SelectItem>
-                            ))}
-                        </Select>
+                            {tasList.map((ta) => {
+                                const isInCourse = course?.tas?.some(courseTa => courseTa.id === ta.id);
+                                return (
+                                    <AutocompleteItem 
+                                        key={ta.id.toString()}
+                                        textValue={ta.full_name}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Avatar
+                                                name={ta.full_name}
+                                                src={ta.avatar || undefined}
+                                                size="sm"
+                                                className={`flex-shrink-0 ${isInCourse ? 'bg-slate-400' : 'bg-gradient-to-br from-emerald-500 to-teal-500'}`}
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <p className={`font-medium truncate ${isInCourse ? 'text-slate-400' : 'text-slate-800'}`}>
+                                                        {ta.full_name}
+                                                    </p>
+                                                    {isInCourse && (
+                                                        <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full whitespace-nowrap">
+                                                            อยู่ในวิชาแล้ว
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className={`text-xs truncate ${isInCourse ? 'text-slate-400' : 'text-slate-500'}`}>
+                                                    {ta.email || ta.username}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </AutocompleteItem>
+                                );
+                            })}
+                        </Autocomplete>
+                        
+                        {/* แสดง TA ที่เลือก */}
+                        {selectedTAId && (
+                            <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
+                                <div className="flex items-center gap-3">
+                                    <Avatar
+                                        name={tasList.find(ta => ta.id.toString() === selectedTAId)?.full_name || ""}
+                                        size="sm"
+                                        src={tasList.find(ta => ta.id.toString() === selectedTAId)?.avatar || undefined}
+                                        className="bg-gradient-to-br from-blue-400 to-indigo-500"
+                                    />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-medium text-blue-800">
+                                            {tasList.find(ta => ta.id.toString() === selectedTAId)?.full_name}
+                                        </p>
+                                        <p className="text-xs text-blue-600">
+                                            {tasList.find(ta => ta.id.toString() === selectedTAId)?.email || 
+                                             tasList.find(ta => ta.id.toString() === selectedTAId)?.username}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="flat"
+                                        className="bg-blue-200/50 text-blue-700"
+                                        onPress={() => setSelectedTAId("")}
+                                    >
+                                        <Icon icon="solar:close-circle-bold" className="text-lg" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button variant="light" onPress={() => setIsAddTAModalOpen(false)}>
@@ -3070,6 +3490,7 @@ export default function ClassroomDetailPage() {
                             onPress={handleAddTA}
                             isLoading={isSubmitting}
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
                             เพิ่มผู้ช่วยสอน
                         </Button>

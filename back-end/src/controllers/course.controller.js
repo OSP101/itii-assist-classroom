@@ -192,7 +192,7 @@ const getCourseById = asyncHandler(async (req, res) => {
       {
         model: User,
         as: 'instructor',
-        attributes: ['id', 'full_name', 'email', 'username'],
+        attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
       },
       {
         model: CourseSection,
@@ -202,7 +202,7 @@ const getCourseById = asyncHandler(async (req, res) => {
       {
         model: User,
         as: 'tas',
-        attributes: ['id', 'full_name', 'email', 'username'],
+        attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
         through: { attributes: ['assigned_at'] },
       },
     ],
@@ -810,7 +810,7 @@ const removeStudentFromSection = asyncHandler(async (req, res) => {
 const getInstructors = asyncHandler(async (req, res) => {
   const instructors = await User.findAll({
     where: { role: 'instructor', is_active: true },
-    attributes: ['id', 'full_name', 'email', 'username'],
+    attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
     order: [['full_name', 'ASC']],
   });
 
@@ -827,7 +827,7 @@ const getInstructors = asyncHandler(async (req, res) => {
 const getTAsList = asyncHandler(async (req, res) => {
   const tas = await User.findAll({
     where: { role: 'ta', is_active: true },
-    attributes: ['id', 'full_name', 'email', 'username'],
+    attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
     order: [['full_name', 'ASC']],
   });
 
@@ -921,7 +921,7 @@ const getMyCourses = asyncHandler(async (req, res) => {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'full_name', 'email'],
+          attributes: ['id', 'full_name', 'email', 'avatar'],
         },
         {
           model: CourseSection,
@@ -951,7 +951,7 @@ const getMyCourses = asyncHandler(async (req, res) => {
         {
           model: User,
           as: 'instructor',
-          attributes: ['id', 'full_name', 'email'],
+          attributes: ['id', 'full_name', 'email', 'avatar'],
         },
         {
           model: CourseSection,

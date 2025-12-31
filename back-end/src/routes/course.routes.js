@@ -6,9 +6,9 @@ const { authenticate, authorize } = require('../middlewares/auth');
 // All routes require authentication
 router.use(authenticate);
 
-// Get instructors/TAs list for dropdown (admin only)
-router.get('/instructors', authorize('admin'), courseController.getInstructors);
-router.get('/tas-list', authorize('admin'), courseController.getTAsList);
+// Get instructors/TAs list for dropdown (admin and instructor)
+router.get('/instructors', authorize('admin', 'instructor'), courseController.getInstructors);
+router.get('/tas-list', authorize('admin', 'instructor'), courseController.getTAsList);
 
 // My courses (for instructor/TA)
 router.get('/my-courses', authorize('instructor', 'ta'), courseController.getMyCourses);
