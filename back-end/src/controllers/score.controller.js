@@ -564,6 +564,261 @@ const getStudentScoresSummary = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Get Score Summary Matrix - All students x All assignments
+ */
+const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
+    const { course_id, section_id, assignment_type } = req.query;
+
+    if (!course_id) {
+        throw new ApiError(400, 'course_id is required');
+    }
+
+    // Get all sections for this course
+    const sections = await CourseSection.findAll({
+        where: { course_id },
+        order: [['section_no', 'ASC']],
+    });
+
+    // Build where clause for students by section
+    let sectionFilter = {};
+    if (section_id) {
+        sectionFilter = { id: section_id };
+    } else {
+        sectionFilter = { course_id };
+    }
+
+    // Get all students in the course (or filtered by section)
+    const courseSections = await CourseSection.findAll({
+        where: sectionFilter,
+        include: [
+            {
+                model: Student,
+                as: 'students',
+                through: { attributes: [] },
+                attributes: ['id', 'student_id', 'full_name'],
+            },
+        ],
+        order: [['section_no', 'ASC']],
+    });
+
+    // Flatten students and add section info
+    const studentsWithSection = [];
+    const studentSectionMap = {};
+    
+    for (const section of courseSections) {
+        for (const student of section.students) {
+            if (!studentSectionMap[student.id]) {
+                studentSectionMap[student.id] = section.section_no;
+                studentsWithSection.push({
+                    id: student.id,
+                    student_id: student.student_id,
+                    full_name: student.full_name,
+                    section_number: section.section_no,
+                });
+            }
+        }
+    }
+
+    // Sort students by section, then student_id
+    studentsWithSection.sort((a, b) => {
+        if (a.section_number !== b.section_number) {
+            return a.section_number - b.section_number;
+        }
+        return a.student_id.localeCompare(b.student_id);
+    });
+
+    // Build assignment type filter
+    let assignmentTypeFilter = {};
+    if (assignment_type === 'individual') {
+        assignmentTypeFilter = { assignment_type: 'individual' };
+    } else if (assignment_type === 'group') {
+        assignmentTypeFilter = { 
+            assignment_type: { [Op.in]: ['permanent_group', 'weekly_group'] } 
+        };
+    }
+
+    // Get all assignments for this course
+    const assignments = await Assignment.findAll({
+        where: { 
+            course_id, 
+            is_active: true,
+            ...assignmentTypeFilter,
+        },
+        include: [
+            {
+                model: AssignmentSubItem,
+                as: 'subItems',
+                order: [['order_index', 'ASC']],
+            },
+        ],
+        order: [['order_index', 'ASC']],
+    });
+
+    // Get all scores for these students and assignments
+    const studentIds = studentsWithSection.map(s => s.id);
+    const assignmentIds = assignments.map(a => a.id);
+
+    const scores = await Score.findAll({
+        where: {
+            student_id: { [Op.in]: studentIds },
+            assignment_id: { [Op.in]: assignmentIds },
+        },
+        include: [
+            {
+                model: User,
+                as: 'grader',
+                attributes: ['id', 'full_name'],
+            },
+        ],
+    });
+
+    // Create score lookup map with full info: { `${student_id}_${assignment_id}_${sub_item_id}`: scoreObj }
+    const scoreMap = {};
+    for (const score of scores) {
+        const key = `${score.student_id}_${score.assignment_id}_${score.sub_item_id || 'main'}`;
+        scoreMap[key] = {
+            score: parseFloat(score.score) || 0,
+            graded_by: score.grader?.full_name || null,
+            graded_at: score.graded_at || score.createdAt,
+            updated_at: score.updatedAt,
+        };
+    }
+
+    // Build matrix data
+    const matrixData = studentsWithSection.map(student => {
+        const row = {
+            student_id: student.student_id,
+            full_name: student.full_name,
+            section_number: student.section_number,
+            scores: {},
+            total_score: 0,
+            total_max_score: 0,
+            scored_count: 0,
+            total_items: 0,
+        };
+
+        for (const assignment of assignments) {
+            const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+            // Parse assignment max_score to number
+            const assignmentMaxScore = parseFloat(assignment.max_score) || 0;
+
+            if (hasSubItems) {
+                // Process sub-items
+                let assignmentTotal = 0;
+                let assignmentMax = 0;
+                let scoredSubItems = 0;
+
+                for (const subItem of assignment.subItems) {
+                    const key = `${student.id}_${assignment.id}_${subItem.id}`;
+                    const scoreObj = scoreMap[key];
+                    const subItemMaxScore = parseFloat(subItem.max_score) || 0;
+                    
+                    row.scores[`${assignment.id}_${subItem.id}`] = {
+                        score: scoreObj?.score !== undefined ? scoreObj.score : null,
+                        max_score: subItemMaxScore,
+                        sub_item_name: subItem.name,
+                        graded_by: scoreObj?.graded_by || null,
+                        graded_at: scoreObj?.graded_at || null,
+                        updated_at: scoreObj?.updated_at || null,
+                    };
+
+                    if (scoreObj?.score !== undefined) {
+                        assignmentTotal += scoreObj.score;
+                        scoredSubItems++;
+                    }
+                    assignmentMax += subItemMaxScore;
+                    row.total_items++;
+                }
+
+                row.total_score += assignmentTotal;
+                row.total_max_score += assignmentMax;
+                row.scored_count += scoredSubItems;
+            } else {
+                // No sub-items, use main score
+                const key = `${student.id}_${assignment.id}_main`;
+                const scoreObj = scoreMap[key];
+
+                row.scores[`${assignment.id}_main`] = {
+                    score: scoreObj?.score !== undefined ? scoreObj.score : null,
+                    max_score: assignmentMaxScore,
+                    graded_by: scoreObj?.graded_by || null,
+                    graded_at: scoreObj?.graded_at || null,
+                    updated_at: scoreObj?.updated_at || null,
+                };
+
+                if (scoreObj?.score !== undefined) {
+                    row.total_score += scoreObj.score;
+                    row.scored_count++;
+                }
+                row.total_max_score += assignmentMaxScore;
+                row.total_items++;
+            }
+        }
+
+        return row;
+    });
+
+    // Calculate class averages per assignment
+    const averages = {};
+    for (const assignment of assignments) {
+        const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+        if (hasSubItems) {
+            for (const subItem of assignment.subItems) {
+                const key = `${assignment.id}_${subItem.id}`;
+                const scores = matrixData
+                    .map(row => row.scores[key]?.score)
+                    .filter(s => s !== null && s !== undefined);
+                
+                averages[key] = scores.length > 0 
+                    ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
+                    : null;
+            }
+        } else {
+            const key = `${assignment.id}_main`;
+            const scores = matrixData
+                .map(row => row.scores[key]?.score)
+                .filter(s => s !== null && s !== undefined);
+            
+            averages[key] = scores.length > 0 
+                ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2)
+                : null;
+        }
+    }
+
+    // Format assignments for response
+    const formattedAssignments = assignments.map(a => ({
+        id: a.id,
+        title: a.name,
+        short_title: a.name,
+        max_score: parseFloat(a.max_score) || 0,
+        assignment_type: a.assignment_type,
+        subItems: a.subItems?.map(si => ({
+            id: si.id,
+            name: si.name,
+            max_score: parseFloat(si.max_score) || 0,
+        })) || [],
+    }));
+
+    res.json({
+        success: true,
+        data: {
+            sections: sections.map(s => ({
+                id: s.id,
+                section_number: s.section_no,
+            })),
+            assignments: formattedAssignments,
+            students: matrixData,
+            averages,
+            summary: {
+                total_students: matrixData.length,
+                total_assignments: assignments.length,
+            },
+        },
+    });
+});
+
+/**
  * Search students for autocomplete
  */
 const searchStudents = asyncHandler(async (req, res) => {
@@ -664,6 +919,7 @@ module.exports = {
     getPendingEditRequests,
     reviewEditRequest,
     getStudentScoresSummary,
+    getScoreSummaryMatrix,
     searchStudents,
     getGroupsForAssignment,
 };

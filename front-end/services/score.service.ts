@@ -218,6 +218,72 @@ const scoreService = {
         const response = await api.get<Assignment[]>(url);
         return response.data || [];
     },
+
+    /**
+     * Get score summary matrix (students x assignments)
+     */
+    async getScoreSummaryMatrix(
+        courseId: string,
+        options?: {
+            sectionId?: number;
+            assignmentType?: 'individual' | 'group';
+        }
+    ): Promise<ScoreSummaryMatrix | null> {
+        let url = `/scores/matrix?course_id=${courseId}`;
+        if (options?.sectionId) {
+            url += `&section_id=${options.sectionId}`;
+        }
+        if (options?.assignmentType) {
+            url += `&assignment_type=${options.assignmentType}`;
+        }
+        const response = await api.get<ScoreSummaryMatrix>(url);
+        return response.data || null;
+    },
 };
+
+// Types for Score Summary Matrix
+export interface ScoreSummaryMatrixStudent {
+    student_id: string;
+    full_name: string;
+    section_number: number;
+    scores: {
+        [key: string]: {
+            score: number | null;
+            max_score: number;
+            sub_item_name?: string;
+            graded_by?: string | null;
+            graded_at?: string | null;
+            updated_at?: string | null;
+        };
+    };
+    total_score: number;
+    total_max_score: number;
+    scored_count: number;
+    total_items: number;
+}
+
+export interface ScoreSummaryMatrixAssignment {
+    id: number;
+    title: string;
+    short_title: string;
+    max_score: number;
+    assignment_type: string;
+    subItems: {
+        id: number;
+        name: string;
+        max_score: number;
+    }[];
+}
+
+export interface ScoreSummaryMatrix {
+    sections: { id: number; section_number: number }[];
+    assignments: ScoreSummaryMatrixAssignment[];
+    students: ScoreSummaryMatrixStudent[];
+    averages: { [key: string]: string | null };
+    summary: {
+        total_students: number;
+        total_assignments: number;
+    };
+}
 
 export default scoreService;

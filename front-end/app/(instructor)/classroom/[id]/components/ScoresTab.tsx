@@ -198,7 +198,7 @@ export default function ScoresTab({
                                                 const student = studentScore.student;
                                                 return !scoreSearchQuery || 
                                                     student.student_id.includes(scoreSearchQuery) ||
-                                                    `${student.first_name} ${student.last_name}`.toLowerCase().includes(scoreSearchQuery.toLowerCase());
+                                                    `${student.full_name}`.toLowerCase().includes(scoreSearchQuery.toLowerCase());
                                             })
                                             .map((studentScore) => {
                                                 const student = studentScore.student;
@@ -238,10 +238,10 @@ export default function ScoresTab({
                                                             <div className="flex items-center gap-2">
                                                                 <Avatar
                                                                     size="sm"
-                                                                    name={`${student.first_name} ${student.last_name}`}
+                                                                    name={student.full_name}
                                                                     className="shrink-0"
                                                                 />
-                                                                <span>{student.first_name} {student.last_name}</span>
+                                                                <span>{student.full_name}</span>
                                                             </div>
                                                         </td>
                                                         {selectedAssignment.assignment_type !== "individual" && (

@@ -128,6 +128,7 @@ const requestLogger = (options = {}) => {
         const statusCode = res.statusCode;
 
         // Skip logging successful GET requests if logAllRequests is false
+        // Only log: errors (status >= 400) OR non-GET methods (POST, PUT, DELETE, PATCH)
         if (!logAllRequests && req.method === 'GET' && statusCode < 400) {
           return;
         }

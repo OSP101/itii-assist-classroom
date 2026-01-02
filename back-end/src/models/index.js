@@ -244,6 +244,17 @@ AssignmentSubItem.belongsTo(Assignment, {
   as: 'assignment',
 });
 
+// Score -> SubItem (optional)
+Score.belongsTo(AssignmentSubItem, {
+  foreignKey: 'sub_item_id',
+  as: 'subItem',
+});
+
+AssignmentSubItem.hasMany(Score, {
+  foreignKey: 'sub_item_id',
+  as: 'scores',
+});
+
 // Score -> Assignment
 Score.belongsTo(Assignment, {
   foreignKey: 'assignment_id',

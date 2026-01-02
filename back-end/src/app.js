@@ -112,7 +112,7 @@ const { requestLogger } = require('./middlewares');
 app.use('/api', requestLogger({
   logBody: config.nodeEnv === 'development', // Log body only in development
   excludePaths: ['/api/health', '/api/system/metrics', '/api/system/cpu'],
-  logAllRequests: true,
+  logAllRequests: false, // เก็บเฉพาะ errors และ non-GET requests (POST, PUT, DELETE)
 }));
 
 // API routes

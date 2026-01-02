@@ -201,7 +201,7 @@ export default function SectionsTab({
                                         <div className="flex items-center gap-4">
                                             <div>
                                                 <p className={`font-semibold ${expandedSections.includes(section.id) ? "text-white" : "text-slate-800"}`}>
-                                                    {section.section_no}
+                                                    Section {section.section_no}
                                                 </p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <Icon

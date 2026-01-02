@@ -8,7 +8,7 @@ const CourseSection = sequelize.define('CourseSection', {
     autoIncrement: true,
   },
   course_id: {
-    type: DataTypes.BIGINT,
+    type: DataTypes.STRING(21), // nanoid format
     allowNull: false,
   },
   section_no: {

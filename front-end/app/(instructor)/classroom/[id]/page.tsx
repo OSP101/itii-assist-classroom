@@ -28,6 +28,7 @@ import type { Assignment as AssignmentType, AssignmentSubItem } from "@/services
 import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember } from "@/services/course.service";
 import type { Student } from "@/services/student.service";
 import type { StudentScore, ScoresData, Group } from "@/services/score.service";
+import scoreEditRequestService from "@/services/scoreEditRequest.service";
 
 // Import components
 import {
@@ -36,6 +37,8 @@ import {
     PeopleTab,
     AssignmentsTab,
     ScoresTab,
+    ScoreSummaryTab,
+    ScoreApprovalTab,
     ScoreModal,
     OverviewSkeleton,
     TeamsGridSkeleton,
@@ -73,6 +76,9 @@ export default function ClassroomDetailPage() {
     const [userRole, setUserRole] = useState<string>("");
     const [overview, setOverview] = useState<CourseOverview | null>(null);
     const [isOverviewLoading, setIsOverviewLoading] = useState(true);
+
+    // Score approval pending count (for instructor badge)
+    const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
 
     // Progressive loading states - แยก loading state แต่ละส่วน
     const [isTeamsLoading, setIsTeamsLoading] = useState(true);
@@ -505,11 +511,20 @@ export default function ClassroomDetailPage() {
         fetchTeams(); // เรียกเลยไม่ต้องรอ course
         fetchAssignments(); // เรียก assignments
 
-        // Fetch user role
+        // Fetch user role and pending approval count
         const fetchUserRole = async () => {
             const user = await authService.getCurrentUser();
             if (user) {
                 setUserRole(user.role);
+                // Fetch pending count only for instructor
+                if (user.role === 'instructor') {
+                    try {
+                        const count = await scoreEditRequestService.getPendingCount(courseId);
+                        setPendingApprovalCount(count);
+                    } catch (error) {
+                        console.error('Failed to fetch pending approval count:', error);
+                    }
+                }
             }
         };
         fetchUserRole();
@@ -1481,8 +1496,16 @@ export default function ClassroomDetailPage() {
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคคล", icon: "solar:users-group-rounded-bold" },
-        { key: "assignments", label: "งาน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
-        { key: "scores", label: "คะแนน", icon: "solar:diploma-bold" },
+        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
+        { key: "scores", label: "คะแนน", icon: "solar:chart-square-bold" },
+        // Score Approval tab - only for instructor
+        ...(userRole === 'instructor' ? [{
+            key: "approval",
+            label: "อนุมัติคะแนน",
+            icon: "solar:clipboard-check-bold",
+            badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
+            badgeColor: "warning" as const,
+        }] : []),
     ];
 
     // console.log("Course data:", course);
@@ -1557,7 +1580,12 @@ export default function ClassroomDetailPage() {
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
                                     {item.badge && (
-                                        <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 min-w-5 px-1 ml-auto">
+                                        <Chip 
+                                            size="sm" 
+                                            variant="flat" 
+                                            color={'badgeColor' in item ? item.badgeColor : "primary"}
+                                            className="h-5 min-w-5 px-1 ml-auto"
+                                        >
                                             {item.badge}
                                         </Chip>
                                     )}
@@ -1615,7 +1643,12 @@ export default function ClassroomDetailPage() {
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
                                 {item.badge && (
-                                    <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 min-w-5 px-1 ml-auto text-xs">
+                                    <Chip 
+                                        size="sm" 
+                                        variant="flat" 
+                                        color={'badgeColor' in item ? item.badgeColor : "primary"}
+                                        className="h-5 min-w-5 px-1 ml-auto text-xs"
+                                    >
                                         {item.badge}
                                     </Chip>
                                 )}
@@ -1788,29 +1821,16 @@ export default function ClassroomDetailPage() {
                             />
                         )}
 
-                        {/* Scores Tab */}
+                        {/* Scores Tab - Summary View */}
                         {activeTab === "scores" && (
-                            <ScoresTab
-                                assignments={assignments}
-                                selectedAssignment={selectedAssignmentForScore}
-                                setSelectedAssignment={setSelectedAssignmentForScore}
-                                scoresData={scoresData}
-                                isLoading={isScoresLoading}
-                                scoreSearchQuery={scoreSearchQuery}
-                                setScoreSearchQuery={setScoreSearchQuery}
-                                scoreEntries={scoreEntries}
-                                setScoreEntries={setScoreEntries}
-                                isSaving={isSavingScores}
-                                groupsForScore={groupsForScore}
-                                onFetchScores={fetchScoresForAssignment}
-                                onSaveScores={saveAllScores}
-                                onOpenGroupScoreModal={() => {
-                                    setSelectedGroupForScore(null);
-                                    setGroupScoreValue(0);
-                                    setGroupSubItemScores({});
-                                    setIsGroupScoreModalOpen(true);
-                                }}
-                                onNavigateToAssignments={() => setActiveTab("assignments")}
+                            <ScoreSummaryTab courseId={courseId} />
+                        )}
+
+                        {/* Score Approval Tab - Instructor Only */}
+                        {activeTab === "approval" && userRole === "instructor" && (
+                            <ScoreApprovalTab 
+                                courseId={courseId} 
+                                onPendingCountChange={(count) => setPendingApprovalCount(count)}
                             />
                         )}
                     </div>

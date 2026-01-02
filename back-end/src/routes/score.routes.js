@@ -12,6 +12,9 @@ router.get('/', scoreController.getScores);
 // GET /api/scores/summary - Get student scores summary
 router.get('/summary', scoreController.getStudentScoresSummary);
 
+// GET /api/scores/matrix - Get score summary matrix (students x assignments)
+router.get('/matrix', scoreController.getScoreSummaryMatrix);
+
 // GET /api/scores/students/search - Search students for autocomplete
 router.get('/students/search', scoreController.searchStudents);
 
