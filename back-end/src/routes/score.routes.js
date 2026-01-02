@@ -1,0 +1,39 @@
+const express = require('express');
+const router = express.Router();
+const scoreController = require('../controllers/score.controller');
+const { authenticate } = require('../middlewares/auth');
+
+// All routes require authentication
+router.use(authenticate);
+
+// GET /api/scores - Get scores for an assignment
+router.get('/', scoreController.getScores);
+
+// GET /api/scores/summary - Get student scores summary
+router.get('/summary', scoreController.getStudentScoresSummary);
+
+// GET /api/scores/students/search - Search students for autocomplete
+router.get('/students/search', scoreController.searchStudents);
+
+// GET /api/scores/groups - Get groups for assignment
+router.get('/groups', scoreController.getGroupsForAssignment);
+
+// POST /api/scores - Submit single score
+router.post('/', scoreController.submitScore);
+
+// POST /api/scores/bulk - Submit bulk scores
+router.post('/bulk', scoreController.submitBulkScores);
+
+// POST /api/scores/group - Submit group score
+router.post('/group', scoreController.submitGroupScore);
+
+// POST /api/scores/edit-request - Request score edit
+router.post('/edit-request', scoreController.requestScoreEdit);
+
+// GET /api/scores/edit-requests - Get pending edit requests
+router.get('/edit-requests', scoreController.getPendingEditRequests);
+
+// PUT /api/scores/edit-requests/:id - Review edit request
+router.put('/edit-requests/:id', scoreController.reviewEditRequest);
+
+module.exports = router;

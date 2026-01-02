@@ -11,6 +11,8 @@ const courseRoutes = require('./course.routes');
 const classroomRoutes = require('./classroom.routes');
 const feedbackRoutes = require('./feedback.routes');
 const teamRoutes = require('./team.routes');
+const assignmentRoutes = require('./assignment.routes');
+const scoreRoutes = require('./score.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -22,6 +24,8 @@ router.use('/courses', courseRoutes);
 router.use('/courses/:id/teams', teamRoutes); // Team routes nested under courses
 router.use('/classrooms', classroomRoutes);
 router.use('/feedback', feedbackRoutes);
+router.use('/assignments', assignmentRoutes);
+router.use('/scores', scoreRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

@@ -12,6 +12,10 @@ const Desk = require('./Desk');
 const Feedback = require('./Feedback');
 const StudentGroup = require('./StudentGroup');
 const StudentGroupMember = require('./StudentGroupMember');
+const Assignment = require('./Assignment');
+const AssignmentSubItem = require('./AssignmentSubItem');
+const Score = require('./Score');
+const ScoreEditRequest = require('./ScoreEditRequest');
 
 // ============================================
 // Define Associations
@@ -209,6 +213,95 @@ StudentGroupMember.belongsTo(Student, {
 });
 
 // ============================================
+// Assignment & Score Associations
+// ============================================
+
+// Assignment -> Course
+Assignment.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(Assignment, {
+  foreignKey: 'course_id',
+  as: 'assignments',
+});
+
+// Assignment -> Creator (User)
+Assignment.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator',
+});
+
+// Assignment -> SubItems
+Assignment.hasMany(AssignmentSubItem, {
+  foreignKey: 'assignment_id',
+  as: 'subItems',
+});
+
+AssignmentSubItem.belongsTo(Assignment, {
+  foreignKey: 'assignment_id',
+  as: 'assignment',
+});
+
+// Score -> Assignment
+Score.belongsTo(Assignment, {
+  foreignKey: 'assignment_id',
+  as: 'assignment',
+});
+
+Assignment.hasMany(Score, {
+  foreignKey: 'assignment_id',
+  as: 'scores',
+});
+
+// Score -> Student
+Score.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+Student.hasMany(Score, {
+  foreignKey: 'student_id',
+  as: 'scores',
+});
+
+// Score -> Group (optional)
+Score.belongsTo(StudentGroup, {
+  foreignKey: 'group_id',
+  as: 'group',
+});
+
+// Score -> Grader (User)
+Score.belongsTo(User, {
+  foreignKey: 'graded_by',
+  as: 'grader',
+});
+
+// ScoreEditRequest -> Score
+ScoreEditRequest.belongsTo(Score, {
+  foreignKey: 'score_id',
+  as: 'score',
+});
+
+Score.hasMany(ScoreEditRequest, {
+  foreignKey: 'score_id',
+  as: 'editRequests',
+});
+
+// ScoreEditRequest -> Requester (User)
+ScoreEditRequest.belongsTo(User, {
+  foreignKey: 'requested_by',
+  as: 'requester',
+});
+
+// ScoreEditRequest -> Reviewer (User)
+ScoreEditRequest.belongsTo(User, {
+  foreignKey: 'reviewed_by',
+  as: 'reviewer',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -226,4 +319,8 @@ module.exports = {
   Feedback,
   StudentGroup,
   StudentGroupMember,
+  Assignment,
+  AssignmentSubItem,
+  Score,
+  ScoreEditRequest,
 };

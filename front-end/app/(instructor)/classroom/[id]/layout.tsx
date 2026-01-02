@@ -5,6 +5,13 @@ export const metadata: Metadata = {
   description: "ดูข้อมูลห้องเรียนและจัดการโต๊ะเรียน",
 };
 
+  export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false
+  }
+
 export default function ClassroomViewLayout({
   children,
 }: {
