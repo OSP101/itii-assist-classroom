@@ -2477,23 +2477,43 @@ export default function ClassroomDetailPage() {
                             {newAssignment.assignment_type === "weekly_group" && (
                                 <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
                                     <label className="text-slate-600 font-medium text-sm mb-2 block">สัปดาห์ที่</label>
-                                    <Select
-                                        selectedKeys={newAssignment.week_number ? [newAssignment.week_number.toString()] : []}
-                                        onSelectionChange={(keys) => {
-                                            const val = Array.from(keys)[0] as string;
-                                            setNewAssignment(prev => ({ ...prev, week_number: parseInt(val) }));
-                                        }}
-                                        variant="bordered"
-                                        classNames={{
-                                            trigger: "bg-white border-slate-200",
-                                        }}
-                                    >
-                                        {Array.from({ length: totalWeeks }, (_, i) => (
-                                            <SelectItem key={(i + 1).toString()}>
-                                                สัปดาห์ที่ {i + 1}
-                                            </SelectItem>
-                                        ))}
-                                    </Select>
+                                    {Object.keys(weeklyTeams).length > 0 ? (
+                                        <Select
+                                            placeholder="เลือกสัปดาห์"
+                                            selectedKeys={newAssignment.week_number ? [newAssignment.week_number.toString()] : []}
+                                            onSelectionChange={(keys) => {
+                                                const val = Array.from(keys)[0] as string;
+                                                if (val) {
+                                                    setNewAssignment(prev => ({ ...prev, week_number: parseInt(val) }));
+                                                }
+                                            }}
+                                            variant="bordered"
+                                            classNames={{
+                                                trigger: "bg-white border-slate-200",
+                                                value: "text-slate-800",
+                                            }}
+                                        >
+                                            {Object.keys(weeklyTeams)
+                                                .map(Number)
+                                                .sort((a, b) => a - b)
+                                                .map((weekNum) => (
+                                                    <SelectItem key={weekNum.toString()} textValue={`สัปดาห์ที่ ${weekNum}`}>
+                                                        <div className="flex items-center justify-between w-full">
+                                                            <span>สัปดาห์ที่ {weekNum}</span>
+                                                            <span className="text-xs text-slate-500">
+                                                                ({weeklyTeams[weekNum]?.length || 0} กลุ่ม)
+                                                            </span>
+                                                        </div>
+                                                    </SelectItem>
+                                                ))}
+                                        </Select>
+                                    ) : (
+                                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-center">
+                                            <Icon icon="solar:info-circle-bold" className="text-amber-500 text-xl mb-1" />
+                                            <p className="text-sm text-amber-700">ยังไม่มีกลุ่มประจำสัปดาห์</p>
+                                            <p className="text-xs text-amber-600 mt-1">กรุณาสร้างกลุ่มประจำสัปดาห์ก่อน</p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -2556,6 +2576,7 @@ export default function ClassroomDetailPage() {
                                     onValueChange={(val) => setNewAssignment(prev => ({ ...prev, maxScore: parseInt(val) || 0 }))}
                                     isRequired
                                     endContent={<span className="text-slate-400 text-sm">คะแนน</span>}
+                                    className="pt-6"
                                     classNames={{
                                         inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                         label: "text-slate-600 font-medium text-sm",
@@ -2637,7 +2658,7 @@ export default function ClassroomDetailPage() {
                                                             )
                                                         }));
                                                     }}
-                                                    className="w-24"
+                                                    className="w-36"
                                                     endContent={<span className="text-slate-400 text-xs">คะแนน</span>}
                                                     classNames={{
                                                         inputWrapper: "h-10 bg-white border-slate-200",
@@ -2665,7 +2686,7 @@ export default function ClassroomDetailPage() {
                             )}
 
                             {/* Due Date */}
-                            <Input
+                            {/* <Input
                                 type="date"
                                 label="กำหนดส่ง (ถ้ามี)"
                                 labelPlacement="outside"
@@ -2673,11 +2694,14 @@ export default function ClassroomDetailPage() {
                                 size="lg"
                                 value={newAssignment.dueDate}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, dueDate: val }))}
+
+                                className="pt-4"
                                 classNames={{
                                     inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
+
                                 }}
-                            />
+                            /> */}
 
                             {/* Description */}
                             <Input
@@ -2688,6 +2712,7 @@ export default function ClassroomDetailPage() {
                                 size="lg"
                                 value={newAssignment.description}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, description: val }))}
+                                className="pt-4"
                                 classNames={{
                                     inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
