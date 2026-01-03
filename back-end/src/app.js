@@ -107,12 +107,12 @@ if (config.nodeEnv === 'development') {
 // Initialize Passport
 app.use(passport.initialize());
 
-// Request Logger Middleware (บันทึก Access Log ตาม พ.ร.บ. คอมพิวเตอร์)
+// Request Logger Middleware (บันทึกเฉพาะการกระทำต่อระบบ ไม่บันทึกการเข้าหน้า)
 const { requestLogger } = require('./middlewares');
 app.use('/api', requestLogger({
   logBody: config.nodeEnv === 'development', // Log body only in development
   excludePaths: ['/api/health', '/api/system/metrics', '/api/system/cpu'],
-  logAllRequests: false, // เก็บเฉพาะ errors และ non-GET requests (POST, PUT, DELETE)
+  logAllRequests: false, // บันทึกเฉพาะ POST, PUT, DELETE, PATCH (การกระทำต่อระบบ)
 }));
 
 // API routes

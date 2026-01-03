@@ -25,3 +25,6 @@ build/
 
 # Test coverage
 coverage/
+
+
+scripts/

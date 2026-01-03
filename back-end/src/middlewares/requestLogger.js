@@ -127,9 +127,10 @@ const requestLogger = (options = {}) => {
         const responseTime = Date.now() - startTime;
         const statusCode = res.statusCode;
 
-        // Skip logging successful GET requests if logAllRequests is false
-        // Only log: errors (status >= 400) OR non-GET methods (POST, PUT, DELETE, PATCH)
-        if (!logAllRequests && req.method === 'GET' && statusCode < 400) {
+        // Skip logging GET requests entirely if logAllRequests is false
+        // Only log: non-GET methods (POST, PUT, DELETE, PATCH) that modify data
+        // This focuses on "actions" rather than "page views"
+        if (!logAllRequests && req.method === 'GET') {
           return;
         }
 
