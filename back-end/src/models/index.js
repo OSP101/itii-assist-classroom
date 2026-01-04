@@ -246,6 +246,17 @@ AssignmentSubItem.belongsTo(Assignment, {
   as: 'assignment',
 });
 
+// Assignment -> AttendanceSession (optional link)
+Assignment.belongsTo(AttendanceSession, {
+  foreignKey: 'linked_attendance_session_id',
+  as: 'linkedAttendanceSession',
+});
+
+AttendanceSession.hasMany(Assignment, {
+  foreignKey: 'linked_attendance_session_id',
+  as: 'linkedAssignments',
+});
+
 // Score -> SubItem (optional)
 Score.belongsTo(AssignmentSubItem, {
   foreignKey: 'sub_item_id',
