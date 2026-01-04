@@ -24,6 +24,7 @@ import { studentService } from "@/services/student.service";
 import { authService } from "@/services/auth.service";
 import assignmentService from "@/services/assignment.service";
 import scoreService from "@/services/score.service";
+import attendanceService, { type AttendanceSession } from "@/services/attendance.service";
 import type { Assignment as AssignmentType, AssignmentSubItem } from "@/services/assignment.service";
 import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember } from "@/services/course.service";
 import type { Student } from "@/services/student.service";
@@ -173,6 +174,7 @@ export default function ClassroomDetailPage() {
         name: string;
         assignment_type: "individual" | "permanent_group" | "weekly_group";
         week_number?: number;
+        linked_attendance_session_id?: number | null;
         hasSubItems: boolean;
         subItems: LocalSubItem[];
         maxScore: number;
@@ -181,6 +183,7 @@ export default function ClassroomDetailPage() {
     }>({
         name: "",
         assignment_type: "individual",
+        linked_attendance_session_id: null,
         hasSubItems: false,
         subItems: [],
         maxScore: 10,
@@ -189,6 +192,9 @@ export default function ClassroomDetailPage() {
     });
     const [expandedAssignments, setExpandedAssignments] = useState<number[]>([]);
     const [editingAssignment, setEditingAssignment] = useState<AssignmentType | null>(null);
+
+    // Attendance sessions for assignment linking
+    const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
 
     // Scores Tab States
     const [selectedAssignmentForScore, setSelectedAssignmentForScore] = useState<AssignmentType | null>(null);
@@ -370,6 +376,17 @@ export default function ClassroomDetailPage() {
         }
     }, [courseId]);
 
+    // Fetch attendance sessions for assignment linking
+    const fetchAttendanceSessions = useCallback(async () => {
+        if (!courseId) return;
+        try {
+            const data = await attendanceService.getSessions(courseId);
+            setAttendanceSessions(data);
+        } catch (error) {
+            console.error("Error fetching attendance sessions:", error);
+        }
+    }, [courseId]);
+
     // Fetch scores for selected assignment
     const fetchScoresForAssignment = useCallback(async (assignment: AssignmentType) => {
         setIsScoresLoading(true);
@@ -511,6 +528,7 @@ export default function ClassroomDetailPage() {
         fetchStudentsList();
         fetchTeams(); // เรียกเลยไม่ต้องรอ course
         fetchAssignments(); // เรียก assignments
+        fetchAttendanceSessions(); // เรียก attendance sessions สำหรับลิงก์งาน
 
         // Fetch user role and pending approval count
         const fetchUserRole = async () => {
@@ -529,7 +547,7 @@ export default function ClassroomDetailPage() {
             }
         };
         fetchUserRole();
-    }, [fetchCourse, fetchOverview, fetchTAsList, fetchStudentsList, fetchTeams, fetchAssignments]);
+    }, [fetchCourse, fetchOverview, fetchTAsList, fetchStudentsList, fetchTeams, fetchAssignments, fetchAttendanceSessions]);
 
     // Fetch all section students after course is loaded
     useEffect(() => {
@@ -1498,9 +1516,10 @@ export default function ClassroomDetailPage() {
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคคล", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
-        { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
+        
         { key: "scores", label: "คะแนน", icon: "solar:chart-square-bold" },
-        // Score Approval tab - only for instructor
+        
+        // ถ้าไม่ใช่อาจารย์ ไม่แสดง
         ...(userRole === 'instructor' ? [{
             key: "approval",
             label: "อนุมัติคะแนน",
@@ -1508,6 +1527,7 @@ export default function ClassroomDetailPage() {
             badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
             badgeColor: "warning" as const,
         }] : []),
+        { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
     ];
 
     // console.log("Course data:", course);
@@ -1794,6 +1814,7 @@ export default function ClassroomDetailPage() {
                                         maxScore: 10,
                                         dueDate: "",
                                         description: "",
+                                        linked_attendance_session_id: null,
                                     });
                                     setEditingAssignment(null);
                                     setIsAddAssignmentModalOpen(true);
@@ -1813,6 +1834,7 @@ export default function ClassroomDetailPage() {
                                         maxScore: Number(assignment.max_score),
                                         dueDate: assignment.due_date || "",
                                         description: assignment.description || "",
+                                        linked_attendance_session_id: assignment.linked_attendance_session_id || null,
                                     });
                                     setIsAddAssignmentModalOpen(true);
                                 }}
@@ -2547,6 +2569,97 @@ export default function ClassroomDetailPage() {
                                 </div>
                             )}
 
+                            {/* Link to Attendance Session */}
+                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-blue-100 rounded-lg">
+                                            <Icon icon="solar:clipboard-check-bold" className="text-lg text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-slate-700">ลิงก์กับการเช็คชื่อ</span>
+                                            <p className="text-xs text-slate-500">ถ้านักศึกษาขาดเรียน จะไม่อนุญาตให้ลงคะแนน</p>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        size="sm"
+                                        variant={newAssignment.linked_attendance_session_id ? "solid" : "bordered"}
+                                        color={newAssignment.linked_attendance_session_id ? "primary" : "default"}
+                                        onPress={() => {
+                                            if (newAssignment.linked_attendance_session_id) {
+                                                setNewAssignment(prev => ({ ...prev, linked_attendance_session_id: null }));
+                                            }
+                                        }}
+                                        startContent={
+                                            <Icon 
+                                                icon={newAssignment.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"} 
+                                                className="text-lg" 
+                                            />
+                                        }
+                                    >
+                                        {newAssignment.linked_attendance_session_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
+                                    </Button>
+                                </div>
+                                
+                                {attendanceSessions.length > 0 ? (
+                                    <Select
+                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์"
+                                        selectedKeys={newAssignment.linked_attendance_session_id ? [String(newAssignment.linked_attendance_session_id)] : []}
+                                        onSelectionChange={(keys) => {
+                                            const val = Array.from(keys)[0] as string;
+                                            setNewAssignment(prev => ({ 
+                                                ...prev, 
+                                                linked_attendance_session_id: val ? parseInt(val) : null 
+                                            }));
+                                        }}
+                                        variant="bordered"
+                                        classNames={{
+                                            trigger: "bg-white border-slate-200",
+                                            value: "text-slate-800",
+                                        }}
+                                    >
+                                        {attendanceSessions.map((session) => (
+                                            <SelectItem key={String(session.id)} textValue={session.title}>
+                                                <div className="flex items-center gap-3">
+                                                    <Icon 
+                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
+                                                              session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
+                                                        className={session.session_type === "lecture" ? "text-blue-500" : 
+                                                                   session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
+                                                    />
+                                                    <div>
+                                                        <span className="font-medium">{session.title}</span>
+                                                        <span className="text-xs text-slate-500 ml-2">
+                                                            {new Date(session.start_time).toLocaleDateString("th-TH", { 
+                                                                day: "numeric", 
+                                                                month: "short",
+                                                                year: "2-digit"
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </Select>
+                                ) : (
+                                    <div className="p-3 bg-slate-100 rounded-lg text-center">
+                                        <Icon icon="solar:clipboard-list-linear" className="text-slate-400 text-xl mb-1" />
+                                        <p className="text-sm text-slate-500">ยังไม่มีรอบเช็คชื่อ</p>
+                                    </div>
+                                )}
+                                
+                                {newAssignment.linked_attendance_session_id && (
+                                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                        <div className="flex items-center gap-2 text-blue-700">
+                                            <Icon icon="solar:info-circle-bold" />
+                                            <span className="text-sm font-medium">
+                                                นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Has Sub Items Toggle */}
                             <div>
                                 <label className="text-slate-600 font-medium text-sm mb-2 block">รูปแบบคะแนน</label>
@@ -2808,6 +2921,7 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
+                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || null,
                                                 });
                                                 if (result) {
                                                     await fetchAssignments();
@@ -2838,6 +2952,7 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
+                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || undefined,
                                                 });
                                                 if (result) {
                                                     await fetchAssignments();

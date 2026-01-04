@@ -1,4 +1,4 @@
-const { Assignment, AssignmentSubItem, Score, Course, Student, User, StudentGroup, sequelize } = require('../models');
+const { Assignment, AssignmentSubItem, Score, Course, Student, User, StudentGroup, AttendanceSession, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -29,6 +29,11 @@ const getAssignments = asyncHandler(async (req, res) => {
                 as: 'creator',
                 attributes: ['id', 'full_name'],
             },
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSession',
+                attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+            },
         ],
         order: [['order_index', 'ASC'], ['created_at', 'DESC']],
     });
@@ -57,6 +62,11 @@ const getAssignment = asyncHandler(async (req, res) => {
                 as: 'creator',
                 attributes: ['id', 'full_name'],
             },
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSession',
+                attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+            },
         ],
     });
 
@@ -80,6 +90,7 @@ const createAssignment = asyncHandler(async (req, res) => {
         description, 
         assignment_type, 
         week_number,
+        linked_attendance_session_id,
         max_score, 
         sub_items,
         due_date 
@@ -87,6 +98,19 @@ const createAssignment = asyncHandler(async (req, res) => {
 
     if (!course_id || !name) {
         throw new ApiError(400, 'course_id and name are required');
+    }
+
+    // Validate linked attendance session if provided
+    if (linked_attendance_session_id) {
+        const attendanceSession = await AttendanceSession.findOne({
+            where: { 
+                id: linked_attendance_session_id,
+                course_id: course_id 
+            }
+        });
+        if (!attendanceSession) {
+            throw new ApiError(400, 'Invalid attendance session or session does not belong to this course');
+        }
     }
 
     // Get max order_index for this course
@@ -104,6 +128,7 @@ const createAssignment = asyncHandler(async (req, res) => {
             description,
             assignment_type: assignment_type || 'individual',
             week_number,
+            linked_attendance_session_id: linked_attendance_session_id || null,
             max_score: max_score || 10,
             due_date,
             order_index: maxOrder + 1,
@@ -136,6 +161,11 @@ const createAssignment = asyncHandler(async (req, res) => {
                     as: 'subItems',
                     order: [['order_index', 'ASC']],
                 },
+                {
+                    model: AttendanceSession,
+                    as: 'linkedAttendanceSession',
+                    attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+                },
             ],
         });
 
@@ -159,7 +189,8 @@ const updateAssignment = asyncHandler(async (req, res) => {
         name, 
         description, 
         assignment_type,
-        week_number, 
+        week_number,
+        linked_attendance_session_id,
         max_score, 
         sub_items,
         due_date 
@@ -171,6 +202,19 @@ const updateAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
+    // Validate linked attendance session if provided
+    if (linked_attendance_session_id !== undefined && linked_attendance_session_id !== null) {
+        const attendanceSession = await AttendanceSession.findOne({
+            where: { 
+                id: linked_attendance_session_id,
+                course_id: assignment.course_id 
+            }
+        });
+        if (!attendanceSession) {
+            throw new ApiError(400, 'Invalid attendance session or session does not belong to this course');
+        }
+    }
+
     const transaction = await sequelize.transaction();
 
     try {
@@ -180,6 +224,7 @@ const updateAssignment = asyncHandler(async (req, res) => {
             description: description !== undefined ? description : assignment.description,
             assignment_type: assignment_type || assignment.assignment_type,
             week_number: week_number !== undefined ? week_number : assignment.week_number,
+            linked_attendance_session_id: linked_attendance_session_id !== undefined ? linked_attendance_session_id : assignment.linked_attendance_session_id,
             max_score: max_score !== undefined ? max_score : assignment.max_score,
             due_date: due_date !== undefined ? due_date : assignment.due_date,
         }, { transaction });
@@ -218,6 +263,11 @@ const updateAssignment = asyncHandler(async (req, res) => {
                     model: AssignmentSubItem,
                     as: 'subItems',
                     order: [['order_index', 'ASC']],
+                },
+                {
+                    model: AttendanceSession,
+                    as: 'linkedAttendanceSession',
+                    attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
                 },
             ],
         });

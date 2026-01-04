@@ -12,6 +12,14 @@ export interface AssignmentSubItem {
     order_index?: number;
 }
 
+export interface LinkedAttendanceSession {
+    id: number;
+    title: string;
+    start_time: string;
+    end_time: string;
+    session_type?: string;
+}
+
 export interface Assignment {
     id: number;
     course_id: string; // nanoid format
@@ -19,6 +27,8 @@ export interface Assignment {
     description?: string;
     assignment_type: 'individual' | 'permanent_group' | 'weekly_group';
     week_number?: number;
+    linked_attendance_session_id?: number | null;
+    linkedAttendanceSession?: LinkedAttendanceSession | null;
     max_score: number;
     due_date?: string;
     order_index: number;
@@ -39,6 +49,7 @@ export interface CreateAssignmentData {
     description?: string;
     assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
     week_number?: number;
+    linked_attendance_session_id?: number | null;
     max_score?: number;
     sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
     due_date?: string;
@@ -49,6 +60,7 @@ export interface UpdateAssignmentData {
     description?: string;
     assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
     week_number?: number;
+    linked_attendance_session_id?: number | null;
     max_score?: number;
     sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
     due_date?: string;

@@ -50,6 +50,9 @@ export interface StudentScore {
     };
     graded_at?: string;
     sub_item_scores?: SubItemScoreData[];
+    // Attendance info (if assignment is linked to attendance session)
+    attendance_status?: 'present' | 'late' | 'leave' | 'absent' | null;
+    can_score?: boolean;
 }
 
 export interface ScoresData {
