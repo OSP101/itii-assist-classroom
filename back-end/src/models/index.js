@@ -16,6 +16,8 @@ const Assignment = require('./Assignment');
 const AssignmentSubItem = require('./AssignmentSubItem');
 const Score = require('./Score');
 const ScoreEditRequest = require('./ScoreEditRequest');
+const AttendanceSession = require('./AttendanceSession');
+const AttendanceRecord = require('./AttendanceRecord');
 
 // ============================================
 // Define Associations
@@ -313,6 +315,66 @@ ScoreEditRequest.belongsTo(User, {
 });
 
 // ============================================
+// Attendance Associations
+// ============================================
+
+// AttendanceSession -> Course
+AttendanceSession.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(AttendanceSession, {
+  foreignKey: 'course_id',
+  as: 'attendanceSessions',
+});
+
+// AttendanceSession -> CourseSection
+AttendanceSession.belongsTo(CourseSection, {
+  foreignKey: 'course_section_id',
+  as: 'section',
+});
+
+CourseSection.hasMany(AttendanceSession, {
+  foreignKey: 'course_section_id',
+  as: 'attendanceSessions',
+});
+
+// AttendanceSession -> Creator (User)
+AttendanceSession.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator',
+});
+
+// AttendanceSession -> Records
+AttendanceSession.hasMany(AttendanceRecord, {
+  foreignKey: 'attendance_session_id',
+  as: 'records',
+});
+
+AttendanceRecord.belongsTo(AttendanceSession, {
+  foreignKey: 'attendance_session_id',
+  as: 'session',
+});
+
+// AttendanceRecord -> Student
+AttendanceRecord.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+Student.hasMany(AttendanceRecord, {
+  foreignKey: 'student_id',
+  as: 'attendanceRecords',
+});
+
+// AttendanceRecord -> UpdatedBy (User)
+AttendanceRecord.belongsTo(User, {
+  foreignKey: 'updated_by',
+  as: 'updater',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -334,4 +396,6 @@ module.exports = {
   AssignmentSubItem,
   Score,
   ScoreEditRequest,
+  AttendanceSession,
+  AttendanceRecord,
 };

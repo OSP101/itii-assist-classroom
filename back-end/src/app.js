@@ -169,16 +169,27 @@ app.use(notFoundHandler);
 app.use(errorConverter);
 app.use(errorHandler);
 
+// Import http and socket.io
+const http = require('http');
+const { initializeSocket } = require('./config/socket');
+
+// Create HTTP server
+const server = http.createServer(app);
+
+// Initialize Socket.io
+const io = initializeSocket(server);
+
 // Start server
 const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
     
-    // Start listening
-    app.listen(config.port, () => {
+    // Start listening (use server instead of app for socket.io)
+    server.listen(config.port, () => {
       logger.info(`🚀 Server running in ${config.nodeEnv} mode on port ${config.port}`);
       logger.info(`📍 API URL: http://localhost:${config.port}/api`);
+      logger.info(`🔌 Socket.io enabled`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);
@@ -200,4 +211,4 @@ process.on('uncaughtException', (error) => {
 // Start the server
 startServer();
 
-module.exports = app;
+module.exports = { app, server, io };

@@ -36,6 +36,7 @@ import {
     SectionsTab,
     PeopleTab,
     AssignmentsTab,
+    AttendanceTab,
     ScoresTab,
     ScoreSummaryTab,
     ScoreApprovalTab,
@@ -1497,6 +1498,7 @@ export default function ClassroomDetailPage() {
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคคล", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
+        { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
         { key: "scores", label: "คะแนน", icon: "solar:chart-square-bold" },
         // Score Approval tab - only for instructor
         ...(userRole === 'instructor' ? [{
@@ -1818,6 +1820,14 @@ export default function ClassroomDetailPage() {
                                     setScoreModalAssignment(assignment);
                                     setIsScoreModalOpen(true);
                                 }}
+                            />
+                        )}
+
+                        {/* Attendance Tab */}
+                        {activeTab === "attendance" && (
+                            <AttendanceTab
+                                course={course}
+                                isLoading={isLoading}
                             />
                         )}
 

@@ -49,3 +49,10 @@ export type {
 } from './score.service';
 export { default as systemLogService } from './systemLog.service';
 export * from './systemLog.service';
+export { default as attendanceService } from './attendance.service';
+export type {
+  AttendanceSession,
+  AttendanceRecord,
+  CreateAttendanceData,
+  StudentCheckInData,
+} from './attendance.service';

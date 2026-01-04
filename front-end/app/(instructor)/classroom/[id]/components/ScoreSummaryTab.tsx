@@ -304,7 +304,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                 value={searchQuery}
                                 onValueChange={setSearchQuery}
                                 startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400 text-sm" />}
-                                className="w-full sm:max-w-72"
+                                className="w-full"
                                 size="md"
                                 variant="bordered"
                                 isClearable
@@ -332,7 +332,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                         { key: "all", label: "ทุกกลุ่ม" },
                                         ...(matrixData?.sections || []).map((s) => ({
                                             key: String(s.id),
-                                            label: `Sec ${s.section_number}`,
+                                            label: `Section ${s.section_number}`,
                                         })),
                                     ]}
                                 >

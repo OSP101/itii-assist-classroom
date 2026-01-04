@@ -317,7 +317,7 @@ export default function InstructorLayout({
                                     <button className="p-0.5 rounded-full hover:ring-2 hover:ring-blue-200 transition-all">
                                         <Avatar
                                             name={user?.full_name}
-                                            size="sm"
+                                            size="md"
                                             src={user?.avatar || undefined}
                                             className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600"
                                         />

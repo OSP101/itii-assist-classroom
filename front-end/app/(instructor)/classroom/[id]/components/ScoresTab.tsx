@@ -149,7 +149,7 @@ export default function ScoresTab({
                                     startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                     value={scoreSearchQuery}
                                     onValueChange={setScoreSearchQuery}
-                                    className="w-64"
+                                    className="w-full"
                                     classNames={{
                                         inputWrapper: "bg-white",
                                     }}

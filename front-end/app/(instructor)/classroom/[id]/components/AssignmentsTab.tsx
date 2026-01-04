@@ -305,7 +305,7 @@ export default function AssignmentsTab({
                                         value={searchQuery}
                                         onValueChange={setSearchQuery}
                                         startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
-                                        className="w-full sm:max-w-72"
+                                        className="w-full"
                                         size="md"
                                         variant="bordered"
                                         isClearable
