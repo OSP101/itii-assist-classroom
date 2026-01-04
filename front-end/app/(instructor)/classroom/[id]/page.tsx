@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
@@ -31,20 +32,83 @@ import type { Student } from "@/services/student.service";
 import type { StudentScore, ScoresData, Group } from "@/services/score.service";
 import scoreEditRequestService from "@/services/scoreEditRequest.service";
 
-// Import components
-import {
-    OverviewTab,
-    SectionsTab,
-    PeopleTab,
-    AssignmentsTab,
-    AttendanceTab,
-    ScoresTab,
-    ScoreSummaryTab,
-    ScoreApprovalTab,
-    ScoreModal,
-    OverviewSkeleton,
-    TeamsGridSkeleton,
-} from "./components";
+// Import Skeletons directly (they're small and used for loading states)
+import { OverviewSkeleton, TeamsGridSkeleton } from "./components/Skeletons";
+
+// Lazy load heavy Tab components with custom loading states
+const OverviewTab = dynamic(() => import("./components/OverviewTab"), {
+    loading: () => <OverviewSkeleton />,
+    ssr: false,
+});
+
+const SectionsTab = dynamic(() => import("./components/SectionsTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const PeopleTab = dynamic(() => import("./components/PeopleTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const AssignmentsTab = dynamic(() => import("./components/AssignmentsTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const AttendanceTab = dynamic(() => import("./components/AttendanceTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const ScoresTab = dynamic(() => import("./components/ScoresTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const ScoreSummaryTab = dynamic(() => import("./components/ScoreSummaryTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const ScoreApprovalTab = dynamic(() => import("./components/ScoreApprovalTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+// Lazy load Modal (only needed when user opens it)
+const ScoreModal = dynamic(() => import("./components/ScoreModal"), {
+    loading: () => null,
+    ssr: false,
+});
 
 
 // Team/Group Types (local extension of service types)
@@ -519,7 +583,7 @@ export default function ClassroomDetailPage() {
         }
     };
 
-    // Initial data loading - fetch all data in parallel
+    // Initial data loading - fetch all data in parallel (run only once on mount)
     useEffect(() => {
         // เรียกทุก API พร้อมกัน แต่ละตัวจัดการ loading state ของตัวเอง
         fetchCourse();
@@ -547,7 +611,8 @@ export default function ClassroomDetailPage() {
             }
         };
         fetchUserRole();
-    }, [fetchCourse, fetchOverview, fetchTAsList, fetchStudentsList, fetchTeams, fetchAssignments, fetchAttendanceSessions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [courseId]); // Only re-run when courseId changes
 
     // Fetch all section students after course is loaded
     useEffect(() => {
@@ -1483,34 +1548,7 @@ export default function ClassroomDetailPage() {
         );
     }, [sectionStudents, sectionSearchQuery]);
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <Spinner size="lg" color="primary" />
-            </div>
-        );
-    }
-
-    if (!course) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="text-center">
-                    <Icon icon="solar:book-2-linear" className="text-6xl text-slate-300 mx-auto mb-4" />
-                    <h2 className="text-xl font-semibold text-slate-700">ไม่พบข้อมูลรายวิชา</h2>
-                    <Button
-                        color="primary"
-                        variant="light"
-                        className="mt-4"
-                        onPress={() => window.close()}
-                    >
-                        ปิดหน้านี้
-                    </Button>
-                </div>
-            </div>
-        );
-    }
-
-    // Menu items for sidebar
+    // Menu items for sidebar (แสดงเสมอ ไม่ต้องรอโหลด course)
     const menuItems = [
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
@@ -1546,8 +1584,22 @@ export default function ClassroomDetailPage() {
                         <Icon icon="solar:hamburger-menu-linear" className="text-xl" />
                     </Button>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-white font-semibold truncate">{course.name}</h1>
-                        <p className="text-white/70 text-xs">{course.code}</p>
+                        {isLoading ? (
+                            <>
+                                <div className="h-5 w-32 bg-white/20 rounded animate-pulse" />
+                                <div className="h-3 w-20 bg-white/20 rounded animate-pulse mt-1" />
+                            </>
+                        ) : course ? (
+                            <>
+                                <h1 className="text-white font-semibold truncate">{course.name}</h1>
+                                <p className="text-white/70 text-xs">{course.code}</p>
+                            </>
+                        ) : (
+                            <>
+                                <h1 className="text-white font-semibold truncate">ไม่พบรายวิชา</h1>
+                                <p className="text-white/70 text-xs">Course not found</p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
@@ -1565,9 +1617,17 @@ export default function ClassroomDetailPage() {
                         {/* Mobile Sidebar Header */}
                         <div className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 p-4">
                             <div className="flex items-center justify-between mb-3">
-                                <Chip size="sm" className="bg-white/20 text-white border-0">
-                                    {course.code}
-                                </Chip>
+                                {isLoading ? (
+                                    <div className="h-6 w-20 bg-white/20 rounded animate-pulse" />
+                                ) : course ? (
+                                    <Chip size="sm" className="bg-white/20 text-white border-0">
+                                        {course.code}
+                                    </Chip>
+                                ) : (
+                                    <Chip size="sm" className="bg-red-500/30 text-white border-0">
+                                        N/A
+                                    </Chip>
+                                )}
                                 <Button
                                     isIconOnly
                                     size="sm"
@@ -1578,10 +1638,24 @@ export default function ClassroomDetailPage() {
                                     <Icon icon="solar:close-circle-linear" className="text-lg" />
                                 </Button>
                             </div>
-                            <h2 className="text-white font-bold text-lg leading-tight mb-1">{course.name}</h2>
-                            <p className="text-white/70 text-sm">{course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}</p>
-                            {course.instructor && (
-                                <p className="text-white/60 text-xs mt-2">{course.instructor.full_name}</p>
+                            {isLoading ? (
+                                <>
+                                    <div className="h-6 w-48 bg-white/20 rounded animate-pulse mb-2" />
+                                    <div className="h-4 w-24 bg-white/20 rounded animate-pulse" />
+                                </>
+                            ) : course ? (
+                                <>
+                                    <h2 className="text-white font-bold text-lg leading-tight mb-1">{course.name}</h2>
+                                    <p className="text-white/70 text-sm">{course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}</p>
+                                    {course.instructor && (
+                                        <p className="text-white/60 text-xs mt-2">{course.instructor.full_name}</p>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <h2 className="text-white font-bold text-lg leading-tight mb-1">ไม่พบรายวิชา</h2>
+                                    <p className="text-white/70 text-sm">กรุณาตรวจสอบลิงก์อีกครั้ง</p>
+                                </>
                             )}
                         </div>
 
@@ -1657,7 +1731,7 @@ export default function ClassroomDetailPage() {
                             <button
                                 key={item.key}
                                 onClick={() => setActiveTab(item.key)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${activeTab === item.key
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all cursor-pointer ${activeTab === item.key
                                         ? "bg-blue-50 text-blue-600 font-medium"
                                         : "text-slate-600 hover:bg-slate-50"
                                     }`}
@@ -1698,7 +1772,7 @@ export default function ClassroomDetailPage() {
                 </aside>
 
                 {/* Main Content Area - Add left margin for fixed sidebar */}
-                <main className="flex-1 lg:ml-64 overflow-x-hidden">
+                
                     {/* Page Title Header - Desktop only */}
                     {/* <div className="hidden lg:block bg-white border-b border-slate-200 px-6 py-4">
                         <div className="flex items-center justify-between">
@@ -1731,18 +1805,60 @@ export default function ClassroomDetailPage() {
                         </div>
                     </div> */}
 
-                    {/* Content */}
+                {/* Main Content */}
+                <main className="flex-1 lg:ml-64 overflow-x-hidden">
                     <div className="p-4 lg:p-6">
-                        {/* Overview Tab */}
-                        {activeTab === "overview" && (
-                            <OverviewTab
-                                course={course}
-                                overview={overview}
-                                isLoading={isLoading || isOverviewLoading}
-                                userRole={userRole}
-                                assignments={assignments}
-                                onNavigateToAssignments={() => setActiveTab("assignments")}
-                            />
+                        {/* Loading State */}
+                        {/* {isLoading && (
+                            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+                                <Spinner size="lg" color="primary" />
+                                <p className="text-slate-500 mt-4">กำลังโหลดข้อมูลรายวิชา...</p>
+                            </div>
+                        )} */}
+
+                        {/* Error State - Course Not Found */}
+                        {!isLoading && !course && (
+                            <div className="flex items-center justify-center min-h-[60vh]">
+                                <div className="text-center">
+                                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Icon icon="solar:danger-triangle-bold" className="text-4xl text-red-500" />
+                                    </div>
+                                    <h2 className="text-xl font-semibold text-slate-700 mb-2">ไม่พบข้อมูลรายวิชา</h2>
+                                    <p className="text-slate-500 mb-6">รายวิชานี้อาจถูกลบไปแล้ว หรือคุณไม่มีสิทธิ์เข้าถึง</p>
+                                    <div className="flex gap-3 justify-center">
+                                        <Button
+                                            color="primary"
+                                            variant="flat"
+                                            onPress={() => window.history.back()}
+                                            startContent={<Icon icon="solar:arrow-left-linear" />}
+                                        >
+                                            กลับหน้าก่อน
+                                        </Button>
+                                        <Button
+                                            color="primary"
+                                            onPress={() => window.location.href = '/home'}
+                                            startContent={<Icon icon="solar:home-2-linear" />}
+                                        >
+                                            หน้าหลัก
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Content - Only show when course is loaded */}
+                        {course && (
+                            <>
+                                {/* Overview Tab */}
+                                {activeTab === "overview" && (
+                                    <OverviewTab
+                                        course={course}
+                                        overview={overview}
+                                        isLoading={isOverviewLoading}
+                                        userRole={userRole}
+                                        assignments={assignments}
+                                        onNavigateToAssignments={() => setActiveTab("assignments")}
+                                    />
                         )}
 
                         {/* Sections Tab */}
@@ -1864,6 +1980,8 @@ export default function ClassroomDetailPage() {
                                 courseId={courseId} 
                                 onPendingCountChange={(count) => setPendingApprovalCount(count)}
                             />
+                        )}
+                            </>
                         )}
                     </div>
                 </main>

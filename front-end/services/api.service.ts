@@ -18,9 +18,20 @@ interface RequestOptions {
 
 class ApiService {
   private baseURL: string;
+  private isRefreshing = false;
+  private refreshSubscribers: Array<(token: string) => void> = [];
+  
+  // Rate limit handling
+  private readonly MAX_RETRIES = 3;
+  private readonly INITIAL_RETRY_DELAY = 1000; // 1 second
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
+  }
+
+  // Sleep utility for retry delays
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   private getAccessToken(): string | null {
@@ -52,6 +63,17 @@ class ApiService {
     }
   }
 
+  // Subscribe to token refresh
+  private subscribeTokenRefresh(callback: (token: string) => void): void {
+    this.refreshSubscribers.push(callback);
+  }
+
+  // Notify all subscribers with new token
+  private onTokenRefreshed(token: string): void {
+    this.refreshSubscribers.forEach(callback => callback(token));
+    this.refreshSubscribers = [];
+  }
+
   private async refreshAccessToken(): Promise<boolean> {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) return false;
@@ -69,6 +91,7 @@ class ApiService {
         const data = await response.json();
         if (data.success && data.data) {
           this.setTokens(data.data.accessToken, data.data.refreshToken);
+          this.onTokenRefreshed(data.data.accessToken);
           return true;
         }
       }
@@ -85,7 +108,8 @@ class ApiService {
     endpoint: string,
     body?: unknown,
     options?: RequestOptions,
-    retry = true
+    retry = true,
+    retryCount = 0
   ): Promise<ApiResponse<T>> {
     const url = new URL(`${this.baseURL}${endpoint}`);
     
@@ -112,22 +136,58 @@ class ApiService {
         body: body ? JSON.stringify(body) : undefined,
       });
 
-      // Handle 401 Unauthorized - try to refresh token (but not for login endpoint)
-      const isLoginEndpoint = endpoint.includes('/auth/login');
-      if (response.status === 401 && retry && !isLoginEndpoint) {
+      // Handle 429 Too Many Requests - retry with exponential backoff
+      if (response.status === 429 && retryCount < this.MAX_RETRIES) {
+        const retryAfter = response.headers.get('Retry-After');
+        const delay = retryAfter 
+          ? parseInt(retryAfter) * 1000 
+          : this.INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        
+        console.warn(`Rate limited (429). Retrying in ${delay}ms... (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+        await this.sleep(delay);
+        return this.request<T>(method, endpoint, body, options, retry, retryCount + 1);
+      }
+
+      // Handle 401 Unauthorized - try to refresh token (but not for login/refresh endpoints)
+      const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh');
+      if (response.status === 401 && retry && !isAuthEndpoint) {
+        // If already refreshing, wait for the refresh to complete
+        if (this.isRefreshing) {
+          return new Promise((resolve) => {
+            this.subscribeTokenRefresh((newToken: string) => {
+              headers['Authorization'] = `Bearer ${newToken}`;
+              // Retry the request with new token
+              resolve(this.request<T>(method, endpoint, body, options, false));
+            });
+          });
+        }
+
+        this.isRefreshing = true;
         const refreshed = await this.refreshAccessToken();
+        this.isRefreshing = false;
+
         if (refreshed) {
           return this.request<T>(method, endpoint, body, options, false);
         }
+        
         // Redirect to login if refresh failed (but not if already on login)
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }
+        return { success: false, error: 'Session expired. Please login again.' };
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
+      // Retry on network errors (but not too many times)
+      if (retryCount < this.MAX_RETRIES && error instanceof TypeError && error.message.includes('fetch')) {
+        const delay = this.INITIAL_RETRY_DELAY * Math.pow(2, retryCount);
+        console.warn(`Network error. Retrying in ${delay}ms... (attempt ${retryCount + 1}/${this.MAX_RETRIES})`);
+        await this.sleep(delay);
+        return this.request<T>(method, endpoint, body, options, retry, retryCount + 1);
+      }
+      
       console.error(`API Error [${method} ${endpoint}]:`, error);
       return {
         success: false,

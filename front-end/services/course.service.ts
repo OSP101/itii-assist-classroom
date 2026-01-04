@@ -183,6 +183,7 @@ export interface OverviewStudent {
   submissionCount: number;
   missedCount: number;
   percentage?: number;
+  assignmentsGraded?: number;
 }
 
 export interface TAActivity {
@@ -191,21 +192,39 @@ export interface TAActivity {
   email: string | null;
   assignedAt: string;
   gradedCount: number;
-  lastActive: string;
+  lastActive: string | null;
   avatar: string | null;
 }
 
 export interface OverviewAssignment {
   id: number;
   name: string;
-  maxScore: number;
-  dueDate: string;
-  submittedCount: number;
-  notSubmittedCount: number;
-  submissionRate: number;
-  averageScore: number;
-  modeScore: number;
-  trend: number;
+  max_score: number;
+  assignment_type: string;
+  avgScore: number | null;
+  scoredCount: number;
+  notScoredCount: number;
+  submittedRate: number;
+}
+
+export interface RecentActivity {
+  id: number;
+  type: string;
+  description: string;
+  score: number;
+  user: {
+    id: number;
+    full_name: string;
+    avatar: string | null;
+  } | null;
+  timestamp: string;
+}
+
+export interface ScoreDistribution {
+  excellent: number;
+  good: number;
+  average: number;
+  poor: number;
 }
 
 export interface CourseOverviewSummary {
@@ -213,8 +232,12 @@ export interface CourseOverviewSummary {
   totalSections: number;
   totalTAs: number;
   totalAssignments: number;
+  totalMaxScore: number;
   submissionRate: number;
-  trend: 'up' | 'stable' | 'down';
+  attendanceRate: number;
+  totalAttendanceSessions: number;
+  averageScore: number;
+  trend: 'up' | 'stable' | 'down' | null;
   trendValue: number;
 }
 
@@ -224,6 +247,8 @@ export interface CourseOverview {
   lowPerformers: OverviewStudent[];
   taActivity: TAActivity[];
   assignments: OverviewAssignment[];
+  recentActivities: RecentActivity[];
+  scoreDistribution: ScoreDistribution;
 }
 
 class CourseService {
