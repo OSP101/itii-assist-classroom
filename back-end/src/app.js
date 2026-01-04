@@ -60,10 +60,18 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Rate limiting
+// Rate limiting - ปรับให้เหมาะกับการใช้งานจริง
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 120, // 120 requests per minute per IP (เพียงพอสำหรับ SPA ที่เรียก API หลายตัวพร้อมกัน)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  // Skip rate limiting for certain conditions
+  skip: (req) => {
+    // Skip rate limiting in development
+    if (config.nodeEnv === 'development') return true;
+    return false;
+  },
   message: {
     success: false,
     error: {
@@ -71,13 +79,23 @@ const limiter = rateLimit({
       message: 'Too many requests, please try again later.',
     },
   },
+  // Use IP + User ID for authenticated users (better distribution)
+  keyGenerator: (req) => {
+    // If user is authenticated, use user ID + IP to allow more requests per user
+    if (req.user?.id) {
+      return `${req.ip}-user-${req.user.id}`;
+    }
+    return req.ip;
+  },
 });
 app.use('/api', limiter);
 
-// Auth routes rate limiting (stricter)
+// Auth routes rate limiting (stricter to prevent brute force)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each IP to 20 login attempts per windowMs
+  max: 30, // 30 login attempts per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
     error: {

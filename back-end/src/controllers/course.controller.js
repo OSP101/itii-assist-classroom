@@ -2,7 +2,19 @@
  * Course Controller - Handle course-related requests
  */
 
-const { Course, CourseSection, CourseTA, CourseSectionStudent, User, Student } = require('../models');
+const { 
+  Course, 
+  CourseSection, 
+  CourseTA, 
+  CourseSectionStudent, 
+  User, 
+  Student,
+  Assignment,
+  AssignmentSubItem,
+  Score,
+  AttendanceSession,
+  AttendanceRecord,
+} = require('../models');
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -1076,13 +1088,16 @@ const getMyCoursesStats = asyncHandler(async (req, res) => {
 });
 
 /**
- * Get course overview dashboard data
+ * Get course overview dashboard data with real statistics
  * @route GET /api/courses/:id/overview
  */
 const getCourseOverview = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  
+  console.log(`[Overview] Fetching overview for course: ${id}`);
+  const startTime = Date.now();
 
-  // Get course with sections
+  // Get course with sections and TAs
   const course = await Course.findByPk(id, {
     include: [
       {
@@ -1139,41 +1154,336 @@ const getCourseOverview = asyncHandler(async (req, res) => {
     totalStudents = allStudents.length;
   }
 
-  // Real data - no mock (waiting for Assignment model)
-  // When Assignment model exists, calculate from actual submissions
+  // ========================================
+  // Get real assignment statistics
+  // ========================================
+  const assignments = await Assignment.findAll({
+    where: { course_id: id },
+    include: [
+      {
+        model: AssignmentSubItem,
+        as: 'subItems',
+        attributes: ['id', 'name', 'max_score'],
+      },
+    ],
+    order: [['created_at', 'DESC']],
+  });
+
+  const totalAssignments = assignments.length;
   
-  // TA activity - real data only
-  const taActivity = (course.tas || []).map(ta => ({
-    id: ta.id,
-    full_name: ta.full_name,
-    email: ta.email,
-    assignedAt: ta.CourseTA?.assigned_at,
-    gradedCount: 0, // Will be real when assignments exist
-    lastActive: null, // Will be real when assignments exist
-    avatar: ta.avatar,
+  // Calculate total max scores for the course
+  let totalMaxScore = 0;
+  assignments.forEach(assignment => {
+    if (assignment.subItems && assignment.subItems.length > 0) {
+      totalMaxScore += assignment.subItems.reduce((sum, item) => sum + (parseFloat(item.max_score) || 0), 0);
+    } else {
+      totalMaxScore += parseFloat(assignment.max_score) || 0;
+    }
+  });
+
+  // ========================================
+  // Get all scores for this course's assignments
+  // ========================================
+  const assignmentIds = assignments.map(a => a.id);
+  let allScores = [];
+  
+  if (assignmentIds.length > 0) {
+    allScores = await Score.findAll({
+      where: { 
+        assignment_id: { [Op.in]: assignmentIds },
+        score: { [Op.not]: null },
+      },
+      include: [
+        {
+          model: User,
+          as: 'grader',
+          attributes: ['id', 'full_name'],
+        },
+        {
+          model: Assignment,
+          as: 'assignment',
+          attributes: ['id', 'name', 'max_score', 'assignment_type'],
+        },
+      ],
+    });
+  }
+
+  // ========================================
+  // Calculate student scores and rankings
+  // ========================================
+  const studentScoreMap = new Map();
+  
+  // Initialize all students with 0 score
+  allStudents.forEach(student => {
+    studentScoreMap.set(student.id, {
+      id: student.id,
+      student_id: student.student_id,
+      full_name: student.full_name,
+      totalScore: 0,
+      assignmentsGraded: 0,
+    });
+  });
+
+  // Calculate total scores per student
+  allScores.forEach(score => {
+    if (score.student_id && studentScoreMap.has(score.student_id)) {
+      const studentData = studentScoreMap.get(score.student_id);
+      studentData.totalScore += parseFloat(score.score) || 0;
+      studentData.assignmentsGraded += 1;
+    }
+  });
+
+  // Convert to array and sort by score
+  const studentScores = Array.from(studentScoreMap.values());
+  studentScores.sort((a, b) => b.totalScore - a.totalScore);
+
+  // Top 5 students
+  const topStudents = studentScores
+    .filter(s => s.totalScore > 0)
+    .slice(0, 5)
+    .map(s => ({
+      ...s,
+      percentage: totalMaxScore > 0 ? Math.round((s.totalScore / totalMaxScore) * 100) : 0,
+    }));
+
+  // Low performers (< 60% and have at least 1 graded assignment)
+  const lowPerformers = studentScores
+    .filter(s => {
+      const percentage = totalMaxScore > 0 ? (s.totalScore / totalMaxScore) * 100 : 0;
+      return s.assignmentsGraded > 0 && percentage < 60;
+    })
+    .slice(0, 8)
+    .map(s => ({
+      ...s,
+      percentage: totalMaxScore > 0 ? Math.round((s.totalScore / totalMaxScore) * 100) : 0,
+    }));
+
+  // ========================================
+  // Calculate submission rate
+  // ========================================
+  let totalExpectedScores = 0;
+  let totalReceivedScores = 0;
+
+  assignments.forEach(assignment => {
+    const isGroupAssignment = assignment.assignment_type !== 'individual';
+    
+    if (!isGroupAssignment) {
+      // For individual assignments
+      const studentsWithScores = new Set(
+        allScores
+          .filter(s => s.assignment_id === assignment.id && s.student_id)
+          .map(s => s.student_id)
+      );
+      totalReceivedScores += studentsWithScores.size;
+      totalExpectedScores += totalStudents;
+    }
+  });
+
+  const submissionRate = totalExpectedScores > 0 
+    ? Math.round((totalReceivedScores / totalExpectedScores) * 100) 
+    : 0;
+
+  // ========================================
+  // Calculate TA activity
+  // ========================================
+  const taActivity = await Promise.all((course.tas || []).map(async (ta) => {
+    // Count scores graded by this TA
+    const gradedCount = assignmentIds.length > 0 ? await Score.count({
+      where: {
+        assignment_id: { [Op.in]: assignmentIds },
+        graded_by: ta.id,
+        score: { [Op.not]: null },
+      },
+    }) : 0;
+
+    // Get last grading time
+    const lastGrade = assignmentIds.length > 0 ? await Score.findOne({
+      where: {
+        assignment_id: { [Op.in]: assignmentIds },
+        graded_by: ta.id,
+        score: { [Op.not]: null },
+      },
+      order: [['graded_at', 'DESC']],
+      attributes: ['graded_at'],
+    }) : null;
+
+    return {
+      id: ta.id,
+      full_name: ta.full_name,
+      email: ta.email,
+      avatar: ta.avatar,
+      assignedAt: ta.CourseTA?.assigned_at,
+      gradedCount,
+      lastActive: lastGrade?.graded_at || null,
+    };
   }));
 
-  // Course summary - real data only
+  // Sort TA by graded count
+  taActivity.sort((a, b) => b.gradedCount - a.gradedCount);
+
+  // ========================================
+  // Get attendance statistics
+  // ========================================
+  let attendanceRate = 0;
+  let totalAttendanceSessions = 0;
+  
+  const attendanceSessions = await AttendanceSession.findAll({
+    where: { course_id: id },
+    attributes: ['id'],
+  });
+  
+  totalAttendanceSessions = attendanceSessions.length;
+
+  if (totalAttendanceSessions > 0 && totalStudents > 0) {
+    const sessionIds = attendanceSessions.map(s => s.id);
+    const presentCount = await AttendanceRecord.count({
+      where: {
+        attendance_session_id: { [Op.in]: sessionIds },
+        status: ['present', 'late'],
+      },
+    });
+    const totalExpected = totalAttendanceSessions * totalStudents;
+    attendanceRate = Math.round((presentCount / totalExpected) * 100);
+  }
+
+  // ========================================
+  // Get recent activities (last 10)
+  // ========================================
+  const recentScores = assignmentIds.length > 0 ? await Score.findAll({
+    where: {
+      assignment_id: { [Op.in]: assignmentIds },
+      score: { [Op.not]: null },
+    },
+    include: [
+      {
+        model: User,
+        as: 'grader',
+        attributes: ['id', 'full_name', 'avatar'],
+      },
+      {
+        model: Student,
+        as: 'student',
+        attributes: ['id', 'full_name', 'student_id'],
+      },
+      {
+        model: Assignment,
+        as: 'assignment',
+        attributes: ['id', 'name'],
+      },
+    ],
+    order: [['graded_at', 'DESC']],
+    limit: 10,
+  }) : [];
+
+  const recentActivities = recentScores.map(score => ({
+    id: score.id,
+    type: 'score',
+    description: `ให้คะแนน ${score.student?.full_name || 'กลุ่ม'} - ${score.assignment?.name}`,
+    score: parseFloat(score.score),
+    user: score.grader ? {
+      id: score.grader.id,
+      full_name: score.grader.full_name,
+      avatar: score.grader.avatar,
+    } : null,
+    timestamp: score.graded_at,
+  }));
+
+  // ========================================
+  // Get score distribution for chart
+  // ========================================
+  const scoreDistribution = {
+    excellent: 0, // >= 80%
+    good: 0,      // 60-79%
+    average: 0,   // 40-59%
+    poor: 0,      // < 40%
+  };
+
+  studentScores.forEach(student => {
+    if (student.assignmentsGraded === 0) return;
+    const percentage = totalMaxScore > 0 ? (student.totalScore / totalMaxScore) * 100 : 0;
+    if (percentage >= 80) scoreDistribution.excellent++;
+    else if (percentage >= 60) scoreDistribution.good++;
+    else if (percentage >= 40) scoreDistribution.average++;
+    else scoreDistribution.poor++;
+  });
+
+  // ========================================
+  // Assignment statistics for table
+  // ========================================
+  const assignmentStats = await Promise.all(assignments.slice(0, 10).map(async (assignment) => {
+    const isGroupAssignment = assignment.assignment_type !== 'individual';
+    
+    // Get scores for this assignment
+    const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
+    
+    // Calculate average score
+    const scores = assignmentScores.map(s => parseFloat(s.score) || 0);
+    const avgScore = scores.length > 0 
+      ? scores.reduce((a, b) => a + b, 0) / scores.length 
+      : null;
+
+    // Count unique students/groups scored
+    let scoredCount = 0;
+    if (isGroupAssignment) {
+      scoredCount = new Set(assignmentScores.filter(s => s.group_id).map(s => s.group_id)).size;
+    } else {
+      scoredCount = new Set(assignmentScores.filter(s => s.student_id).map(s => s.student_id)).size;
+    }
+
+    const notScoredCount = isGroupAssignment 
+      ? 0
+      : totalStudents - scoredCount;
+
+    const submittedRate = isGroupAssignment 
+      ? 0 
+      : (totalStudents > 0 ? Math.round((scoredCount / totalStudents) * 100) : 0);
+
+    return {
+      id: assignment.id,
+      name: assignment.name,
+      max_score: assignment.max_score,
+      assignment_type: assignment.assignment_type,
+      avgScore: avgScore !== null ? Math.round(avgScore * 10) / 10 : null,
+      scoredCount,
+      notScoredCount: Math.max(0, notScoredCount),
+      submittedRate,
+    };
+  }));
+
+  // ========================================
+  // Course summary
+  // ========================================
   const summary = {
     totalStudents,
     totalSections: course.sections.length,
     totalTAs: (course.tas || []).length,
-    totalAssignments: 0, // Will be real when assignments exist
-    submissionRate: 0, // Will be real when assignments exist
-    trend: null, // Will be real when assignments exist
-    trendValue: 0,
+    totalAssignments,
+    totalMaxScore,
+    submissionRate,
+    attendanceRate,
+    totalAttendanceSessions,
+    averageScore: studentScores.filter(s => s.assignmentsGraded > 0).length > 0
+      ? Math.round(studentScores.filter(s => s.assignmentsGraded > 0).reduce((sum, s) => sum + s.totalScore, 0) / studentScores.filter(s => s.assignmentsGraded > 0).length * 10) / 10
+      : 0,
+    trend: submissionRate > 70 ? 'up' : submissionRate > 40 ? 'stable' : 'down',
+    trendValue: submissionRate,
   };
 
   res.json({
     success: true,
     data: {
       summary,
-      topStudents: [], // Will be real when assignments exist (need scores)
-      lowPerformers: [], // Will be real when assignments exist (need scores)
+      topStudents,
+      lowPerformers,
       taActivity,
-      assignments: [], // Will be real when assignments exist
+      assignments: assignmentStats,
+      recentActivities,
+      scoreDistribution,
     },
   });
+  
+  const endTime = Date.now();
+  console.log(`[Overview] Completed for course ${id} in ${endTime - startTime}ms`);
 });
 
 module.exports = {
