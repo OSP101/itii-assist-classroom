@@ -1889,7 +1889,7 @@ export default function ClassroomDetailPage() {
                                 isTeamsLoading={isTeamsLoading}
                                 sectionStudents={sectionStudents}
                                 onToggleSection={toggleSection}
-                                onOpenAddSectionModal={() => setIsAddStudentModalOpen(true)}
+                                onOpenAddSectionModal={() => setIsAddSectionModalOpen(true)}
                                 onOpenAddStudentModal={openAddStudentModal}
                                 onRemoveSection={handleRemoveSection}
                                 onOpenDeleteStudentModal={openDeleteStudentModal}
@@ -2187,6 +2187,73 @@ export default function ClassroomDetailPage() {
                             className="bg-gradient-to-r from-purple-500 to-violet-600"
                         >
                             บันทึกคะแนน
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Add Section Modal */}
+            <Modal isOpen={isAddSectionModalOpen} onClose={() => setIsAddSectionModalOpen(false)} size="md">
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:folder-with-files-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มกลุ่มเรียน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">สร้างกลุ่มเรียนใหม่สำหรับรายวิชานี้</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            <Input
+                                label="หมายเลขกลุ่มเรียน"
+                                labelPlacement="outside"
+                                placeholder="เช่น 1, 2, 101, A"
+                                variant="bordered"
+                                size="lg"
+                                value={newSectionNo}
+                                onValueChange={setNewSectionNo}
+                                isRequired
+                                classNames={{
+                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                            <Input
+                                label="หมายเหตุ (ถ้ามี)"
+                                labelPlacement="outside"
+                                placeholder="เช่น เรียนวันจันทร์, กลุ่มพิเศษ"
+                                variant="bordered"
+                                size="lg"
+                                value={newSectionNote}
+                                onValueChange={setNewSectionNote}
+                                classNames={{
+                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button variant="light" onPress={() => {
+                            setIsAddSectionModalOpen(false);
+                            setNewSectionNo("");
+                            setNewSectionNote("");
+                        }}>
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="primary"
+                            onPress={handleAddSection}
+                            isLoading={isSubmitting}
+                            isDisabled={!newSectionNo.trim()}
+                            className="bg-gradient-to-r from-amber-500 to-orange-600"
+                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                        >
+                            เพิ่มกลุ่มเรียน
                         </Button>
                     </ModalFooter>
                 </ModalContent>
