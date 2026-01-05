@@ -1889,7 +1889,7 @@ export default function ClassroomDetailPage() {
                                 isTeamsLoading={isTeamsLoading}
                                 sectionStudents={sectionStudents}
                                 onToggleSection={toggleSection}
-                                onOpenAddSectionModal={() => setIsAddSectionModalOpen(true)}
+                                onOpenAddSectionModal={() => setIsAddStudentModalOpen(true)}
                                 onOpenAddStudentModal={openAddStudentModal}
                                 onRemoveSection={handleRemoveSection}
                                 onOpenDeleteStudentModal={openDeleteStudentModal}
