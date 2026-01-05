@@ -15,6 +15,7 @@ const assignmentRoutes = require('./assignment.routes');
 const scoreRoutes = require('./score.routes');
 const scoreEditRequestRoutes = require('./scoreEditRequest.routes');
 const attendanceRoutes = require('./attendance.routes');
+const queueRoutes = require('./queue.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -24,12 +25,14 @@ router.use('/users', userRoutes);
 router.use('/students', studentRoutes);
 router.use('/courses', courseRoutes);
 router.use('/courses/:id/teams', teamRoutes); // Team routes nested under courses
+router.use('/courses/:courseId/queue', queueRoutes); // Queue routes nested under courses
 router.use('/classrooms', classroomRoutes);
 router.use('/feedback', feedbackRoutes);
 router.use('/assignments', assignmentRoutes);
 router.use('/scores', scoreRoutes);
 router.use('/score-edit-requests', scoreEditRequestRoutes);
 router.use('/attendance', attendanceRoutes);
+router.use('/queue', queueRoutes); // Public queue routes (verify-pin, bookings)
 
 // Health check endpoint
 router.get('/health', (req, res) => {

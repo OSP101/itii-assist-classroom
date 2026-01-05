@@ -19,6 +19,12 @@ const ScoreEditRequest = require('./ScoreEditRequest');
 const AttendanceSession = require('./AttendanceSession');
 const AttendanceRecord = require('./AttendanceRecord');
 
+// Queue System Models
+const QueueSession = require('./QueueSession');
+const QueueWorker = require('./QueueWorker');
+const QueueBooking = require('./QueueBooking');
+const QueueDeskStatus = require('./QueueDeskStatus');
+
 // ============================================
 // Define Associations
 // ============================================
@@ -386,6 +392,128 @@ AttendanceRecord.belongsTo(User, {
 });
 
 // ============================================
+// Queue System Associations
+// ============================================
+
+// QueueSession -> Course
+QueueSession.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(QueueSession, {
+  foreignKey: 'course_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> Classroom
+QueueSession.belongsTo(Classroom, {
+  foreignKey: 'classroom_id',
+  as: 'classroom',
+});
+
+Classroom.hasMany(QueueSession, {
+  foreignKey: 'classroom_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> Assignment (linked)
+QueueSession.belongsTo(Assignment, {
+  foreignKey: 'linked_assignment_id',
+  as: 'linkedAssignment',
+});
+
+// QueueSession -> AttendanceSession (linked)
+QueueSession.belongsTo(AttendanceSession, {
+  foreignKey: 'linked_attendance_session_id',
+  as: 'linkedAttendanceSession',
+});
+
+// QueueSession -> Creator (User)
+QueueSession.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator',
+});
+
+// QueueSession -> Workers
+QueueSession.hasMany(QueueWorker, {
+  foreignKey: 'queue_session_id',
+  as: 'workers',
+});
+
+QueueWorker.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'queueSession',
+});
+
+// QueueWorker -> User
+QueueWorker.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+User.hasMany(QueueWorker, {
+  foreignKey: 'user_id',
+  as: 'queueWorkerSessions',
+});
+
+// QueueSession -> Bookings
+QueueSession.hasMany(QueueBooking, {
+  foreignKey: 'queue_session_id',
+  as: 'bookings',
+});
+
+QueueBooking.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'queueSession',
+});
+
+// QueueBooking -> Student
+QueueBooking.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+Student.hasMany(QueueBooking, {
+  foreignKey: 'student_id',
+  as: 'queueBookings',
+});
+
+// QueueBooking -> Desk
+QueueBooking.belongsTo(Desk, {
+  foreignKey: 'desk_id',
+  as: 'desk',
+});
+
+Desk.hasMany(QueueBooking, {
+  foreignKey: 'desk_id',
+  as: 'queueBookings',
+});
+
+// QueueBooking -> AssignedWorker (User)
+QueueBooking.belongsTo(User, {
+  foreignKey: 'assigned_worker_id',
+  as: 'assignedWorker',
+});
+
+// QueueDeskStatus -> QueueSession
+QueueDeskStatus.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'queueSession',
+});
+
+QueueSession.hasMany(QueueDeskStatus, {
+  foreignKey: 'queue_session_id',
+  as: 'deskStatuses',
+});
+
+// QueueDeskStatus -> Desk
+QueueDeskStatus.belongsTo(Desk, {
+  foreignKey: 'desk_id',
+  as: 'desk',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -409,4 +537,9 @@ module.exports = {
   ScoreEditRequest,
   AttendanceSession,
   AttendanceRecord,
+  // Queue System
+  QueueSession,
+  QueueWorker,
+  QueueBooking,
+  QueueDeskStatus,
 };

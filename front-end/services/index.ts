@@ -56,3 +56,17 @@ export type {
   CreateAttendanceData,
   StudentCheckInData,
 } from './attendance.service';
+export { default as queueService } from './queue.service';
+export type {
+  QueueSession,
+  QueueWorker,
+  QueueBooking,
+  QueueDeskStatus,
+  DeskWithStatus,
+  CreateQueueSessionData,
+  UpdateQueueSessionData,
+  CreateBookingData,
+  CompleteBookingData,
+  ProjectorViewData,
+  VerifyPINResponse,
+} from './queue.service';

@@ -77,6 +77,15 @@ const AttendanceTab = dynamic(() => import("./components/AttendanceTab"), {
     ssr: false,
 });
 
+const QueueTab = dynamic(() => import("./components/QueueTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
 const ScoresTab = dynamic(() => import("./components/ScoresTab"), {
     loading: () => (
         <div className="flex items-center justify-center py-12">
@@ -1566,6 +1575,7 @@ export default function ClassroomDetailPage() {
             badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
+        { key: "queue", label: "จองคิว", icon: "solar:ticket-bold" },
     ];
 
     // console.log("Course data:", course);
@@ -1964,6 +1974,14 @@ export default function ClassroomDetailPage() {
                         {/* Attendance Tab */}
                         {activeTab === "attendance" && (
                             <AttendanceTab
+                                course={course}
+                                isLoading={isLoading}
+                            />
+                        )}
+
+                        {/* Queue Tab */}
+                        {activeTab === "queue" && (
+                            <QueueTab
                                 course={course}
                                 isLoading={isLoading}
                             />
