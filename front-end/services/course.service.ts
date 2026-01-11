@@ -377,6 +377,13 @@ class CourseService {
   }
 
   /**
+   * Add multiple TAs to course
+   */
+  async bulkAddTAs(courseId: string, userIds: number[]) {
+    return apiService.post<{ added: TA[]; skipped: number }>(`/courses/${courseId}/tas/bulk`, { user_ids: userIds });
+  }
+
+  /**
    * Remove TA from course
    */
   async removeTA(courseId: string, userId: number) {

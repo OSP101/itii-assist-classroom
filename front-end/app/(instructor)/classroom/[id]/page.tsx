@@ -17,7 +17,6 @@ import {
     ModalFooter,
 } from "@heroui/modal";
 import { Select, SelectItem } from "@heroui/select";
-import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import { courseService } from "@/services/course.service";
@@ -31,6 +30,7 @@ import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as Se
 import type { Student } from "@/services/student.service";
 import type { StudentScore, ScoresData, Group } from "@/services/score.service";
 import scoreEditRequestService from "@/services/scoreEditRequest.service";
+import { FaCheckCircle } from "react-icons/fa";
 
 // Import Skeletons directly (they're small and used for loading states)
 import { OverviewSkeleton, TeamsGridSkeleton } from "./components/Skeletons";
@@ -185,7 +185,8 @@ export default function ClassroomDetailPage() {
 
     // TA states
     const [isAddTAModalOpen, setIsAddTAModalOpen] = useState(false);
-    const [selectedTAId, setSelectedTAId] = useState<string>("");
+    const [selectedTAIds, setSelectedTAIds] = useState<number[]>([]);
+    const [taSearchQuery, setTASearchQuery] = useState("");
 
     // Student states
     const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
@@ -197,7 +198,7 @@ export default function ClassroomDetailPage() {
 
     // Delete confirmation modal states
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [deleteType, setDeleteType] = useState<"student" | "team" | null>(null);
+    const [deleteType, setDeleteType] = useState<"student" | "team" | "section" | "ta" | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<{
         // For student deletion
         studentId?: number;
@@ -205,12 +206,19 @@ export default function ClassroomDetailPage() {
         studentCode?: string;
         sectionId?: number;
         sectionNo?: string;
+        // For section deletion
+        sectionStudentCount?: number;
         // For team deletion
         teamId?: number;
         teamName?: string;
         teamType?: "permanent" | "weekly";
         weekNumber?: number;
         teamMembers?: TeamMember[];
+        // For TA deletion
+        taId?: number;
+        taName?: string;
+        taEmail?: string;
+        taAvatar?: string;
     } | null>(null);
 
     // Bulk delete teams modal state
@@ -688,10 +696,26 @@ export default function ClassroomDetailPage() {
         }
     };
 
-    // Remove section
-    const handleRemoveSection = async (sectionId: number) => {
-        if (!confirm("คุณต้องการลบกลุ่มเรียนนี้ใช่หรือไม่?")) return;
+    // Open delete section modal
+    const handleRemoveSection = (sectionId: number) => {
+        const section = course?.sections?.find(s => s.id === sectionId);
+        if (!section) return;
 
+        setDeleteType("section");
+        setDeleteTarget({
+            sectionId: sectionId,
+            sectionNo: section.section_no,
+            sectionStudentCount: section.studentCount || 0
+        });
+        setIsDeleteModalOpen(true);
+    };
+
+    // Actually remove section (called after confirmation)
+    const confirmRemoveSection = async () => {
+        if (!deleteTarget?.sectionId) return;
+
+        const sectionId = deleteTarget.sectionId;
+        setIsSubmitting(true);
         try {
             const response = await courseService.removeSection(courseId, sectionId);
             if (response.success) {
@@ -713,9 +737,12 @@ export default function ClassroomDetailPage() {
                 setExpandedSections(prev => prev.filter(id => id !== sectionId));
                 addToast({
                     title: "สำเร็จ",
-                    description: "ลบกลุ่มเรียนสำเร็จ",
+                    description: `ลบกลุ่มเรียน ${deleteTarget.sectionNo} สำเร็จ`,
                     color: "success",
                 });
+                setIsDeleteModalOpen(false);
+                setDeleteTarget(null);
+                setDeleteType(null);
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -724,15 +751,17 @@ export default function ClassroomDetailPage() {
                 description: err.message || "ไม่สามารถลบกลุ่มเรียนได้",
                 color: "danger",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
-    // Add TA
+    // Add TA (supports multiple)
     const handleAddTA = async () => {
-        if (!selectedTAId) {
+        if (selectedTAIds.length === 0) {
             addToast({
                 title: "ข้อมูลไม่ครบ",
-                description: "กรุณาเลือกผู้ช่วยสอน",
+                description: "กรุณาเลือกผู้ช่วยสอนอย่างน้อย 1 คน",
                 color: "warning",
             });
             return;
@@ -740,33 +769,35 @@ export default function ClassroomDetailPage() {
 
         setIsSubmitting(true);
         try {
-            const response = await courseService.addTA(courseId, parseInt(selectedTAId));
+            const response = await courseService.bulkAddTAs(courseId, selectedTAIds);
             if (response.success && response.data) {
-                // หา TA info จาก tasList และอัปเดต local state
-                const addedTA = tasList.find(ta => ta.id === parseInt(selectedTAId));
-                if (addedTA) {
+                // อัปเดต local state ด้วย TAs ที่เพิ่มสำเร็จ
+                const addedTAs = response.data.added;
+                if (addedTAs && addedTAs.length > 0) {
                     setCourse(prev => {
                         if (!prev) return prev;
+                        const newTAs = addedTAs.map(ta => ({
+                            id: ta.id,
+                            full_name: ta.full_name,
+                            email: ta.email,
+                            username: ta.username,
+                            avatar: ta.avatar,
+                            CourseTA: { assigned_at: new Date().toISOString() }
+                        }));
                         return {
                             ...prev,
-                            tas: [...(prev.tas || []), {
-                                id: addedTA.id,
-                                full_name: addedTA.full_name,
-                                email: addedTA.email,
-                                username: addedTA.username,
-                                avatar: addedTA.avatar,
-                                CourseTA: { assigned_at: new Date().toISOString() }
-                            }]
+                            tas: [...(prev.tas || []), ...newTAs]
                         };
                     });
                 }
                 addToast({
                     title: "สำเร็จ",
-                    description: "เพิ่มผู้ช่วยสอนสำเร็จ",
+                    description: `เพิ่มผู้ช่วยสอน ${addedTAs.length} คนสำเร็จ`,
                     color: "success",
                 });
                 setIsAddTAModalOpen(false);
-                setSelectedTAId("");
+                setSelectedTAIds([]);
+                setTASearchQuery("");
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -780,10 +811,50 @@ export default function ClassroomDetailPage() {
         }
     };
 
-    // Remove TA
-    const handleRemoveTA = async (userId: number) => {
-        if (!confirm("คุณต้องการนำผู้ช่วยสอนออกจากรายวิชานี้ใช่หรือไม่?")) return;
+    // Toggle TA selection
+    const toggleTASelection = (taId: number) => {
+        setSelectedTAIds(prev => 
+            prev.includes(taId) 
+                ? prev.filter(id => id !== taId)
+                : [...prev, taId]
+        );
+    };
 
+    // Select all available TAs
+    const selectAllAvailableTAs = () => {
+        const existingTAIds = course?.tas?.map(ta => ta.id) || [];
+        const availableTAIds = tasList
+            .filter(ta => !existingTAIds.includes(ta.id))
+            .map(ta => ta.id);
+        setSelectedTAIds(availableTAIds);
+    };
+
+    // Clear TA selection
+    const clearTASelection = () => {
+        setSelectedTAIds([]);
+    };
+
+    // Open delete TA modal
+    const handleRemoveTA = (userId: number) => {
+        const ta = course?.tas?.find(t => t.id === userId);
+        if (!ta) return;
+
+        setDeleteType("ta");
+        setDeleteTarget({
+            taId: userId,
+            taName: ta.full_name,
+            taEmail: ta.email || ta.username,
+            taAvatar: ta.avatar || undefined,
+        });
+        setIsDeleteModalOpen(true);
+    };
+
+    // Actually remove TA (called after confirmation)
+    const confirmRemoveTA = async () => {
+        if (!deleteTarget?.taId) return;
+
+        const userId = deleteTarget.taId;
+        setIsSubmitting(true);
         try {
             const response = await courseService.removeTA(courseId, userId);
             if (response.success) {
@@ -797,9 +868,12 @@ export default function ClassroomDetailPage() {
                 });
                 addToast({
                     title: "สำเร็จ",
-                    description: "นำผู้ช่วยสอนออกสำเร็จ",
+                    description: `นำ ${deleteTarget.taName} ออกจากรายวิชาแล้ว`,
                     color: "success",
                 });
+                setIsDeleteModalOpen(false);
+                setDeleteTarget(null);
+                setDeleteType(null);
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -808,6 +882,8 @@ export default function ClassroomDetailPage() {
                 description: err.message || "ไม่สามารถนำผู้ช่วยสอนออกได้",
                 color: "danger",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -1552,7 +1628,7 @@ export default function ClassroomDetailPage() {
     const menuItems = [
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
-        { key: "people", label: "บุคคล", icon: "solar:users-group-rounded-bold" },
+        { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
         
         { key: "scores", label: "คะแนน", icon: "solar:chart-square-bold" },
@@ -1907,6 +1983,7 @@ export default function ClassroomDetailPage() {
                             <PeopleTab
                                 course={course}
                                 isLoading={isLoading}
+                                userRole={userRole}
                                 isPeopleLoading={isPeopleLoading}
                                 onOpenAddTAModal={() => setIsAddTAModalOpen(true)}
                                 onRemoveTA={handleRemoveTA}
@@ -2174,8 +2251,85 @@ export default function ClassroomDetailPage() {
                 </ModalContent>
             </Modal>
 
+            {/* Add Section Modal */}
+            <Modal isOpen={isAddSectionModalOpen} onClose={() => setIsAddSectionModalOpen(false)} size="md">
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มกลุ่มเรียน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">สร้างกลุ่มเรียนใหม่สำหรับรายวิชานี้</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            <Input
+                                label="หมายเลขกลุ่มเรียน"
+                                labelPlacement="outside"
+                                placeholder="เช่น 1, 2, 101, A"
+                                variant="bordered"
+                                size="lg"
+                                value={newSectionNo}
+                                onValueChange={setNewSectionNo}
+                                isRequired
+                                classNames={{
+                                    inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                            <Input
+                                label="หมายเหตุ (ถ้ามี)"
+                                labelPlacement="outside"
+                                placeholder="เช่น เรียนวันจันทร์, กลุ่มพิเศษ"
+                                variant="bordered"
+                                size="lg"
+                                value={newSectionNote}
+                                onValueChange={setNewSectionNote}
+                                className="pt-2"
+                                classNames={{
+                                    inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-slate-100">
+                        <Button variant="light" onPress={() => {
+                            setIsAddSectionModalOpen(false);
+                            setNewSectionNo("");
+                            setNewSectionNote("");
+                        }}>
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="primary"
+                            onPress={handleAddSection}
+                            isLoading={isSubmitting}
+                            isDisabled={!newSectionNo.trim()}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
+                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                        >
+                            เพิ่มกลุ่มเรียน
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
             {/* Add TA Modal */}
-            <Modal isOpen={isAddTAModalOpen} onClose={() => setIsAddTAModalOpen(false)} size="md">
+            <Modal 
+                isOpen={isAddTAModalOpen} 
+                onClose={() => {
+                    setIsAddTAModalOpen(false);
+                    setSelectedTAIds([]);
+                    setTASearchQuery("");
+                }} 
+                size="2xl"
+                scrollBehavior="inside"
+            >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
@@ -2184,125 +2338,189 @@ export default function ClassroomDetailPage() {
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">เพิ่มผู้ช่วยสอน</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกผู้ช่วยสอนที่ต้องการเพิ่ม</p>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกผู้ช่วยสอนที่ต้องการเพิ่ม (เลือกได้หลายคน)</p>
                             </div>
                         </div>
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
-                        {/* แสดงจำนวน TA ในระบบ */}
-                        <div className="mb-3 flex items-center gap-2 text-sm text-slate-600">
-                            <Icon icon="solar:users-group-rounded-bold" className="text-blue-500" />
-                            <span>ผู้ช่วยสอนในระบบทั้งหมด <span className="font-semibold text-blue-600">{tasList.length}</span> คน</span>
-                            {course?.tas && course.tas.length > 0 && (
-                                <span className="text-slate-400">
-                                    (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.tas.length}</span> คน)
-                                </span>
+                        {/* Stats */}
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-blue-500" />
+                                <span>ผู้ช่วยสอนในระบบ <span className="font-semibold text-blue-600">{tasList.length}</span> คน</span>
+                                {course?.tas && course.tas.length > 0 && (
+                                    <span className="text-slate-400">
+                                        (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.tas.length}</span> คน)
+                                    </span>
+                                )}
+                            </div>
+                            {selectedTAIds.length > 0 && (
+                                <Chip size="sm" color="primary" variant="flat">
+                                    เลือกแล้ว {selectedTAIds.length} คน
+                                </Chip>
                             )}
                         </div>
-                        
-                        <Autocomplete
-                            label="ค้นหาผู้ช่วยสอน"
-                            labelPlacement="outside"
-                            placeholder="พิมพ์ชื่อหรืออีเมลเพื่อค้นหา..."
+
+                        {/* Search */}
+                        <Input
+                            placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
                             variant="bordered"
                             size="lg"
-                            selectedKey={selectedTAId}
-                            onSelectionChange={(key) => setSelectedTAId(key?.toString() || "")}
-                            disabledKeys={course?.tas?.map(ta => ta.id.toString()) || []}
+                            value={taSearchQuery}
+                            onValueChange={setTASearchQuery}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
-                            listboxProps={{
-                                emptyContent: "ไม่พบผู้ช่วยสอนที่ค้นหา",
-                            }}
-                            classNames={{
-                                base: "w-full",
-                                listboxWrapper: "max-h-[300px]",
-                            }}
-                            inputProps={{
-                                classNames: {
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-500 focus-within:!border-blue-500",
-                                    label: "text-slate-600 font-medium text-sm",
-                                },
-                            }}
-                        >
-                            {tasList.map((ta) => {
-                                const isInCourse = course?.tas?.some(courseTa => courseTa.id === ta.id);
-                                return (
-                                    <AutocompleteItem 
-                                        key={ta.id.toString()}
-                                        textValue={ta.full_name}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <Avatar
-                                                name={ta.full_name}
-                                                src={ta.avatar || undefined}
-                                                size="sm"
-                                                className={`flex-shrink-0 ${isInCourse ? 'bg-slate-400' : 'bg-gradient-to-br from-emerald-500 to-teal-500'}`}
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-center gap-2">
-                                                    <p className={`font-medium truncate ${isInCourse ? 'text-slate-400' : 'text-slate-800'}`}>
-                                                        {ta.full_name}
-                                                    </p>
-                                                    {isInCourse && (
-                                                        <span className="px-2 py-0.5 text-xs bg-emerald-100 text-emerald-700 rounded-full whitespace-nowrap">
-                                                            อยู่ในวิชาแล้ว
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className={`text-xs truncate ${isInCourse ? 'text-slate-400' : 'text-slate-500'}`}>
-                                                    {ta.email || ta.username}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </AutocompleteItem>
-                                );
-                            })}
-                        </Autocomplete>
-                        
-                        {/* แสดง TA ที่เลือก */}
-                        {selectedTAId && (
-                            <div className="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                                <div className="flex items-center gap-3">
-                                    <Avatar
-                                        name={tasList.find(ta => ta.id.toString() === selectedTAId)?.full_name || ""}
-                                        size="sm"
-                                        src={tasList.find(ta => ta.id.toString() === selectedTAId)?.avatar || undefined}
-                                        className="bg-gradient-to-br from-blue-400 to-indigo-500"
-                                    />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-medium text-blue-800">
-                                            {tasList.find(ta => ta.id.toString() === selectedTAId)?.full_name}
-                                        </p>
-                                        <p className="text-xs text-blue-600">
-                                            {tasList.find(ta => ta.id.toString() === selectedTAId)?.email || 
-                                             tasList.find(ta => ta.id.toString() === selectedTAId)?.username}
-                                        </p>
-                                    </div>
+                            endContent={
+                                taSearchQuery && (
                                     <Button
                                         isIconOnly
                                         size="sm"
-                                        variant="flat"
-                                        className="bg-blue-200/50 text-blue-700"
-                                        onPress={() => setSelectedTAId("")}
+                                        variant="light"
+                                        onPress={() => setTASearchQuery("")}
                                     >
-                                        <Icon icon="solar:close-circle-bold" className="text-lg" />
+                                        <Icon icon="solar:close-circle-bold" className="text-slate-400" />
                                     </Button>
+                                )
+                            }
+                            classNames={{
+                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                            }}
+                        />
+
+                        {/* Quick Actions */}
+                        <div className="flex items-center gap-2 mt-3">
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                color="primary"
+                                onPress={selectAllAvailableTAs}
+                                startContent={<Icon icon="solar:checklist-bold" />}
+                            >
+                                เลือกทั้งหมด
+                            </Button>
+                            {selectedTAIds.length > 0 && (
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="danger"
+                                    onPress={clearTASelection}
+                                    startContent={<Icon icon="solar:close-circle-bold" />}
+                                >
+                                    ล้างการเลือก
+                                </Button>
+                            )}
+                        </div>
+                        
+                        {/* TA List */}
+                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {(() => {
+                                    const existingTAIds = course?.tas?.map(ta => ta.id) || [];
+                                    const filteredTAs = tasList.filter(ta => {
+                                        // ไม่แสดง TA ที่อยู่ในวิชาแล้ว
+                                        if (existingTAIds.includes(ta.id)) return false;
+                                        
+                                        const searchLower = taSearchQuery.toLowerCase();
+                                        const matchesSearch = !taSearchQuery || 
+                                            ta.full_name.toLowerCase().includes(searchLower) ||
+                                            (ta.email && ta.email.toLowerCase().includes(searchLower)) ||
+                                            (ta.username && ta.username.toLowerCase().includes(searchLower));
+                                        return matchesSearch;
+                                    });
+
+                                    if (filteredTAs.length === 0) {
+                                        return (
+                                            <div className="p-8 text-center text-slate-500">
+                                                <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
+                                                <p>{taSearchQuery ? "ไม่พบผู้ช่วยสอนที่ค้นหา" : "ผู้ช่วยสอนทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    return filteredTAs.map((ta) => {
+                                        const isSelected = selectedTAIds.includes(ta.id);
+
+                                        return (
+                                            <div
+                                                key={ta.id}
+                                                onClick={() => toggleTASelection(ta.id)}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
+                                                    isSelected
+                                                        ? "bg-blue-50 cursor-pointer"
+                                                        : "hover:bg-slate-50 cursor-pointer"
+                                                }`}
+                                            >
+                                                {/* Checkbox */}
+                                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 `}>
+                                                    {isSelected && (
+                                                        <FaCheckCircle className="text-lg text-blue-500" />
+                                                    )}
+                                                </div>
+
+                                                <Avatar
+                                                    name={ta.full_name}
+                                                    src={ta.avatar || undefined}
+                                                    size="sm"
+                                                    className={`flex-shrink-0 bg-gradient-to-br from-blue-400 to-indigo-500`}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium truncate text-slate-800">
+                                                        {ta.full_name}
+                                                    </p>
+                                                    <p className="text-xs truncate text-slate-500">
+                                                        {ta.email || ta.username}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                        
+                        {/* Selected TAs Preview */}
+                        {selectedTAIds.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-sm font-medium text-slate-600 mb-2">ผู้ช่วยสอนที่เลือก ({selectedTAIds.length} คน)</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedTAIds.map(taId => {
+                                        const ta = tasList.find(t => t.id === taId);
+                                        if (!ta) return null;
+                                        return (
+                                            <Chip
+                                                key={taId}
+                                                variant="flat"
+                                                color="primary"
+                                                onClose={() => toggleTASelection(taId)}
+                                                
+                                            >
+                                                {ta.full_name}
+                                            </Chip>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button variant="light" onPress={() => setIsAddTAModalOpen(false)}>
+                        <Button 
+                            variant="light" 
+                            onPress={() => {
+                                setIsAddTAModalOpen(false);
+                                setSelectedTAIds([]);
+                                setTASearchQuery("");
+                            }}
+                        >
                             ยกเลิก
                         </Button>
                         <Button
-                            color="success"
+                            color="primary"
                             onPress={handleAddTA}
                             isLoading={isSubmitting}
+                            isDisabled={selectedTAIds.length === 0}
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
                             className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
-                            เพิ่มผู้ช่วยสอน
+                            เพิ่มผู้ช่วยสอน {selectedTAIds.length > 0 ? `(${selectedTAIds.length} คน)` : ""}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -2313,7 +2531,7 @@ export default function ClassroomDetailPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
                                 <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -2366,7 +2584,7 @@ export default function ClassroomDetailPage() {
                                         onValueChange={setStudentSearchQuery}
                                         startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            inputWrapper: "h-12 bg-white border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -2519,7 +2737,7 @@ export default function ClassroomDetailPage() {
                             )}
                         </div>
                     </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                    <ModalFooter className="px-6 py-4">
                         <Button variant="light" onPress={resetAddStudentModal}>
                             ยกเลิก
                         </Button>
@@ -2529,7 +2747,7 @@ export default function ClassroomDetailPage() {
                                 onPress={handleAddStudent}
                                 isLoading={isSubmitting}
                                 isDisabled={!selectedStudentId}
-                                className="bg-blue-500"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500"
                                 startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
                             >
                                 เพิ่มนักศึกษา
@@ -2540,7 +2758,7 @@ export default function ClassroomDetailPage() {
                                 onPress={handleBulkAddStudents}
                                 isLoading={isSubmitting}
                                 isDisabled={parsedStudents.filter(p => p.status === "matched").length === 0}
-                                className="bg-blue-500"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500"
                                 startContent={!isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
                             >
                                 เพิ่ม {parsedStudents.filter(p => p.status === "matched").length} คน
@@ -3506,7 +3724,7 @@ export default function ClassroomDetailPage() {
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">
-                                    {deleteType === "student" ? "นำนักศึกษาออกจากวิชา" : "ลบกลุ่ม"}
+                                    {deleteType === "student" ? "นำนักศึกษาออกจากวิชา" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : "ลบกลุ่ม"}
                                 </h3>
                                 <p className="text-sm text-slate-500 font-normal mt-1">
                                     กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
@@ -3720,6 +3938,146 @@ export default function ClassroomDetailPage() {
                                 </div>
                             </div>
                         )}
+
+                        {deleteType === "section" && deleteTarget && (
+                            <div className="space-y-4">
+                                {/* Section Info */}
+                                <Card className="border border-red-100 bg-red-50/50">
+                                    <CardBody className="py-4 px-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg">
+                                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-white" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-lg text-slate-800">
+                                                    กลุ่มเรียน {deleteTarget.sectionNo}
+                                                </p>
+                                                <p className="text-sm text-slate-500">
+                                                    {deleteTarget.sectionStudentCount || 0} นักศึกษา
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Warning about students */}
+                                {(deleteTarget.sectionStudentCount || 0) > 0 && (
+                                    <Card className="border border-amber-200 bg-amber-50">
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
+                                                <div>
+                                                    <p className="font-medium text-amber-800">มีนักศึกษาในกลุ่มเรียน</p>
+                                                    <p className="text-sm text-amber-700 mt-1">
+                                                        นักศึกษาทั้งหมด {deleteTarget.sectionStudentCount} คน จะถูกนำออกจากกลุ่มเรียนนี้
+                                                        และไม่สามารถเข้าถึงรายวิชานี้ได้อีก
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                )}
+
+                                {/* Score Info */}
+                                <Card className="border border-blue-200 bg-blue-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:diploma-verified-bold" className="text-xl text-blue-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-blue-800">เกี่ยวกับคะแนน</p>
+                                                <p className="text-sm text-blue-600 mt-1">
+                                                    คะแนนที่เคยลงให้นักศึกษาในกลุ่มเรียนนี้จะยังคงอยู่ในระบบ
+                                                    และจะแสดงเป็น <span className="font-medium">&quot;นักศึกษาที่ถูกนำออก&quot;</span> ในหน้าคะแนน
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                คุณต้องการลบกลุ่มเรียนนี้ใช่หรือไม่?
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TA Delete Content */}
+                        {deleteType === "ta" && deleteTarget && (
+                            <div className="space-y-4">
+                                {/* TA Info Card */}
+                                <Card className="border border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50">
+                                    <CardBody className="py-4">
+                                        <div className="flex items-center gap-4">
+                                            <Avatar
+                                                src={deleteTarget.taAvatar || undefined}
+                                                name={deleteTarget.taName}
+                                                size="lg"
+                                                className="w-16 h-16"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-lg text-slate-800">
+                                                    {deleteTarget.taName}
+                                                </p>
+                                                <p className="text-sm text-slate-500">
+                                                    {deleteTarget.taEmail}
+                                                </p>
+                                                <Chip 
+                                                    size="sm" 
+                                                    color="success" 
+                                                    variant="flat"
+                                                    startContent={<Icon icon="solar:star-bold" className="text-xs" />}
+                                                    className="mt-1"
+                                                >
+                                                    ผู้ช่วยสอน
+                                                </Chip>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* What happens info */}
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-amber-800">สิ่งที่จะเกิดขึ้น</p>
+                                                <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
+                                                    <li>ผู้ช่วยสอนจะไม่สามารถเข้าถึงรายวิชานี้ได้อีก</li>
+                                                    <li>ไม่สามารถจัดการคะแนนหรือตรวจงานในรายวิชานี้ได้</li>
+                                                    <li>ประวัติการตรวจงานที่ผ่านมาจะยังคงอยู่ในระบบ</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                คุณต้องการนำผู้ช่วยสอนคนนี้ออกจากรายวิชาใช่หรือไม่?
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                สามารถเพิ่มกลับได้ภายหลัง
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
@@ -3734,12 +4092,20 @@ export default function ClassroomDetailPage() {
                         </Button>
                         <Button
                             color="danger"
-                            onPress={deleteType === "student" ? confirmRemoveStudent : confirmDeleteTeam}
+                            onPress={
+                                deleteType === "student" 
+                                    ? confirmRemoveStudent 
+                                    : deleteType === "section" 
+                                        ? confirmRemoveSection 
+                                        : deleteType === "ta"
+                                            ? confirmRemoveTA
+                                            : confirmDeleteTeam
+                            }
                             isLoading={isSubmitting}
                             className="bg-red-500"
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
                         >
-                            {deleteType === "student" ? "นำนักศึกษาออก" : "ลบกลุ่ม"}
+                            {deleteType === "student" ? "นำนักศึกษาออก" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : "ลบกลุ่ม"}
                         </Button>
                     </ModalFooter>
                 </ModalContent>

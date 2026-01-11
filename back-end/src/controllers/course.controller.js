@@ -582,6 +582,69 @@ const addTA = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Add multiple TAs to course
+ * @route POST /api/courses/:id/tas/bulk
+ */
+const bulkAddTAs = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { user_ids } = req.body; // Array of user IDs
+  const currentUser = req.user;
+
+  if (!Array.isArray(user_ids) || user_ids.length === 0) {
+    throw new ApiError(400, 'กรุณาระบุรายชื่อผู้ช่วยสอน');
+  }
+
+  // Check course access (only admin or instructor of this course)
+  if (currentUser.role !== 'admin') {
+    const course = await Course.findByPk(id);
+    if (!course || course.instructor_id !== currentUser.id) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์เพิ่มผู้ช่วยสอนในรายวิชานี้');
+    }
+  }
+
+  const course = await Course.findByPk(id);
+  if (!course) {
+    throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
+  }
+
+  // Validate all TAs exist
+  const tas = await User.findAll({
+    where: { id: user_ids, role: 'ta' },
+  });
+
+  if (tas.length === 0) {
+    throw new ApiError(400, 'ไม่พบผู้ช่วยสอนที่ระบุ');
+  }
+
+  // Get existing TAs in course
+  const existingTAs = await CourseTA.findAll({
+    where: { course_id: id, user_id: user_ids },
+  });
+  const existingTAIds = existingTAs.map(ct => ct.user_id);
+
+  // Filter out TAs that are already in the course
+  const newTAs = tas.filter(ta => !existingTAIds.includes(ta.id));
+
+  if (newTAs.length === 0) {
+    throw new ApiError(400, 'ผู้ช่วยสอนที่เลือกทั้งหมดอยู่ในรายวิชาแล้ว');
+  }
+
+  // Bulk create
+  await CourseTA.bulkCreate(
+    newTAs.map(ta => ({ course_id: id, user_id: ta.id }))
+  );
+
+  res.status(201).json({
+    success: true,
+    message: `เพิ่มผู้ช่วยสอน ${newTAs.length} คนสำเร็จ`,
+    data: {
+      added: newTAs.map(ta => ta.toSafeObject()),
+      skipped: existingTAIds.length,
+    },
+  });
+});
+
+/**
  * Remove TA from course
  * @route DELETE /api/courses/:id/tas/:userId
  */
@@ -1497,6 +1560,7 @@ module.exports = {
   addSection,
   removeSection,
   addTA,
+  bulkAddTAs,
   removeTA,
   getSectionStudents,
   addStudentToSection,
