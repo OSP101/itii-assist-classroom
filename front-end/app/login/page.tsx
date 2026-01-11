@@ -96,8 +96,8 @@ export default function LoginPage() {
     };
 
     const handleGoogleLogin = () => {
-        // TODO: Implement Google OAuth
-        window.location.href = "http://localhost:3001/api/auth/google";
+        // Redirect to Google OAuth
+        window.location.href = authService.getGoogleAuthUrl();
     };
 
     return (
@@ -200,11 +200,11 @@ export default function LoginPage() {
                                     }}
                                 />
 
-                                <div className="flex justify-end">
+                                {/* <div className="flex justify-end">
                                     <Link href="#" size="sm" className="text-blue-400 hover:text-blue-500">
                                         ลืมรหัสผ่าน?
                                     </Link>
-                                </div>
+                                </div> */}
 
                                 <Turnstile
                                     id='turnstile-1'
@@ -212,14 +212,16 @@ export default function LoginPage() {
                                     siteKey={process.env.NEXT_PUBLIC_CLOUD || ''}
                                     onSuccess={() => setCanSubmit(false)}
                                     options={{
-                                        theme: 'auto'
+                                        theme: 'auto',
+                                        size: 'flexible',
                                     }}
+                                    className="w-full mt-2"
                                 />
 
                                 <Button
                                     type="submit"
                                     size="md"
-                                    className="w-full font-bold mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
+                                    className="w-full font-medium mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                     isLoading={isLoading}
                                 >
                                     เข้าสู่ระบบ
@@ -239,7 +241,7 @@ export default function LoginPage() {
                             <Button
                                 variant="bordered"
                                 size="md"
-                                className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm sm:text-base"
+                                className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm"
                                 onPress={handleGoogleLogin}
                                 startContent={
                                     <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
@@ -270,9 +272,8 @@ export default function LoginPage() {
                 </CardBody>
             </Card>
 
-            {/* Footer */}
-            <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 text-center text-slate-400 text-[10px] sm:text-xs px-4">
-                © 2025 ITII Assist classroom - Course & Lab Management System
+            <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 text-center text-slate-400 text-sm sm:text-xs px-4">
+                © 2025 ITII Assist classroom. All Rights Reserved. made with by <Link href="https://github.com/OSP101" target="_blank" className="text-sm text-slate-400">OSP101</Link>
             </div>
         </div>
     );

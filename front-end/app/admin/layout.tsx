@@ -47,12 +47,12 @@ const menuItems: MenuItem[] = [
         icon: "solar:book-bookmark-bold",
         href: "/admin/courses",
     },
-    {
-        key: "classrooms",
-        label: "ห้องเรียน",
-        icon: "solar:display-bold",
-        href: "/admin/classrooms",
-    },
+    // {
+    //     key: "classrooms",
+    //     label: "ห้องเรียน",
+    //     icon: "solar:display-bold",
+    //     href: "/admin/classrooms",
+    // },
     {
         key: "feedback",
         label: "Feedback",
@@ -151,7 +151,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 {/* Logo */}
                 <div className="flex items-center h-16 px-4 border-b border-slate-200">
                     <Link href="/admin/dashboard" className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-500/30 flex-shrink-0">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-500/30 flex-shrink-0">
                             <IoSchool />
                         </div>
                         {(!sidebarCollapsed || isMobileSidebarOpen) && (
@@ -221,7 +221,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                                     <Avatar
                                         name={user?.full_name}
                                         size="md"
-                                        className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white cursor-pointer"
+                                        className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white cursor-pointer"
                                     />
                                 </DropdownTrigger>
                                 <DropdownMenu aria-label="User menu">

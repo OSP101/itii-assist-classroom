@@ -22,7 +22,7 @@ interface AssignmentsTabProps {
     setExpandedAssignments: React.Dispatch<React.SetStateAction<number[]>>;
     onOpenCreateModal: () => void;
     onOpenEditModal: (assignment: AssignmentType) => void;
-    onOpenScoreModal?: (assignment: AssignmentType) => void;
+    onOpenScoreModal: (assignment: AssignmentType) => void;
 }
 
 export default function AssignmentsTab({
@@ -76,7 +76,7 @@ export default function AssignmentsTab({
         let list = assignments;
         if (activeTab === "individual") list = individualAssignments;
         if (activeTab === "group") list = groupAssignments;
-        
+
         if (searchQuery) {
             list = list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
@@ -99,7 +99,7 @@ export default function AssignmentsTab({
     const renderGridCard = (assignment: AssignmentType) => {
         const typeInfo = getTypeInfo(assignment.assignment_type);
         return (
-            <Card key={assignment.id} className="shadow-sm border border-slate-200 hover:shadow-md transition-all">
+            <Card key={assignment.id} className="shadow-sm border border-slate-200 hover:shadow-md transition-all" onPress={() => onOpenScoreModal(assignment)} isPressable>
                 <CardBody className="p-4">
                     {/* Header with Actions */}
                     <div className="flex items-start justify-between gap-2 mb-3">
@@ -107,11 +107,11 @@ export default function AssignmentsTab({
                             <Icon icon={typeInfo.icon} className={`text-xl ${assignment.assignment_type === "individual" ? "text-indigo-600" : assignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-emerald-600"}`} />
                         </div>
                         <div className="flex items-center gap-1">
-                            <Tooltip content="ลงคะแนน">
+                            {/* <Tooltip content="ลงคะแนน">
                                 <Button isIconOnly size="sm" variant="flat" color="primary" onPress={() => onOpenScoreModal?.(assignment)}>
                                     <Icon icon="solar:pen-new-square-bold" />
                                 </Button>
-                            </Tooltip>
+                            </Tooltip> */}
                             <Tooltip content="แก้ไข">
                                 <Button isIconOnly size="sm" variant="light" color="default" onPress={() => onOpenEditModal(assignment)}>
                                     <Icon icon="solar:pen-linear" />
@@ -124,10 +124,10 @@ export default function AssignmentsTab({
                             </Tooltip>
                         </div>
                     </div>
-                    
+
                     {/* Title */}
                     <p className="font-semibold text-slate-800 mb-2 line-clamp-2">{assignment.name}</p>
-                    
+
                     {/* Chips */}
                     <div className="flex flex-wrap items-center gap-1.5 mb-3">
                         <Chip size="sm" className={typeInfo.color}>{typeInfo.label}</Chip>
@@ -138,7 +138,7 @@ export default function AssignmentsTab({
                             <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600">{assignment.subItems.length} ข้อย่อย</Chip>
                         )}
                     </div>
-                    
+
                     {/* Footer Info */}
                     <div className="flex items-center justify-between text-sm text-slate-500 pt-2 border-t border-slate-100">
                         <span className="flex items-center gap-1">
@@ -161,15 +161,15 @@ export default function AssignmentsTab({
     const renderListRow = (assignment: AssignmentType, index: number) => {
         const typeInfo = getTypeInfo(assignment.assignment_type);
         return (
-            
-            <Card key={assignment.id} className="shadow-sm border border-slate-200 hover:shadow-md transition-all">
+
+            <Card key={assignment.id} className="shadow-sm border border-slate-200 hover:shadow-md transition-all w-full" onPress={() => onOpenScoreModal(assignment)} isPressable>
                 <CardBody className="p-3 sm:p-4">
                     <div className="flex items-center gap-3 sm:gap-4">
                         {/* Icon */}
                         <div className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${assignment.assignment_type === "individual" ? "bg-indigo-100" : assignment.assignment_type === "permanent_group" ? "bg-purple-100" : "bg-emerald-100"}`}>
                             <Icon icon={typeInfo.icon} className={`text-lg sm:text-xl ${assignment.assignment_type === "individual" ? "text-indigo-600" : assignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-emerald-600"}`} />
                         </div>
-                        
+
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
@@ -194,14 +194,14 @@ export default function AssignmentsTab({
                                 )}
                             </div>
                         </div>
-                        
+
                         {/* Actions */}
                         <div className="flex items-center gap-1 shrink-0">
-                            <Tooltip content="ลงคะแนน">
+                            {/* <Tooltip content="ลงคะแนน">
                                 <Button isIconOnly size="sm" variant="flat" color="primary" onPress={() => onOpenScoreModal?.(assignment)}>
                                     <Icon icon="solar:pen-new-square-bold" className="text-lg" />
                                 </Button>
-                            </Tooltip>
+                            </Tooltip> */}
                             <Tooltip content="แก้ไข">
                                 <Button isIconOnly size="sm" variant="light" color="default" onPress={() => onOpenEditModal(assignment)}>
                                     <Icon icon="solar:pen-linear" className="text-lg" />
@@ -224,7 +224,7 @@ export default function AssignmentsTab({
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-800">จัดการงาน</h2>
+                    <h2 className="text-lg font-semibold text-slate-800">งานในชั้นเรียน</h2>
                     <p className="text-sm text-slate-500">สร้างและจัดการหัวข้องานสำหรับการลงคะแนน</p>
                 </div>
             </div>
@@ -304,13 +304,14 @@ export default function AssignmentsTab({
                                         placeholder="ค้นหาชื่องาน..."
                                         value={searchQuery}
                                         onValueChange={setSearchQuery}
-                                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                        startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400 text-lg sm:text-xl" />}
                                         className="w-full"
                                         size="md"
                                         variant="bordered"
                                         isClearable
                                         classNames={{
-                                            inputWrapper: "bg-slate-50 border-slate-200"
+                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-blue-400 text-sm",
                                         }}
                                     />
                                 </div>
@@ -318,9 +319,9 @@ export default function AssignmentsTab({
                                     {/* View Mode Toggle */}
                                     <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
                                         <Tooltip content="แบบการ์ด">
-                                            <Button 
-                                                isIconOnly 
-                                                size="sm" 
+                                            <Button
+                                                isIconOnly
+                                                size="md"
                                                 variant="light"
                                                 className={`rounded-none ${viewMode === "grid" ? "bg-slate-100" : ""}`}
                                                 onPress={() => setViewMode("grid")}
@@ -330,9 +331,9 @@ export default function AssignmentsTab({
                                         </Tooltip>
                                         <div className="w-px h-5 bg-slate-200" />
                                         <Tooltip content="แบบรายการ">
-                                            <Button 
-                                                isIconOnly 
-                                                size="sm" 
+                                            <Button
+                                                isIconOnly
+                                                size="md"
                                                 variant="light"
                                                 className={`rounded-none ${viewMode === "list" ? "bg-slate-100" : ""}`}
                                                 onPress={() => setViewMode("list")}
@@ -341,7 +342,7 @@ export default function AssignmentsTab({
                                             </Button>
                                         </Tooltip>
                                     </div>
-                                    
+
                                     {/* Stats Info - Desktop Only */}
                                     {/* <div className="hidden lg:flex items-center gap-3 mr-2 text-sm text-slate-500">
                                         <span className="flex items-center gap-1">
@@ -349,7 +350,7 @@ export default function AssignmentsTab({
                                             รวม {assignments.reduce((acc, a) => acc + Number(a.max_score || 0), 0)} คะแนน
                                         </span>
                                     </div> */}
-                                    
+
                                     <Button
                                         color="primary"
                                         startContent={<Icon icon="solar:add-circle-bold" />}
@@ -402,8 +403,8 @@ export default function AssignmentsTab({
                                             <Icon icon="solar:clipboard-list-bold-duotone" className="text-5xl text-blue-500" />
                                         </div>
                                         <h3 className="text-lg font-semibold text-slate-700 mb-2">
-                                            {activeTab === "individual" ? "ยังไม่มีงานเดี่ยว" : 
-                                             activeTab === "group" ? "ยังไม่มีงานกลุ่ม" : "ยังไม่มีงาน"}
+                                            {activeTab === "individual" ? "ยังไม่มีงานเดี่ยว" :
+                                                activeTab === "group" ? "ยังไม่มีงานกลุ่ม" : "ยังไม่มีงาน"}
                                         </h3>
                                         <p className="text-slate-500 mb-6 max-w-md mx-auto">
                                             สร้างงานเพื่อกำหนดหัวข้อการลงคะแนนให้นักศึกษา

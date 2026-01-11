@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "สรุปการเช็คชื่อ",
+  title: "สรุปการเช็คชื่อ - ITII Assist Classroom",
   description: "ดูสรุปผลการเช็คชื่อของนักศึกษา",
 };
 

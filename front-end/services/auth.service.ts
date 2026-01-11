@@ -185,6 +185,52 @@ class AuthService {
     const roles = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
     return roles.includes(user.role);
   }
+
+  /**
+   * Set tokens manually (for OAuth callback)
+   */
+  setTokens(accessToken: string, refreshToken: string): void {
+    apiService.setAuthTokens(accessToken, refreshToken);
+  }
+
+  /**
+   * Clear tokens (for logout or error)
+   */
+  clearTokens(): void {
+    apiService.clearAuthTokens();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('user');
+    }
+  }
+
+  /**
+   * Get user info from API (for OAuth callback)
+   */
+  async getMe(): Promise<{ success: boolean; user?: User; error?: string }> {
+    const response = await apiService.get<{ user: User }>(API_ENDPOINTS.ME);
+
+    if (response.success && response.data) {
+      const user = response.data.user;
+      // Store user info
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+      return { success: true, user };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถดึงข้อมูลผู้ใช้ได้',
+    };
+  }
+
+  /**
+   * Get Google OAuth URL
+   */
+  getGoogleAuthUrl(): string {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return `${apiBaseUrl}/auth/google`;
+  }
 }
 
 export const authService = new AuthService();

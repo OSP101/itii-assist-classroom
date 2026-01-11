@@ -200,7 +200,7 @@ export default function InstructorLayout({
         return (
             <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
                 <div className="flex flex-col items-center gap-4">
-                    <div className="w-15 h-15 bg-gradient-to-br from-blue-500 to-indigo-600 rounded flex items-center justify-center text-white text-4xl">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
                         <IoSchool />
                     </div>
                     <p className="text-xl text-slate-700">The ITII Assist Classroom is loading.</p>
@@ -229,7 +229,7 @@ export default function InstructorLayout({
                                 href={getBackPath()}
                                 className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-900"
                             >
-                                <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded flex items-center justify-center text-white text-xs">
+                                <div className="w-6 h-6 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-xs">
                                     <IoSchool />
                                 </div>
                             </Link>
@@ -325,7 +325,7 @@ export default function InstructorLayout({
                                             name={user?.full_name}
                                             size="md"
                                             src={user?.avatar || undefined}
-                                            className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600"
+                                            className="w-7 h-7 bg-gradient-to-br from-blue-400 to-indigo-500"
                                         />
                                     </button>
                                 </DropdownTrigger>

@@ -413,7 +413,7 @@ export default function CoursesPage() {
                                 className="w-10 h-10 object-cover rounded-lg border border-slate-200"
                             />
                         ) : (
-                            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                            <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg">
                                 <IoBook className="text-2xl text-white" />
                             </div>
                         )}
@@ -473,7 +473,7 @@ export default function CoursesPage() {
             case "actions":
                 return (
                     <div className="flex items-center gap-1 justify-center">
-                        <Tooltip content="ดูรายละเอียด">
+                        {/* <Tooltip content="ดูรายละเอียด">
                             <Button
                                 isIconOnly
                                 size="sm"
@@ -482,7 +482,7 @@ export default function CoursesPage() {
                             >
                                 <Icon icon="solar:eye-linear" className="text-lg text-default-500" />
                             </Button>
-                        </Tooltip>
+                        </Tooltip> */}
                         <Tooltip content="แก้ไข">
                             <Button
                                 isIconOnly
@@ -541,7 +541,7 @@ export default function CoursesPage() {
                         resetForm();
                         setIsCreateModalOpen(true);
                     }}
-                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600 w-full sm:w-auto"
+                    className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 w-full sm:w-auto"
                 >
                     เพิ่มรายวิชา
                 </Button>
@@ -738,7 +738,7 @@ export default function CoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:book-2-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -949,7 +949,7 @@ export default function CoursesPage() {
                             color="primary"
                             onPress={handleCreate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             สร้างรายวิชา

@@ -5,7 +5,7 @@ export default function DashboardLoading() {
   return (
     <div className="space-y-6">
       {/* Welcome Banner Skeleton */}
-      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl p-6">
+      <div className="bg-gradient-to-r from-blue-400 to-indigo-500 rounded-2xl p-6">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <Skeleton className="w-64 h-8 rounded-lg bg-white/20" />

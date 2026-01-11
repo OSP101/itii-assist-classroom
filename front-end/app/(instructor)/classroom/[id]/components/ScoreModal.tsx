@@ -335,13 +335,23 @@ export default function ScoreModal({
 
     // Filter students based on search query
     const filteredStudents = useMemo(() => {
-        if (!searchQuery.trim()) return students.slice(0, 2);
+        if (!searchQuery.trim()) return students.slice(0, 10);
         const query = searchQuery.toLowerCase();
         return students.filter(
             s => s.student_id.toLowerCase().includes(query) ||
                 s.full_name.toLowerCase().includes(query)
-        ).slice(0, 2);
+        ).slice(0, 10);
     }, [students, searchQuery]);
+
+    // Filter students for edit tab based on edit search query
+    const filteredEditStudents = useMemo(() => {
+        if (!editSearchQuery.trim()) return students.slice(0, 10);
+        const query = editSearchQuery.toLowerCase();
+        return students.filter(
+            s => s.student_id.toLowerCase().includes(query) ||
+                s.full_name.toLowerCase().includes(query)
+        ).slice(0, 10);
+    }, [students, editSearchQuery]);
 
     // Filter groups based on search query
     const filteredGroups = useMemo(() => {
@@ -821,11 +831,17 @@ export default function ScoreModal({
                                                     onInputChange={setSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleStudentSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
+                                                    }}
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
                                                     }}
                                                 >
                                                     {filteredStudents.map((student) => (
@@ -954,11 +970,17 @@ export default function ScoreModal({
                                                     onInputChange={setGroupSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleGroupSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
                                                     {filteredGroups.map((group) => (
@@ -1100,7 +1122,7 @@ export default function ScoreModal({
                                                 {hasSubItems ? (
                                                     /* Sub-items score inputs */
                                                     <div className="space-y-3 bg-slate-50 p-4 rounded-xl">
-                                                        {assignment.subItems?.filter(item => item.id !== undefined).map((subItem, idx) => {
+                                                        {assignment.subItems?.filter(item => item.id !== undefined).slice().sort((a, b) => a.id! - b.id!).map((subItem, idx) => {
                                                             const subItemId = subItem.id!;
                                                             const existingSubScore = subItemExistingScores.find(s => s.subItemId === subItemId);
                                                             const isLocked = existingSubScore && existingSubScore.score !== null;
@@ -1146,6 +1168,7 @@ export default function ScoreModal({
                                                                                         onValueChange={(value) => handleSubItemScoreChange(subItemId, value)}
                                                                                         min={0}
                                                                                         max={subItem.max_score}
+                                                                                        step="any"
                                                                                         className="w-20"
                                                                                         size="sm"
                                                                                         variant="bordered"
@@ -1159,10 +1182,10 @@ export default function ScoreModal({
                                                                                 {/* Quick score buttons for sub-item */}
                                                                                 <div className="flex justify-end gap-1">
                                                                                     {(() => {
-                                                                                        const max = subItem.max_score;
+                                                                                        const max = Number(subItem.max_score);
                                                                                         const currentScore = subItemScores.find(s => s.subItemId === subItemId)?.score.toString() || "";
                                                                                         // Always show 3 buttons: 0, half, full
-                                                                                        const half = Math.floor(max / 2);
+                                                                                        const half = max / 2;
                                                                                         const options = [0, half, max];
                                                                                         return options.map(score => (
                                                                                             <Button
@@ -1170,13 +1193,13 @@ export default function ScoreModal({
                                                                                                 size="sm"
                                                                                                 variant={currentScore === score.toString() ? "solid" : "flat"}
                                                                                                 color={currentScore === score.toString() ? "primary" : "default"}
-                                                                                                className={`min-w-[2.5rem] h-7 text-xs ${currentScore === score.toString() 
-                                                                                                    ? "bg-blue-500 text-white font-semibold" 
+                                                                                                className={`min-w-[2.5rem] h-7 text-xs ${currentScore === score.toString()
+                                                                                                    ? "bg-blue-500 text-white font-semibold"
                                                                                                     : "bg-slate-100 font-medium"
-                                                                                                }`}
+                                                                                                    }`}
                                                                                                 onPress={() => handleSubItemScoreChange(subItemId, score.toString())}
                                                                                             >
-                                                                                                {score}
+                                                                                                {Number.isInteger(score) ? score : score.toFixed(1)}
                                                                                             </Button>
                                                                                         ));
                                                                                     })()}
@@ -1215,6 +1238,7 @@ export default function ScoreModal({
                                                                     onValueChange={setMainScore}
                                                                     min={0}
                                                                     max={assignment.max_score}
+                                                                    step="any"
                                                                     className="w-20"
                                                                     size="sm"
                                                                     variant="bordered"
@@ -1229,9 +1253,9 @@ export default function ScoreModal({
                                                         {/* Quick score buttons */}
                                                         <div className="flex justify-end gap-2">
                                                             {(() => {
-                                                                const max = assignment.max_score;
+                                                                const max = Number(assignment.max_score);
                                                                 // Always show 3 buttons: 0, half, full
-                                                                const half = Math.floor(max / 2);
+                                                                const half = max / 2;
                                                                 const options = [0, half, max];
                                                                 return options.map(score => (
                                                                     <Button
@@ -1239,13 +1263,13 @@ export default function ScoreModal({
                                                                         size="sm"
                                                                         variant={mainScore === score.toString() ? "solid" : "flat"}
                                                                         color={mainScore === score.toString() ? "primary" : "default"}
-                                                                        className={mainScore === score.toString() 
-                                                                            ? "bg-blue-500 text-white font-semibold min-w-[3rem]" 
+                                                                        className={mainScore === score.toString()
+                                                                            ? "bg-blue-500 text-white font-semibold min-w-[3rem]"
                                                                             : "bg-white border border-slate-200 font-medium min-w-[3rem]"
                                                                         }
                                                                         onPress={() => setMainScore(score.toString())}
                                                                     >
-                                                                        {score}
+                                                                        {Number.isInteger(score) ? score : score.toFixed(1)}
                                                                     </Button>
                                                                 ));
                                                             })()}
@@ -1299,14 +1323,20 @@ export default function ScoreModal({
                                                     onInputChange={setEditSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleEditStudentSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
-                                                    {filteredStudents.map((student) => (
+                                                    {filteredEditStudents.map((student) => (
                                                         <AutocompleteItem
                                                             key={student.id.toString()}
                                                             textValue={`${student.student_id} ${student.full_name}`}
@@ -1369,11 +1399,17 @@ export default function ScoreModal({
                                                     onInputChange={setEditGroupSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleEditGroupSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
                                                     {filteredEditGroups.map((group) => (
@@ -1465,10 +1501,10 @@ export default function ScoreModal({
                                                                     <div
                                                                         key={subItem.id}
                                                                         onClick={() => hasScore && setSelectedEditSubItemId(subItem.id!)}
-                                                                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected
+                                                                        className={`flex items-center gap-3 p-3 rounded-lg border  transition-colors ${isSelected
                                                                             ? 'bg-blue-50 border-blue-300'
                                                                             : hasScore
-                                                                                ? 'bg-white border-slate-200 hover:bg-slate-50'
+                                                                                ? 'bg-white border-slate-200 hover:bg-slate-50 cursor-pointer'
                                                                                 : 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-60'
                                                                             }`}
                                                                     >
@@ -1536,6 +1572,7 @@ export default function ScoreModal({
                                                                             onValueChange={(val) => handleSubItemNewScoreChange(selectedEditSubItemId, val)}
                                                                             min={0}
                                                                             max={selectedSubItem?.max_score || 0}
+                                                                            step="any"
                                                                             size="lg"
                                                                             variant="bordered"
                                                                             classNames={{
@@ -1601,36 +1638,37 @@ export default function ScoreModal({
 
                                                     <div>
                                                         <label className="text-slate-600 font-medium text-sm mb-2 block">คะแนนใหม่ *</label>
-                                                        
+
 
                                                         <div className="bg-slate-50 p-4 rounded-xl">
-                                                        <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
-                                                            <div className="p-2 bg-amber-100 rounded-lg shrink-0">
-                                                                <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Input
-                                                                    type="number"
-                                                                    placeholder="0"
-                                                                    value={newScore}
-                                                                    onValueChange={setNewScore}
-                                                                    min={0}
-                                                                    max={assignment.max_score}
-                                                                    className="w-20"
-                                                                    size="sm"
-                                                                    variant="bordered"
-                                                                    classNames={{
-                                                                        input: "text-center font-semibold",
-                                                                        inputWrapper: "bg-white border-slate-200",
-                                                                    }}
-                                                                />
-                                                                <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+                                                                <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                    <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="0"
+                                                                        value={newScore}
+                                                                        onValueChange={setNewScore}
+                                                                        min={0}
+                                                                        max={assignment.max_score}
+                                                                        step="any"
+                                                                        className="w-20"
+                                                                        size="sm"
+                                                                        variant="bordered"
+                                                                        classNames={{
+                                                                            input: "text-center font-semibold",
+                                                                            inputWrapper: "bg-white border-slate-200",
+                                                                        }}
+                                                                    />
+                                                                    <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
                                                     </div>
 
                                                     <div>

@@ -448,6 +448,19 @@ export default function ClassroomDetailPage() {
         }
     }, [courseId]);
 
+        const fetchAssignmentsNew = useCallback(async () => {
+        if (!courseId) return;
+        
+        // setIsAssignmentsLoading(true);
+        try {
+            // courseId is already a string (nanoid format)
+            const data = await assignmentService.getAssignments(courseId);
+            setAssignments(data);
+        } catch (error) {
+            console.error("Error fetching assignments:", error);
+        }
+    }, [courseId]);
+
     // Fetch attendance sessions for assignment linking
     const fetchAttendanceSessions = useCallback(async () => {
         if (!courseId) return;
@@ -1631,7 +1644,7 @@ export default function ClassroomDetailPage() {
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
         
-        { key: "scores", label: "คะแนน", icon: "solar:chart-square-bold" },
+        { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
         
         // ถ้าไม่ใช่อาจารย์ ไม่แสดง
         ...(userRole === 'instructor' ? [{
@@ -1781,7 +1794,7 @@ export default function ClassroomDetailPage() {
                                     className="w-12 h-12 object-cover rounded-xl"
                                 />
                             ) : (
-                                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                                <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center">
                                     <Icon icon="solar:book-2-bold-duotone" className="text-xl text-white" />
                                 </div>
                             )}
@@ -2781,7 +2794,7 @@ export default function ClassroomDetailPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg">
                                 <Icon icon="solar:clipboard-list-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -2821,8 +2834,10 @@ export default function ClassroomDetailPage() {
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "individual", week_number: undefined }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "individual"
                                                 ? "border-indigo-500 bg-indigo-50"
-                                                : "border-slate-200 hover:border-slate-300"
+                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
                                             }`}
+                                        disabled={!!editingAssignment}
+
                                     >
                                         <Icon icon="solar:user-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "individual" ? "text-indigo-500" : "text-slate-400"
                                             }`} />
@@ -2835,8 +2850,10 @@ export default function ClassroomDetailPage() {
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "permanent_group", week_number: undefined }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "permanent_group"
                                                 ? "border-purple-500 bg-purple-50"
-                                                : "border-slate-200 hover:border-slate-300"
+                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
                                             }`}
+                                        disabled={!!editingAssignment}
+
                                     >
                                         <Icon icon="solar:users-group-rounded-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "permanent_group" ? "text-purple-500" : "text-slate-400"
                                             }`} />
@@ -2849,8 +2866,9 @@ export default function ClassroomDetailPage() {
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "weekly_group", week_number: selectedWeek }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "weekly_group"
                                                 ? "border-emerald-500 bg-emerald-50"
-                                                : "border-slate-200 hover:border-slate-300"
+                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
                                             }`}
+                                        disabled={!!editingAssignment}
                                     >
                                         <Icon icon="solar:calendar-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "weekly_group" ? "text-emerald-500" : "text-slate-400"
                                             }`} />
@@ -3002,6 +3020,7 @@ export default function ClassroomDetailPage() {
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
                                         type="button"
+                                        disabled={!!editingAssignment}
                                         onClick={() => setNewAssignment(prev => ({
                                             ...prev,
                                             hasSubItems: false,
@@ -3009,7 +3028,7 @@ export default function ClassroomDetailPage() {
                                         }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${!newAssignment.hasSubItems
                                                 ? "border-blue-500 bg-blue-50"
-                                                : "border-slate-200 hover:border-slate-300"
+                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
                                             }`}
                                     >
                                         <Icon icon="solar:document-bold" className={`text-3xl mx-auto mb-2 ${!newAssignment.hasSubItems ? "text-blue-500" : "text-slate-400"
@@ -3020,6 +3039,7 @@ export default function ClassroomDetailPage() {
                                     </button>
                                     <button
                                         type="button"
+                                        disabled={!!editingAssignment}
                                         onClick={() => setNewAssignment(prev => ({
                                             ...prev,
                                             hasSubItems: true,
@@ -3029,7 +3049,7 @@ export default function ClassroomDetailPage() {
                                         }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.hasSubItems
                                                 ? "border-amber-500 bg-amber-50"
-                                                : "border-slate-200 hover:border-slate-300"
+                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
                                             }`}
                                     >
                                         <Icon icon="solar:checklist-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.hasSubItems ? "text-amber-500" : "text-slate-400"
@@ -3051,8 +3071,9 @@ export default function ClassroomDetailPage() {
                                     variant="bordered"
                                     size="lg"
                                     min={0}
+                                    step="any"
                                     value={newAssignment.maxScore.toString()}
-                                    onValueChange={(val) => setNewAssignment(prev => ({ ...prev, maxScore: parseInt(val) || 0 }))}
+                                    onValueChange={(val) => setNewAssignment(prev => ({ ...prev, maxScore: parseFloat(val) || 0 }))}
                                     isRequired
                                     endContent={<span className="text-slate-400 text-sm">คะแนน</span>}
                                     className="pt-6"
@@ -3072,7 +3093,10 @@ export default function ClassroomDetailPage() {
                                         </label>
                                         <div className="flex items-center gap-2">
                                             <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-600">
-                                                รวม {newAssignment.subItems.reduce((acc, sub) => acc + sub.max_score, 0)} คะแนน
+                                                รวม {(() => {
+                                                    const total = newAssignment.subItems.reduce((acc, sub) => acc + sub.max_score, 0);
+                                                    return Number.isInteger(total) ? total : total.toFixed(2);
+                                                })()} คะแนน
                                             </Chip>
                                             <Button
                                                 size="sm"
@@ -3128,12 +3152,13 @@ export default function ClassroomDetailPage() {
                                                     variant="bordered"
                                                     placeholder="คะแนน"
                                                     min={0}
+                                                    step="any"
                                                     value={subItem.max_score.toString()}
                                                     onValueChange={(val) => {
                                                         setNewAssignment(prev => ({
                                                             ...prev,
                                                             subItems: prev.subItems.map((s, i) =>
-                                                                i === idx ? { ...s, max_score: parseInt(val) || 0 } : s
+                                                                i === idx ? { ...s, max_score: parseFloat(val) || 0 } : s
                                                             )
                                                         }));
                                                     }}
@@ -3260,7 +3285,7 @@ export default function ClassroomDetailPage() {
                                                     linked_attendance_session_id: newAssignment.linked_attendance_session_id || null,
                                                 });
                                                 if (result) {
-                                                    await fetchAssignments();
+                                                    await fetchAssignmentsNew();
                                                     addToast({
                                                         title: "สำเร็จ",
                                                         description: "แก้ไขงานเรียบร้อยแล้ว",
@@ -3291,7 +3316,7 @@ export default function ClassroomDetailPage() {
                                                     linked_attendance_session_id: newAssignment.linked_attendance_session_id || undefined,
                                                 });
                                                 if (result) {
-                                                    await fetchAssignments();
+                                                    await fetchAssignmentsNew();
                                                     addToast({
                                                         title: "สำเร็จ",
                                                         description: "สร้างงานใหม่เรียบร้อยแล้ว",

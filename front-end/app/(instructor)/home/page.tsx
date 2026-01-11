@@ -388,7 +388,7 @@ export default function HomePage() {
                         color="primary"
                         startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
                         onPress={handleCreateCourse}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-600"
+                        className="bg-gradient-to-r from-blue-400 to-indigo-500"
                     >
                         สร้างรายวิชาใหม่
                     </Button>
@@ -444,9 +444,14 @@ export default function HomePage() {
                                 placeholder="ค้นหารายวิชา..."
                                 value={search}
                                 onValueChange={setSearch}
-                                startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                 isClearable
                                 onClear={() => setSearch("")}
+                                variant="bordered"
+                                classNames={{
+                                    inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-blue-400 text-sm",
+                                }}
                             />
                         </div>
 
@@ -458,6 +463,8 @@ export default function HomePage() {
                                 onSelectionChange={(keys) => setYearFilter(Array.from(keys)[0] as string || "")}
                                 className="w-full sm:w-36"
                                 size="md"
+                                variant="bordered"
+
                             >
                                 {yearOptions.map((option) => (
                                     <SelectItem key={option.value}>{option.label}</SelectItem>
@@ -470,6 +477,8 @@ export default function HomePage() {
                                 onSelectionChange={(keys) => setSemesterFilter(Array.from(keys)[0] as string || "")}
                                 className="w-full sm:w-32"
                                 size="md"
+                                variant="bordered"
+
                             >
                                 {semesterOptions.map((option) => (
                                     <SelectItem key={option.value}>{option.label}</SelectItem>
@@ -482,6 +491,8 @@ export default function HomePage() {
                                 onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string || "")}
                                 className="w-full sm:w-32"
                                 size="md"
+                                variant="bordered"
+
                             >
                                 {statusOptions.map((option) => (
                                     <SelectItem key={option.value}>{option.label}</SelectItem>
@@ -553,7 +564,7 @@ export default function HomePage() {
                                             className="w-full h-full object-cover"
                                         />
                                     ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                                        <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
                                             <IoSchool className="text-white/20 text-7xl" />
                                         </div>
                                     )}
@@ -596,7 +607,7 @@ export default function HomePage() {
                                                             <Icon icon="solar:menu-dots-bold" className="text-lg text-slate-500" />
                                                         </Button>
                                                     </DropdownTrigger>
-                                                    <DropdownMenu 
+                                                    <DropdownMenu
                                                         aria-label="Course actions"
                                                         onAction={(key) => {
                                                             if (key === "edit") {
@@ -615,9 +626,9 @@ export default function HomePage() {
                                                         <DropdownItem
                                                             key="toggle"
                                                             startContent={
-                                                                <Icon 
-                                                                    icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"} 
-                                                                    className="text-lg" 
+                                                                <Icon
+                                                                    icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                                                                    className="text-lg"
                                                                 />
                                                             }
                                                             color={course.is_active ? "warning" : "success"}
@@ -692,7 +703,7 @@ export default function HomePage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:book-2-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -880,7 +891,7 @@ export default function HomePage() {
                             color="primary"
                             onPress={handleCreate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             สร้างรายวิชา

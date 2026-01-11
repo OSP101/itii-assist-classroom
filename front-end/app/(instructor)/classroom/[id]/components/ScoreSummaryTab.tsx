@@ -13,6 +13,7 @@ import { Button } from "@heroui/button";
 import { Divider } from "@heroui/divider";
 import { Icon } from "@iconify/react";
 import scoreService, { ScoreSummaryMatrix } from "@/services/score.service";
+import {Link} from "@heroui/link";
 
 interface ScoreSummaryTabProps {
     courseId: string;
@@ -65,7 +66,10 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     const [selectedSection, setSelectedSection] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    
+    const [hoverRowId, setHoverRowId] = useState<string | null>(null);
+    const [hoverColKey, setHoverColKey] = useState<string | null>(null);
+
+
     // Cache data for both tabs - avoid re-fetching when switching
     const [individualData, setIndividualData] = useState<ScoreSummaryMatrix | null>(null);
     const [groupData, setGroupData] = useState<ScoreSummaryMatrix | null>(null);
@@ -88,7 +92,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     const fetchMatrix = useCallback(async (type: AssignmentTabType, forceRefresh = false) => {
         // Skip if already fetched and not forcing refresh
         if (!forceRefresh && hasFetchedRef.current[type]) return;
-        
+
         setIsLoading(true);
         try {
             const data = await scoreService.getScoreSummaryMatrix(courseId, {
@@ -136,10 +140,10 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     // Get assignment columns
     const columns = useMemo(() => {
         if (!matrixData?.assignments) return [];
-        
+
         // Debug: log assignments data
         console.log('assignments from API:', matrixData.sections);
-        
+
         const cols: {
             key: string;
             assignmentId: number;
@@ -153,7 +157,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
         for (const assignment of matrixData.assignments) {
             const title = assignment.title || `งาน #${assignment.id}`;
             const shortTitle = assignment.short_title || title;
-            
+
             if (assignment.subItems && assignment.subItems.length > 0) {
                 for (const subItem of assignment.subItems) {
                     cols.push({
@@ -176,7 +180,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                 });
             }
         }
-        
+
         console.log('columns result:', cols);
         return cols;
     }, [matrixData?.assignments]);
@@ -238,16 +242,19 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     const individualCount = individualData?.assignments?.length || 0;
     const groupCount = groupData?.assignments?.length || 0;
 
-    console.log("Title: ScoreSummaryTab render",columns);
+    console.log("Title: ScoreSummaryTab render", columns);
 
     return (
         <div className="space-y-4">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-800">สรุปคะแนน</h2>
+                    <h2 className="text-lg font-semibold text-slate-800">คะแนนในชั้นเรียน</h2>
                     <p className="text-sm text-slate-500">ดูภาพรวมคะแนนทั้งหมดของนักศึกษา</p>
                 </div>
+                <Link isExternal showAnchorIcon className="text-blue-600 hover:underline" href="/myscore">
+                    เช็คคะแนนรายบุคคล
+                </Link>
             </div>
 
             {/* Tabs */}
@@ -297,21 +304,24 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                 <CardBody className="py-3 px-4">
                     <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
                         <div className="flex gap-2 items-center flex-1">
-                           
+
 
                             <Input
                                 placeholder="ค้นหา..."
                                 value={searchQuery}
                                 onValueChange={setSearchQuery}
-                                startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400 text-sm" />}
+                                startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400 text-sm" />}
                                 className="w-full"
                                 size="md"
                                 variant="bordered"
                                 isClearable
-                                classNames={{ inputWrapper: "border-slate-200" }}
+                                classNames={{
+                                    inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-blue-400 text-sm",
+                                }}
                             />
 
-                             <Dropdown>
+                            <Dropdown>
                                 <DropdownTrigger>
                                     <Button
                                         variant="bordered"
@@ -384,16 +394,16 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                             <table className="w-full text-sm">
                                 <thead className="sticky top-0 z-10">
                                     {/* Row 1: Assignment names with colspan */}
-                                    <tr className="bg-slate-100 border-b border-slate-200">
+                                    <tr className="bg-slate-100 border-b border-slate-200 ">
                                         <th rowSpan={2} className="px-3 py-2 text-center text-slate-600 font-semibold w-12 border-r border-slate-200 bg-slate-100">#</th>
                                         <th rowSpan={2} className="px-3 py-2 text-center text-slate-600 font-semibold min-w-[120px] border-r border-slate-200 bg-slate-100">รหัสนักศึกษา</th>
                                         <th rowSpan={2} className="px-3 py-2 text-center text-slate-600 font-semibold min-w-[200px] border-r border-slate-200 bg-slate-100">ชื่อ-นามสกุล</th>
                                         <th rowSpan={2} className="px-2 py-2 text-center text-slate-600 font-semibold w-14 border-r border-slate-200 bg-slate-100">Sec</th>
                                         {assignmentGroups.map((group) => (
-                                            <th 
-                                                key={group.id} 
+                                            <th
+                                                key={group.id}
                                                 colSpan={group.colSpan}
-                                                className="px-2 py-2 text-center font-semibold text-slate-700 border-l border-slate-300 bg-slate-200"
+                                                className="px-2 py-2 text-center font-semibold text-slate-700 border-l border-slate-300 bg-slate-200 "
                                             >
                                                 {group.title}
                                             </th>
@@ -406,12 +416,20 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                     {/* Row 2: Sub-items / Max scores */}
                                     <tr className="bg-slate-50 border-b border-slate-300">
                                         {columns.map((col) => (
-                                            <th key={col.key} className="px-2 py-2 text-center min-w-[80px] border-l border-slate-200 bg-slate-50">
+                                            <th
+                                                key={col.key}
+                                                onMouseEnter={() => setHoverColKey(col.key)}
+                                                onMouseLeave={() => setHoverColKey(null)}
+                                                className={`px-2 py-2 text-center min-w-[80px] border-l border-slate-200
+    ${hoverColKey === col.key ? "bg-blue-100" : "bg-slate-50"}
+  `}
+                                            >
+
                                                 {col.subItemName ? (
                                                     <div className="font-medium text-slate-600 text-xs">
                                                         {col.subItemName}
                                                     </div>
-                                                ): (
+                                                ) : (
                                                     <div className="font-medium text-slate-600 text-xs">
                                                         ข้อ 1
                                                     </div>
@@ -442,7 +460,15 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                         const totalColor = getScoreColor(studentTotal, studentMax);
 
                                         return (
-                                            <tr key={student.student_id} className="hover:bg-blue-50/50 transition-colors">
+                                            <tr
+                                                key={student.student_id}
+                                                onMouseEnter={() => setHoverRowId(student.student_id)}
+                                                onMouseLeave={() => setHoverRowId(null)}
+                                                className={`transition-colors
+    ${hoverRowId === student.student_id ? "bg-blue-50/60" : ""}
+  `}
+                                            >
+
                                                 <td className="px-3 py-3 text-center text-slate-800">{index + 1}</td>
                                                 <td className="px-3 py-3 font-mono text-slate-800">{student.student_id}</td>
                                                 <td className="px-3 py-3 font-mono text-slate-800">{student.full_name}</td>
@@ -457,7 +483,15 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                                     const color = getScoreColor(score, col.maxScore);
 
                                                     return (
-                                                        <td key={col.key} className="px-2 py-2 text-center border-l border-slate-100">
+                                                        <td
+                                                            key={col.key}
+                                                            onMouseEnter={() => setHoverColKey(col.key)}
+                                                            onMouseLeave={() => setHoverColKey(null)}
+                                                            className={`px-2 py-2 text-center border-l transition-colors border-slate-100
+    ${hoverColKey === col.key ? "bg-blue-50" : ""}
+  `}
+                                                        >
+
                                                             <button
                                                                 onClick={() => handleScoreClick(student, col, scoreData)}
                                                                 className={`inline-flex items-center justify-center min-w-[40px] h-7 px-2 rounded-md text-sm font-medium transition-all hover:scale-105 hover:shadow-sm ${color.bg} ${color.text}`}

@@ -369,7 +369,7 @@ export default function LiveAttendancePage() {
                         <p className="text-lg text-slate-600 mb-2">ไม่พบข้อมูลการเช็คชื่อ</p>
                         <p className="text-sm text-slate-400 mb-6">กรุณาตรวจสอบลิงก์อีกครั้ง</p>
                         <Button
-                            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                            className="w-full bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg"
                             onPress={() => router.back()}
                         >
                             กลับหน้าหลัก

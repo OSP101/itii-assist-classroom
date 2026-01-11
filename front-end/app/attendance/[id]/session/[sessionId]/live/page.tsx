@@ -369,7 +369,7 @@ export default function LiveAttendancePage() {
                         <p className="text-lg text-slate-600 mb-2">ไม่พบข้อมูลการเช็คชื่อ</p>
                         <p className="text-sm text-slate-400 mb-6">กรุณาตรวจสอบลิงก์อีกครั้ง</p>
                         <Button
-                            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                            className="w-full bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg"
                             onPress={() => router.back()}
                         >
                             กลับหน้าหลัก
@@ -385,7 +385,7 @@ export default function LiveAttendancePage() {
             {/* Header Card with Purple Gradient Bar */}
             <Card className="mb-6 shadow-lg border-0 overflow-hidden">
                 {/* Purple Gradient Bar */}
-                <div className="h-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400" />
+                {/* <div className="h-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400" /> */}
 
                 <CardBody className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -408,7 +408,8 @@ export default function LiveAttendancePage() {
                             {session.status === "active" && (
                                 <Button
                                     variant="bordered"
-                                    className="border-slate-300 text-slate-600"
+                                    // className="border-slate-300 text-slate-600"
+                                    color="danger"
                                     startContent={<Icon icon="solar:close-circle-linear" className="text-lg" />}
                                     onPress={handleCloseSession}
                                     isLoading={isClosing}
@@ -462,7 +463,7 @@ export default function LiveAttendancePage() {
                             >
                                 <QRCodeSVG
                                     value={checkInUrl}
-                                    size={200}
+                                    size={250}
                                     level="H"
                                     fgColor="#2b7fff"
                                 />
@@ -559,19 +560,12 @@ export default function LiveAttendancePage() {
                     </Card>
 
                     {/* Student List Table */}
-                    <Card className="shadow-lg border-0 border-t-4 border-blue-500/80 overflow-hidden">
-                        <CardHeader className="flex items-center justify-between p-5 border-b border-slate-200 bg-blue-50/50">
-                            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <Card className="shadow-lg border-0 overflow-hidden">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-2">
                                 <Icon icon="solar:checklist-minimalistic-linear" className="text-2xl text-blue-600" />
-                                รายชื่อผู้เช็คชื่อ
-                            </h2>
-                            {/* <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 text-sm shadow-inner border border-green-200">
-                                <span className="relative flex h-2.5 w-2.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                </span>
-                                <span className="text-xs text-slate-600 font-medium tracking-wider">LIVE REFRESH (2s)</span>
-                            </div> */}
+                                <h3 className="text-lg font-semibold text-slate-700">รายชื่อผู้เช็คชื่อ</h3>
+                            </div>
                         </CardHeader>
                         <CardBody className="p-0">
                             <div className="overflow-x-auto p-3">
@@ -666,7 +660,6 @@ export default function LiveAttendancePage() {
                                     </div>
                                 </div>
                                 <Button
-                                    className="mt-10"
                                     variant="bordered"
                                     size="lg"
                                     onPress={() => setIsQRModalOpen(false)}

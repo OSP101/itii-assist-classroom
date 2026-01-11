@@ -327,7 +327,7 @@ export default function AdminDashboardPage() {
     <div className="space-y-4 sm:space-y-6">
       {/* Welcome Banner */}
       {loadingUser ? (
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl p-4 sm:p-6">
+        <div className="bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl sm:rounded-2xl p-4 sm:p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="space-y-2">
               <Skeleton className="w-48 sm:w-64 h-6 sm:h-8 rounded-lg bg-white/20" />
@@ -339,7 +339,7 @@ export default function AdminDashboardPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white">
+        <div className="bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-lg sm:text-2xl font-bold mb-1">{getGreeting()}, {currentUser?.full_name || "Admin"} 👋</h2>
