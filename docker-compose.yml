@@ -66,9 +66,27 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001/api}
     ports:
-      - "3000:3000"
+      - "80:3000"
     depends_on:
       - backend
+    networks:
+      - itii-network
+
+  # phpMyAdmin - Database Management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: itii-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 0
+      UPLOAD_LIMIT: 100M
+    ports:
+      - "8080:80"
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - itii-network
 
