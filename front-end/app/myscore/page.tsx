@@ -241,7 +241,7 @@ export default function MyScorePage() {
     };
 
     const renderCourseCard = (courseData: CourseScoreData) => {
-        const { course, assignments, totalScore, totalMaxScore, progress, attendance } = courseData;
+        const { course, assignments, totalScore, totalMaxScore, progress, attendance, bonusScore } = courseData;
         const gradedCount = assignments.filter(a => a.status === "graded").length;
 
         return (
@@ -264,9 +264,17 @@ export default function MyScorePage() {
                                 <span>ปีการศึกษา {course.year} / ภาคเรียนที่ {course.semester}</span>
                             </div>
                         </div>
-                        <div className="flex items-end gap-1 bg-white/10 rounded-xl px-4 py-3">
-                            <span className="text-4xl font-bold">{totalScore.toFixed(1)}</span>
-                            <span className="text-blue-200 text-sm mb-1">/ {totalMaxScore.toFixed(1)}</span>
+                        <div className="flex items-center gap-3">
+                            {bonusScore && bonusScore.total > 0 && (
+                                <div className="flex items-center gap-1 bg-amber-400/20 rounded-xl px-3 py-2">
+                                    <Icon icon="solar:star-bold" className="text-amber-300" />
+                                    <span className="text-2xl font-bold text-amber-300">+{bonusScore.total}</span>
+                                </div>
+                            )}
+                            <div className="flex items-end gap-1 bg-white/10 rounded-xl px-4 py-3">
+                                <span className="text-4xl font-bold">{totalScore.toFixed(1)}</span>
+                                <span className="text-blue-200 text-sm mb-1">/ {totalMaxScore.toFixed(1)}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -396,6 +404,80 @@ export default function MyScorePage() {
                                     <div className="text-center py-8 text-gray-400">
                                         <Icon icon="solar:calendar-mark-linear" className="text-5xl mx-auto mb-2 opacity-50" />
                                         <p>ยังไม่มีข้อมูลเช็คชื่อ</p>
+                                    </div>
+                                )}
+                            </div>
+                        </Tab>
+
+                        {/* Bonus Score Tab */}
+                        <Tab
+                            key="bonus"
+                            title={
+                                <div className="flex items-center gap-2">
+                                    <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
+                                    <span>คะแนนพิเศษ</span>
+                                    {bonusScore && bonusScore.total > 0 && (
+                                        <Chip size="sm" variant="flat" color="warning">{bonusScore.total}</Chip>
+                                    )}
+                                </div>
+                            }
+                        >
+                            <div className="p-4 sm:p-5">
+                                {/* Bonus Score Summary */}
+                                <div className="flex items-center justify-center gap-4 mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                                    <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                                        <Icon icon="solar:star-bold" className="text-3xl text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-amber-700">คะแนนพิเศษรวม</p>
+                                        <p className="text-4xl font-bold text-amber-600">+{bonusScore?.total || 0}</p>
+                                        <p className="text-xs text-amber-500">คะแนน</p>
+                                    </div>
+                                </div>
+
+                                {/* Bonus Score Records */}
+                                {bonusScore && bonusScore.records.length > 0 ? (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-gray-600 mb-3 flex items-center gap-2">
+                                            <Icon icon="solar:history-linear" />
+                                            ประวัติการได้รับคะแนน ({bonusScore.records.length} รายการ)
+                                        </p>
+                                        {bonusScore.records.map((record, index) => (
+                                            <div
+                                                key={index}
+                                                className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-100 hover:border-amber-300 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                                                        <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-gray-800 text-sm">{record.reason}</p>
+                                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                            {record.given_by && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Icon icon="solar:user-check-linear" />
+                                                                    {record.given_by}
+                                                                </span>
+                                                            )}
+                                                            <span className="flex items-center gap-1">
+                                                                <Icon icon="solar:calendar-linear" />
+                                                                {formatDate(record.given_at)}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <Chip size="sm" color="warning" variant="flat" className="font-bold">
+                                                    +{record.score}
+                                                </Chip>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8 text-gray-400">
+                                        <Icon icon="solar:star-linear" className="text-5xl mx-auto mb-2 opacity-50" />
+                                        <p>ยังไม่มีคะแนนพิเศษ</p>
+                                        <p className="text-xs mt-1">คะแนนพิเศษจะได้รับจากการตอบคำถามในห้องเรียน</p>
                                     </div>
                                 )}
                             </div>

@@ -1,4 +1,4 @@
-const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, sequelize } = require('../models');
+const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -737,6 +737,24 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
     });
 
+    // Get bonus scores for all students in this course
+    const bonusScoreRecords = await BonusScore.findAll({
+        where: {
+            course_id,
+            student_id: { [Op.in]: studentIds },
+        },
+        attributes: ['student_id', 'score'],
+    });
+
+    // Create bonus score map: { student_id: totalBonusScore }
+    const bonusScoreMap = {};
+    for (const record of bonusScoreRecords) {
+        if (!bonusScoreMap[record.student_id]) {
+            bonusScoreMap[record.student_id] = 0;
+        }
+        bonusScoreMap[record.student_id] += parseFloat(record.score) || 0;
+    }
+
     // Create score lookup map with full info: { `${student_id}_${assignment_id}_${sub_item_id}`: scoreObj }
     const scoreMap = {};
     for (const score of scores) {
@@ -755,6 +773,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             student_id: student.student_id,
             full_name: student.full_name,
             section_number: student.section_number,
+            bonus_score: bonusScoreMap[student.id] || 0,
             scores: {},
             total_score: 0,
             total_max_score: 0,

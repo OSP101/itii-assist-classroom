@@ -110,6 +110,18 @@ export interface AttendanceSummary {
   absent: number;
 }
 
+export interface BonusScoreRecord {
+  score: number;
+  reason: string;
+  given_by: string | null;
+  given_at: string;
+}
+
+export interface BonusScoreData {
+  total: number;
+  records: BonusScoreRecord[];
+}
+
 export interface CourseScoreData {
   course: {
     id: number;
@@ -124,6 +136,7 @@ export interface CourseScoreData {
   totalScore: number;
   totalMaxScore: number;
   progress: number;
+  bonusScore: BonusScoreData;
   attendance: {
     records: AttendanceRecordData[];
     summary: AttendanceSummary;

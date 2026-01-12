@@ -249,6 +249,7 @@ export interface ScoreSummaryMatrixStudent {
     student_id: string;
     full_name: string;
     section_number: number;
+    bonus_score: number;
     scores: {
         [key: string]: {
             score: number | null;

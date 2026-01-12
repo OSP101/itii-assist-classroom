@@ -2,7 +2,7 @@
  * Student Controller - Handle student-related requests
  */
 
-const { Student, Score, Assignment, AssignmentSubItem, User, Course, CourseSection, CourseSectionStudent, AttendanceSession, AttendanceRecord, StudentGroup, StudentGroupMember } = require('../models');
+const { Student, Score, Assignment, AssignmentSubItem, User, Course, CourseSection, CourseSectionStudent, AttendanceSession, AttendanceRecord, StudentGroup, StudentGroupMember, BonusScore } = require('../models');
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -631,6 +631,41 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
     }
   });
 
+  // Get bonus scores for this student grouped by course
+  const bonusScoreRecords = await BonusScore.findAll({
+    where: {
+      student_id: student.id,
+      course_id: { [Op.in]: courseIds },
+    },
+    attributes: ['course_id', 'score', 'reason', 'given_at'],
+    include: [
+      {
+        model: User,
+        as: 'giver',
+        attributes: ['id', 'full_name'],
+      },
+    ],
+    order: [['given_at', 'DESC']],
+  });
+
+  // Group bonus scores by course
+  const bonusByCourse = {};
+  bonusScoreRecords.forEach(record => {
+    if (!bonusByCourse[record.course_id]) {
+      bonusByCourse[record.course_id] = {
+        totalBonus: 0,
+        records: [],
+      };
+    }
+    bonusByCourse[record.course_id].totalBonus += parseFloat(record.score) || 0;
+    bonusByCourse[record.course_id].records.push({
+      score: parseFloat(record.score) || 0,
+      reason: record.reason,
+      given_by: record.giver ? record.giver.full_name : null,
+      given_at: record.given_at,
+    });
+  });
+
   // Get attendance records for this student
   const attendanceRecords = await AttendanceRecord.findAll({
     where: { student_id: student.id },
@@ -668,16 +703,23 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
   });
 
   // Build final response
-  const courseScores = Object.values(scoresByCourse).map(courseData => ({
-    ...courseData,
-    attendance: attendanceByCourse[courseData.course.id] || {
-      records: [],
-      summary: { present: 0, late: 0, leave: 0, absent: 0 },
-    },
-    progress: courseData.totalMaxScore > 0 
-      ? Math.round((courseData.totalScore / courseData.totalMaxScore) * 100) 
-      : 0,
-  }));
+  const courseScores = Object.values(scoresByCourse).map(courseData => {
+    const bonusData = bonusByCourse[courseData.course.id] || { totalBonus: 0, records: [] };
+    return {
+      ...courseData,
+      bonusScore: {
+        total: bonusData.totalBonus,
+        records: bonusData.records,
+      },
+      attendance: attendanceByCourse[courseData.course.id] || {
+        records: [],
+        summary: { present: 0, late: 0, leave: 0, absent: 0 },
+      },
+      progress: courseData.totalMaxScore > 0 
+        ? Math.round((courseData.totalScore / courseData.totalMaxScore) * 100) 
+        : 0,
+    };
+  });
 
   res.json({
     success: true,

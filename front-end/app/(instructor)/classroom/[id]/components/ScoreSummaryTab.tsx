@@ -412,6 +412,12 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                             <div>รวม</div>
                                             <div className="font-normal text-slate-400 text-xs">({totalMaxScore})</div>
                                         </th>
+                                        <th rowSpan={2} className="px-3 py-2 text-center text-amber-600 font-semibold min-w-[70px] border-l border-amber-300 bg-amber-50">
+                                            <div className="flex items-center justify-center gap-1">
+                                                <Icon icon="solar:star-bold" className="text-amber-500" />
+                                                <span>พิเศษ</span>
+                                            </div>
+                                        </th>
                                     </tr>
                                     {/* Row 2: Sub-items / Max scores */}
                                     <tr className="bg-slate-50 border-b border-slate-300">
@@ -450,6 +456,12 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                         ))}
                                         <td className="px-3 py-2 text-center text-blue-700 font-bold border-l border-blue-200 bg-blue-50">
                                             {classAverage.toFixed(1)}
+                                        </td>
+                                        <td className="px-3 py-2 text-center text-amber-600 font-bold border-l border-amber-200 bg-amber-50">
+                                            {filteredStudents.length > 0 
+                                                ? (filteredStudents.reduce((sum, s) => sum + (s.bonus_score || 0), 0) / filteredStudents.length).toFixed(1)
+                                                : "-"
+                                            }
                                         </td>
                                     </tr>
                                 </thead>
@@ -508,6 +520,16 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                                         </span>
                                                         <span className="text-xs text-slate-400">/{studentMax}</span>
                                                     </div>
+                                                </td>
+                                                <td className="px-2 py-2 text-center border-l border-amber-100 bg-amber-50/30">
+                                                    {student.bonus_score > 0 ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-100 text-amber-700 font-bold text-sm">
+                                                            <Icon icon="solar:star-bold" className="text-amber-500 text-xs" />
+                                                            +{student.bonus_score}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-slate-300">-</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );
