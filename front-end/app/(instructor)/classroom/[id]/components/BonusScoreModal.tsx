@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Button } from "@heroui/button";
-import { Input } from "@heroui/input";
 import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Tooltip } from "@heroui/tooltip";
 import { Tabs, Tab } from "@heroui/tabs";
+import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import bonusScoreService, { StudentWithBonus, StudentBonusData } from "@/services/bonusScore.service";
@@ -27,6 +27,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
     const [isLoading, setIsLoading] = useState(false);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [givingTo, setGivingTo] = useState<number | null>(null);
+    const [recentBonuses, setRecentBonuses] = useState<{ student: StudentWithBonus; totalBonus: number }[]>([]);
+    const autocompleteRef = useRef<HTMLInputElement>(null);
 
     // Fetch enrolled students
     const fetchStudents = useCallback(async () => {
@@ -65,18 +67,31 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
         if (isOpen && courseId) {
             fetchStudents();
             fetchBonusHistory();
+            setRecentBonuses([]);
+            setSearchQuery("");
         }
     }, [isOpen, courseId, fetchStudents, fetchBonusHistory]);
 
-    // Debounced search
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (isOpen) {
-                fetchStudents();
-            }
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [searchQuery, isOpen, fetchStudents]);
+    // Handle autocomplete selection - give bonus immediately
+    const handleSelectStudent = async (key: React.Key | null) => {
+        if (!key) return;
+        const studentId = Number(key);
+        const student = students.find(s => s.id === studentId);
+        if (student) {
+            await handleGiveBonus(student.id, student.full_name);
+        }
+    };
+
+    // Filter students for autocomplete
+    const filteredStudents = useMemo(() => {
+        if (!searchQuery.trim()) return students;
+        const query = searchQuery.toLowerCase();
+        return students.filter(
+            s =>
+                s.student_id.toLowerCase().includes(query) ||
+                s.full_name.toLowerCase().includes(query)
+        );
+    }, [students, searchQuery]);
 
     // Give bonus score
     const handleGiveBonus = async (studentId: number, studentName: string) => {
@@ -105,6 +120,18 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                             : s
                     )
                 );
+
+                // Add to recent bonuses (prepend to top)
+                const student = students.find(s => s.id === studentId);
+                if (student) {
+                    setRecentBonuses(prev => {
+                        const filtered = prev.filter(r => r.student.id !== studentId);
+                        return [{ student: { ...student, totalBonus: newTotalBonus }, totalBonus: newTotalBonus }, ...filtered].slice(0, 10);
+                    });
+                }
+
+                // Clear search and refocus
+                setSearchQuery("");
 
                 // Refresh history
                 fetchBonusHistory();
@@ -141,17 +168,6 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
             });
         }
     };
-
-    // Filter students by search
-    const filteredStudents = useMemo(() => {
-        if (!searchQuery.trim()) return students;
-        const query = searchQuery.toLowerCase();
-        return students.filter(
-            s =>
-                s.student_id.toLowerCase().includes(query) ||
-                s.full_name.toLowerCase().includes(query)
-        );
-    }, [students, searchQuery]);
 
     return (
         <Modal
@@ -198,97 +214,150 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                             }
                         >
                             <div className="space-y-4 mt-4">
-                                {/* Search */}
-                                <Input
-                                    placeholder="ค้นหานักศึกษา (รหัส หรือ ชื่อ)"
-                                    value={searchQuery}
-                                    onValueChange={setSearchQuery}
-                                    startContent={<Icon icon="solar:magnifer-linear" className="text-amber-500 text-lg" />}
-                                    isClearable
-                                    variant="bordered"
-                                    classNames={{
-                                        inputWrapper: "border-amber-200 hover:border-amber-300 focus-within:!border-amber-500",
-                                    }}
-                                />
-
-                                {/* Student List */}
-                                {isLoading ? (
-                                    <div className="flex items-center justify-center py-12">
-                                        <Spinner size="lg" color="warning" />
-                                    </div>
-                                ) : filteredStudents.length > 0 ? (
-                                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-                                        {filteredStudents.map((student) => (
-                                            <Card
+                                {/* Autocomplete Search */}
+                                <div className="relative">
+                                    <Autocomplete
+                                        ref={autocompleteRef}
+                                        label="ค้นหานักศึกษา"
+                                        placeholder="พิมพ์รหัส หรือ ชื่อนักศึกษา แล้วเลือก..."
+                                        variant="bordered"
+                                        size="lg"
+                                        isLoading={isLoading || givingTo !== null}
+                                        inputValue={searchQuery}
+                                        onInputChange={setSearchQuery}
+                                        onSelectionChange={handleSelectStudent}
+                                        selectedKey={null}
+                                        items={filteredStudents}
+                                        startContent={
+                                            <Icon icon="solar:star-bold" className="text-amber-500 text-xl" />
+                                        }
+                                        classNames={{
+                                            base: "w-full",
+                                            listboxWrapper: "max-h-[300px]",
+                                        }}
+                                        listboxProps={{
+                                            emptyContent: searchQuery ? "ไม่พบนักศึกษา" : "พิมพ์เพื่อค้นหา..."
+                                        }}
+                                    >
+                                        {(student) => (
+                                            <AutocompleteItem
                                                 key={student.id}
-                                                className="border border-slate-200 shadow-sm hover:shadow-md transition-all"
+                                                textValue={`${student.student_id} ${student.full_name}`}
                                             >
-                                                <CardBody className="p-3">
-                                                    <div className="flex items-center gap-3">
-                                                        {/* Avatar */}
-                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
-                                                            {student.full_name.charAt(0)}
-                                                        </div>
-
-                                                        {/* Info */}
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-slate-800 truncate">
-                                                                {student.full_name}
-                                                            </p>
-                                                            <div className="flex items-center gap-2 text-sm text-slate-500">
-                                                                <span className="font-mono">{student.student_id}</span>
-                                                                <span>•</span>
-                                                                <span>กลุ่ม {student.section_no}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Current Bonus */}
-                                                        {student.totalBonus > 0 && (
-                                                            <Chip
-                                                                size="sm"
-                                                                color="warning"
-                                                                variant="flat"
-                                                                startContent={<Icon icon="solar:star-bold" className="text-xs" />}
-                                                            >
-                                                                {student.totalBonus} คะแนน
-                                                            </Chip>
-                                                        )}
-
-                                                        {/* Give Button */}
-                                                        <Tooltip content="ให้ +1 คะแนน">
-                                                            <Button
-                                                                isIconOnly
-                                                                color="warning"
-                                                                variant="flat"
-                                                                size="sm"
-                                                                isLoading={givingTo === student.id}
-                                                                onPress={() => handleGiveBonus(student.id, student.full_name)}
-                                                                className="shrink-0"
-                                                            >
-                                                                {givingTo !== student.id && (
-                                                                    <Icon icon="solar:add-circle-bold" className="text-lg" />
-                                                                )}
-                                                            </Button>
-                                                        </Tooltip>
+                                                <div className="flex items-center gap-3 py-1">
+                                                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                                                        {student.full_name.charAt(0)}
                                                     </div>
-                                                </CardBody>
-                                            </Card>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-12 text-slate-500">
-                                        <Icon icon="solar:user-cross-rounded-bold-duotone" className="text-5xl mx-auto mb-3 text-slate-300" />
-                                        <p>ไม่พบนักศึกษา</p>
-                                        {searchQuery && (
-                                            <Button
-                                                size="sm"
-                                                variant="light"
-                                                className="mt-2"
-                                                onPress={() => setSearchQuery("")}
-                                            >
-                                                ล้างการค้นหา
-                                            </Button>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-medium text-slate-800 truncate">
+                                                            {student.full_name}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500">
+                                                            <span className="font-mono">{student.student_id}</span>
+                                                            <span className="mx-1">•</span>
+                                                            <span>Sec {student.section_no}</span>
+                                                        </p>
+                                                    </div>
+                                                    {student.totalBonus > 0 && (
+                                                        <Chip
+                                                            size="sm"
+                                                            color="warning"
+                                                            variant="flat"
+                                                            startContent={<Icon icon="solar:star-bold" className="text-xs" />}
+                                                        >
+                                                            {student.totalBonus}
+                                                        </Chip>
+                                                    )}
+                                                    <div className="flex items-center gap-1 text-amber-600">
+                                                        <Icon icon="solar:add-circle-bold" className="text-lg" />
+                                                        <span className="text-sm font-medium">+1</span>
+                                                    </div>
+                                                </div>
+                                            </AutocompleteItem>
                                         )}
+                                    </Autocomplete>
+                                    <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
+                                        <Icon icon="solar:info-circle-linear" />
+                                        เลือกนักศึกษาเพื่อให้ +1 คะแนนทันที
+                                    </p>
+                                </div>
+
+                                {/* Recent Bonuses */}
+                                {recentBonuses.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                                            <Icon icon="solar:clock-circle-bold" className="text-amber-500" />
+                                            เพิ่งให้คะแนน ({recentBonuses.length})
+                                        </p>
+                                        <div className="space-y-2 max-h-[280px] overflow-y-auto pr-2">
+                                            {recentBonuses.map((item, index) => (
+                                                <Card
+                                                    key={`${item.student.id}-${index}`}
+                                                    className="border border-amber-200 bg-amber-50/50 shadow-sm"
+                                                >
+                                                    <CardBody className="p-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-white font-semibold text-sm shrink-0">
+                                                                {item.student.full_name.charAt(0)}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="font-semibold text-slate-800 truncate">
+                                                                    {item.student.full_name}
+                                                                </p>
+                                                                <div className="flex items-center gap-2 text-sm text-slate-500">
+                                                                    <span className="font-mono">{item.student.student_id}</span>
+                                                                    <span>•</span>
+                                                                    <span>Sec {item.student.section_no}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <Chip
+                                                                    size="sm"
+                                                                    color="success"
+                                                                    variant="flat"
+                                                                >
+                                                                    +1 ✓
+                                                                </Chip>
+                                                                <Chip
+                                                                    size="sm"
+                                                                    color="warning"
+                                                                    variant="solid"
+                                                                    startContent={<Icon icon="solar:star-bold" className="text-xs" />}
+                                                                >
+                                                                    {item.totalBonus}
+                                                                </Chip>
+                                                            </div>
+                                                            {/* Quick add more button */}
+                                                            <Tooltip content="ให้อีก +1">
+                                                                <Button
+                                                                    isIconOnly
+                                                                    size="sm"
+                                                                    color="warning"
+                                                                    variant="flat"
+                                                                    isLoading={givingTo === item.student.id}
+                                                                    onPress={() => handleGiveBonus(item.student.id, item.student.full_name)}
+                                                                >
+                                                                    {givingTo !== item.student.id && (
+                                                                        <Icon icon="solar:add-circle-bold" className="text-lg" />
+                                                                    )}
+                                                                </Button>
+                                                            </Tooltip>
+                                                        </div>
+                                                    </CardBody>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Empty state when no recent */}
+                                {recentBonuses.length === 0 && !isLoading && (
+                                    <div className="text-center py-8 text-slate-500">
+                                        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-amber-50 flex items-center justify-center">
+                                            <Icon icon="solar:star-shine-bold-duotone" className="text-5xl text-amber-400" />
+                                        </div>
+                                        <p className="font-medium text-slate-600">พร้อมให้คะแนนพิเศษ</p>
+                                        <p className="text-sm text-slate-400 mt-1">ค้นหาและเลือกนักศึกษาด้านบน</p>
                                     </div>
                                 )}
                             </div>
