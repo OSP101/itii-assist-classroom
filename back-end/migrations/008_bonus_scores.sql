@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS bonus_scores (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     course_id VARCHAR(21) NOT NULL,
-    student_id varchar(11) NOT NULL,
+    student_id VARCHAR(11) NOT NULL,
     score DECIMAL(5, 2) NOT NULL DEFAULT 1.00,
     reason VARCHAR(255) NULL COMMENT 'เหตุผลการให้คะแนน เช่น ตอบคำถามในห้องเรียน',
     given_by BIGINT NOT NULL COMMENT 'ผู้ให้คะแนน (instructor/ta)',
