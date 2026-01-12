@@ -110,6 +110,11 @@ const ScoreModal = dynamic(() => import("./components/ScoreModal"), {
     ssr: false,
 });
 
+const BonusScoreModal = dynamic(() => import("./components/BonusScoreModal"), {
+    loading: () => null,
+    ssr: false,
+});
+
 
 // Team/Group Types (local extension of service types)
 interface TeamMember {
@@ -284,6 +289,9 @@ export default function ClassroomDetailPage() {
     // New Score Modal State
     const [isScoreModalOpen, setIsScoreModalOpen] = useState(false);
     const [scoreModalAssignment, setScoreModalAssignment] = useState<AssignmentType | null>(null);
+
+    // Bonus Score Modal State
+    const [isBonusScoreModalOpen, setIsBonusScoreModalOpen] = useState(false);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -2005,50 +2013,60 @@ export default function ClassroomDetailPage() {
 
                         {/* Assignments Tab */}
                         {activeTab === "assignments" && (
-                            <AssignmentsTab
-                                assignments={assignments}
-                                setAssignments={setAssignments}
-                                isLoading={isAssignmentsLoading}
-                                expandedAssignments={expandedAssignments}
-                                setExpandedAssignments={setExpandedAssignments}
-                                onOpenCreateModal={() => {
-                                    setNewAssignment({
-                                        name: "",
-                                        assignment_type: "individual",
-                                        hasSubItems: false,
-                                        subItems: [],
-                                        maxScore: 10,
-                                        dueDate: "",
-                                        description: "",
-                                        linked_attendance_session_id: null,
-                                    });
-                                    setEditingAssignment(null);
-                                    setIsAddAssignmentModalOpen(true);
-                                }}
-                                onOpenEditModal={(assignment) => {
-                                    setEditingAssignment(assignment);
-                                    setNewAssignment({
-                                        name: assignment.name,
-                                        assignment_type: assignment.assignment_type,
-                                        week_number: assignment.week_number,
-                                        hasSubItems: !!(assignment.subItems && assignment.subItems.length > 0),
-                                        subItems: assignment.subItems?.map(s => ({
-                                            id: s.id,
-                                            name: s.name,
-                                            max_score: Number(s.max_score)
-                                        })) || [],
-                                        maxScore: Number(assignment.max_score),
-                                        dueDate: assignment.due_date || "",
-                                        description: assignment.description || "",
-                                        linked_attendance_session_id: assignment.linked_attendance_session_id || null,
-                                    });
-                                    setIsAddAssignmentModalOpen(true);
-                                }}
-                                onOpenScoreModal={(assignment) => {
-                                    setScoreModalAssignment(assignment);
-                                    setIsScoreModalOpen(true);
-                                }}
-                            />
+                            <>
+                                <AssignmentsTab
+                                    assignments={assignments}
+                                    setAssignments={setAssignments}
+                                    isLoading={isAssignmentsLoading}
+                                    expandedAssignments={expandedAssignments}
+                                    setExpandedAssignments={setExpandedAssignments}
+                                    onOpenCreateModal={() => {
+                                        setNewAssignment({
+                                            name: "",
+                                            assignment_type: "individual",
+                                            hasSubItems: false,
+                                            subItems: [],
+                                            maxScore: 10,
+                                            dueDate: "",
+                                            description: "",
+                                            linked_attendance_session_id: null,
+                                        });
+                                        setEditingAssignment(null);
+                                        setIsAddAssignmentModalOpen(true);
+                                    }}
+                                    onOpenEditModal={(assignment) => {
+                                        setEditingAssignment(assignment);
+                                        setNewAssignment({
+                                            name: assignment.name,
+                                            assignment_type: assignment.assignment_type,
+                                            week_number: assignment.week_number,
+                                            hasSubItems: !!(assignment.subItems && assignment.subItems.length > 0),
+                                            subItems: assignment.subItems?.map(s => ({
+                                                id: s.id,
+                                                name: s.name,
+                                                max_score: Number(s.max_score)
+                                            })) || [],
+                                            maxScore: Number(assignment.max_score),
+                                            dueDate: assignment.due_date || "",
+                                            description: assignment.description || "",
+                                            linked_attendance_session_id: assignment.linked_attendance_session_id || null,
+                                        });
+                                        setIsAddAssignmentModalOpen(true);
+                                    }}
+                                    onOpenScoreModal={(assignment) => {
+                                        setScoreModalAssignment(assignment);
+                                        setIsScoreModalOpen(true);
+                                    }}
+                                    onOpenBonusScoreModal={() => setIsBonusScoreModalOpen(true)}
+                                />
+                                
+                                {/* Bonus Score Modal */}
+                                <BonusScoreModal
+                                    isOpen={isBonusScoreModalOpen}
+                                    onClose={() => setIsBonusScoreModalOpen(false)}
+                                    courseId={parseInt(courseId)}
+                                />
+                            </>
                         )}
 
                         {/* Attendance Tab */}

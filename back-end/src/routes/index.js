@@ -15,6 +15,7 @@ const assignmentRoutes = require('./assignment.routes');
 const scoreRoutes = require('./score.routes');
 const scoreEditRequestRoutes = require('./scoreEditRequest.routes');
 const attendanceRoutes = require('./attendance.routes');
+const bonusScoreRoutes = require('./bonusScore.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -30,6 +31,7 @@ router.use('/assignments', assignmentRoutes);
 router.use('/scores', scoreRoutes);
 router.use('/score-edit-requests', scoreEditRequestRoutes);
 router.use('/attendance', attendanceRoutes);
+router.use('/bonus-scores', bonusScoreRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

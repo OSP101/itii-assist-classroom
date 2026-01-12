@@ -18,6 +18,7 @@ const Score = require('./Score');
 const ScoreEditRequest = require('./ScoreEditRequest');
 const AttendanceSession = require('./AttendanceSession');
 const AttendanceRecord = require('./AttendanceRecord');
+const BonusScore = require('./BonusScore');
 
 // ============================================
 // Define Associations
@@ -386,6 +387,43 @@ AttendanceRecord.belongsTo(User, {
 });
 
 // ============================================
+// Bonus Score Associations
+// ============================================
+
+// BonusScore -> Course
+BonusScore.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(BonusScore, {
+  foreignKey: 'course_id',
+  as: 'bonusScores',
+});
+
+// BonusScore -> Student
+BonusScore.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+Student.hasMany(BonusScore, {
+  foreignKey: 'student_id',
+  as: 'bonusScores',
+});
+
+// BonusScore -> User (given_by)
+BonusScore.belongsTo(User, {
+  foreignKey: 'given_by',
+  as: 'giver',
+});
+
+User.hasMany(BonusScore, {
+  foreignKey: 'given_by',
+  as: 'givenBonusScores',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -409,4 +447,5 @@ module.exports = {
   ScoreEditRequest,
   AttendanceSession,
   AttendanceRecord,
+  BonusScore,
 };

@@ -24,6 +24,7 @@ interface AssignmentsTabProps {
     onOpenCreateModal: () => void;
     onOpenEditModal: (assignment: AssignmentType) => void;
     onOpenScoreModal: (assignment: AssignmentType) => void;
+    onOpenBonusScoreModal?: () => void;
 }
 
 export default function AssignmentsTab({
@@ -35,6 +36,7 @@ export default function AssignmentsTab({
     onOpenCreateModal,
     onOpenEditModal,
     onOpenScoreModal,
+    onOpenBonusScoreModal,
 }: AssignmentsTabProps) {
     const [searchQuery, setSearchQuery] = useState("");
     const [activeTab, setActiveTab] = useState<"all" | "individual" | "group">("all");
@@ -377,6 +379,34 @@ export default function AssignmentsTab({
                                             รวม {assignments.reduce((acc, a) => acc + Number(a.max_score || 0), 0)} คะแนน
                                         </span>
                                     </div> */}
+
+                                    {/* Bonus Score Button */}
+                                    {onOpenBonusScoreModal && (
+                                        <Tooltip content="ให้คะแนนพิเศษ (ถาม-ตอบ)">
+                                            <Button
+                                                color="warning"
+                                                variant="flat"
+                                                startContent={<Icon icon="solar:star-bold" />}
+                                                onPress={onOpenBonusScoreModal}
+                                                className="hidden sm:flex"
+                                            >
+                                                คะแนนพิเศษ
+                                            </Button>
+                                        </Tooltip>
+                                    )}
+                                    {onOpenBonusScoreModal && (
+                                        <Tooltip content="ให้คะแนนพิเศษ">
+                                            <Button
+                                                isIconOnly
+                                                color="warning"
+                                                variant="flat"
+                                                onPress={onOpenBonusScoreModal}
+                                                className="sm:hidden"
+                                            >
+                                                <Icon icon="solar:star-bold" className="text-lg" />
+                                            </Button>
+                                        </Tooltip>
+                                    )}
 
                                     <Button
                                         color="primary"
