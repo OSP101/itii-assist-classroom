@@ -9,6 +9,7 @@ import { Tooltip } from "@heroui/tooltip";
 import { Spinner } from "@heroui/spinner";
 import { Tabs, Tab } from "@heroui/tabs";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@heroui/table";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import assignmentService from "@/services/assignment.service";
@@ -38,25 +39,51 @@ export default function AssignmentsTab({
     const [searchQuery, setSearchQuery] = useState("");
     const [activeTab, setActiveTab] = useState<"all" | "individual" | "group">("all");
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+    
+    // Delete confirmation modal states
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<AssignmentType | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
-    const handleDeleteAssignment = async (assignment: AssignmentType) => {
-        if (confirm("คุณต้องการลบงานนี้ใช่หรือไม่?")) {
-            try {
-                await assignmentService.deleteAssignment(assignment.id);
-                setAssignments(prev => prev.filter(a => a.id !== assignment.id));
-                addToast({
-                    title: "สำเร็จ",
-                    description: "ลบงานเรียบร้อยแล้ว",
-                    color: "success",
-                });
-            } catch (error) {
-                addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: "ไม่สามารถลบงานได้",
-                    color: "danger",
-                });
-            }
+    // Open delete confirmation modal
+    const openDeleteModal = (assignment: AssignmentType) => {
+        setDeleteTarget(assignment);
+        setIsDeleteModalOpen(true);
+    };
+
+    // Close delete modal
+    const closeDeleteModal = () => {
+        setIsDeleteModalOpen(false);
+        setDeleteTarget(null);
+    };
+
+    // Confirm delete assignment
+    const confirmDeleteAssignment = async () => {
+        if (!deleteTarget) return;
+        
+        setIsDeleting(true);
+        try {
+            await assignmentService.deleteAssignment(deleteTarget.id);
+            setAssignments(prev => prev.filter(a => a.id !== deleteTarget.id));
+            addToast({
+                title: "สำเร็จ",
+                description: "ลบงานเรียบร้อยแล้ว",
+                color: "success",
+            });
+            closeDeleteModal();
+        } catch (error) {
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: "ไม่สามารถลบงานได้",
+                color: "danger",
+            });
+        } finally {
+            setIsDeleting(false);
         }
+    };
+
+    const handleDeleteAssignment = (assignment: AssignmentType) => {
+        openDeleteModal(assignment);
     };
 
     const toggleExpanded = (assignmentId: number) => {
@@ -425,6 +452,114 @@ export default function AssignmentsTab({
                     )}
                 </>
             )}
+
+            {/* Delete Confirmation Modal */}
+            <Modal 
+                isOpen={isDeleteModalOpen} 
+                onClose={closeDeleteModal}
+                size="md"
+                backdrop="blur"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-danger">
+                            <Icon icon="solar:trash-bin-trash-bold" className="text-2xl" />
+                            <span>ยืนยันการลบงาน</span>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody>
+                        {deleteTarget && (
+                            <div className="space-y-4">
+                                <p className="text-slate-600">
+                                    คุณต้องการลบงานนี้ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                </p>
+                                
+                                <Card className="border border-slate-200 bg-slate-50">
+                                    <CardBody className="p-4">
+                                        <div className="flex items-start gap-3">
+                                            <div className={`p-2 rounded-lg shrink-0 ${
+                                                deleteTarget.assignment_type === "individual" 
+                                                    ? "bg-indigo-100" 
+                                                    : deleteTarget.assignment_type === "permanent_group" 
+                                                        ? "bg-purple-100" 
+                                                        : "bg-emerald-100"
+                                            }`}>
+                                                <Icon 
+                                                    icon={
+                                                        deleteTarget.assignment_type === "individual" 
+                                                            ? "solar:user-bold" 
+                                                            : deleteTarget.assignment_type === "permanent_group"
+                                                                ? "solar:users-group-two-rounded-bold"
+                                                                : "solar:users-group-rounded-bold"
+                                                    } 
+                                                    className={`text-xl ${
+                                                        deleteTarget.assignment_type === "individual" 
+                                                            ? "text-indigo-600" 
+                                                            : deleteTarget.assignment_type === "permanent_group" 
+                                                                ? "text-purple-600" 
+                                                                : "text-emerald-600"
+                                                    }`} 
+                                                />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-slate-800">{deleteTarget.name}</p>
+                                                <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                                                    <Chip size="sm" variant="flat" className={
+                                                        deleteTarget.assignment_type === "individual"
+                                                            ? "bg-indigo-100 text-indigo-700"
+                                                            : deleteTarget.assignment_type === "permanent_group"
+                                                                ? "bg-purple-100 text-purple-700"
+                                                                : "bg-emerald-100 text-emerald-700"
+                                                    }>
+                                                        {deleteTarget.assignment_type === "individual" 
+                                                            ? "งานเดี่ยว" 
+                                                            : deleteTarget.assignment_type === "permanent_group"
+                                                                ? "กลุ่มถาวร"
+                                                                : "กลุ่มสัปดาห์"}
+                                                    </Chip>
+                                                    <span className="flex items-center gap-1">
+                                                        <Icon icon="solar:medal-star-linear" className="text-amber-500" />
+                                                        {deleteTarget.max_score} คะแนน
+                                                    </span>
+                                                </div>
+                                                {deleteTarget.subItems && deleteTarget.subItems.length > 0 && (
+                                                    <p className="text-xs text-slate-400 mt-1">
+                                                        มี {deleteTarget.subItems.length} ข้อย่อย
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                                    <Icon icon="solar:danger-triangle-bold" className="text-amber-500 text-lg shrink-0 mt-0.5" />
+                                    <p className="text-sm text-amber-700">
+                                        <strong>คำเตือน:</strong> คะแนนทั้งหมดที่เกี่ยวข้องกับงานนี้จะถูกลบไปด้วย
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button 
+                            variant="light" 
+                            onPress={closeDeleteModal}
+                            isDisabled={isDeleting}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={confirmDeleteAssignment}
+                            isLoading={isDeleting}
+                            startContent={!isDeleting && <Icon icon="solar:trash-bin-trash-bold" />}
+                        >
+                            ลบงาน
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
         </div>
     );
 }
