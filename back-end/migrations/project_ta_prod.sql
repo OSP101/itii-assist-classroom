@@ -2,10 +2,10 @@
 -- version 5.2.3
 -- https://www.phpmyadmin.net/
 --
--- Host: mysql
--- Generation Time: Jan 11, 2026 at 11:01 PM
+-- Host: db:3306
+-- Generation Time: Jan 11, 2026 at 11:15 PM
 -- Server version: 8.0.44
--- PHP Version: 8.3.29
+-- PHP Version: 8.3.28
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -18,7 +18,7 @@ SET time_zone = "+00:00";
 /*!40101 SET NAMES utf8mb4 */;
 
 --
--- Database: `project_ta_dev`
+-- Database: `project_ta_prod`
 --
 
 -- --------------------------------------------------------
@@ -72,9 +72,9 @@ CREATE TABLE `attendance_records` (
   `student_id` bigint NOT NULL,
   `check_in_time` datetime DEFAULT NULL,
   `timestamp` datetime DEFAULT CURRENT_TIMESTAMP,
-  `status` enum('present','late','leave','absent') COLLATE utf8mb4_unicode_ci DEFAULT 'absent',
-  `google_email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `google_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `status` enum('present','late','leave','absent') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'absent',
+  `google_email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `google_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `pin_verified` tinyint(1) DEFAULT '0',
   `location_verified` tinyint(1) DEFAULT '0',
   `sso_identifier` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -98,9 +98,9 @@ CREATE TABLE `attendance_sessions` (
   `id` bigint NOT NULL,
   `course_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `course_section_id` bigint DEFAULT NULL,
-  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Attendance',
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'Attendance',
   `pin_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `session_type` enum('lecture','lab','online') COLLATE utf8mb4_unicode_ci DEFAULT 'lecture',
+  `session_type` enum('lecture','lab','online') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'lecture',
   `check_location` tinyint(1) DEFAULT '0',
   `duration_minutes` int DEFAULT NULL,
   `location_lat` decimal(10,7) DEFAULT NULL,
@@ -206,7 +206,7 @@ CREATE TABLE `desks` (
   `number` int NOT NULL COMMENT 'à¸«à¸¡à¸²à¸¢à¹€à¸¥à¸‚à¹‚à¸•à¹Šà¸°',
   `x` int NOT NULL DEFAULT '0' COMMENT 'à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡ X à¸šà¸™ canvas',
   `y` int NOT NULL DEFAULT '0' COMMENT 'à¸•à¸³à¹à¸«à¸™à¹ˆà¸‡ Y à¸šà¸™ canvas',
-  `type` enum('computer','normal','teacher') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'normal' COMMENT 'ประเภทโต๊ะ',
+  `type` enum('computer','normal','teacher') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'normal' COMMENT 'ประเภทโต๊ะ',
   `is_enabled` tinyint(1) NOT NULL DEFAULT '1' COMMENT 'à¹€à¸›à¸´à¸”/à¸›à¸´à¸”à¹ƒà¸Šà¹‰à¸‡à¸²à¸™',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -243,21 +243,21 @@ CREATE TABLE `feedbacks` (
 
 CREATE TABLE `queue_bookings` (
   `id` bigint NOT NULL,
-  `queue_session_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `queue_session_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `student_id` bigint NOT NULL COMMENT 'FK ไปยัง students table',
-  `desk_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `desk_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `desk_number` int NOT NULL COMMENT 'เลขโต๊ะ (denormalized)',
-  `booking_type` enum('grading','help') COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'grading=ตรวจงาน, help=ขอความช่วยเหลือ',
+  `booking_type` enum('grading','help') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'grading=ตรวจงาน, help=ขอความช่วยเหลือ',
   `queue_number` int NOT NULL COMMENT 'หมายเลขคิวในรอบนี้',
-  `note` text COLLATE utf8mb4_unicode_ci COMMENT 'หมายเหตุเพิ่มเติม เช่น ปัญหาที่พบ',
-  `status` enum('waiting','in_progress','completed','cancelled','no_show') COLLATE utf8mb4_unicode_ci DEFAULT 'waiting' COMMENT 'waiting=รอคิว, in_progress=กำลังตรวจ, completed=เสร็จ, cancelled=ยกเลิก, no_show=ไม่มา',
+  `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'หมายเหตุเพิ่มเติม เช่น ปัญหาที่พบ',
+  `status` enum('waiting','in_progress','completed','cancelled','no_show') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'waiting' COMMENT 'waiting=รอคิว, in_progress=กำลังตรวจ, completed=เสร็จ, cancelled=ยกเลิก, no_show=ไม่มา',
   `assigned_worker_id` bigint DEFAULT NULL COMMENT 'ผู้ที่ได้รับมอบหมายตรวจ',
   `assigned_at` timestamp NULL DEFAULT NULL COMMENT 'เวลาที่ได้รับมอบหมาย',
   `started_at` timestamp NULL DEFAULT NULL COMMENT 'เวลาเริ่มตรวจ',
   `completed_at` timestamp NULL DEFAULT NULL COMMENT 'เวลาตรวจเสร็จ',
   `score` decimal(5,2) DEFAULT NULL COMMENT 'คะแนนที่ได้',
-  `score_comment` text COLLATE utf8mb4_unicode_ci COMMENT 'ความเห็นเรื่องคะแนน',
-  `worker_note` text COLLATE utf8mb4_unicode_ci COMMENT 'บันทึกจากผู้ตรวจ',
+  `score_comment` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'ความเห็นเรื่องคะแนน',
+  `worker_note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'บันทึกจากผู้ตรวจ',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -270,11 +270,11 @@ CREATE TABLE `queue_bookings` (
 
 CREATE TABLE `queue_desk_status` (
   `id` bigint NOT NULL,
-  `queue_session_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `desk_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `grading_status` enum('not_started','waiting','in_progress','completed') COLLATE utf8mb4_unicode_ci DEFAULT 'not_started' COMMENT 'not_started=ยังไม่จอง, waiting=รอตรวจ, in_progress=กำลังตรวจ, completed=ตรวจแล้ว',
+  `queue_session_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `desk_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `grading_status` enum('not_started','waiting','in_progress','completed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'not_started' COMMENT 'not_started=ยังไม่จอง, waiting=รอตรวจ, in_progress=กำลังตรวจ, completed=ตรวจแล้ว',
   `grading_booking_id` bigint DEFAULT NULL COMMENT 'Booking ID ปัจจุบันของ grading',
-  `help_status` enum('none','waiting','in_progress') COLLATE utf8mb4_unicode_ci DEFAULT 'none' COMMENT 'none=ไม่มี, waiting=รอช่วยเหลือ, in_progress=กำลังช่วย',
+  `help_status` enum('none','waiting','in_progress') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'none' COMMENT 'none=ไม่มี, waiting=รอช่วยเหลือ, in_progress=กำลังช่วย',
   `help_booking_id` bigint DEFAULT NULL COMMENT 'Booking ID ปัจจุบันของ help',
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -286,16 +286,16 @@ CREATE TABLE `queue_desk_status` (
 --
 
 CREATE TABLE `queue_sessions` (
-  `id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `course_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `classroom_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อการจองคิว เช่น Lab01 - ตรวจงาน',
-  `description` text COLLATE utf8mb4_unicode_ci COMMENT 'รายละเอียดเพิ่มเติม',
-  `pin_code` varchar(10) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'รหัส PIN 6 หลัก',
+  `id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `course_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `classroom_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `title` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'ชื่อการจองคิว เช่น Lab01 - ตรวจงาน',
+  `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci COMMENT 'รายละเอียดเพิ่มเติม',
+  `pin_code` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'รหัส PIN 6 หลัก',
   `linked_assignment_id` int DEFAULT NULL COMMENT 'Assignment ที่ลิงก์สำหรับลงคะแนน',
   `require_attendance` tinyint(1) DEFAULT '0' COMMENT 'ต้องเช็คชื่อก่อนจึงจะจองได้',
   `linked_attendance_session_id` bigint DEFAULT NULL COMMENT 'Session เช็คชื่อที่ลิงก์',
-  `status` enum('draft','active','paused','closed') COLLATE utf8mb4_unicode_ci DEFAULT 'draft' COMMENT 'draft=ยังไม่เปิด, active=กำลังรับจอง, paused=หยุดชั่วคราว, closed=ปิดแล้ว',
+  `status` enum('draft','active','paused','closed') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'draft' COMMENT 'draft=ยังไม่เปิด, active=กำลังรับจอง, paused=หยุดชั่วคราว, closed=ปิดแล้ว',
   `start_time` datetime DEFAULT NULL COMMENT 'เวลาเริ่มรับจอง',
   `end_time` datetime DEFAULT NULL COMMENT 'เวลาสิ้นสุดรับจอง',
   `created_by` bigint DEFAULT NULL,
@@ -311,11 +311,11 @@ CREATE TABLE `queue_sessions` (
 
 CREATE TABLE `queue_workers` (
   `id` bigint NOT NULL,
-  `queue_session_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `queue_session_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint NOT NULL COMMENT 'อาจารย์หรือ TA',
   `accept_grading` tinyint(1) DEFAULT '1' COMMENT 'รับตรวจงาน',
   `accept_help` tinyint(1) DEFAULT '1' COMMENT 'รับแก้ไขปัญหา',
-  `status` enum('online','busy','offline') COLLATE utf8mb4_unicode_ci DEFAULT 'offline' COMMENT 'online=พร้อมรับงาน, busy=กำลังทำงาน, offline=ออฟไลน์',
+  `status` enum('online','busy','offline') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'offline' COMMENT 'online=พร้อมรับงาน, busy=กำลังทำงาน, offline=ออฟไลน์',
   `current_booking_id` bigint DEFAULT NULL COMMENT 'งานที่กำลังทำอยู่',
   `total_grading_completed` int DEFAULT '0' COMMENT 'จำนวนตรวจงานเสร็จ',
   `total_help_completed` int DEFAULT '0' COMMENT 'จำนวนช่วยเหลือเสร็จ',
@@ -485,6 +485,13 @@ CREATE TABLE `users` (
   `is_active` tinyint(1) NOT NULL DEFAULT '1',
   `avatar` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`id`, `username`, `password_hash`, `role`, `linked_student_id`, `full_name`, `email`, `created_at`, `updated_at`, `google_id`, `provider`, `is_active`, `avatar`) VALUES
+(1, 'admin', '$2a$10$wUWwScBc2ca8y76MMs9iOOkA5J71z4m809/Y2Q2INpX.Iz/KO/koy', 'admin', NULL, 'Administrator', 'admin@itii.com', '2026-01-11 23:15:27', '2026-01-11 23:15:27', NULL, 'local', 1, NULL);
 
 --
 -- Indexes for dumped tables
@@ -841,7 +848,7 @@ ALTER TABLE `system_logs`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- Constraints for dumped tables
