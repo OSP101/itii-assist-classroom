@@ -381,7 +381,6 @@ export default function AssignmentsTab({
                                     </div> */}
 
                                     {/* Bonus Score Button */}
-                                    {onOpenBonusScoreModal && (
                                         <Tooltip content="ให้คะแนนพิเศษ (ถาม-ตอบ)">
                                             <Button
                                                 color="warning"
@@ -393,8 +392,7 @@ export default function AssignmentsTab({
                                                 คะแนนพิเศษ
                                             </Button>
                                         </Tooltip>
-                                    )}
-                                    {onOpenBonusScoreModal && (
+                                    {/* {onOpenBonusScoreModal && (
                                         <Tooltip content="ให้คะแนนพิเศษ">
                                             <Button
                                                 isIconOnly
@@ -406,7 +404,7 @@ export default function AssignmentsTab({
                                                 <Icon icon="solar:star-bold" className="text-lg" />
                                             </Button>
                                         </Tooltip>
-                                    )}
+                                    )} */}
 
                                     <Button
                                         color="primary"

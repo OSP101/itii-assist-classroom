@@ -13,7 +13,7 @@ import { Button } from "@heroui/button";
 import { Divider } from "@heroui/divider";
 import { Icon } from "@iconify/react";
 import scoreService, { ScoreSummaryMatrix } from "@/services/score.service";
-import {Link} from "@heroui/link";
+import { Link } from "@heroui/link";
 
 interface ScoreSummaryTabProps {
     courseId: string;
@@ -458,10 +458,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                             {classAverage.toFixed(1)}
                                         </td>
                                         <td className="px-3 py-2 text-center text-amber-600 font-bold border-l border-amber-200 bg-amber-50">
-                                            {filteredStudents.length > 0 
-                                                ? (filteredStudents.reduce((sum, s) => sum + (s.bonus_score || 0), 0) / filteredStudents.length).toFixed(1)
-                                                : "-"
-                                            }
+                                            -
                                         </td>
                                     </tr>
                                 </thead>
@@ -524,8 +521,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                                                 <td className="px-2 py-2 text-center border-l border-amber-100 bg-amber-50/30">
                                                     {student.bonus_score > 0 ? (
                                                         <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-100 text-amber-700 font-bold text-sm">
-                                                            <Icon icon="solar:star-bold" className="text-amber-500 text-xs" />
-                                                            +{student.bonus_score}
+                                                            {student.bonus_score}
                                                         </span>
                                                     ) : (
                                                         <span className="text-slate-300">-</span>

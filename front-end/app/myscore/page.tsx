@@ -266,9 +266,9 @@ export default function MyScorePage() {
                         </div>
                         <div className="flex items-center gap-3">
                             {bonusScore && bonusScore.total > 0 && (
-                                <div className="flex items-center gap-1 bg-amber-400/20 rounded-xl px-3 py-2">
-                                    <Icon icon="solar:star-bold" className="text-amber-300" />
-                                    <span className="text-2xl font-bold text-amber-300">+{bonusScore.total}</span>
+                                <div className="flex items-center gap-1 bg-amber-400/20 rounded-xl px-4 py-3">
+                                    <Icon icon="solar:star-bold" className="text-amber-300 text-2xl" />
+                                    <span className="text-4xl font-bold text-amber-300">{bonusScore.total}</span>
                                 </div>
                             )}
                             <div className="flex items-end gap-1 bg-white/10 rounded-xl px-4 py-3">
@@ -494,8 +494,9 @@ export default function MyScorePage() {
             <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white overflow-hidden">
                 {/* Background Pattern */}
                 <div className="absolute inset-0 opacity-10">
-                    <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
+                    <div className="absolute top-60 left-90 w-35 h-35 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
                     <div className="absolute bottom-0 right-0 w-60 h-60 bg-white rounded-full translate-x-1/3 translate-y-1/3" />
+                    <div className="absolute top-0 left-0 w-40 h-40 bg-white rounded-full -translate-x-1/2 -translate-y-1/2" />
                 </div>
 
                 <div className="relative max-w-4xl mx-auto px-4 py-8 sm:py-12">
@@ -540,7 +541,7 @@ export default function MyScorePage() {
                                 onPress={handleSearch}
                                 isLoading={isLoading}
                                 className="bg-gradient-to-r from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 h-14 min-w-[140px] text-base font-medium"
-                                startContent={!isLoading && <Icon icon="solar:magnifer-bold" className="text-xl" />}
+                                // startContent={!isLoading && <Icon icon="solar:magnifer-bold" className="text-5xl text-white" />}
                             >
                                 ค้นหาคะแนน
                             </Button>

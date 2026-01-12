@@ -47,7 +47,7 @@ export interface BonusScoreSummary {
 }
 
 export interface GiveBonusScoreDto {
-    course_id: number;
+    course_id: string;
     student_id: number;
     score?: number;
     reason?: string;
@@ -74,19 +74,18 @@ export const bonusScoreService = {
     },
 
     /**
-     * Get enrolled students for bonus score selection
+     * Get all enrolled students for bonus score selection
      */
-    async getEnrolledStudents(courseId: number, search?: string): Promise<ApiResponse<{
+    async getEnrolledStudents(courseId: string): Promise<ApiResponse<{
         students: StudentWithBonus[];
     }>> {
-        const params = search ? `?search=${encodeURIComponent(search)}` : '';
-        return apiService.get(`/bonus-scores/course/${courseId}/students${params}`);
+        return apiService.get(`/bonus-scores/course/${courseId}/students`);
     },
 
     /**
      * Get all bonus scores for a course (grouped by student)
      */
-    async getBonusScoresByCourse(courseId: number): Promise<ApiResponse<{
+    async getBonusScoresByCourse(courseId: string): Promise<ApiResponse<{
         studentBonusScores: StudentBonusData[];
         totalRecords: number;
     }>> {
@@ -96,14 +95,14 @@ export const bonusScoreService = {
     /**
      * Get bonus score summary for a course
      */
-    async getBonusScoreSummary(courseId: number): Promise<ApiResponse<BonusScoreSummary>> {
+    async getBonusScoreSummary(courseId: string): Promise<ApiResponse<BonusScoreSummary>> {
         return apiService.get(`/bonus-scores/course/${courseId}/summary`);
     },
 
     /**
      * Get bonus score history for specific student in a course
      */
-    async getStudentBonusHistory(courseId: number, studentId: number): Promise<ApiResponse<{
+    async getStudentBonusHistory(courseId: string, studentId: number): Promise<ApiResponse<{
         records: BonusScoreRecord[];
         totalScore: number;
     }>> {

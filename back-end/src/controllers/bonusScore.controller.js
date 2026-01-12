@@ -175,7 +175,6 @@ const getStudentBonusHistory = asyncHandler(async (req, res) => {
  */
 const getEnrolledStudentsForBonus = asyncHandler(async (req, res) => {
     const { courseId } = req.params;
-    const { search = '' } = req.query;
 
     // Get all sections in this course
     const sections = await CourseSection.findAll({
@@ -192,15 +191,6 @@ const getEnrolledStudentsForBonus = asyncHandler(async (req, res) => {
         });
     }
 
-    // Build where clause for search
-    const studentWhere = {};
-    if (search) {
-        studentWhere[Op.or] = [
-            { student_id: { [Op.like]: `%${search}%` } },
-            { full_name: { [Op.like]: `%${search}%` } },
-        ];
-    }
-
     // Get enrolled students with their bonus scores
     const enrollments = await CourseSectionStudent.findAll({
         where: { course_section_id: { [Op.in]: sectionIds } },
@@ -208,7 +198,6 @@ const getEnrolledStudentsForBonus = asyncHandler(async (req, res) => {
             {
                 model: Student,
                 as: 'student',
-                where: studentWhere,
                 attributes: ['id', 'student_id', 'full_name'],
             },
             {

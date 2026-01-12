@@ -196,6 +196,7 @@ export default function InstructorLayout({
     const isHomePage = pathname === "/home" || pathname === "/home/create-course";
     const isClassroomPage = pathname.includes("/classroom/");
 
+    // Show loading screen while checking auth
     if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
@@ -204,6 +205,21 @@ export default function InstructorLayout({
                         <IoSchool />
                     </div>
                     <p className="text-xl text-slate-700">The ITII Assist Classroom is loading.</p>
+                    <Spinner size="lg" color="primary" />
+                </div>
+            </div>
+        );
+    }
+
+    // Don't render content if user is not authenticated (will be redirected by useEffect)
+    if (!user) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <p className="text-xl text-slate-700">กำลังนำไปยังหน้าเข้าสู่ระบบ...</p>
                     <Spinner size="lg" color="primary" />
                 </div>
             </div>

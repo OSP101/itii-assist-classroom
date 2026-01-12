@@ -116,7 +116,28 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-50">
-                <Spinner size="lg" color="primary" />
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <p className="text-xl text-slate-700">กำลังโหลด...</p>
+                    <Spinner size="lg" color="primary" />
+                </div>
+            </div>
+        );
+    }
+
+    // Don't render content if user is not authenticated (will be redirected by AdminContext)
+    if (!user) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <p className="text-xl text-slate-700">กำลังนำไปยังหน้าเข้าสู่ระบบ...</p>
+                    <Spinner size="lg" color="primary" />
+                </div>
             </div>
         );
     }

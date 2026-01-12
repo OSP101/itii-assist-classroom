@@ -2064,7 +2064,7 @@ export default function ClassroomDetailPage() {
                                 <BonusScoreModal
                                     isOpen={isBonusScoreModalOpen}
                                     onClose={() => setIsBonusScoreModalOpen(false)}
-                                    courseId={parseInt(courseId)}
+                                    courseId={courseId}
                                 />
                             </>
                         )}
