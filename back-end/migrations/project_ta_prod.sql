@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: db:3306
--- Generation Time: Jan 11, 2026 at 11:15 PM
+-- Generation Time: Jan 12, 2026 at 05:00 PM
 -- Server version: 8.0.44
 -- PHP Version: 8.3.28
 
@@ -114,6 +114,24 @@ CREATE TABLE `attendance_sessions` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `bonus_scores`
+--
+
+CREATE TABLE `bonus_scores` (
+  `id` bigint NOT NULL,
+  `course_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `student_id` bigint NOT NULL,
+  `score` decimal(5,2) NOT NULL DEFAULT '1.00',
+  `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เหตุผลการให้คะแนน เช่น ตอบคำถามในห้องเรียน',
+  `given_by` bigint NOT NULL COMMENT 'ผู้ให้คะแนน (instructor/ta)',
+  `given_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='ตารางเก็บคะแนนพิเศษจากการถามตอบในห้องเรียน';
 
 -- --------------------------------------------------------
 
@@ -390,7 +408,7 @@ CREATE TABLE `score_edit_requests` (
 
 CREATE TABLE `students` (
   `id` bigint NOT NULL,
-  `student_id` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `student_id` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `extra` json DEFAULT NULL,
@@ -487,13 +505,6 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
--- Dumping data for table `users`
---
-
-INSERT INTO `users` (`id`, `username`, `password_hash`, `role`, `linked_student_id`, `full_name`, `email`, `created_at`, `updated_at`, `google_id`, `provider`, `is_active`, `avatar`) VALUES
-(1, 'admin', '$2a$10$wUWwScBc2ca8y76MMs9iOOkA5J71z4m809/Y2Q2INpX.Iz/KO/koy', 'admin', NULL, 'Administrator', 'admin@itii.com', '2026-01-11 23:15:27', '2026-01-11 23:15:27', NULL, 'local', 1, NULL);
-
---
 -- Indexes for dumped tables
 --
 
@@ -537,6 +548,16 @@ ALTER TABLE `attendance_sessions`
   ADD KEY `fk_att_creator` (`created_by`),
   ADD KEY `idx_attsess_status` (`status`),
   ADD KEY `idx_attsess_start_time` (`start_time`);
+
+--
+-- Indexes for table `bonus_scores`
+--
+ALTER TABLE `bonus_scores`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `given_by` (`given_by`),
+  ADD KEY `idx_bonus_scores_course` (`course_id`),
+  ADD KEY `idx_bonus_scores_student` (`student_id`),
+  ADD KEY `idx_bonus_scores_course_student` (`course_id`,`student_id`);
 
 --
 -- Indexes for table `classrooms`
@@ -761,6 +782,12 @@ ALTER TABLE `attendance_sessions`
   MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `bonus_scores`
+--
+ALTER TABLE `bonus_scores`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `course_sections`
 --
 ALTER TABLE `course_sections`
@@ -848,7 +875,7 @@ ALTER TABLE `system_logs`
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
 
 --
 -- Constraints for dumped tables
@@ -883,6 +910,14 @@ ALTER TABLE `attendance_sessions`
   ADD CONSTRAINT `fk_att_course` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `fk_att_creator` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_att_section` FOREIGN KEY (`course_section_id`) REFERENCES `course_sections` (`id`) ON DELETE SET NULL;
+
+--
+-- Constraints for table `bonus_scores`
+--
+ALTER TABLE `bonus_scores`
+  ADD CONSTRAINT `bonus_scores_ibfk_1` FOREIGN KEY (`course_id`) REFERENCES `courses` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `bonus_scores_ibfk_2` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `bonus_scores_ibfk_3` FOREIGN KEY (`given_by`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `classrooms`

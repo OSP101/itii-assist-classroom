@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS bonus_scores (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     course_id VARCHAR(21) NOT NULL,
-    student_id VARCHAR(11) NOT NULL,
+    student_id BIGINT NOT NULL,
     score DECIMAL(5, 2) NOT NULL DEFAULT 1.00,
     reason VARCHAR(255) NULL COMMENT 'เหตุผลการให้คะแนน เช่น ตอบคำถามในห้องเรียน',
     given_by BIGINT NOT NULL COMMENT 'ผู้ให้คะแนน (instructor/ta)',
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS bonus_scores (
     
     FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
     FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-    FOREIGN KEY (given_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (given_by) REFERENCES users(id) ON DELETE CASCADE,
     
     INDEX idx_bonus_scores_course (course_id),
     INDEX idx_bonus_scores_student (student_id),
