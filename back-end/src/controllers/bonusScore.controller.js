@@ -203,7 +203,7 @@ const getEnrolledStudentsForBonus = asyncHandler(async (req, res) => {
 
     // Get enrolled students with their bonus scores
     const enrollments = await CourseSectionStudent.findAll({
-        where: { section_id: { [Op.in]: sectionIds } },
+        where: { course_section_id: { [Op.in]: sectionIds } },
         include: [
             {
                 model: Student,
