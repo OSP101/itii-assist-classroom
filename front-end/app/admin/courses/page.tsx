@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import {
     Table,
     TableHeader,
@@ -407,11 +408,15 @@ export default function CoursesPage() {
                 return (
                     <div className="flex items-center gap-3">
                         {course.image ? (
-                            <img
-                                src={course.image}
-                                alt={course.name}
-                                className="w-10 h-10 object-cover rounded-lg border border-slate-200"
-                            />
+                            <div className="relative w-10 h-10">
+                                <Image
+                                    src={course.image}
+                                    alt={course.name}
+                                    fill
+                                    className="object-cover rounded-lg border border-slate-200"
+                                    sizes="40px"
+                                />
+                            </div>
                         ) : (
                             <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg">
                                 <IoBook className="text-2xl text-white" />

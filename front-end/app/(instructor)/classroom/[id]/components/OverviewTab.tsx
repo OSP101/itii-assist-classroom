@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Divider } from "@heroui/divider";
@@ -273,11 +274,15 @@ export default function OverviewTab({
                         {/* Course Image */}
                         <div className="shrink-0">
                             {course.image ? (
-                                <img
-                                    src={course.image}
-                                    alt={course.name}
-                                    className="w-full md:w-36 h-36 object-cover rounded-2xl border-2 border-white/20 shadow-xl"
-                                />
+                                <div className="relative w-full md:w-36 h-36">
+                                    <Image
+                                        src={course.image}
+                                        alt={course.name}
+                                        fill
+                                        className="object-cover rounded-2xl border-2 border-white/20 shadow-xl"
+                                        sizes="144px"
+                                    />
+                                </div>
                             ) : (
                                 <div className="w-full md:w-36 h-36 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center border-2 border-white/20">
                                     <Icon icon="solar:book-2-bold-duotone" className="text-5xl text-white/60" />

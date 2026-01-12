@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Card, CardBody } from "@heroui/card";
@@ -108,14 +109,15 @@ export default function LoginPage() {
                     <div className="flex flex-col md:flex-row">
                         {/* Left Side - Image & Branding */}
                         <div className="relative hidden w-full md:flex md:w-1/2 min-h-[600px]">
-                            <div
-                                className="absolute inset-0 w-full h-full bg-center bg-cover bg-no-repeat"
-                                style={{
-                                    backgroundImage: `url("/images/cp-image-login.jpg")`,
-                                }}
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                            </div>
+                            <Image
+                                src="/images/cp-image-login.jpg"
+                                alt="ITII Assist Classroom"
+                                fill
+                                priority
+                                className="object-cover object-center"
+                                sizes="(max-width: 768px) 0vw, 50vw"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                             <div className="absolute bottom-0 left-0 p-8 text-white z-10">
                                 <p className="text-3xl font-bold leading-tight mb-2 tracking-tight">
                                     ITII Assist classroom.
