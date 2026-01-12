@@ -457,32 +457,35 @@ export default function AssignmentsTab({
             <Modal 
                 isOpen={isDeleteModalOpen} 
                 onClose={closeDeleteModal}
-                size="md"
-                backdrop="blur"
+                size="lg"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2 text-danger">
-                            <Icon icon="solar:trash-bin-trash-bold" className="text-2xl" />
-                            <span>ยืนยันการลบงาน</span>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ลบงาน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                                </p>
+                            </div>
                         </div>
                     </ModalHeader>
-                    <ModalBody>
+                    <ModalBody className="px-6 py-4">
                         {deleteTarget && (
                             <div className="space-y-4">
-                                <p className="text-slate-600">
-                                    คุณต้องการลบงานนี้ใช่หรือไม่? การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                </p>
-                                
-                                <Card className="border border-slate-200 bg-slate-50">
-                                    <CardBody className="p-4">
-                                        <div className="flex items-start gap-3">
-                                            <div className={`p-2 rounded-lg shrink-0 ${
+                                {/* Assignment Info */}
+                                <Card className="border border-red-100 bg-red-50/50">
+                                    <CardBody className="py-4 px-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${
                                                 deleteTarget.assignment_type === "individual" 
-                                                    ? "bg-indigo-100" 
+                                                    ? "bg-gradient-to-br from-indigo-500 to-blue-600" 
                                                     : deleteTarget.assignment_type === "permanent_group" 
-                                                        ? "bg-purple-100" 
-                                                        : "bg-emerald-100"
+                                                        ? "bg-gradient-to-br from-purple-500 to-indigo-600" 
+                                                        : "bg-gradient-to-br from-emerald-500 to-teal-600"
                                             }`}>
                                                 <Icon 
                                                     icon={
@@ -492,18 +495,12 @@ export default function AssignmentsTab({
                                                                 ? "solar:users-group-two-rounded-bold"
                                                                 : "solar:users-group-rounded-bold"
                                                     } 
-                                                    className={`text-xl ${
-                                                        deleteTarget.assignment_type === "individual" 
-                                                            ? "text-indigo-600" 
-                                                            : deleteTarget.assignment_type === "permanent_group" 
-                                                                ? "text-purple-600" 
-                                                                : "text-emerald-600"
-                                                    }`} 
+                                                    className="text-2xl text-white"
                                                 />
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-slate-800">{deleteTarget.name}</p>
-                                                <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-lg text-slate-800">{deleteTarget.name}</p>
+                                                <div className="flex items-center gap-2 mt-1">
                                                     <Chip size="sm" variant="flat" className={
                                                         deleteTarget.assignment_type === "individual"
                                                             ? "bg-indigo-100 text-indigo-700"
@@ -517,31 +514,63 @@ export default function AssignmentsTab({
                                                                 ? "กลุ่มถาวร"
                                                                 : "กลุ่มสัปดาห์"}
                                                     </Chip>
+                                                    {deleteTarget.week_number && (
+                                                        <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                            W{deleteTarget.week_number}
+                                                        </Chip>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-3 mt-2 text-sm text-slate-500">
                                                     <span className="flex items-center gap-1">
                                                         <Icon icon="solar:medal-star-linear" className="text-amber-500" />
                                                         {deleteTarget.max_score} คะแนน
                                                     </span>
+                                                    {deleteTarget.subItems && deleteTarget.subItems.length > 0 && (
+                                                        <span className="flex items-center gap-1">
+                                                            <Icon icon="solar:list-bold" className="text-slate-400" />
+                                                            {deleteTarget.subItems.length} ข้อย่อย
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {deleteTarget.subItems && deleteTarget.subItems.length > 0 && (
-                                                    <p className="text-xs text-slate-400 mt-1">
-                                                        มี {deleteTarget.subItems.length} ข้อย่อย
-                                                    </p>
-                                                )}
                                             </div>
                                         </div>
                                     </CardBody>
                                 </Card>
 
-                                <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                                    <Icon icon="solar:danger-triangle-bold" className="text-amber-500 text-lg shrink-0 mt-0.5" />
-                                    <p className="text-sm text-amber-700">
-                                        <strong>คำเตือน:</strong> คะแนนทั้งหมดที่เกี่ยวข้องกับงานนี้จะถูกลบไปด้วย
-                                    </p>
+                                {/* Score Info */}
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:diploma-verified-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-amber-800">เกี่ยวกับคะแนน</p>
+                                                <p className="text-sm text-amber-700 mt-1">
+                                                    คะแนนทั้งหมดที่เกี่ยวข้องกับงานนี้จะถูกลบไปด้วย
+                                                    รวมถึงคะแนนข้อย่อยทั้งหมด (ถ้ามี)
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                คุณต้องการลบงานนี้ใช่หรือไม่?
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </ModalBody>
-                    <ModalFooter>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button 
                             variant="light" 
                             onPress={closeDeleteModal}
@@ -553,7 +582,7 @@ export default function AssignmentsTab({
                             color="danger" 
                             onPress={confirmDeleteAssignment}
                             isLoading={isDeleting}
-                            startContent={!isDeleting && <Icon icon="solar:trash-bin-trash-bold" />}
+                            className="bg-red-500"
                         >
                             ลบงาน
                         </Button>
