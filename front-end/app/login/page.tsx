@@ -28,7 +28,7 @@ export default function LoginPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!formData.username || !formData.password) {
             addToast({
                 title: "กรุณากรอกข้อมูล",
@@ -75,7 +75,7 @@ export default function LoginPage() {
                 } else if (result.error && typeof result.error === 'object') {
                     errorMessage = (result.error as { message?: string }).message || errorMessage;
                 }
-                
+
                 addToast({
                     title: "เข้าสู่ระบบไม่สำเร็จ",
                     description: errorMessage,
@@ -101,8 +101,9 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
-            <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
+        <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
+            <div className="flex-1 flex items-center justify-center">
+                <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
                 <CardBody className="p-0">
                     <div className="flex flex-col md:flex-row">
                         {/* Left Side - Image & Branding */}
@@ -128,7 +129,7 @@ export default function LoginPage() {
 
                         {/* Right Side - Login Form */}
                         <div className="w-full md:w-1/2 p-5 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
-                            
+
 
                             {/* Header */}
                             <div className="flex flex-col gap-1 sm:gap-2 mb-6 sm:mb-8">
@@ -271,9 +272,10 @@ export default function LoginPage() {
                     </div>
                 </CardBody>
             </Card>
+            </div>
 
-            <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 text-center text-slate-400 text-sm sm:text-xs px-4">
-                © 2025 ITII Assist classroom. All Rights Reserved. made with by <Link href="https://github.com/OSP101" target="_blank" className="text-sm text-slate-400">OSP101</Link>
+            <div className="mt-2 pb-2 text-center text-slate-400 text-xs sm:text-sm px-4 font-light">
+                © 2025 ITII Assist classroom. All Rights Reserved. made with by <Link href="https://github.com/OSP101" target="_blank" className="text-xs sm:text-sm text-slate-400">OSP101</Link>
             </div>
         </div>
     );
