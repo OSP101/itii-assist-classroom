@@ -2,16 +2,22 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Card, CardBody } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { Link } from "@heroui/link";
 import { Icon } from "@iconify/react";
-import { Turnstile, TurnstileInstance } from '@marsidev/react-turnstile';
+import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { addToast } from "@heroui/toast";
 import { authService } from "@/services";
+
+// Dynamic import Turnstile to avoid hydration mismatch
+const Turnstile = dynamic(
+    () => import('@marsidev/react-turnstile').then(mod => mod.Turnstile),
+    { ssr: false }
+);
 
 export default function LoginPage() {
     const router = useRouter();
@@ -109,13 +115,11 @@ export default function LoginPage() {
                     <div className="flex flex-col md:flex-row">
                         {/* Left Side - Image & Branding */}
                         <div className="relative hidden w-full md:flex md:w-1/2 min-h-[600px]">
-                            <Image
-                                src="/images/cp-image-login.jpg"
-                                alt="ITII Assist Classroom"
-                                fill
-                                priority
-                                className="object-cover object-center"
-                                sizes="(max-width: 768px) 0vw, 50vw"
+                            {/* Use CSS background for decorative image to avoid hydration issues */}
+                            <div 
+                                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                                style={{ backgroundImage: `url('/images/cp-image-login.jpg')` }}
+                                aria-hidden="true"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                             <div className="absolute bottom-0 left-0 p-8 text-white z-10">
@@ -209,17 +213,20 @@ export default function LoginPage() {
                                     </Link>
                                 </div> */}
 
-                                <Turnstile
-                                    id='turnstile-1'
-                                    ref={refTurnstile}
-                                    siteKey={process.env.NEXT_PUBLIC_CLOUD || ''}
-                                    onSuccess={() => setCanSubmit(false)}
-                                    options={{
-                                        theme: 'auto',
-                                        size: 'flexible',
-                                    }}
-                                    className="w-full mt-2"
-                                />
+                                {process.env.NEXT_PUBLIC_CLOUD && (
+                                    <Turnstile
+                                        id='turnstile-1'
+                                        ref={refTurnstile}
+                                        siteKey={process.env.NEXT_PUBLIC_CLOUD}
+                                        onSuccess={() => setCanSubmit(false)}
+                                        onError={() => setCanSubmit(true)}
+                                        options={{
+                                            theme: 'auto',
+                                            size: 'flexible',
+                                        }}
+                                        className="w-full mt-2"
+                                    />
+                                )}
 
                                 <Button
                                     type="submit"
