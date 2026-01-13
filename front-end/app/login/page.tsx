@@ -228,7 +228,7 @@ export default function LoginPage() {
                                 </div> */}
 
                                 {/* Turnstile - Only render on client after key is loaded */}
-                                <div className="w-full mt-2" suppressHydrationWarning>
+                                {/* <div className="w-full mt-2" suppressHydrationWarning>
                                     {turnstileKey ? (
                                         <Turnstile
                                             id='turnstile-1'
@@ -256,7 +256,7 @@ export default function LoginPage() {
                                     ) : !turnstileReady ? (
                                         <Skeleton className="w-full h-[65px] rounded-lg" />
                                     ) : null}
-                                </div>
+                                </div> */}
 
                                 <Button
                                     type="submit"
