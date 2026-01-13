@@ -171,7 +171,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
         }
     }, [course.id]);
 
-        const fetchSessionsNew = useCallback(async () => {
+    const fetchSessionsNew = useCallback(async () => {
         try {
             const data = await attendanceService.getSessions(course.id);
             setSessions(data);
@@ -195,11 +195,11 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
     const getComputedStatus = useCallback((session: AttendanceSession): "draft" | "active" | "closed" => {
         // If status is manually set to closed, keep it closed
         if (session.status === "closed") return "closed";
-        
+
         const now = new Date();
         const startTime = new Date(session.start_time);
         const endTime = new Date(session.end_time);
-        
+
         if (now < startTime) {
             return "draft"; // ยังไม่ถึงเวลาเริ่ม
         } else if (now >= startTime && now <= endTime) {
@@ -305,7 +305,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 });
                 setIsDeleteModalOpen(false);
                 setDeleteTarget(null);
-                fetchSessions();
+                fetchSessionsNew();
             }
         } catch (error: unknown) {
             console.error("Error deleting session:", error);
@@ -351,7 +351,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
         if (!window.confirm("ต้องการปิดรอบเช็คชื่อนี้ทันทีหรือไม่?")) {
             return;
         }
-        
+
         try {
             const result = await attendanceService.closeSession(session.id);
             if (result) {
@@ -397,7 +397,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
     // Handle update session
     const handleUpdateSession = async () => {
         if (!editTarget) return;
-        
+
         if (!formData.title.trim()) {
             addToast({
                 title: "กรุณากรอกข้อมูล",
@@ -502,7 +502,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                     location_lat: position.coords.latitude,
                     location_lng: position.coords.longitude,
                 }));
-                
+
                 const accuracy = position.coords.accuracy;
                 // addToast({
                 //     title: "ดึงตำแหน่ง GPS สำเร็จ",
@@ -514,7 +514,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
             (error) => {
                 console.error("Geolocation error:", error);
                 let errorMessage = "ไม่สามารถดึงตำแหน่งได้";
-                
+
                 switch (error.code) {
                     case error.PERMISSION_DENIED:
                         errorMessage = "คุณไม่อนุญาตให้เข้าถึงตำแหน่ง GPS กรุณาเปิดสิทธิ์ในการตั้งค่าเบราว์เซอร์";
@@ -526,7 +526,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                         errorMessage = "หมดเวลารอการรับตำแหน่ง GPS กรุณาลองใหม่อีกครั้ง";
                         break;
                 }
-                
+
                 addToast({
                     title: "ไม่สามารถดึงตำแหน่ง GPS ได้",
                     description: errorMessage,
@@ -649,14 +649,21 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                     onValueChange={setSearchQuery}
                                     startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                     className="flex-1"
-                                    size="sm"
+                                    size="md"
+                                    variant="bordered"
+                                    isClearable
+                                    classNames={{
+                                        inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                        label: "text-blue-400 text-sm",
+                                    }}
                                 />
                                 <Select
                                     placeholder="สถานะ"
                                     selectedKeys={[statusFilter]}
                                     onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
                                     className="w-full sm:w-40"
-                                    size="sm"
+                                    variant="bordered"
+                                    size="md"
                                 >
                                     <SelectItem key="all">ทุกสถานะ</SelectItem>
                                     <SelectItem key="draft">ฉบับร่าง</SelectItem>
@@ -668,7 +675,8 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                     selectedKeys={[typeFilter]}
                                     onSelectionChange={(keys) => setTypeFilter(Array.from(keys)[0] as string)}
                                     className="w-full sm:w-40"
-                                    size="sm"
+                                    variant="bordered"
+                                    size="md"
                                 >
                                     <SelectItem key="all">ทุกประเภท</SelectItem>
                                     <SelectItem key="lecture">บรรยาย</SelectItem>
@@ -902,7 +910,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                         )}
                                                         {session.status === "closed" && (
                                                             <>
-                                                                 <Tooltip content="ดูหน้าเช็คชื่อ">
+                                                                <Tooltip content="ดูหน้าเช็คชื่อ">
                                                                     <Link
                                                                         className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
                                                                         href={`/attendance/${course.id}/session/${session.id}/live`}
@@ -911,7 +919,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                                         <Icon icon="solar:eye-bold" className="text-lg" />
                                                                     </Link>
                                                                 </Tooltip>
-                                                                
+
                                                                 <Tooltip content="ดูสรุป">
                                                                     <Link
                                                                         className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
@@ -1177,9 +1185,9 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                 }))
                                             }
                                             startContent={
-                                                <Icon 
-                                                    icon={formData.check_location ? "solar:check-circle-bold" : "solar:close-circle-linear"} 
-                                                    className="text-lg" 
+                                                <Icon
+                                                    icon={formData.check_location ? "solar:check-circle-bold" : "solar:close-circle-linear"}
+                                                    className="text-lg"
                                                 />
                                             }
                                         >
@@ -1196,21 +1204,19 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                     type="button"
                                                     onClick={getCurrentLocation}
                                                     disabled={isGettingLocation}
-                                                    className={`group relative p-4 rounded-xl border-2 border-dashed transition-all duration-200 w-full ${
-                                                        isGettingLocation 
-                                                            ? "border-blue-400 bg-blue-50 cursor-wait" 
-                                                            : "border-slate-200 hover:border-blue-400 hover:bg-blue-50/50"
-                                                    }`}
+                                                    className={`group relative p-4 rounded-xl border-2 border-dashed transition-all duration-200 w-full ${isGettingLocation
+                                                        ? "border-blue-400 bg-blue-50 cursor-wait"
+                                                        : "border-slate-200 hover:border-blue-400 hover:bg-blue-50/50"
+                                                        }`}
                                                 >
                                                     <div className="flex flex-col items-center gap-2">
-                                                        <div className={`p-3 rounded-full transition-colors ${
-                                                            isGettingLocation 
-                                                                ? "bg-blue-200 animate-pulse" 
-                                                                : "bg-blue-100 group-hover:bg-blue-200"
-                                                        }`}>
-                                                            <Icon 
-                                                                icon={isGettingLocation ? "solar:gps-bold" : "solar:gps-bold"} 
-                                                                className={`text-2xl text-blue-600 ${isGettingLocation ? "animate-spin" : ""}`} 
+                                                        <div className={`p-3 rounded-full transition-colors ${isGettingLocation
+                                                            ? "bg-blue-200 animate-pulse"
+                                                            : "bg-blue-100 group-hover:bg-blue-200"
+                                                            }`}>
+                                                            <Icon
+                                                                icon={isGettingLocation ? "solar:gps-bold" : "solar:gps-bold"}
+                                                                className={`text-2xl text-blue-600 ${isGettingLocation ? "animate-spin" : ""}`}
                                                             />
                                                         </div>
                                                         <span className="font-medium text-slate-700">
@@ -1366,7 +1372,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                     </ModalBody>
                     <ModalFooter>
                         <Button
-                            variant="flat"
+                            variant="light"
                             onPress={() => {
                                 setIsCreateModalOpen(false);
                                 resetForm();
@@ -1399,7 +1405,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                         </p>
                     </ModalBody>
                     <ModalFooter>
-                        <Button variant="flat" onPress={() => setIsDeleteModalOpen(false)}>
+                        <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
                             ยกเลิก
                         </Button>
                         <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting}>
@@ -1622,7 +1628,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                     </ModalBody>
                     <ModalFooter>
                         <Button
-                            variant="flat"
+                            variant="light"
                             onPress={() => {
                                 setIsEditModalOpen(false);
                                 resetForm();

@@ -66,6 +66,93 @@ export interface ImportResult {
   errors: Array<{ student_id: string; error: string }>;
 }
 
+// Student Score Lookup types
+export interface AssignmentSubItemScore {
+  id: number;
+  name: string;
+  max_score: number;
+  score: number | null;
+  grader: string | null;
+  graded_at: string | null;
+}
+
+export interface AssignmentScore {
+  id: number;
+  title: string;
+  type: string;
+  max_score: number;
+  score: number | null;
+  status: 'pending' | 'graded';
+  grader: string | null;
+  graded_at: string | null;
+  comment: string | null;
+  sub_items: AssignmentSubItemScore[];
+  is_group_assignment?: boolean;
+  group_info?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export interface AttendanceRecordData {
+  id: number;
+  session_title: string;
+  date: string;
+  status: 'present' | 'late' | 'leave' | 'absent';
+  check_in_time: string | null;
+  note: string | null;
+}
+
+export interface AttendanceSummary {
+  present: number;
+  late: number;
+  leave: number;
+  absent: number;
+}
+
+export interface BonusScoreRecord {
+  score: number;
+  reason: string;
+  given_by: string | null;
+  given_at: string;
+}
+
+export interface BonusScoreData {
+  total: number;
+  records: BonusScoreRecord[];
+}
+
+export interface CourseScoreData {
+  course: {
+    id: number;
+    code: string;
+    name: string;
+    year: number;
+    semester: number;
+    is_active: boolean;
+    sections: Array<{ id: number; name: string; week_number: number | null }>;
+  };
+  assignments: AssignmentScore[];
+  totalScore: number;
+  totalMaxScore: number;
+  progress: number;
+  bonusScore: BonusScoreData;
+  attendance: {
+    records: AttendanceRecordData[];
+    summary: AttendanceSummary;
+  };
+}
+
+export interface StudentScoreLookupResponse {
+  student: {
+    id: number;
+    student_id: string;
+    full_name: string;
+    email: string | null;
+  };
+  courses: CourseScoreData[];
+}
+
 class StudentService {
   /**
    * Get list of students with pagination and filters
@@ -130,6 +217,13 @@ class StudentService {
    */
   async importStudents(students: CreateStudentDto[]) {
     return apiService.post<ImportResult>(`${API_ENDPOINTS.STUDENTS}/import`, { students });
+  }
+
+  /**
+   * Lookup student scores by student_id (public endpoint)
+   */
+  async lookupStudentScores(studentId: string) {
+    return apiService.get<StudentScoreLookupResponse>(`${API_ENDPOINTS.STUDENTS}/lookup/${studentId}`);
   }
 }
 

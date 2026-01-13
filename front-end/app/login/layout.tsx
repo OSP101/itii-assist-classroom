@@ -8,6 +8,13 @@ export const metadata = {
   description: "เข้าสู่ระบบ ITII Assist Classroom - Course & Lab Management System",
 };
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false
+}
+
 export default function LoginLayout({
   children,
 }: {

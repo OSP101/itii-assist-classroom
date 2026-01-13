@@ -1,7 +1,40 @@
-const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, sequelize } = require('../models');
+const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+
+/**
+ * Check if student attended the linked attendance session
+ * Returns: { attended: boolean, status: string | null, message: string }
+ */
+const checkStudentAttendance = async (assignmentId, studentId) => {
+    const assignment = await Assignment.findByPk(assignmentId);
+    
+    // If no linked session, allow scoring
+    if (!assignment || !assignment.linked_attendance_session_id) {
+        return { attended: true, status: null, message: 'ไม่มีการลิงก์กับการเช็คชื่อ' };
+    }
+    
+    // Check attendance record
+    const record = await AttendanceRecord.findOne({
+        where: {
+            attendance_session_id: assignment.linked_attendance_session_id,
+            student_id: studentId,
+        },
+    });
+    
+    if (!record) {
+        return { attended: false, status: 'absent', message: 'นักศึกษาไม่มีข้อมูลการเช็คชื่อ' };
+    }
+    
+    // Check if status is 'absent'
+    if (record.status === 'absent') {
+        return { attended: false, status: 'absent', message: 'นักศึกษาขาดเรียน ไม่อนุญาตให้ลงคะแนน' };
+    }
+    
+    // Present, late, or leave are all considered attended
+    return { attended: true, status: record.status, message: 'นักศึกษามาเรียน' };
+};
 
 /**
  * Get scores for an assignment
@@ -19,6 +52,11 @@ const getScores = asyncHandler(async (req, res) => {
                 model: AssignmentSubItem,
                 as: 'subItems',
                 order: [['order_index', 'ASC']],
+            },
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSession',
+                attributes: ['id', 'title', 'start_time', 'end_time'],
             },
         ],
     });
@@ -77,10 +115,28 @@ const getScores = asyncHandler(async (req, res) => {
         }
     });
 
+    // Get attendance records if assignment is linked to attendance session
+    let attendanceMap = {};
+    if (assignment.linked_attendance_session_id) {
+        const attendanceRecords = await AttendanceRecord.findAll({
+            where: { attendance_session_id: assignment.linked_attendance_session_id },
+            attributes: ['student_id', 'status'],
+        });
+        attendanceRecords.forEach(record => {
+            attendanceMap[record.student_id] = record.status;
+        });
+    }
+
     // Build response with all students
     const studentScores = uniqueStudents.map(student => {
         const existingScore = scoreMap[student.id];
         const studentSubItemScores = subItemScoreMap[student.id] || {};
+        
+        // Check attendance status
+        const attendanceStatus = assignment.linked_attendance_session_id 
+            ? (attendanceMap[student.id] || 'absent')
+            : null;
+        const canScore = !assignment.linked_attendance_session_id || attendanceStatus !== 'absent';
         
         // Build sub-item scores array
         const subItemScores = assignment.subItems ? assignment.subItems.map(subItem => {
@@ -112,6 +168,9 @@ const getScores = asyncHandler(async (req, res) => {
             } : null,
             graded_at: existingScore ? existingScore.graded_at : null,
             sub_item_scores: subItemScores,
+            // Attendance info
+            attendance_status: attendanceStatus,
+            can_score: canScore,
         };
     });
 
@@ -142,6 +201,12 @@ const submitScore = asyncHandler(async (req, res) => {
     });
     if (!assignment) {
         throw new ApiError(404, 'Assignment not found');
+    }
+
+    // Check attendance if assignment is linked to attendance session
+    const attendanceCheck = await checkStudentAttendance(assignment_id, student_id);
+    if (!attendanceCheck.attended) {
+        throw new ApiError(400, attendanceCheck.message);
     }
 
     // Validate score against max
@@ -672,6 +737,24 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
     });
 
+    // Get bonus scores for all students in this course
+    const bonusScoreRecords = await BonusScore.findAll({
+        where: {
+            course_id,
+            student_id: { [Op.in]: studentIds },
+        },
+        attributes: ['student_id', 'score'],
+    });
+
+    // Create bonus score map: { student_id: totalBonusScore }
+    const bonusScoreMap = {};
+    for (const record of bonusScoreRecords) {
+        if (!bonusScoreMap[record.student_id]) {
+            bonusScoreMap[record.student_id] = 0;
+        }
+        bonusScoreMap[record.student_id] += parseFloat(record.score) || 0;
+    }
+
     // Create score lookup map with full info: { `${student_id}_${assignment_id}_${sub_item_id}`: scoreObj }
     const scoreMap = {};
     for (const score of scores) {
@@ -690,6 +773,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             student_id: student.student_id,
             full_name: student.full_name,
             section_number: student.section_number,
+            bonus_score: bonusScoreMap[student.id] || 0,
             scores: {},
             total_score: 0,
             total_max_score: 0,
@@ -849,9 +933,13 @@ const searchStudents = asyncHandler(async (req, res) => {
     const allStudents = sections.flatMap(section => section.students);
     const uniqueStudents = [...new Map(allStudents.map(s => [s.id, s])).values()];
 
+    // Sort by student_id for consistent ordering
+    uniqueStudents.sort((a, b) => a.student_id.localeCompare(b.student_id));
+
     res.json({
         success: true,
-        data: uniqueStudents.slice(0, 20), // Limit to 20 results
+        data: uniqueStudents, // Return all students (filter in frontend)
+        total: uniqueStudents.length,
     });
 });
 

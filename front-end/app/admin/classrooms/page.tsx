@@ -716,7 +716,7 @@ export default function ClassroomsPage() {
                         color="primary"
                         startContent={<Icon icon="solar:add-circle-bold" className="text-lg sm:text-xl" />}
                         onPress={() => setShowCreateModal(true)}
-                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-500 to-indigo-600 text-xs sm:text-sm"
+                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-xs sm:text-sm"
                         size="md"
                     >
                         <span className="hidden sm:inline">สร้างห้องเรียนใหม่</span>
@@ -880,7 +880,7 @@ export default function ClassroomsPage() {
                 <ModalContent>
                     <ModalHeader>
                         <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl">
                                 <Icon
                                     icon="solar:display-bold"
                                     className="text-xl sm:text-2xl text-white"
@@ -1028,7 +1028,7 @@ export default function ClassroomsPage() {
                     <ModalHeader className="border-b border-slate-200 p-3 sm:p-4">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2 sm:gap-4 pr-0 sm:pr-4">
                             <div className="flex items-center gap-2 sm:gap-3">
-                                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg sm:rounded-xl">
+                                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg sm:rounded-xl">
                                     <Icon
                                         icon="solar:display-bold"
                                         className="text-lg sm:text-2xl text-white"
@@ -1251,7 +1251,7 @@ export default function ClassroomsPage() {
                             onPress={handleSaveLayout}
                             startContent={!isSaving && <Icon icon="solar:diskette-bold" />}
                             isLoading={isSaving}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
                             size="sm"
                         >
                             บันทึกผัง

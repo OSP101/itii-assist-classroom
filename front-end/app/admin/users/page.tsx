@@ -387,7 +387,7 @@ export default function UsersPage() {
                             size="md"
                             src={user.avatar || undefined}
                             name={user.full_name}
-                            className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                            className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                         />
                         <div>
                             <p className="font-medium">{user.username}</p>
@@ -505,7 +505,7 @@ export default function UsersPage() {
                         resetForm();
                         setIsCreateModalOpen(true);
                     }}
-                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600 w-full sm:w-auto"
+                    className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 w-full sm:w-auto"
                 >
                     เพิ่มผู้ใช้
                 </Button>
@@ -570,12 +570,14 @@ export default function UsersPage() {
                             placeholder="ค้นหาผู้ใช้..."
                             value={search}
                             onValueChange={setSearch}
-                            startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                             isClearable
                             onClear={() => setSearch("")}
-                            classNames={{
-                                inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
-                            }}
+                            variant="bordered"
+                                classNames={{
+                                    inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-blue-400 text-sm",
+                                }}
                         />
                         <div className="flex gap-2 flex-wrap md:flex-nowrap">
                             <Select
@@ -590,6 +592,7 @@ export default function UsersPage() {
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
                                 }}
+                                variant="bordered"
                             >
                                 {roleOptions.map((option) => (
                                     <SelectItem key={option.key}>{option.label}</SelectItem>
@@ -607,6 +610,7 @@ export default function UsersPage() {
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
                                 }}
+                                variant="bordered"
                             >
                                 {statusOptions.map((option) => (
                                     <SelectItem key={option.key}>{option.label}</SelectItem>
@@ -697,7 +701,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -720,7 +724,7 @@ export default function UsersPage() {
                                             size="lg"
                                             src={avatarPreview || undefined}
                                             name={formData.full_name || "User"}
-                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                         />
                                         {avatarPreview && (
                                             <Button
@@ -869,7 +873,7 @@ export default function UsersPage() {
                             color="primary" 
                             onPress={handleCreate} 
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             เพิ่มผู้ใช้
@@ -906,7 +910,7 @@ export default function UsersPage() {
                                             size="lg"
                                             src={avatarPreview || undefined}
                                             name={formData.full_name || "User"}
-                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                         />
                                         {avatarPreview && (
                                             <Button

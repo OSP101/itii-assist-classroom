@@ -112,7 +112,7 @@ export default function SectionsTab({
                                 <span className="hidden sm:inline">รายชื่อนักศึกษา</span>
                                 <span className="sm:hidden">นักศึกษา</span>
                                 {totalStudents > 0 && (
-                                    <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-700 h-5 min-w-5 px-1">
+                                    <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700 h-5 min-w-5 px-1">
                                         {totalStudents}
                                     </Chip>
                                 )}
@@ -163,13 +163,14 @@ export default function SectionsTab({
                                         placeholder="ค้นหารหัสหรือชื่อนักศึกษา..."
                                         value={sectionSearchQuery}
                                         onValueChange={setSectionSearchQuery}
-                                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                        startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400 text-lg sm:text-xl" />}
                                         className="w-full"
                                         size="md"
                                         variant="bordered"
                                         isClearable
                                         classNames={{
-                                            inputWrapper: "bg-slate-50 border-slate-200"
+                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-blue-400 text-sm",
                                         }}
                                     />
                                 </div>
@@ -220,7 +221,7 @@ export default function SectionsTab({
                                                     isIconOnly
                                                     size="sm"
                                                     variant="flat"
-                                                    className={expandedSections.includes(section.id) ? "bg-white/20 text-white" : "bg-amber-100 text-amber-600"}
+                                                    className={expandedSections.includes(section.id) ? "bg-white/20 text-white" : ""}
                                                     onPress={() => onOpenAddStudentModal(section.id)}
                                                 >
                                                     <Icon icon="solar:user-plus-bold" className="text-lg" />
@@ -237,11 +238,12 @@ export default function SectionsTab({
                                                     <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
                                                 </Button>
                                             </Tooltip>
-                                            <div className={`ml-2 p-1 rounded-lg ${expandedSections.includes(section.id) ? "bg-white/20" : "bg-slate-200"}`}>
+                                            <div className={`ml-2 p-1 rounded-lg ${expandedSections.includes(section.id) ? "bg-white/20" : "bg-slate-200"}`} onClick={() => onToggleSection(section.id)}>
                                                 <Icon
                                                     icon={expandedSections.includes(section.id) ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"}
                                                     className={`text-xl ${expandedSections.includes(section.id) ? "text-white" : "text-slate-500"}`}
                                                 />
+
                                             </div>
                                         </div>
                                     </div>
@@ -266,7 +268,7 @@ export default function SectionsTab({
                                                             <TableColumn width={100}>รหัส</TableColumn>
                                                             <TableColumn>ชื่อ-นามสกุล</TableColumn>
                                                             <TableColumn width={120}>กลุ่มถาวร</TableColumn>
-                                                            <TableColumn width={80}>สถานะ</TableColumn>
+                                                            {/* <TableColumn width={80}>สถานะ</TableColumn> */}
                                                             <TableColumn width={50} align="center">จัดการ</TableColumn>
                                                         </TableHeader>
                                                         <TableBody>
@@ -300,7 +302,7 @@ export default function SectionsTab({
                                                                             <span className="text-slate-300 text-xs">-</span>
                                                                         )}
                                                                     </TableCell>
-                                                                    <TableCell>
+                                                                    {/* <TableCell>
                                                                         <Chip
                                                                             size="sm"
                                                                             variant="dot"
@@ -312,7 +314,7 @@ export default function SectionsTab({
                                                                         >
                                                                             <span className="text-xs">{student.is_active ? "ใช้งาน" : "ไม่ใช้"}</span>
                                                                         </Chip>
-                                                                    </TableCell>
+                                                                    </TableCell> */}
                                                                     <TableCell>
                                                                         <Tooltip content="นำออกจากกลุ่ม" color="danger">
                                                                             <Button
@@ -351,7 +353,7 @@ export default function SectionsTab({
                                                         variant="flat"
                                                         startContent={<Icon icon="solar:user-plus-bold" />}
                                                         onPress={() => onOpenAddStudentModal(section.id)}
-                                                        className="bg-amber-100 text-amber-700"
+                                                        className=" text-amber-700"
                                                     >
                                                         เพิ่มนักศึกษา
                                                     </Button>
@@ -537,40 +539,40 @@ export default function SectionsTab({
                                 </div>
                                 <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
                                     {/* Copy from week dropdown */}
-                                    {!weeklyTeams[selectedWeek]?.length && 
-                                     Object.keys(weeklyTeams).some(k => parseInt(k) !== selectedWeek && weeklyTeams[parseInt(k)]?.length > 0) && (
-                                        <Dropdown>
-                                            <DropdownTrigger>
-                                                <Button
-                                                    variant="flat"
-                                                    size="md"
-                                                    startContent={<Icon icon="solar:copy-bold" />}
-                                                    endContent={<Icon icon="solar:alt-arrow-down-linear" className="text-sm" />}
-                                                    className="bg-slate-100 flex-shrink-0"
+                                    {!weeklyTeams[selectedWeek]?.length &&
+                                        Object.keys(weeklyTeams).some(k => parseInt(k) !== selectedWeek && weeklyTeams[parseInt(k)]?.length > 0) && (
+                                            <Dropdown>
+                                                <DropdownTrigger>
+                                                    <Button
+                                                        variant="flat"
+                                                        size="md"
+                                                        startContent={<Icon icon="solar:copy-bold" />}
+                                                        endContent={<Icon icon="solar:alt-arrow-down-linear" className="text-sm" />}
+                                                        className="bg-slate-100 flex-shrink-0"
+                                                    >
+                                                        <span className="hidden sm:inline">คัดลอกจาก</span>
+                                                        <span className="sm:hidden">คัดลอก</span>
+                                                    </Button>
+                                                </DropdownTrigger>
+                                                <DropdownMenu
+                                                    aria-label="เลือกสัปดาห์ที่จะคัดลอก"
+                                                    onAction={(key) => onCopyTeamsFromWeek(parseInt(key as string))}
                                                 >
-                                                    <span className="hidden sm:inline">คัดลอกจาก</span>
-                                                    <span className="sm:hidden">คัดลอก</span>
-                                                </Button>
-                                            </DropdownTrigger>
-                                            <DropdownMenu 
-                                                aria-label="เลือกสัปดาห์ที่จะคัดลอก"
-                                                onAction={(key) => onCopyTeamsFromWeek(parseInt(key as string))}
-                                            >
-                                                {Array.from({ length: totalWeeks }, (_, i) => i + 1)
-                                                    .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
-                                                    .map((week) => (
-                                                        <DropdownItem 
-                                                            key={week.toString()}
-                                                            startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
-                                                            description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}
-                                                        >
-                                                            สัปดาห์ที่ {week}
-                                                        </DropdownItem>
-                                                    ))
-                                                }
-                                            </DropdownMenu>
-                                        </Dropdown>
-                                    )}
+                                                    {Array.from({ length: totalWeeks }, (_, i) => i + 1)
+                                                        .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
+                                                        .map((week) => (
+                                                            <DropdownItem
+                                                                key={week.toString()}
+                                                                startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
+                                                                description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}
+                                                            >
+                                                                สัปดาห์ที่ {week}
+                                                            </DropdownItem>
+                                                        ))
+                                                    }
+                                                </DropdownMenu>
+                                            </Dropdown>
+                                        )}
                                     {weeklyTeams[selectedWeek]?.length > 0 && (
                                         <Button
                                             variant="flat"
@@ -704,14 +706,14 @@ export default function SectionsTab({
                                                     คัดลอกจากสัปดาห์อื่น
                                                 </Button>
                                             </DropdownTrigger>
-                                            <DropdownMenu 
+                                            <DropdownMenu
                                                 aria-label="เลือกสัปดาห์ที่จะคัดลอก"
                                                 onAction={(key) => onCopyTeamsFromWeek(parseInt(key as string))}
                                             >
                                                 {Array.from({ length: totalWeeks }, (_, i) => i + 1)
                                                     .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
                                                     .map((week) => (
-                                                        <DropdownItem 
+                                                        <DropdownItem
                                                             key={week.toString()}
                                                             startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
                                                             description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}

@@ -34,6 +34,15 @@ const Assignment = sequelize.define('Assignment', {
         allowNull: true,
         comment: 'สำหรับงานกลุ่มประจำสัปดาห์',
     },
+    linked_attendance_session_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: 'attendance_sessions',
+            key: 'id',
+        },
+        comment: 'ถ้า set ค่านี้ จะตรวจสอบว่านักศึกษามาเรียนหรือไม่ก่อนลงคะแนน',
+    },
     max_score: {
         type: DataTypes.DECIMAL(5, 2),
         allowNull: true,

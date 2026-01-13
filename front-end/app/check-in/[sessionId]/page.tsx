@@ -368,7 +368,7 @@ export default function StudentCheckInPage() {
                     {/* Session Info Header */}
                     {step !== "loading" && session && step !== "error" && (
                         <div className="text-center mb-6 pb-6 border-b border-slate-100">
-                            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
                                 <Icon icon="solar:clipboard-check-bold" className="text-3xl text-white" />
                             </div>
                             <h1 className="text-xl font-bold text-slate-800">{session.title}</h1>
@@ -424,7 +424,7 @@ export default function StudentCheckInPage() {
                                 <Button
                                     color="primary"
                                     size="lg"
-                                    className="w-full bg-gradient-to-r from-blue-500 to-indigo-600"
+                                    className="w-full bg-gradient-to-r from-blue-400 to-indigo-500"
                                     startContent={
                                         !isGettingLocation && <Icon icon="solar:gps-bold" className="text-xl" />
                                     }
@@ -494,7 +494,7 @@ export default function StudentCheckInPage() {
                             <Button
                                 color="primary"
                                 size="lg"
-                                className="w-full mt-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                                className="w-full mt-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                                 isDisabled={pinCode.length !== 6}
                                 isLoading={isSubmitting}
                                 onPress={handleCheckIn}

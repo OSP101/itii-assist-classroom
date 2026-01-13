@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Card, CardBody } from "@heroui/card";
@@ -28,7 +29,7 @@ export default function LoginPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!formData.username || !formData.password) {
             addToast({
                 title: "กรุณากรอกข้อมูล",
@@ -75,7 +76,7 @@ export default function LoginPage() {
                 } else if (result.error && typeof result.error === 'object') {
                     errorMessage = (result.error as { message?: string }).message || errorMessage;
                 }
-                
+
                 addToast({
                     title: "เข้าสู่ระบบไม่สำเร็จ",
                     description: errorMessage,
@@ -96,25 +97,27 @@ export default function LoginPage() {
     };
 
     const handleGoogleLogin = () => {
-        // TODO: Implement Google OAuth
-        window.location.href = "http://localhost:3001/api/auth/google";
+        // Redirect to Google OAuth
+        window.location.href = authService.getGoogleAuthUrl();
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
-            <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
+        <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
+            <div className="flex-1 flex items-center justify-center">
+                <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
                 <CardBody className="p-0">
                     <div className="flex flex-col md:flex-row">
                         {/* Left Side - Image & Branding */}
                         <div className="relative hidden w-full md:flex md:w-1/2 min-h-[600px]">
-                            <div
-                                className="absolute inset-0 w-full h-full bg-center bg-cover bg-no-repeat"
-                                style={{
-                                    backgroundImage: `url("/images/cp-image-login.jpg")`,
-                                }}
-                            >
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-                            </div>
+                            <Image
+                                src="/images/cp-image-login.jpg"
+                                alt="ITII Assist Classroom"
+                                fill
+                                priority
+                                className="object-cover object-center"
+                                sizes="(max-width: 768px) 0vw, 50vw"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
                             <div className="absolute bottom-0 left-0 p-8 text-white z-10">
                                 <p className="text-3xl font-bold leading-tight mb-2 tracking-tight">
                                     ITII Assist classroom.
@@ -128,7 +131,7 @@ export default function LoginPage() {
 
                         {/* Right Side - Login Form */}
                         <div className="w-full md:w-1/2 p-5 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
-                            
+
 
                             {/* Header */}
                             <div className="flex flex-col gap-1 sm:gap-2 mb-6 sm:mb-8">
@@ -200,11 +203,11 @@ export default function LoginPage() {
                                     }}
                                 />
 
-                                <div className="flex justify-end">
+                                {/* <div className="flex justify-end">
                                     <Link href="#" size="sm" className="text-blue-400 hover:text-blue-500">
                                         ลืมรหัสผ่าน?
                                     </Link>
-                                </div>
+                                </div> */}
 
                                 <Turnstile
                                     id='turnstile-1'
@@ -212,14 +215,16 @@ export default function LoginPage() {
                                     siteKey={process.env.NEXT_PUBLIC_CLOUD || ''}
                                     onSuccess={() => setCanSubmit(false)}
                                     options={{
-                                        theme: 'auto'
+                                        theme: 'auto',
+                                        size: 'flexible',
                                     }}
+                                    className="w-full mt-2"
                                 />
 
                                 <Button
                                     type="submit"
                                     size="md"
-                                    className="w-full font-bold mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
+                                    className="w-full font-medium mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                     isLoading={isLoading}
                                 >
                                     เข้าสู่ระบบ
@@ -239,7 +244,7 @@ export default function LoginPage() {
                             <Button
                                 variant="bordered"
                                 size="md"
-                                className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm sm:text-base"
+                                className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm"
                                 onPress={handleGoogleLogin}
                                 startContent={
                                     <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
@@ -269,10 +274,10 @@ export default function LoginPage() {
                     </div>
                 </CardBody>
             </Card>
+            </div>
 
-            {/* Footer */}
-            <div className="absolute bottom-2 sm:bottom-4 left-0 right-0 text-center text-slate-400 text-[10px] sm:text-xs px-4">
-                © 2025 ITII Assist classroom - Course & Lab Management System
+            <div className="mt-2 pb-2 text-center text-slate-400 text-xs sm:text-sm px-4 font-light">
+                © 2025 ITII Assist classroom. All Rights Reserved. made with by <Link href="https://github.com/OSP101" target="_blank" className="text-xs sm:text-sm text-slate-400">OSP101</Link>
             </div>
         </div>
     );

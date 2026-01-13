@@ -44,6 +44,7 @@ interface PeopleTabProps {
     isPeopleLoading: boolean;
     onOpenAddTAModal: () => void;
     onRemoveTA: (taId: number) => void;
+    userRole: string;
 }
 
 // Loading Skeleton
@@ -74,6 +75,7 @@ export default function PeopleTab({
     isPeopleLoading,
     onOpenAddTAModal,
     onRemoveTA,
+    userRole,
 }: PeopleTabProps) {
     return (
         <div className="space-y-4">
@@ -231,7 +233,7 @@ export default function PeopleTab({
                                                             size="sm"
                                                             variant="flat"
                                                             className="bg-blue-100 text-blue-700"
-                                                            startContent={<Icon icon="solar:crown-bold" className="text-sm" />}
+                                                            // startContent={<Icon icon="solar:crown-bold" className="text-sm" />}
                                                         >
                                                             อาจารย์ผู้สอน
                                                         </Chip>
@@ -240,7 +242,7 @@ export default function PeopleTab({
                                                             size="sm"
                                                             variant="flat"
                                                             className="bg-emerald-100 text-emerald-700"
-                                                            startContent={<Icon icon="solar:user-hands-bold" className="text-sm" />}
+                                                            // startContent={<Icon icon="solar:user-hands-bold" className="text-sm" />}
                                                         >
                                                             ผู้ช่วยสอน
                                                         </Chip>
@@ -248,8 +250,8 @@ export default function PeopleTab({
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center gap-1">
-                                                        {person.type === 'instructor' ? (
-                                                            <Tooltip content="อาจารย์ผู้สอนไม่สามารถลบได้">
+                                                        {person.type === 'instructor' || userRole !== 'instructor' ? (
+                                                            <Tooltip content={`${person.type === 'instructor' ? "อาจารย์ผู้สอนไม่สามารถลบออกจากรายวิชา" : "เฉพาะอาจารย์ผู้สอนเท่านั้นที่สามารถลบผู้ช่วยสอนได้"}`}>
                                                                 <span className="text-slate-300">
                                                                     <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
                                                                 </span>

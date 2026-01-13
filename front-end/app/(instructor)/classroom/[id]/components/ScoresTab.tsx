@@ -266,9 +266,10 @@ export default function ScoresTab({
                                                                             variant="bordered"
                                                                             min={0}
                                                                             max={Number(subItem.max_score)}
+                                                                            step="any"
                                                                             value={String(scoreEntries[key] ?? "")}
                                                                             onValueChange={(val) => {
-                                                                                const numVal = val === "" ? "" : Math.min(Number(val), Number(subItem.max_score));
+                                                                                const numVal = val === "" ? "" : Math.min(parseFloat(val) || 0, Number(subItem.max_score));
                                                                                 setScoreEntries(prev => ({
                                                                                     ...prev,
                                                                                     [key]: numVal
@@ -291,9 +292,10 @@ export default function ScoresTab({
                                                                     variant="bordered"
                                                                     min={0}
                                                                     max={Number(selectedAssignment.max_score)}
+                                                                    step="any"
                                                                     value={String(scoreEntries[`${student.id}`] ?? "")}
                                                                     onValueChange={(val) => {
-                                                                        const numVal = val === "" ? "" : Math.min(Number(val), Number(selectedAssignment.max_score));
+                                                                        const numVal = val === "" ? "" : Math.min(parseFloat(val) || 0, Number(selectedAssignment.max_score));
                                                                         setScoreEntries(prev => ({
                                                                             ...prev,
                                                                             [`${student.id}`]: numVal
@@ -310,10 +312,10 @@ export default function ScoresTab({
                                                         <td className="px-4 py-3 text-center">
                                                             <div className="flex items-center justify-center gap-1">
                                                                 <span className={`font-semibold ${totalScore === maxTotal ? 'text-green-600' : totalScore > 0 ? 'text-blue-600' : 'text-slate-400'}`}>
-                                                                    {totalScore}
+                                                                    {Number.isInteger(totalScore) ? totalScore : totalScore.toFixed(2)}
                                                                 </span>
                                                                 <span className="text-slate-400">/</span>
-                                                                <span className="text-slate-500">{maxTotal}</span>
+                                                                <span className="text-slate-500">{Number.isInteger(maxTotal) ? maxTotal : maxTotal.toFixed(2)}</span>
                                                             </div>
                                                         </td>
                                                     </tr>

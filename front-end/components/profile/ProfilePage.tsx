@@ -210,7 +210,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
             <Avatar
               name={user.full_name || user.username}
               src={user.avatar || ""}
-              className="w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+              className="w-20 h-20 sm:w-24 sm:h-24 text-2xl sm:text-3xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
             />
             <div className="text-center sm:text-left flex-1">
               <h2 className="text-lg sm:text-xl font-semibold text-default-900">

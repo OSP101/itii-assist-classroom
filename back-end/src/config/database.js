@@ -17,9 +17,9 @@ const sequelize = new Sequelize(
       freezeTableName: true, // don't pluralize table names
     },
     pool: {
-      max: 10,
-      min: 0,
-      acquire: 30000,
+      max: 25,      // เพิ่มจาก 10 เป็น 25
+      min: 5,       // เพิ่มจาก 0 เป็น 5
+      acquire: 60000, // เพิ่มจาก 30000 เป็น 60000 (60 วินาที)
       idle: 10000,
     },
   }

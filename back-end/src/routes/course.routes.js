@@ -6,9 +6,9 @@ const { authenticate, authorize } = require('../middlewares/auth');
 // All routes require authentication
 router.use(authenticate);
 
-// Get instructors/TAs list for dropdown (admin and instructor)
-router.get('/instructors', authorize('admin', 'instructor'), courseController.getInstructors);
-router.get('/tas-list', authorize('admin', 'instructor'), courseController.getTAsList);
+// Get instructors/TAs list for dropdown (admin, instructor, and ta)
+router.get('/instructors', authorize('admin', 'instructor', 'ta'), courseController.getInstructors);
+router.get('/tas-list', authorize('admin', 'instructor', 'ta'), courseController.getTAsList);
 
 // My courses (for instructor/TA)
 router.get('/my-courses', authorize('instructor', 'ta'), courseController.getMyCourses);
@@ -32,6 +32,7 @@ router.delete('/:id/sections/:sectionId', authorize('admin', 'instructor', 'ta')
 
 // TA management (admin or course instructor only)
 router.post('/:id/tas', authorize('admin', 'instructor'), courseController.addTA);
+router.post('/:id/tas/bulk', authorize('admin', 'instructor'), courseController.bulkAddTAs);
 router.delete('/:id/tas/:userId', authorize('admin', 'instructor'), courseController.removeTA);
 
 // Student management in sections (admin, instructor, or TA of course)

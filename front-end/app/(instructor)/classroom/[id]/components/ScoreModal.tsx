@@ -58,6 +58,8 @@ export default function ScoreModal({
     courseId,
     onScoreSubmitted,
 }: ScoreModalProps) {
+    // DEBUG: First line of component
+    console.log("=== ScoreModal Component Called ===", { isOpen, assignment: assignment?.id, courseId });
     // States
     const [activeTab, setActiveTab] = useState<"grade" | "edit">("grade");
     const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +105,7 @@ export default function ScoreModal({
 
     // Load students and groups when modal opens
     useEffect(() => {
+        console.log("useEffect triggered - isOpen:", isOpen, "assignment:", assignment?.id);
         if (isOpen && assignment) {
             loadData();
         }
@@ -113,13 +116,16 @@ export default function ScoreModal({
     useEffect(() => {
         if (!isOpen) {
             resetStates();
+            console.log("Testing - States reset on modal close");
         }
     }, [isOpen]);
 
     const loadData = async () => {
+        console.log("loadData called - courseId:", courseId);
         setIsLoading(true);
         try {
             const studentData = await scoreService.searchStudents(courseId);
+            console.log("Student Data loaded:", studentData.length, "students");
             setStudents(studentData);
 
             if (isGroupAssignment && assignment) {
@@ -164,6 +170,53 @@ export default function ScoreModal({
         setSubItemExistingScores([]);
         setGroupSearchQuery("");
     };
+
+    // Helper function to check if student can be scored (attendance check)
+    const getStudentAttendanceInfo = (studentId: number) => {
+        if (!scoresData?.student_scores) return { canScore: true, status: null };
+        const studentScore = scoresData.student_scores.find(ss => ss.student.id === studentId);
+        return {
+            canScore: studentScore?.can_score ?? true,
+            status: studentScore?.attendance_status ?? null,
+        };
+    };
+
+    // Get attendance status label and color
+    const getAttendanceLabel = (status: string | null) => {
+        switch (status) {
+            case 'present': return { text: 'มาเรียน', color: 'text-emerald-600', bg: 'bg-emerald-100' };
+            case 'late': return { text: 'มาสาย', color: 'text-amber-600', bg: 'bg-amber-100' };
+            case 'leave': return { text: 'ลา', color: 'text-blue-600', bg: 'bg-blue-100' };
+            case 'absent': return { text: 'ขาดเรียน', color: 'text-red-600', bg: 'bg-red-100' };
+            default: return null;
+        }
+    };
+
+    // Check if selected student/group can be scored
+    const canScoreSelected = useMemo(() => {
+        if (isGroupAssignment && selectedGroup) {
+            // For group assignment, all members must be able to score
+            return selectedGroup.members.every(member => {
+                const info = getStudentAttendanceInfo(member.id);
+                return info.canScore;
+            });
+        } else if (selectedStudent) {
+            const info = getStudentAttendanceInfo(selectedStudent.id);
+            return info.canScore;
+        }
+        return true;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedStudent?.id, selectedGroup?.id, scoresData]);
+
+    // Get absent members in group
+    const absentGroupMembers = useMemo(() => {
+        if (!isGroupAssignment || !selectedGroup) return [];
+        return selectedGroup.members.filter(member => {
+            const info = getStudentAttendanceInfo(member.id);
+            return !info.canScore;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedGroup?.id, scoresData, isGroupAssignment]);
 
     // Initialize sub-item scores when student/group is selected
     useEffect(() => {
@@ -282,13 +335,23 @@ export default function ScoreModal({
 
     // Filter students based on search query
     const filteredStudents = useMemo(() => {
-        if (!searchQuery.trim()) return students.slice(0, 2);
+        if (!searchQuery.trim()) return students.slice(0, 10);
         const query = searchQuery.toLowerCase();
         return students.filter(
             s => s.student_id.toLowerCase().includes(query) ||
                 s.full_name.toLowerCase().includes(query)
-        ).slice(0, 2);
+        ).slice(0, 10);
     }, [students, searchQuery]);
+
+    // Filter students for edit tab based on edit search query
+    const filteredEditStudents = useMemo(() => {
+        if (!editSearchQuery.trim()) return students.slice(0, 10);
+        const query = editSearchQuery.toLowerCase();
+        return students.filter(
+            s => s.student_id.toLowerCase().includes(query) ||
+                s.full_name.toLowerCase().includes(query)
+        ).slice(0, 10);
+    }, [students, editSearchQuery]);
 
     // Filter groups based on search query
     const filteredGroups = useMemo(() => {
@@ -384,6 +447,9 @@ export default function ScoreModal({
         if (!isGroupAssignment && !selectedStudent) return false;
         if (isGroupAssignment && !selectedGroup) return false;
 
+        // Check attendance - cannot score if absent
+        if (!canScoreSelected) return false;
+
         // If already scored (non sub-items), cannot submit
         if (!hasSubItems && existingScore) return false;
 
@@ -399,7 +465,7 @@ export default function ScoreModal({
         } else {
             return mainScore !== "" && validateScore(mainScore, assignment.max_score);
         }
-    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore]);
+    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore, canScoreSelected]);
 
     const handleSubmitGrade = async () => {
         if (!assignment || !canSubmitGrade) return;
@@ -679,6 +745,10 @@ export default function ScoreModal({
         }
     };
 
+    // Debug: Log when component renders
+    console.log("ScoreModal render - isOpen:", isOpen, "assignment:", assignment?.id, "courseId:", courseId);
+
+    // Don't render anything if no assignment
     if (!assignment) return null;
 
     const typeInfo = getTypeInfo();
@@ -761,11 +831,17 @@ export default function ScoreModal({
                                                     onInputChange={setSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleStudentSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
+                                                    }}
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
                                                     }}
                                                 >
                                                     {filteredStudents.map((student) => (
@@ -791,18 +867,32 @@ export default function ScoreModal({
 
                                             {/* Selected Student Info */}
                                             {selectedStudent && (
-                                                <div className={`mt-3 p-3 rounded-xl border ${existingScore ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
+                                                <div className={`mt-3 p-3 rounded-xl border ${!canScoreSelected ? 'bg-red-50 border-red-200' : existingScore ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-200'}`}>
                                                     <div className="flex items-center gap-3">
                                                         <Avatar
                                                             name={`${selectedStudent.full_name}`}
                                                             size="md"
-                                                            className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
+                                                            className={`text-white ${!canScoreSelected ? 'bg-red-400' : 'bg-gradient-to-br from-blue-400 to-indigo-500'}`}
                                                         />
                                                         <div className="flex-1">
                                                             <p className="font-semibold text-slate-800">
                                                                 {selectedStudent.full_name}
                                                             </p>
-                                                            <p className="text-sm text-slate-500">{selectedStudent.student_id}</p>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="text-sm text-slate-500">{selectedStudent.student_id}</p>
+                                                                {(() => {
+                                                                    const info = getStudentAttendanceInfo(selectedStudent.id);
+                                                                    const label = getAttendanceLabel(info.status);
+                                                                    if (label) {
+                                                                        return (
+                                                                            <Chip size="sm" className={`${label.bg} ${label.color}`}>
+                                                                                {label.text}
+                                                                            </Chip>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </div>
                                                         </div>
                                                         <Button
                                                             isIconOnly
@@ -828,8 +918,23 @@ export default function ScoreModal({
                                                         </div>
                                                     )}
 
+                                                    {/* Warning if student is absent (cannot score) */}
+                                                    {!isCheckingScore && !canScoreSelected && (
+                                                        <div className="mt-3 p-3 bg-red-100 rounded-lg border border-red-300">
+                                                            <div className="flex items-start gap-2">
+                                                                <Icon icon="solar:user-cross-bold" className="text-xl text-red-600 shrink-0 mt-0.5" />
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-red-800">ไม่สามารถลงคะแนนได้</p>
+                                                                    <p className="text-xs text-red-700 mt-1">
+                                                                        นักศึกษาคนนี้ขาดเรียนในรอบเช็คชื่อที่เชื่อมกับงานนี้
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     {/* Warning if already scored */}
-                                                    {!isCheckingScore && existingScore && !hasSubItems && (
+                                                    {!isCheckingScore && canScoreSelected && existingScore && !hasSubItems && (
                                                         <div className="mt-3 p-3 bg-amber-100 rounded-lg border border-amber-300">
                                                             <div className="flex items-start gap-2">
                                                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600 shrink-0 mt-0.5" />
@@ -865,11 +970,17 @@ export default function ScoreModal({
                                                     onInputChange={setGroupSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleGroupSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
                                                     {filteredGroups.map((group) => (
@@ -901,12 +1012,12 @@ export default function ScoreModal({
 
                                             {/* Selected Group Info */}
                                             {selectedGroup && (
-                                                <div className={`mt-3 p-3 rounded-xl border ${existingScore ? 'bg-amber-50 border-amber-200' : `${groupColors.bg} ${groupColors.border}`}`}>
+                                                <div className={`mt-3 p-3 rounded-xl border ${absentGroupMembers.length > 0 ? 'bg-red-50 border-red-200' : existingScore ? 'bg-amber-50 border-amber-200' : `${groupColors.bg} ${groupColors.border}`}`}>
                                                     <div className="flex items-center justify-between mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${groupColors.icon}`} />
+                                                            <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${absentGroupMembers.length > 0 ? 'text-red-500' : groupColors.icon}`} />
                                                             <span className="font-semibold text-slate-800">{selectedGroup.name}</span>
-                                                            <Chip size="sm" variant="flat" className={groupColors.chip}>
+                                                            <Chip size="sm" variant="flat" className={absentGroupMembers.length > 0 ? 'bg-red-100 text-red-700' : groupColors.chip}>
                                                                 {selectedGroup.members.length} คน
                                                             </Chip>
                                                         </div>
@@ -924,18 +1035,40 @@ export default function ScoreModal({
                                                         </Button>
                                                     </div>
                                                     <div className="flex flex-wrap gap-2">
-                                                        {selectedGroup.members.map((member) => (
-                                                            <Chip
-                                                                key={member.id}
-                                                                size="sm"
-                                                                variant="flat"
-                                                                className="bg-white"
-
-                                                            >
-                                                                {member.full_name}
-                                                            </Chip>
-                                                        ))}
+                                                        {selectedGroup.members.map((member) => {
+                                                            const info = getStudentAttendanceInfo(member.id);
+                                                            const label = getAttendanceLabel(info.status);
+                                                            return (
+                                                                <Chip
+                                                                    key={member.id}
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    className={!info.canScore ? 'bg-red-100 text-red-700' : 'bg-white'}
+                                                                    startContent={!info.canScore ? <Icon icon="solar:user-cross-bold" className="text-red-500" /> : undefined}
+                                                                >
+                                                                    {member.full_name}
+                                                                    {label && (
+                                                                        <span className={`ml-1 text-xs ${label.color}`}>({label.text})</span>
+                                                                    )}
+                                                                </Chip>
+                                                            );
+                                                        })}
                                                     </div>
+
+                                                    {/* Warning if any member is absent */}
+                                                    {absentGroupMembers.length > 0 && (
+                                                        <div className="mt-3 p-3 bg-red-100 rounded-lg border border-red-300">
+                                                            <div className="flex items-start gap-2">
+                                                                <Icon icon="solar:users-group-rounded-bold" className="text-xl text-red-600 shrink-0 mt-0.5" />
+                                                                <div>
+                                                                    <p className="text-sm font-semibold text-red-800">ไม่สามารถลงคะแนนได้</p>
+                                                                    <p className="text-xs text-red-700 mt-1">
+                                                                        สมาชิกในกลุ่มขาดเรียน: {absentGroupMembers.map(m => m.full_name).join(", ")}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
 
                                                     {/* Loading indicator while checking score */}
                                                     {isCheckingScore && (
@@ -948,7 +1081,7 @@ export default function ScoreModal({
                                                     )}
 
                                                     {/* Warning if already scored */}
-                                                    {!isCheckingScore && existingScore && !hasSubItems && (
+                                                    {!isCheckingScore && canScoreSelected && existingScore && !hasSubItems && (
                                                         <div className="mt-3 p-3 bg-amber-100 rounded-lg border border-amber-300">
                                                             <div className="flex items-start gap-2">
                                                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600 shrink-0 mt-0.5" />
@@ -976,7 +1109,7 @@ export default function ScoreModal({
                                     )}
 
                                     {/* Score Input Section */}
-                                    {(selectedStudent || selectedGroup) && !isCheckingScore && (!existingScore || hasSubItems) && (
+                                    {(selectedStudent || selectedGroup) && !isCheckingScore && (!existingScore || hasSubItems) && canScoreSelected && (
                                         <>
                                             <Divider />
 
@@ -989,7 +1122,7 @@ export default function ScoreModal({
                                                 {hasSubItems ? (
                                                     /* Sub-items score inputs */
                                                     <div className="space-y-3 bg-slate-50 p-4 rounded-xl">
-                                                        {assignment.subItems?.filter(item => item.id !== undefined).map((subItem, idx) => {
+                                                        {assignment.subItems?.filter(item => item.id !== undefined).slice().sort((a, b) => a.id! - b.id!).map((subItem, idx) => {
                                                             const subItemId = subItem.id!;
                                                             const existingSubScore = subItemExistingScores.find(s => s.subItemId === subItemId);
                                                             const isLocked = existingSubScore && existingSubScore.score !== null;
@@ -1035,6 +1168,7 @@ export default function ScoreModal({
                                                                                         onValueChange={(value) => handleSubItemScoreChange(subItemId, value)}
                                                                                         min={0}
                                                                                         max={subItem.max_score}
+                                                                                        step="any"
                                                                                         className="w-20"
                                                                                         size="sm"
                                                                                         variant="bordered"
@@ -1048,10 +1182,10 @@ export default function ScoreModal({
                                                                                 {/* Quick score buttons for sub-item */}
                                                                                 <div className="flex justify-end gap-1">
                                                                                     {(() => {
-                                                                                        const max = subItem.max_score;
+                                                                                        const max = Number(subItem.max_score);
                                                                                         const currentScore = subItemScores.find(s => s.subItemId === subItemId)?.score.toString() || "";
                                                                                         // Always show 3 buttons: 0, half, full
-                                                                                        const half = Math.floor(max / 2);
+                                                                                        const half = max / 2;
                                                                                         const options = [0, half, max];
                                                                                         return options.map(score => (
                                                                                             <Button
@@ -1059,13 +1193,13 @@ export default function ScoreModal({
                                                                                                 size="sm"
                                                                                                 variant={currentScore === score.toString() ? "solid" : "flat"}
                                                                                                 color={currentScore === score.toString() ? "primary" : "default"}
-                                                                                                className={`min-w-[2.5rem] h-7 text-xs ${currentScore === score.toString() 
-                                                                                                    ? "bg-blue-500 text-white font-semibold" 
+                                                                                                className={`min-w-[2.5rem] h-7 text-xs ${currentScore === score.toString()
+                                                                                                    ? "bg-blue-500 text-white font-semibold"
                                                                                                     : "bg-slate-100 font-medium"
-                                                                                                }`}
+                                                                                                    }`}
                                                                                                 onPress={() => handleSubItemScoreChange(subItemId, score.toString())}
                                                                                             >
-                                                                                                {score}
+                                                                                                {Number.isInteger(score) ? score : score.toFixed(1)}
                                                                                             </Button>
                                                                                         ));
                                                                                     })()}
@@ -1104,6 +1238,7 @@ export default function ScoreModal({
                                                                     onValueChange={setMainScore}
                                                                     min={0}
                                                                     max={assignment.max_score}
+                                                                    step="any"
                                                                     className="w-20"
                                                                     size="sm"
                                                                     variant="bordered"
@@ -1118,9 +1253,9 @@ export default function ScoreModal({
                                                         {/* Quick score buttons */}
                                                         <div className="flex justify-end gap-2">
                                                             {(() => {
-                                                                const max = assignment.max_score;
+                                                                const max = Number(assignment.max_score);
                                                                 // Always show 3 buttons: 0, half, full
-                                                                const half = Math.floor(max / 2);
+                                                                const half = max / 2;
                                                                 const options = [0, half, max];
                                                                 return options.map(score => (
                                                                     <Button
@@ -1128,13 +1263,13 @@ export default function ScoreModal({
                                                                         size="sm"
                                                                         variant={mainScore === score.toString() ? "solid" : "flat"}
                                                                         color={mainScore === score.toString() ? "primary" : "default"}
-                                                                        className={mainScore === score.toString() 
-                                                                            ? "bg-blue-500 text-white font-semibold min-w-[3rem]" 
+                                                                        className={mainScore === score.toString()
+                                                                            ? "bg-blue-500 text-white font-semibold min-w-[3rem]"
                                                                             : "bg-white border border-slate-200 font-medium min-w-[3rem]"
                                                                         }
                                                                         onPress={() => setMainScore(score.toString())}
                                                                     >
-                                                                        {score}
+                                                                        {Number.isInteger(score) ? score : score.toFixed(1)}
                                                                     </Button>
                                                                 ));
                                                             })()}
@@ -1188,14 +1323,20 @@ export default function ScoreModal({
                                                     onInputChange={setEditSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleEditStudentSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
-                                                    {filteredStudents.map((student) => (
+                                                    {filteredEditStudents.map((student) => (
                                                         <AutocompleteItem
                                                             key={student.id.toString()}
                                                             textValue={`${student.student_id} ${student.full_name}`}
@@ -1258,11 +1399,17 @@ export default function ScoreModal({
                                                     onInputChange={setEditGroupSearchQuery}
                                                     selectedKey={null}
                                                     onSelectionChange={handleEditGroupSelect}
-                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                                     variant="bordered"
                                                     classNames={{
                                                         base: "w-full",
                                                         listboxWrapper: "max-h-[300px]",
+                                                        selectorButton: "text-blue-400"
+                                                    }}
+                                                    inputProps={{
+                                                        classNames: {
+                                                            inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                        },
                                                     }}
                                                 >
                                                     {filteredEditGroups.map((group) => (
@@ -1354,10 +1501,10 @@ export default function ScoreModal({
                                                                     <div
                                                                         key={subItem.id}
                                                                         onClick={() => hasScore && setSelectedEditSubItemId(subItem.id!)}
-                                                                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected
+                                                                        className={`flex items-center gap-3 p-3 rounded-lg border  transition-colors ${isSelected
                                                                             ? 'bg-blue-50 border-blue-300'
                                                                             : hasScore
-                                                                                ? 'bg-white border-slate-200 hover:bg-slate-50'
+                                                                                ? 'bg-white border-slate-200 hover:bg-slate-50 cursor-pointer'
                                                                                 : 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-60'
                                                                             }`}
                                                                     >
@@ -1425,6 +1572,7 @@ export default function ScoreModal({
                                                                             onValueChange={(val) => handleSubItemNewScoreChange(selectedEditSubItemId, val)}
                                                                             min={0}
                                                                             max={selectedSubItem?.max_score || 0}
+                                                                            step="any"
                                                                             size="lg"
                                                                             variant="bordered"
                                                                             classNames={{
@@ -1490,36 +1638,37 @@ export default function ScoreModal({
 
                                                     <div>
                                                         <label className="text-slate-600 font-medium text-sm mb-2 block">คะแนนใหม่ *</label>
-                                                        
+
 
                                                         <div className="bg-slate-50 p-4 rounded-xl">
-                                                        <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
-                                                            <div className="p-2 bg-amber-100 rounded-lg shrink-0">
-                                                                <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Input
-                                                                    type="number"
-                                                                    placeholder="0"
-                                                                    value={newScore}
-                                                                    onValueChange={setNewScore}
-                                                                    min={0}
-                                                                    max={assignment.max_score}
-                                                                    className="w-20"
-                                                                    size="sm"
-                                                                    variant="bordered"
-                                                                    classNames={{
-                                                                        input: "text-center font-semibold",
-                                                                        inputWrapper: "bg-white border-slate-200",
-                                                                    }}
-                                                                />
-                                                                <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+                                                                <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                    <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
+                                                                </div>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Input
+                                                                        type="number"
+                                                                        placeholder="0"
+                                                                        value={newScore}
+                                                                        onValueChange={setNewScore}
+                                                                        min={0}
+                                                                        max={assignment.max_score}
+                                                                        step="any"
+                                                                        className="w-20"
+                                                                        size="sm"
+                                                                        variant="bordered"
+                                                                        classNames={{
+                                                                            input: "text-center font-semibold",
+                                                                            inputWrapper: "bg-white border-slate-200",
+                                                                        }}
+                                                                    />
+                                                                    <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
                                                     </div>
 
                                                     <div>

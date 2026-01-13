@@ -256,14 +256,14 @@ export default function AttendanceSummaryPage() {
                     </div>
                 </div>
 
-                <Button
+                {/* <Button
                     color="primary"
                     variant="flat"
                     startContent={<Icon icon="solar:download-bold" />}
                     onPress={exportCSV}
                 >
                     ส่งออก CSV
-                </Button>
+                </Button> */}
             </div>
 
             {/* Stats Cards */}

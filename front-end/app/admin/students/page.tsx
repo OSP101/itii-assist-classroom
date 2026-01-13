@@ -499,7 +499,7 @@ export default function StudentsPage() {
                         color="primary"
                         startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
                         onPress={() => setIsCreateModalOpen(true)}
-                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                     >
                         <span className="hidden sm:inline">เพิ่มนักศึกษา</span>
                         <span className="sm:hidden">เพิ่ม</span>
@@ -658,7 +658,7 @@ export default function StudentsPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -738,7 +738,7 @@ export default function StudentsPage() {
                             color="primary"
                             onPress={handleCreate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             เพิ่มนักศึกษา

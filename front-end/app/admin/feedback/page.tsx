@@ -294,7 +294,7 @@ export default function FeedbackPage() {
                             name={feedback.user.full_name}
                             size="md"
                             src={feedback.user.avatar || ""}
-                            className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                            className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                         />
                         <div>
                             <p className="text-sm font-medium">{feedback.user.full_name}</p>
@@ -605,7 +605,7 @@ export default function FeedbackPage() {
                                                         name={selectedFeedback.user.full_name}
                                                         src={selectedFeedback.user.avatar || ""}
                                                         size="md"
-                                                        className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                                        className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                                     />
                                                     <div>
                                                         <p className="font-medium">{selectedFeedback.user.full_name}</p>

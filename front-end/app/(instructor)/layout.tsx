@@ -62,8 +62,8 @@ export default function InstructorLayout({
     const [activeCourses, setActiveCourses] = useState<Course[]>([]);
 
     // Extract course ID from pathname
-    const courseId = pathname.includes("/classroom/") 
-        ? pathname.split("/classroom/")[1]?.split("/")[0] 
+    const courseId = pathname.includes("/classroom/")
+        ? pathname.split("/classroom/")[1]?.split("/")[0]
         : null;
 
     // Check auth once
@@ -196,21 +196,43 @@ export default function InstructorLayout({
     const isHomePage = pathname === "/home" || pathname === "/home/create-course";
     const isClassroomPage = pathname.includes("/classroom/");
 
+    // Show loading screen while checking auth
     if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
-                <Spinner size="lg" color="primary" />
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <p className="text-xl text-slate-700">The ITII Assist Classroom is loading.</p>
+                    <Spinner size="lg" color="primary" />
+                </div>
+            </div>
+        );
+    }
+
+    // Don't render content if user is not authenticated (will be redirected by useEffect)
+    if (!user) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <p className="text-xl text-slate-700">กำลังนำไปยังหน้าเข้าสู่ระบบ...</p>
+                    <Spinner size="lg" color="primary" />
+                </div>
             </div>
         );
     }
 
     return (
-        <InstructorContext.Provider value={{ 
-            user, 
-            activeCourses, 
-            courseInfo, 
+        <InstructorContext.Provider value={{
+            user,
+            activeCourses,
+            courseInfo,
             setCourseInfo,
-            refreshCourses: fetchActiveCourses 
+            refreshCourses: fetchActiveCourses
         }}>
             <div className="min-h-screen bg-slate-50">
                 {/* Top Navigation Bar - Shared Header */}
@@ -219,11 +241,11 @@ export default function InstructorLayout({
                         {/* Left: Breadcrumb Navigation */}
                         <div className="flex items-center gap-1 text-sm overflow-x-auto">
                             {/* Home Icon */}
-                            <Link 
+                            <Link
                                 href={getBackPath()}
                                 className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors text-slate-600 hover:text-slate-900"
                             >
-                                <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-600 rounded flex items-center justify-center text-white text-xs">
+                                <div className="w-6 h-6 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-xs">
                                     <IoSchool />
                                 </div>
                             </Link>
@@ -319,7 +341,7 @@ export default function InstructorLayout({
                                             name={user?.full_name}
                                             size="md"
                                             src={user?.avatar || undefined}
-                                            className="w-7 h-7 bg-gradient-to-br from-blue-500 to-indigo-600"
+                                            className="w-7 h-7 bg-gradient-to-br from-blue-400 to-indigo-500"
                                         />
                                     </button>
                                 </DropdownTrigger>
