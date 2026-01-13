@@ -74,26 +74,26 @@ OR
             }
         }
 
-        stage('🔐 Inject Secrets (. env)') {
-            when {
-                expression { env.ENV_NAME == 'dev' }
-            }
-            steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
-                        string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
-                        string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
-                        string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
-                        string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
-                        string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
-                        string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
-                        string(credentialsId: 'DEV_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL')
-                    ]) {
-                        sh '''
-                        # Create backend . env file
-                        mkdir -p back-end
-                        cat <<EOF > back-end/.env
+        stage('🔐 Inject Secrets (.env)') {
+    when {
+        expression { env.ENV_NAME == 'dev' }
+    }
+    steps {
+        script {
+            withCredentials([
+                string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
+                string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
+                string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
+                string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
+                string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
+                string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
+                string(credentialsId: 'DEV_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL')
+            ]) {
+                sh '''
+                # Create backend .env file
+                mkdir -p back-end
+                cat <<EOF > back-end/.env
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
@@ -103,16 +103,16 @@ GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 EOF
 
-                        # Create frontend .env. local file
-                        mkdir -p front-end
-                        cat <<EOF > front-end/.env. local
+                # Create frontend .env.local file
+                mkdir -p front-end
+                cat <<EOF > front-end/.env.local
 NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 EOF
-                        '''
-                    }
-                }
+                '''
             }
         }
+    }
+}
 
         stage('🏗 Build') {
             steps {
