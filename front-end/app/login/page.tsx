@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
@@ -8,6 +8,7 @@ import { Input } from "@heroui/input";
 import { Card, CardBody } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { Link } from "@heroui/link";
+import { Skeleton } from "@heroui/skeleton";
 import { Icon } from "@iconify/react";
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { addToast } from "@heroui/toast";
@@ -16,7 +17,14 @@ import { authService } from "@/services";
 // Dynamic import Turnstile to avoid hydration mismatch
 const Turnstile = dynamic(
     () => import('@marsidev/react-turnstile').then(mod => mod.Turnstile),
-    { ssr: false }
+    { 
+        ssr: false,
+        loading: () => (
+            <div className="w-full mt-2">
+                <Skeleton className="w-full h-[65px] rounded-lg" />
+            </div>
+        )
+    }
 );
 
 export default function LoginPage() {
@@ -28,7 +36,14 @@ export default function LoginPage() {
         password: "",
     });
     const [canSubmit, setCanSubmit] = useState(true);
+    const [isMounted, setIsMounted] = useState(false);
+    const [turnstileReady, setTurnstileReady] = useState(false);
     const refTurnstile = useRef<TurnstileInstance>(null);
+
+    // Wait for client-side mount
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
 
     const toggleVisibility = () => setIsVisible(!isVisible);
@@ -213,19 +228,38 @@ export default function LoginPage() {
                                     </Link>
                                 </div> */}
 
-                                {process.env.NEXT_PUBLIC_CLOUD && (
+                                {isMounted && process.env.NEXT_PUBLIC_CLOUD && (
                                     <Turnstile
                                         id='turnstile-1'
                                         ref={refTurnstile}
                                         siteKey={process.env.NEXT_PUBLIC_CLOUD}
-                                        onSuccess={() => setCanSubmit(false)}
-                                        onError={() => setCanSubmit(true)}
+                                        onSuccess={() => {
+                                            setCanSubmit(false);
+                                            setTurnstileReady(true);
+                                        }}
+                                        onError={() => {
+                                            setCanSubmit(true);
+                                            setTurnstileReady(true);
+                                        }}
+                                        onExpire={() => {
+                                            setCanSubmit(true);
+                                        }}
+                                        onWidgetLoad={() => {
+                                            setTurnstileReady(true);
+                                        }}
                                         options={{
                                             theme: 'auto',
                                             size: 'flexible',
                                         }}
                                         className="w-full mt-2"
                                     />
+                                )}
+                                
+                                {/* Show skeleton while Turnstile is loading */}
+                                {isMounted && process.env.NEXT_PUBLIC_CLOUD && !turnstileReady && (
+                                    <div className="w-full mt-2">
+                                        <Skeleton className="w-full h-[65px] rounded-lg" />
+                                    </div>
                                 )}
 
                                 <Button
