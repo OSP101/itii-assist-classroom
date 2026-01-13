@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
@@ -18,6 +18,15 @@ export default function MyScorePage() {
     const [isLoading, setIsLoading] = useState(false);
     const [data, setData] = useState<StudentScoreLookupResponse | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
+    const [cooldown, setCooldown] = useState(0);
+
+    // Cooldown timer
+    useEffect(() => {
+        if (cooldown > 0) {
+            const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+            return () => clearTimeout(timer);
+        }
+    }, [cooldown]);
 
     const handleSearch = async () => {
         if (!studentId.trim()) {
@@ -29,8 +38,11 @@ export default function MyScorePage() {
             return;
         }
 
+        if (cooldown > 0) return;
+
         setIsLoading(true);
         setHasSearched(true);
+        setCooldown(5); // Start 5 second cooldown
 
         try {
             const response = await studentService.lookupStudentScores(studentId.trim());
@@ -540,10 +552,10 @@ export default function MyScorePage() {
                                 size="lg"
                                 onPress={handleSearch}
                                 isLoading={isLoading}
+                                isDisabled={cooldown > 0 && !isLoading}
                                 className="bg-gradient-to-r from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/30 h-14 min-w-[140px] text-base font-medium"
-                                // startContent={!isLoading && <Icon icon="solar:magnifer-bold" className="text-5xl text-white" />}
                             >
-                                ค้นหาคะแนน
+                                {cooldown > 0 && !isLoading ? `รอ ${cooldown} วินาที` : "ค้นหาคะแนน"}
                             </Button>
                         </div>
                     </CardBody>
