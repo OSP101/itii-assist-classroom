@@ -14,7 +14,7 @@ pipeline {
     environment {
         DEPLOY_ENV = ""
         COMPOSE_FILE = ""
-        COMPOSE_PROJECT_NAME = ""
+        COMPOSE_PROJECT = ""
         DOCKER_NETWORK = ""
     }
 
@@ -29,17 +29,17 @@ pipeline {
         stage('📋 Setup') {
             steps {
                 script {
-                    env.GIT_BRANCH_NAME = sh(
-                        script: 'git rev-parse --abbrev-ref HEAD',
-                        returnStdout: true
-                    ).trim().replace("origin/", "")
+                    env.BRANCH = env.BRANCH_NAME ?: env.GIT_BRANCH?.replace("origin/", "")
 
                     env.GIT_COMMIT_SHORT = sh(
-                        script: 'git rev-parse --short HEAD',
+                        script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
 
-                    echo "Branch=${env.GIT_BRANCH_NAME}, Commit=${env.GIT_COMMIT_SHORT}"
+                    echo """
+                    Branch  : ${env.BRANCH}
+                    Commit  : ${env.GIT_COMMIT_SHORT}
+                    """
                 }
             }
         }
@@ -47,18 +47,20 @@ pipeline {
         stage('🌱 Detect Environment') {
             steps {
                 script {
-                    if (env.GIT_BRANCH_NAME == "deploy") {
+                    if (env.BRANCH == "deploy") {
                         env.DEPLOY_ENV = "dev"
                         env.COMPOSE_FILE = "docker-compose.dev.yml"
-                        env.COMPOSE_PROJECT_NAME = "itii-dev"
+                        env.COMPOSE_PROJECT = "itii-dev"
                         env.DOCKER_NETWORK = "itii-dev"
-                    } else if (env.GIT_BRANCH_NAME == "main") {
+                    }
+                    else if (env.BRANCH == "main") {
                         env.DEPLOY_ENV = "prod"
                         env.COMPOSE_FILE = "docker-compose.prod.yml"
-                        env.COMPOSE_PROJECT_NAME = "itii-prod"
+                        env.COMPOSE_PROJECT = "itii-prod"
                         env.DOCKER_NETWORK = "itii-prod"
-                    } else {
-                        error("❌ Branch '${env.GIT_BRANCH_NAME}' not allowed")
+                    }
+                    else {
+                        error("❌ Branch '${env.BRANCH}' not allowed")
                     }
 
                     echo "Deploy ENV = ${DEPLOY_ENV}"
@@ -66,7 +68,6 @@ pipeline {
             }
         }
 
-        /* ================= ENV FILES ================= */
         stage('🔐 Prepare ENV Files') {
             steps {
                 script {
@@ -81,8 +82,8 @@ pipeline {
                         string(credentialsId: "${PREFIX}_DB_PASSWORD", value: 'DB_PASSWORD'),
                         string(credentialsId: "${PREFIX}_JWT_ACCESS_SECRET", value: 'JWT_ACCESS_SECRET'),
                         string(credentialsId: "${PREFIX}_JWT_REFRESH_SECRET", value: 'JWT_REFRESH_SECRET'),
-                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_SECRET", value: 'GOOGLE_CLIENT_SECRET'),
-                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_ID", value: 'GOOGLE_CLIENT_ID')
+                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_ID", value: 'GOOGLE_CLIENT_ID'),
+                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_SECRET", value: 'GOOGLE_CLIENT_SECRET')
                     ]) {
 
                         sh """
@@ -123,34 +124,37 @@ EOF
 
         stage('🧪 Test') {
             steps {
-                sh """
+                sh '''
                 cd back-end && npm install && npm test || true
                 cd ../front-end && npm install && npm run test --if-present || true
-                """
+                '''
             }
         }
 
         stage('🏗️ Build Images') {
             steps {
-                sh """
+                sh '''
                 docker build -t itii-backend:latest back-end
                 docker build -t itii-frontend:latest front-end
-                """
+                '''
             }
         }
 
         stage('🚀 Deploy') {
             steps {
                 sh """
-                docker compose -p ${COMPOSE_PROJECT_NAME} -f ${COMPOSE_FILE} down --remove-orphans || true
-                docker compose -p ${COMPOSE_PROJECT_NAME} -f ${COMPOSE_FILE} up -d
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down --remove-orphans || true
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
                 """
             }
         }
 
         stage('🏥 Health Check') {
             steps {
-                sh "sleep 10 && curl -f http://localhost:3001/health"
+                sh '''
+                sleep 10
+                curl -f http://localhost:3001/health
+                '''
             }
         }
     }
@@ -163,7 +167,7 @@ EOF
             echo "❌ DEPLOY FAILED"
         }
         always {
-            sh "docker image prune -f || true"
+            sh 'docker image prune -f || true'
         }
     }
 }
