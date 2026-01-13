@@ -1,4 +1,4 @@
-version: "3.9"
+
 
 services:
   backend:
@@ -16,7 +16,7 @@ services:
     ports:
       - "3001:3001"
     networks:
-      - itii-network
+      - itii-prod
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 10s
@@ -38,8 +38,8 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - itii-network
+      - itii-prod
 
 networks:
-  itii-network:
+  itii-prod:
     external: true
