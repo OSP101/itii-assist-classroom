@@ -12,200 +12,158 @@ pipeline {
     }
 
     environment {
-        ENV_NAME = 'dev'
-        COMPOSE_FILE = 'docker-compose.dev.yml'
-        COMPOSE_PROJECT = 'itii-dev'
-        DOCKER_NETWORK = 'itii-network'
+        DEPLOY_ENV = ""
+        COMPOSE_FILE = ""
+        COMPOSE_PROJECT_NAME = ""
+        DOCKER_NETWORK = ""
     }
 
     stages {
 
-        /* ================= CHECKOUT ================= */
         stage('📥 Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        /* ================= SETUP ================= */
         stage('📋 Setup') {
             steps {
                 script {
-                    env.GIT_BRANCH = sh(
+                    env.GIT_BRANCH_NAME = sh(
                         script: 'git rev-parse --abbrev-ref HEAD',
                         returnStdout: true
-                    ).trim()
+                    ).trim().replace("origin/", "")
 
                     env.GIT_COMMIT_SHORT = sh(
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
 
-                    echo """
-                    Branch : ${env.GIT_BRANCH}
-                    Commit : ${env.GIT_COMMIT_SHORT}
-                    """
+                    echo "Branch=${env.GIT_BRANCH_NAME}, Commit=${env.GIT_COMMIT_SHORT}"
                 }
             }
         }
 
-        /* ================= ENV SWITCH ================= */
-        stage('🌱 Select Environment') {
+        stage('🌱 Detect Environment') {
             steps {
                 script {
-                    if (env.GIT_BRANCH == 'main') {
-                        env.ENV_NAME = 'prod'
-                        env.COMPOSE_FILE = 'docker-compose.prod.yml'
-                        env.COMPOSE_PROJECT = 'itii-prod'
+                    if (env.GIT_BRANCH_NAME == "deploy") {
+                        env.DEPLOY_ENV = "dev"
+                        env.COMPOSE_FILE = "docker-compose.dev.yml"
+                        env.COMPOSE_PROJECT_NAME = "itii-dev"
+                        env.DOCKER_NETWORK = "itii-dev"
+                    } else if (env.GIT_BRANCH_NAME == "main") {
+                        env.DEPLOY_ENV = "prod"
+                        env.COMPOSE_FILE = "docker-compose.prod.yml"
+                        env.COMPOSE_PROJECT_NAME = "itii-prod"
+                        env.DOCKER_NETWORK = "itii-prod"
                     } else {
-                        env.ENV_NAME = 'dev'
-                        env.COMPOSE_FILE = 'docker-compose.dev.yml'
-                        env.COMPOSE_PROJECT = 'itii-dev'
+                        error("❌ Branch '${env.GIT_BRANCH_NAME}' not allowed")
                     }
 
-                    echo "Deploy ENV = ${env.ENV_NAME}"
+                    echo "Deploy ENV = ${DEPLOY_ENV}"
                 }
             }
         }
 
-        /* ================= PREPARE ENV ================= */
+        /* ================= ENV FILES ================= */
         stage('🔐 Prepare ENV Files') {
             steps {
                 script {
 
-                    sh 'docker network create itii-network || true'
+                    sh "docker network create ${DOCKER_NETWORK} || true"
 
-                    if (env.ENV_NAME == 'dev') {
-                        withCredentials([
-                            string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
-                            string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
-                            string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
-                            string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
-                            string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET')
-                        ]) {
-                            sh '''
-                            cat <<EOF > back-end/.env
-NODE_ENV=development
+                    def PREFIX = DEPLOY_ENV.toUpperCase()
+
+                    withCredentials([
+                        string(credentialsId: "${PREFIX}_DB_NAME", value: 'DB_NAME'),
+                        string(credentialsId: "${PREFIX}_DB_USER", value: 'DB_USER'),
+                        string(credentialsId: "${PREFIX}_DB_PASSWORD", value: 'DB_PASSWORD'),
+                        string(credentialsId: "${PREFIX}_JWT_ACCESS_SECRET", value: 'JWT_ACCESS_SECRET'),
+                        string(credentialsId: "${PREFIX}_JWT_REFRESH_SECRET", value: 'JWT_REFRESH_SECRET'),
+                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_SECRET", value: 'GOOGLE_CLIENT_SECRET'),
+                        string(credentialsId: "${PREFIX}_GOOGLE_CLIENT_ID", value: 'GOOGLE_CLIENT_ID')
+                    ]) {
+
+                        sh """
+                        mkdir -p back-end front-end
+
+                        cat > back-end/.env <<EOF
+NODE_ENV=${DEPLOY_ENV}
 PORT=3001
+
 DB_HOST=itii-mysql
 DB_PORT=3306
-DB_NAME=${DB_NAME}
-DB_USER=${DB_USER}
-DB_PASSWORD=${DB_PASSWORD}
-JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
-JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-FRONTEND_URL=https://itii-dev.osp101.dev
+DB_NAME=\${DB_NAME}
+DB_USER=\${DB_USER}
+DB_PASSWORD=\${DB_PASSWORD}
+
+JWT_ACCESS_SECRET=\${JWT_ACCESS_SECRET}
+JWT_REFRESH_SECRET=\${JWT_REFRESH_SECRET}
+JWT_ACCESS_EXPIRES_IN=120m
+JWT_REFRESH_EXPIRES_IN=1d
+
+GOOGLE_CLIENT_ID=\${GOOGLE_CLIENT_ID}
+GOOGLE_CLIENT_SECRET=\${GOOGLE_CLIENT_SECRET}
+
+FRONTEND_URL=https://itii-${DEPLOY_ENV}.osp101.dev
 EOF
 
-                            cat <<EOF > front-end/.env.local
-NEXT_PUBLIC_API_URL=https://api-itii-dev.osp101.dev/api
-NEXT_PUBLIC_FRONTEND_URL=https://itii-dev.osp101.dev
+                        cat > front-end/.env.local <<EOF
+NEXT_PUBLIC_API_URL=https://api-itii-${DEPLOY_ENV}.osp101.dev/api
+NEXT_PUBLIC_SOCKET_URL=https://api-itii-${DEPLOY_ENV}.osp101.dev
+NEXT_PUBLIC_FRONTEND_URL=https://itii-${DEPLOY_ENV}.osp101.dev
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=\${GOOGLE_CLIENT_ID}
 EOF
-                            '''
-                        }
-                    }
-
-                    if (env.ENV_NAME == 'prod') {
-                        withCredentials([
-                            string(credentialsId: 'PROD_DB_NAME', variable: 'DB_NAME'),
-                            string(credentialsId: 'PROD_DB_USER', variable: 'DB_USER'),
-                            string(credentialsId: 'PROD_DB_PASSWORD', variable: 'DB_PASSWORD'),
-                            string(credentialsId: 'PROD_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
-                            string(credentialsId: 'PROD_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET')
-                        ]) {
-                            sh '''
-                            cat <<EOF > back-end/.env
-NODE_ENV=production
-PORT=3001
-DB_HOST=itii-mysql
-DB_PORT=3306
-DB_NAME=${DB_NAME}
-DB_USER=${DB_USER}
-DB_PASSWORD=${DB_PASSWORD}
-JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
-JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-FRONTEND_URL=https://itii.osp101.dev
-EOF
-
-                            cat <<EOF > front-end/.env.local
-NEXT_PUBLIC_API_URL=https://api-itii.osp101.dev/api
-NEXT_PUBLIC_FRONTEND_URL=https://itii.osp101.dev
-EOF
-                            '''
-                        }
+                        """
                     }
                 }
             }
         }
 
-        /* ================= TEST ================= */
-        stage('🧪 Test (Pre-Deploy)') {
-            steps {
-                sh '''
-                echo "=== Backend Test ==="
-                docker run --rm \
-                  -v "$PWD/back-end:/app" \
-                  -w /app \
-                  node:20 \
-                  sh -c "npm install && npm test || true"
-
-                echo "=== Frontend Test ==="
-                docker run --rm \
-                  -v "$PWD/front-end:/app" \
-                  -w /app \
-                  node:20 \
-                  sh -c "npm install && npm run test --if-present || true"
-                '''
-            }
-        }
-
-        /* ================= DEPLOY ================= */
-        stage('🚀 Deploy') {
+        stage('🧪 Test') {
             steps {
                 sh """
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down || true
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d --build
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} ps
+                cd back-end && npm install && npm test || true
+                cd ../front-end && npm install && npm run test --if-present || true
                 """
             }
         }
 
-        /* ================= HEALTH ================= */
+        stage('🏗️ Build Images') {
+            steps {
+                sh """
+                docker build -t itii-backend:latest back-end
+                docker build -t itii-frontend:latest front-end
+                """
+            }
+        }
+
+        stage('🚀 Deploy') {
+            steps {
+                sh """
+                docker compose -p ${COMPOSE_PROJECT_NAME} -f ${COMPOSE_FILE} down --remove-orphans || true
+                docker compose -p ${COMPOSE_PROJECT_NAME} -f ${COMPOSE_FILE} up -d
+                """
+            }
+        }
+
         stage('🏥 Health Check') {
             steps {
-                script {
-                    sleep 10
-
-                    if (env.ENV_NAME == 'dev') {
-                        sh '''
-                        curl -f http://localhost:3001/health
-                        curl -f http://localhost:81
-                        '''
-                    } else {
-                        sh '''
-                        curl -f https://api-itii.osp101.dev/health
-                        curl -f https://itii.osp101.dev
-                        '''
-                    }
-                }
+                sh "sleep 10 && curl -f http://localhost:3001/health"
             }
         }
     }
 
     post {
         success {
-            echo "✅ ${ENV_NAME.toUpperCase()} DEPLOY SUCCESS"
+            echo "✅ DEPLOY ${DEPLOY_ENV.toUpperCase()} SUCCESS"
         }
         failure {
             echo "❌ DEPLOY FAILED"
-            sh '''
-            docker ps -a | grep itii || true
-            docker logs itii-prod-backend || true
-            docker logs itii-dev-backend || true
-            '''
         }
         always {
-            sh 'docker image prune -f || true'
+            sh "docker image prune -f || true"
         }
     }
 }
