@@ -1,51 +1,54 @@
-# Database Services - MySQL & phpMyAdmin
-# Run: docker-compose -f docker-compose.db.yml up -d
+version: "3.9"
 
 services:
-  # MySQL Database
   db:
     image: mysql:8.0
     container_name: itii-mysql
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
-      MYSQL_DATABASE: ${DB_NAME:-project_ta_prod}
-      MYSQL_USER: ${DB_USER:-app_user}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-app_password}
+
+    env_file:
+      - ./.env.db.prod
+
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data_prod:/var/lib/mysql
       - ./project_ta_prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
     ports:
       - "3306:3306"
+
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
+
     networks:
       - itii-network
 
-  # phpMyAdmin - Database Management
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: itii-phpmyadmin
     restart: unless-stopped
+
     environment:
       PMA_HOST: db
       PMA_PORT: 3306
       PMA_ARBITRARY: 0
       UPLOAD_LIMIT: 100M
+
     ports:
       - "8088:80"
+
     depends_on:
       db:
         condition: service_healthy
+
     networks:
       - itii-network
 
 volumes:
-  mysql_data:
+  mysql_data_prod:
 
 networks:
   itii-network:
-    driver: bridge
+    external: true
