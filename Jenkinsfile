@@ -77,21 +77,25 @@ OR
         }
 
         stage('🔐 Inject Secrets (.env)') {
-            steps {
-                script {
-                    if (env.ENV_NAME == 'dev') {
-                        withCredentials([
-                            string(credentialsId: 'DEV_DB_NAME', value: 'DB_NAME'),
-                            string(credentialsId: 'DEV_DB_USER', value: 'DB_USER'),
-                            string(credentialsId: 'DEV_DB_PASSWORD', value: 'DB_PASSWORD'),
-                            string(credentialsId: 'DEV_JWT_ACCESS_SECRET', value: 'JWT_ACCESS_SECRET'),
-                            string(credentialsId: 'DEV_JWT_REFRESH_SECRET', value: 'JWT_REFRESH_SECRET'),
-                            string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', value: 'GOOGLE_CLIENT_ID'),
-                            string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', value: 'GOOGLE_CLIENT_SECRET')
-                        ]) {
-                            sh '''
-                            mkdir -p back-end
-                            cat <<EOF > back-end/.env
+    when {
+        expression { env.ENV_NAME == 'dev' }
+    }
+    steps {
+        script {
+
+            withCredentials([
+                string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
+                string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
+                string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
+                string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
+                string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
+                string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET')
+            ]) {
+
+                sh '''
+                mkdir -p back-end
+                cat <<EOF > back-end/.env
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
@@ -100,12 +104,12 @@ JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 EOF
-                            '''
-                        }
-                    }
-                }
+                '''
             }
         }
+    }
+}
+
 
         stage('🏗 Build') {
             steps {
