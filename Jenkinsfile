@@ -26,8 +26,6 @@ pipeline {
         stage('📌 Resolve Branch') {
             steps {
                 script {
-
-                    // ลำดับความสำคัญ
                     if (env.BRANCH_NAME) {
                         env.BRANCH = env.BRANCH_NAME
                     }
@@ -77,25 +75,23 @@ OR
         }
 
         stage('🔐 Inject Secrets (.env)') {
-    when {
-        expression { env.ENV_NAME == 'dev' }
-    }
-    steps {
-        script {
-
-            withCredentials([
-                string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
-                string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
-                string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
-                string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
-                string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
-                string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
-                string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET')
-            ]) {
-
-                sh '''
-                mkdir -p back-end
-                cat <<EOF > back-end/.env
+            when {
+                expression { env.ENV_NAME == 'dev' }
+            }
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'DEV_DB_NAME', variable: 'DB_NAME'),
+                        string(credentialsId: 'DEV_DB_USER', variable: 'DB_USER'),
+                        string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
+                        string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                        string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
+                        string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET')
+                    ]) {
+                        sh '''
+                        mkdir -p back-end
+                        cat <<EOF > back-end/.env
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
@@ -104,12 +100,11 @@ JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 EOF
-                '''
+                        '''
+                    }
+                }
             }
         }
-    }
-}
-
 
         stage('🏗 Build') {
             steps {
@@ -117,36 +112,55 @@ EOF
             }
         }
 
-stage('🚀 Deploy') {
-    steps {
-        sh """
-        docker network create ${DOCKER_NETWORK} || true
-        docker compose -f ${COMPOSE_FILE} down
-        docker compose -f ${COMPOSE_FILE} up -d
-        
-        # รอ 3 วินาที แล้วเช็คว่า backend ยังรันอยู่ไหม
-        sleep 3
-        
-        if ! docker ps | grep -q itii-dev-backend; then
-            echo "❌ Backend failed to start. Showing logs:"
-            docker logs itii-dev-backend || true
-            exit 1
-        fi
-        """
-    }
-}
+        stage('🚀 Deploy') {
+            steps {
+                sh """
+                docker network create ${DOCKER_NETWORK} || true
+                docker compose -f ${COMPOSE_FILE} down
+                docker compose -f ${COMPOSE_FILE} up -d
+                
+                echo "⏳ Waiting for containers to start..."
+                sleep 5
+                
+                if ! docker ps | grep -q itii-dev-backend; then
+                    echo "❌ Backend failed to start. Showing logs:"
+                    docker logs itii-dev-backend || true
+                    exit 1
+                fi
+                """
+            }
+        }
 
-post {
-    failure {
-        echo "❌ DEPLOY FAILED"
-        sh '''
-        echo "📋 Backend logs:"
-        docker logs itii-dev-backend --tail 100 || true
-        echo ""
-        echo "📋 Docker ps:"
-        docker ps -a | grep itii || true
-        '''
+        stage('🏥 Health Check') {
+            steps {
+                sh """
+                echo "🔍 Checking containers..."
+                docker ps | grep ${PROJECT_NAME} || true
+                
+                echo ""
+                echo "📊 Backend logs:"
+                docker logs itii-dev-backend --tail 20 || true
+                """
+            }
+        }
     }
-    // ... ส่วนอื่นเหมือนเดิม
-}
+
+    post {
+        success {
+            echo "✅ DEPLOY SUCCESS (${ENV_NAME})"
+        }
+        failure {
+            echo "❌ DEPLOY FAILED"
+            sh '''
+            echo "📋 Backend logs:"
+            docker logs itii-dev-backend --tail 100 || true
+            echo ""
+            echo "📋 Container status:"
+            docker ps -a | grep itii || true
+            '''
+        }
+        always {
+            sh 'docker image prune -f || true'
+        }
+    }
 }
