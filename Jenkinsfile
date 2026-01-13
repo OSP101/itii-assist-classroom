@@ -117,32 +117,36 @@ EOF
             }
         }
 
-        stage('🚀 Deploy') {
-            steps {
-                sh """
-                docker network create ${DOCKER_NETWORK} || true
-                docker compose -f ${COMPOSE_FILE} down
-                docker compose -f ${COMPOSE_FILE} up -d
-                """
-            }
-        }
-
-        stage('🏥 Health Check') {
-            steps {
-                sh "docker ps | grep ${PROJECT_NAME} || true"
-            }
-        }
+stage('🚀 Deploy') {
+    steps {
+        sh """
+        docker network create ${DOCKER_NETWORK} || true
+        docker compose -f ${COMPOSE_FILE} down
+        docker compose -f ${COMPOSE_FILE} up -d
+        
+        # รอ 3 วินาที แล้วเช็คว่า backend ยังรันอยู่ไหม
+        sleep 3
+        
+        if ! docker ps | grep -q itii-dev-backend; then
+            echo "❌ Backend failed to start. Showing logs:"
+            docker logs itii-dev-backend || true
+            exit 1
+        fi
+        """
     }
+}
 
-    post {
-        success {
-            echo "✅ DEPLOY SUCCESS (${ENV_NAME})"
-        }
-        failure {
-            echo "❌ DEPLOY FAILED"
-        }
-        always {
-            sh 'docker image prune -f || true'
-        }
+post {
+    failure {
+        echo "❌ DEPLOY FAILED"
+        sh '''
+        echo "📋 Backend logs:"
+        docker logs itii-dev-backend --tail 100 || true
+        echo ""
+        echo "📋 Docker ps:"
+        docker ps -a | grep itii || true
+        '''
     }
+    // ... ส่วนอื่นเหมือนเดิม
+}
 }
