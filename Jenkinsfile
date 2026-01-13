@@ -88,7 +88,16 @@ OR
                 string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
                 string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
                 string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
-                string(credentialsId: 'DEV_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL')
+                string(credentialsId: 'DEV_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL'),
+                string(credentialsId: 'DEV_NEXT_PUBLIC_SOCKET_URL', variable: 'NEXT_PUBLIC_SOCKET_URL'),
+                string(credentialsId: 'DEV_NEXT_PUBLIC_FRONTEND_URL', variable: 'NEXT_PUBLIC_FRONTEND_URL'),
+                string(credentialsId: 'DEV_NEXT_PUBLIC_CLOUD', variable: 'NEXT_PUBLIC_CLOUD'),
+                string(credentialsId: 'DEV_GOOGLE_CALLBACK_URL', variable: 'GOOGLE_CALLBACK_URL'),
+                string(credentialsId: 'DEV_FRONTEND_URL', variable: 'FRONTEND_URL'),
+                string(credentialsId: 'DEV_NEXT_PUBLIC_GOOGLE_CLIENT_ID', variable: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'),
+                string(credentialsId: 'DEV_JWT_ACCESS_EXPIRES_IN', variable: 'JWT_ACCESS_EXPIRES_IN'),
+                string(credentialsId: 'DEV_JWT_REFRESH_EXPIRES_IN', variable: 'JWT_REFRESH_EXPIRES_IN'),
+
             ]) {
                 sh '''
                 # Create backend .env file
@@ -101,12 +110,20 @@ JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
 JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+GOOGLE_CALLBACK_URL=$GOOGLE_CALLBACK_URL
+FRONTEND_URL=$FRONTEND_URL
+JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
+JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
 EOF
 
                 # Create frontend .env.local file
                 mkdir -p front-end
                 cat <<EOF > front-end/.env.local
 NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 EOF
                 '''
             }
