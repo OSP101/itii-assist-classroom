@@ -12,7 +12,7 @@ pipeline {
 
     environment {
         PROJECT_NAME   = "itii"
-        DOCKER_NETWORK = "itii-network"
+        DOCKER_NETWORK = "itii-prod"
     }
 
     stages {
