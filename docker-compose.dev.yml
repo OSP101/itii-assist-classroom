@@ -14,9 +14,6 @@ services:
       DB_PORT: 3306
     ports:
       - "3001:3001"
-    depends_on:
-      db:
-        condition: service_healthy
     networks:
       - itii-network
     healthcheck:
