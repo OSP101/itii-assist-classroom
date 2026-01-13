@@ -5,7 +5,7 @@ import clsx from "clsx";
 
 export const metadata = {
   title: "เข้าสู่ระบบ - ITII Assist Classroom",
-  description: "เข้าสู่ระบบ ITII Assist Classroom - Course & Lab Management System",
+  description: "เข้าสู่ระบบ ITII Assist Classroom",
 };
 
 export const viewport = {
