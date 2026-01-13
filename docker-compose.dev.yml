@@ -13,7 +13,7 @@ services:
     ports:
       - "3001:3001"
     networks:
-      - itii-prod
+      - itii-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 10s
@@ -36,8 +36,8 @@ services:
       backend:
         condition:  service_healthy
     networks: 
-      - itii-prod
+      - itii-network
 
 networks:
-  itii-prod:  
+  itii-network:  
     external: true
