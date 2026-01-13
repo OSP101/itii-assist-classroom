@@ -14,17 +14,10 @@ import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { addToast } from "@heroui/toast";
 import { authService } from "@/services";
 
-// Dynamic import Turnstile to avoid hydration mismatch
+// Dynamic import Turnstile - completely skip SSR
 const Turnstile = dynamic(
     () => import('@marsidev/react-turnstile').then(mod => mod.Turnstile),
-    { 
-        ssr: false,
-        loading: () => (
-            <div className="w-full mt-2">
-                <Skeleton className="w-full h-[65px] rounded-lg" />
-            </div>
-        )
-    }
+    { ssr: false }
 );
 
 export default function LoginPage() {
@@ -36,13 +29,19 @@ export default function LoginPage() {
         password: "",
     });
     const [canSubmit, setCanSubmit] = useState(true);
-    const [isMounted, setIsMounted] = useState(false);
+    const [turnstileKey, setTurnstileKey] = useState<string | null>(null);
     const [turnstileReady, setTurnstileReady] = useState(false);
     const refTurnstile = useRef<TurnstileInstance>(null);
 
-    // Wait for client-side mount
+    // Get Turnstile key only on client side to avoid hydration mismatch
     useEffect(() => {
-        setIsMounted(true);
+        const key = process.env.NEXT_PUBLIC_CLOUD;
+        if (key) {
+            setTurnstileKey(key);
+        } else {
+            // No Turnstile key, allow submit
+            setTurnstileReady(true);
+        }
     }, []);
 
 
@@ -228,39 +227,36 @@ export default function LoginPage() {
                                     </Link>
                                 </div> */}
 
-                                {isMounted && process.env.NEXT_PUBLIC_CLOUD && (
-                                    <Turnstile
-                                        id='turnstile-1'
-                                        ref={refTurnstile}
-                                        siteKey={process.env.NEXT_PUBLIC_CLOUD}
-                                        onSuccess={() => {
-                                            setCanSubmit(false);
-                                            setTurnstileReady(true);
-                                        }}
-                                        onError={() => {
-                                            setCanSubmit(true);
-                                            setTurnstileReady(true);
-                                        }}
-                                        onExpire={() => {
-                                            setCanSubmit(true);
-                                        }}
-                                        onWidgetLoad={() => {
-                                            setTurnstileReady(true);
-                                        }}
-                                        options={{
-                                            theme: 'auto',
-                                            size: 'flexible',
-                                        }}
-                                        className="w-full mt-2"
-                                    />
-                                )}
-                                
-                                {/* Show skeleton while Turnstile is loading */}
-                                {isMounted && process.env.NEXT_PUBLIC_CLOUD && !turnstileReady && (
-                                    <div className="w-full mt-2">
+                                {/* Turnstile - Only render on client after key is loaded */}
+                                <div className="w-full mt-2" suppressHydrationWarning>
+                                    {turnstileKey ? (
+                                        <Turnstile
+                                            id='turnstile-1'
+                                            ref={refTurnstile}
+                                            siteKey={turnstileKey}
+                                            onSuccess={() => {
+                                                setCanSubmit(false);
+                                                setTurnstileReady(true);
+                                            }}
+                                            onError={() => {
+                                                setCanSubmit(true);
+                                                setTurnstileReady(true);
+                                            }}
+                                            onExpire={() => {
+                                                setCanSubmit(true);
+                                            }}
+                                            onWidgetLoad={() => {
+                                                setTurnstileReady(true);
+                                            }}
+                                            options={{
+                                                theme: 'auto',
+                                                size: 'flexible',
+                                            }}
+                                        />
+                                    ) : !turnstileReady ? (
                                         <Skeleton className="w-full h-[65px] rounded-lg" />
-                                    </div>
-                                )}
+                                    ) : null}
+                                </div>
 
                                 <Button
                                     type="submit"
