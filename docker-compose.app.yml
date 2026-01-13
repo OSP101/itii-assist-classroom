@@ -13,7 +13,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DB_HOST: ${DB_HOST:-itii-mysql}
+      DB_HOST: ${DB_HOST:-db}
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-project_ta_prod}
       DB_USER: ${DB_USER:-app_user}
