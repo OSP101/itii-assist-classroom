@@ -26,17 +26,29 @@ pipeline {
         stage('📌 Resolve Branch') {
             steps {
                 script {
-                    // รองรับทั้ง Multibranch และ Pipeline ปกติ
-                    env.BRANCH = env.BRANCH_NAME ?: sh(
-                        script: "git rev-parse --abbrev-ref HEAD",
-                        returnStdout: true
-                    ).trim()
 
-                    if (!env.BRANCH || env.BRANCH == 'HEAD') {
-                        error("❌ Cannot detect branch")
+                    // ลำดับความสำคัญ
+                    if (env.BRANCH_NAME) {
+                        env.BRANCH = env.BRANCH_NAME
+                    }
+                    else if (env.GIT_BRANCH) {
+                        env.BRANCH = env.GIT_BRANCH.replaceFirst(/^origin\//, '')
+                    }
+                    else if (env.CHANGE_BRANCH) {
+                        env.BRANCH = env.CHANGE_BRANCH
+                    }
+                    else {
+                        error("""
+❌ Cannot detect branch
+
+👉 Fix:
+1. Use Multibranch Pipeline (recommended)
+OR
+2. Enable 'GitHub hook trigger for GITScm polling'
+""")
                     }
 
-                    echo "➡ Branch = ${env.BRANCH}"
+                    echo "➡ Branch detected: ${env.BRANCH}"
                 }
             }
         }
@@ -44,19 +56,22 @@ pipeline {
         stage('🌱 Detect Environment') {
             steps {
                 script {
-                    if (env.BRANCH == 'deploy') {
-                        env.ENV_NAME = 'dev'
-                        env.COMPOSE_FILE = 'docker-compose.dev.yml'
-                    }
-                    else if (env.BRANCH == 'main') {
-                        env.ENV_NAME = 'prod'
-                        env.COMPOSE_FILE = 'docker-compose.prod.yml'
-                    }
-                    else {
-                        error("❌ Branch '${env.BRANCH}' not allowed")
+                    switch (env.BRANCH) {
+                        case 'deploy':
+                            env.ENV_NAME = 'dev'
+                            env.COMPOSE_FILE = 'docker-compose.dev.yml'
+                            break
+
+                        case 'main':
+                            env.ENV_NAME = 'prod'
+                            env.COMPOSE_FILE = 'docker-compose.prod.yml'
+                            break
+
+                        default:
+                            error("❌ Branch '${env.BRANCH}' not allowed")
                     }
 
-                    echo "🚀 Deploy ENV = ${env.ENV_NAME}"
+                    echo "🚀 Deploy environment = ${env.ENV_NAME}"
                 }
             }
         }
@@ -75,6 +90,7 @@ pipeline {
                             string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', value: 'GOOGLE_CLIENT_SECRET')
                         ]) {
                             sh '''
+                            mkdir -p back-end
                             cat <<EOF > back-end/.env
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
@@ -87,33 +103,7 @@ EOF
                             '''
                         }
                     }
-
-                    if (env.ENV_NAME == 'prod') {
-                        withCredentials([
-                            string(credentialsId: 'PROD_DB_NAME', value: 'DB_NAME'),
-                            string(credentialsId: 'PROD_DB_USER', value: 'DB_USER'),
-                            string(credentialsId: 'PROD_DB_PASSWORD', value: 'DB_PASSWORD'),
-                            string(credentialsId: 'PROD_JWT_ACCESS_SECRET', value: 'JWT_ACCESS_SECRET'),
-                            string(credentialsId: 'PROD_JWT_REFRESH_SECRET', value: 'JWT_REFRESH_SECRET')
-                        ]) {
-                            sh '''
-                            cat <<EOF > back-end/.env
-DB_NAME=$DB_NAME
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASSWORD
-JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
-JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
-EOF
-                            '''
-                        }
-                    }
                 }
-            }
-        }
-
-        stage('🧪 Test') {
-            steps {
-                sh 'echo "🧪 Test stage (add later)"'
             }
         }
 
@@ -135,7 +125,7 @@ EOF
 
         stage('🏥 Health Check') {
             steps {
-                sh 'docker ps | grep itii || true'
+                sh "docker ps | grep ${PROJECT_NAME} || true"
             }
         }
     }
