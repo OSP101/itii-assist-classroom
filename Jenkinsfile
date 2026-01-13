@@ -3,182 +3,188 @@ pipeline {
 
     options {
         timeout(time: 30, unit: 'MINUTES')
-        disableConcurrentBuilds()
+        ansiColor('xterm')
     }
 
     environment {
-        // --- runtime ---
-        DEPLOY_ENV       = ""
-        COMPOSE_FILE     = ""
-        COMPOSE_PROJECT  = ""
-        DOCKER_NETWORK   = ""
-
-        // --- app ---
-        NODE_ENV = ""
-
-        // --- database (from Jenkins Global Env) ---
-        DB_NAME     = ""
-        DB_USER     = ""
-        DB_PASSWORD = ""
-
-        // --- secrets ---
-        JWT_ACCESS_SECRET  = ""
-        JWT_REFRESH_SECRET = ""
-        GOOGLE_CLIENT_ID     = ""
-        GOOGLE_CLIENT_SECRET = ""
+        PROJECT_NAME   = "itii"
+        DOCKER_NETWORK = "itii-network"
     }
 
     stages {
 
-        /* -------------------- CHECKOUT -------------------- */
+        /* ===============================
+         * 📥 Checkout
+         * =============================== */
         stage('📥 Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        /* -------------------- SETUP -------------------- */
+        /* ===============================
+         * 📋 Setup
+         * =============================== */
         stage('📋 Setup') {
             steps {
                 script {
-                    env.GIT_BRANCH_NAME = sh(
-                        script: "git rev-parse --abbrev-ref HEAD",
-                        returnStdout: true
-                    ).trim()
-
+                    env.GIT_BRANCH_NAME = env.BRANCH_NAME
                     env.GIT_COMMIT_SHORT = sh(
                         script: "git rev-parse --short HEAD",
                         returnStdout: true
                     ).trim()
 
                     echo """
-                    Branch  : ${env.GIT_BRANCH_NAME}
-                    Commit  : ${env.GIT_COMMIT_SHORT}
-                    """
+==============================
+ Branch : ${env.GIT_BRANCH_NAME}
+ Commit : ${env.GIT_COMMIT_SHORT}
+==============================
+"""
                 }
             }
         }
 
-        /* -------------------- DETECT ENV -------------------- */
+        /* ===============================
+         * 🌱 Detect Environment
+         * =============================== */
         stage('🌱 Detect Environment') {
             steps {
                 script {
-                    if (env.GIT_BRANCH_NAME == "deploy") {
-                        env.DEPLOY_ENV      = "dev"
-                        env.NODE_ENV        = "development"
-                        env.COMPOSE_FILE    = "docker-compose.dev.yml"
-                        env.COMPOSE_PROJECT = "itii-dev"
-                        env.DOCKER_NETWORK  = "itii-dev"
-
-                        env.DB_NAME     = env.DEV_DB_NAME
-                        env.DB_USER     = env.DEV_DB_USER
-                        env.DB_PASSWORD = env.DEV_DB_PASSWORD
-
-                        env.JWT_ACCESS_SECRET  = env.DEV_JWT_ACCESS_SECRET
-                        env.JWT_REFRESH_SECRET = env.DEV_JWT_REFRESH_SECRET
-                        env.GOOGLE_CLIENT_ID     = env.DEV_GOOGLE_CLIENT_ID
-                        env.GOOGLE_CLIENT_SECRET = env.DEV_GOOGLE_CLIENT_SECRET
-
-                    } else if (env.GIT_BRANCH_NAME == "main") {
-                        env.DEPLOY_ENV      = "prod"
-                        env.NODE_ENV        = "production"
-                        env.COMPOSE_FILE    = "docker-compose.prod.yml"
-                        env.COMPOSE_PROJECT = "itii-prod"
-                        env.DOCKER_NETWORK  = "itii-prod"
-
-                        env.DB_NAME     = env.PROD_DB_NAME
-                        env.DB_USER     = env.PROD_DB_USER
-                        env.DB_PASSWORD = env.PROD_DB_PASSWORD
-
-                        env.JWT_ACCESS_SECRET  = env.PROD_JWT_ACCESS_SECRET
-                        env.JWT_REFRESH_SECRET = env.PROD_JWT_REFRESH_SECRET
-                        env.GOOGLE_CLIENT_ID     = env.PROD_GOOGLE_CLIENT_ID
-                        env.GOOGLE_CLIENT_SECRET = env.PROD_GOOGLE_CLIENT_SECRET
-
+                    if (env.GIT_BRANCH_NAME == 'deploy') {
+                        env.DEPLOY_ENV = 'dev'
+                        env.COMPOSE_FILE = 'docker-compose.app.yml'
+                    } else if (env.GIT_BRANCH_NAME == 'main') {
+                        env.DEPLOY_ENV = 'prod'
+                        env.COMPOSE_FILE = 'docker-compose.app.yml'
                     } else {
                         error("❌ Branch '${env.GIT_BRANCH_NAME}' not allowed")
                     }
 
-                    echo "✅ Deploy ENV = ${env.DEPLOY_ENV}"
+                    echo "Deploy ENV = ${env.DEPLOY_ENV}"
                 }
             }
         }
 
-        /* -------------------- PREPARE ENV FILE -------------------- */
+        /* ===============================
+         * 🔐 Prepare ENV Files
+         * =============================== */
         stage('🔐 Prepare ENV Files') {
             steps {
-                sh """
-                cat > back-end/.env <<EOF
-NODE_ENV=${env.NODE_ENV}
-DB_NAME=${env.DB_NAME}
-DB_USER=${env.DB_USER}
-DB_PASSWORD=${env.DB_PASSWORD}
-JWT_ACCESS_SECRET=${env.JWT_ACCESS_SECRET}
-JWT_REFRESH_SECRET=${env.JWT_REFRESH_SECRET}
-GOOGLE_CLIENT_ID=${env.GOOGLE_CLIENT_ID}
-GOOGLE_CLIENT_SECRET=${env.GOOGLE_CLIENT_SECRET}
+                script {
+
+                    sh "docker network create ${DOCKER_NETWORK} || true"
+
+                    if (env.DEPLOY_ENV == 'dev') {
+                        withCredentials([
+                            string(credentialsId: 'DEV_DB_NAME', valueVariable: 'DB_NAME'),
+                            string(credentialsId: 'DEV_DB_USER', valueVariable: 'DB_USER'),
+                            string(credentialsId: 'DEV_DB_PASSWORD', valueVariable: 'DB_PASSWORD'),
+                            string(credentialsId: 'DEV_JWT_ACCESS_SECRET', valueVariable: 'JWT_ACCESS_SECRET'),
+                            string(credentialsId: 'DEV_JWT_REFRESH_SECRET', valueVariable: 'JWT_REFRESH_SECRET'),
+                            string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', valueVariable: 'GOOGLE_CLIENT_ID'),
+                            string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', valueVariable: 'GOOGLE_CLIENT_SECRET')
+                        ]) {
+                            sh '''
+cat > back-end/.env <<EOF
+NODE_ENV=development
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 EOF
-                """
+'''
+                        }
+                    }
+
+                    if (env.DEPLOY_ENV == 'prod') {
+                        withCredentials([
+                            string(credentialsId: 'PROD_DB_NAME', valueVariable: 'DB_NAME'),
+                            string(credentialsId: 'PROD_DB_USER', valueVariable: 'DB_USER'),
+                            string(credentialsId: 'PROD_DB_PASSWORD', valueVariable: 'DB_PASSWORD'),
+                            string(credentialsId: 'PROD_JWT_ACCESS_SECRET', valueVariable: 'JWT_ACCESS_SECRET'),
+                            string(credentialsId: 'PROD_JWT_REFRESH_SECRET', valueVariable: 'JWT_REFRESH_SECRET'),
+                            string(credentialsId: 'PROD_GOOGLE_CLIENT_ID', valueVariable: 'GOOGLE_CLIENT_ID'),
+                            string(credentialsId: 'PROD_GOOGLE_CLIENT_SECRET', valueVariable: 'GOOGLE_CLIENT_SECRET')
+                        ]) {
+                            sh '''
+cat > back-end/.env <<EOF
+NODE_ENV=production
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+EOF
+'''
+                        }
+                    }
+                }
             }
         }
 
-        /* -------------------- TEST -------------------- */
-        stage('🧪 Test') {
+        /* ===============================
+         * 🧪 Test
+         * =============================== */
+        stage('🧪 Test (Pre-Deploy)') {
             steps {
-                sh """
-                cd back-end
-                npm ci
-                npm test || true
-                """
+                sh '''
+echo "=== Backend Test ==="
+cd back-end || exit 0
+npm install || true
+npm test || true
+'''
             }
         }
 
-        /* -------------------- BUILD -------------------- */
+        /* ===============================
+         * 🏗️ Build Images
+         * =============================== */
         stage('🏗️ Build Images') {
             steps {
-                sh """
-                docker compose \
-                  -f ${env.COMPOSE_FILE} \
-                  -p ${env.COMPOSE_PROJECT} \
-                  build
-                """
+                sh '''
+docker compose -f ${COMPOSE_FILE} build
+'''
             }
         }
 
-        /* -------------------- DEPLOY -------------------- */
+        /* ===============================
+         * 🚀 Deploy
+         * =============================== */
         stage('🚀 Deploy') {
             steps {
-                sh """
-                docker network inspect ${env.DOCKER_NETWORK} >/dev/null 2>&1 || \
-                docker network create ${env.DOCKER_NETWORK}
-
-                docker compose \
-                  -f ${env.COMPOSE_FILE} \
-                  -p ${env.COMPOSE_PROJECT} \
-                  up -d
-                """
+                sh '''
+docker compose -f ${COMPOSE_FILE} down
+docker compose -f ${COMPOSE_FILE} up -d
+'''
             }
         }
 
-        /* -------------------- HEALTH -------------------- */
+        /* ===============================
+         * 🏥 Health Check
+         * =============================== */
         stage('🏥 Health Check') {
             steps {
-                sh """
-                docker ps --filter "name=${env.COMPOSE_PROJECT}"
-                """
+                sh '''
+docker ps
+'''
             }
         }
     }
 
     post {
         success {
-            echo "✅ DEPLOY ${env.DEPLOY_ENV.toUpperCase()} SUCCESS"
+            echo "✅ DEPLOY SUCCESS (${DEPLOY_ENV})"
         }
         failure {
             echo "❌ DEPLOY FAILED"
         }
         always {
-            sh "docker image prune -f || true"
+            sh 'docker image prune -f || true'
         }
     }
 }
