@@ -14,7 +14,7 @@ services:
       MYSQL_PASSWORD: ${DB_PASSWORD:-app_password}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./back-end/migrations/project_ta_prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./project_ta_prod.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "3306:3306"
     healthcheck:
@@ -36,7 +36,7 @@ services:
       PMA_ARBITRARY: 0
       UPLOAD_LIMIT: 100M
     ports:
-      - "8080:80"
+      - "8088:80"
     depends_on:
       db:
         condition: service_healthy

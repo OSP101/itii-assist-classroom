@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: db:3306
--- Generation Time: Jan 12, 2026 at 05:00 PM
+-- Generation Time: Jan 13, 2026 at 04:18 AM
 -- Server version: 8.0.44
 -- PHP Version: 8.3.28
 
@@ -123,10 +123,10 @@ CREATE TABLE `attendance_sessions` (
 
 CREATE TABLE `bonus_scores` (
   `id` bigint NOT NULL,
-  `course_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `course_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `student_id` bigint NOT NULL,
   `score` decimal(5,2) NOT NULL DEFAULT '1.00',
-  `reason` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เหตุผลการให้คะแนน เช่น ตอบคำถามในห้องเรียน',
+  `reason` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'เหตุผลการให้คะแนน เช่น ตอบคำถามในห้องเรียน',
   `given_by` bigint NOT NULL COMMENT 'ผู้ให้คะแนน (instructor/ta)',
   `given_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -505,6 +505,13 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`id`, `username`, `password_hash`, `role`, `linked_student_id`, `full_name`, `email`, `created_at`, `updated_at`, `google_id`, `provider`, `is_active`, `avatar`) VALUES
+(4, 'admin', '$2a$10$wUWwScBc2ca8y76MMs9iOOkA5J71z4m809/Y2Q2INpX.Iz/KO/koy', 'admin', NULL, 'Administrator', 'admin@osp101.com', '2025-12-20 00:03:24', '2025-12-20 00:03:24', NULL, 'local', 1, NULL);
+
+--
 -- Indexes for dumped tables
 --
 
@@ -833,7 +840,7 @@ ALTER TABLE `queue_workers`
 -- AUTO_INCREMENT for table `refresh_tokens`
 --
 ALTER TABLE `refresh_tokens`
-  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT for table `scores`
@@ -869,13 +876,13 @@ ALTER TABLE `student_group_members`
 -- AUTO_INCREMENT for table `system_logs`
 --
 ALTER TABLE `system_logs`
-  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- Constraints for dumped tables
