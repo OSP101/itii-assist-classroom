@@ -45,28 +45,29 @@ pipeline {
         }
 
         stage('🌱 Detect Environment') {
-            steps {
-                script {
-                    if (env.BRANCH == "deploy") {
-                        env.DEPLOY_ENV = "dev"
-                        env.COMPOSE_FILE = "docker-compose.dev.yml"
-                        env.COMPOSE_PROJECT = "itii-dev"
-                        env.DOCKER_NETWORK = "itii-dev"
-                    }
-                    else if (env.BRANCH == "main") {
-                        env.DEPLOY_ENV = "prod"
-                        env.COMPOSE_FILE = "docker-compose.prod.yml"
-                        env.COMPOSE_PROJECT = "itii-prod"
-                        env.DOCKER_NETWORK = "itii-prod"
-                    }
-                    else {
-                        error("❌ Branch '${env.BRANCH}' not allowed")
-                    }
-
-                    echo "Deploy ENV = ${DEPLOY_ENV}"
-                }
+    steps {
+        script {
+            if (env.BRANCH == "deploy") {
+                env.DEPLOY_ENV = "dev"
+                env.COMPOSE_FILE = "docker-compose.dev.yml"
+                env.COMPOSE_PROJECT = "itii-dev"
+                env.DOCKER_NETWORK = "itii-dev"
             }
+            else if (env.BRANCH == "main") {
+                env.DEPLOY_ENV = "prod"
+                env.COMPOSE_FILE = "docker-compose.prod.yml"
+                env.COMPOSE_PROJECT = "itii-prod"
+                env.DOCKER_NETWORK = "itii-prod"
+            }
+            else {
+                error("❌ Branch '${env.BRANCH}' not allowed")
+            }
+
+            echo "✅ Deploy ENV = ${env.DEPLOY_ENV}"
         }
+    }
+}
+
 
         stage('🔐 Prepare ENV Files') {
             steps {
