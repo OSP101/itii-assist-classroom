@@ -51,6 +51,7 @@ export interface Course {
   tas?: TA[];
   taCount?: number;
   studentCount?: number;
+  instructors?: Instructor[];
 }
 
 export interface CreateCourseDto {
@@ -59,6 +60,7 @@ export interface CreateCourseDto {
   year: number;
   semester: number;
   instructor_id?: number | null;
+  instructor_ids?: number[];
   description?: string;
   image?: string;
 }
@@ -69,6 +71,7 @@ export interface UpdateCourseDto {
   year?: number;
   semester?: number;
   instructor_id?: number | null;
+  instructor_ids?: number[];
   description?: string;
   image?: string;
   is_active?: boolean;

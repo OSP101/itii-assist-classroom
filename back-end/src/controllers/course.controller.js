@@ -4,7 +4,8 @@
 
 const { 
   Course, 
-  CourseSection, 
+  CourseSection,
+  CourseInstructor,
   CourseTA, 
   CourseSectionStudent, 
   User, 
@@ -28,8 +29,15 @@ const checkCourseAccess = async (courseId, user) => {
   const course = await Course.findByPk(courseId);
   if (!course) return false;
   
-  // Check if user is the instructor
-  if (user.role === 'instructor' && course.instructor_id === user.id) return true;
+  // Check if user is one of the instructors
+  if (user.role === 'instructor') {
+    const isInstructor = await CourseInstructor.findOne({
+      where: { course_id: courseId, user_id: user.id }
+    });
+    if (isInstructor) return true;
+    // Also check legacy instructor_id field
+    if (course.instructor_id === user.id) return true;
+  }
   
   // Check if user is a TA of this course
   if (user.role === 'ta' || user.role === 'instructor') {
@@ -110,6 +118,12 @@ const getCourses = asyncHandler(async (req, res) => {
         model: User,
         as: 'instructor',
         attributes: ['id', 'full_name', 'email'],
+      },
+      {
+        model: User,
+        as: 'instructors',
+        attributes: ['id', 'full_name', 'email'],
+        through: { attributes: ['is_primary', 'assigned_at'] },
       },
       {
         model: CourseSection,
@@ -207,6 +221,12 @@ const getCourseById = asyncHandler(async (req, res) => {
         attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
       },
       {
+        model: User,
+        as: 'instructors',
+        attributes: ['id', 'full_name', 'email', 'username', 'avatar'],
+        through: { attributes: ['is_primary', 'assigned_at'] },
+      },
+      {
         model: CourseSection,
         as: 'sections',
         attributes: ['id', 'section_no', 'note', 'created_at'],
@@ -251,7 +271,7 @@ const getCourseById = asyncHandler(async (req, res) => {
  * @route POST /api/courses
  */
 const createCourse = asyncHandler(async (req, res) => {
-  const { code, name, year, semester, instructor_id, description, image } = req.body;
+  const { code, name, year, semester, instructor_id, instructor_ids, description, image } = req.body;
   const currentUser = req.user;
 
   // Validate required fields
@@ -259,31 +279,41 @@ const createCourse = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'กรุณากรอกข้อมูลที่จำเป็น (รหัสวิชา, ชื่อวิชา, ปีการศึกษา, ภาคเรียน)');
   }
 
-  // Check if course already exists
+  // Check if ACTIVE course already exists with same code/year/semester
   const existingCourse = await Course.findOne({
-    where: { code, year: parseInt(year), semester: parseInt(semester) },
+    where: { 
+      code, 
+      year: parseInt(year), 
+      semester: parseInt(semester),
+      is_active: true, // Only check active courses
+    },
   });
   if (existingCourse) {
-    throw new ApiError(400, 'รายวิชานี้มีอยู่ในระบบแล้ว (รหัส-ปี-ภาคเรียน ซ้ำ)');
+    throw new ApiError(400, 'รายวิชานี้มีเปิดใช้งานอยู่แล้ว (รหัส-ปี-ภาคเรียน ซ้ำ) กรุณาปิดใช้งานรายวิชาเดิมก่อน หรือใช้รหัสวิชาอื่น');
   }
 
-  // Determine instructor_id
-  let finalInstructorId = instructor_id || null;
-  
-  // If instructor creates the course and no instructor_id provided, use their own id
-  if (!instructor_id && currentUser.role === 'instructor') {
-    finalInstructorId = currentUser.id;
+  // Prepare instructor IDs (support both single and multiple)
+  let instructorIdList = [];
+  if (instructor_ids && Array.isArray(instructor_ids) && instructor_ids.length > 0) {
+    instructorIdList = instructor_ids.map(id => parseInt(id));
+  } else if (instructor_id) {
+    instructorIdList = [parseInt(instructor_id)];
+  } else if (currentUser.role === 'instructor') {
+    instructorIdList = [currentUser.id];
   }
 
-  // Validate instructor if provided
-  if (finalInstructorId) {
-    const instructor = await User.findOne({
-      where: { id: finalInstructorId, role: 'instructor' },
+  // Validate all instructors
+  if (instructorIdList.length > 0) {
+    const instructors = await User.findAll({
+      where: { id: instructorIdList, role: 'instructor' },
     });
-    if (!instructor) {
-      throw new ApiError(400, 'ไม่พบอาจารย์ที่ระบุในระบบ');
+    if (instructors.length !== instructorIdList.length) {
+      throw new ApiError(400, 'ไม่พบอาจารย์บางคนที่ระบุในระบบ');
     }
   }
+
+  // Set primary instructor (first one or legacy instructor_id)
+  const primaryInstructorId = instructorIdList.length > 0 ? instructorIdList[0] : null;
 
   // Create course
   const course = await Course.create({
@@ -291,11 +321,21 @@ const createCourse = asyncHandler(async (req, res) => {
     name,
     year: parseInt(year),
     semester: parseInt(semester),
-    instructor_id: finalInstructorId,
+    instructor_id: primaryInstructorId, // Keep for backward compatibility
     description: description || null,
     image: image || null,
     is_active: true,
   });
+
+  // Add all instructors to course_instructors table
+  if (instructorIdList.length > 0) {
+    const courseInstructorData = instructorIdList.map((userId, index) => ({
+      course_id: course.id,
+      user_id: userId,
+      is_primary: index === 0, // First instructor is primary
+    }));
+    await CourseInstructor.bulkCreate(courseInstructorData);
+  }
 
   // Reload with associations
   const createdCourse = await Course.findByPk(course.id, {
@@ -304,6 +344,12 @@ const createCourse = asyncHandler(async (req, res) => {
         model: User,
         as: 'instructor',
         attributes: ['id', 'full_name', 'email'],
+      },
+      {
+        model: User,
+        as: 'instructors',
+        attributes: ['id', 'full_name', 'email'],
+        through: { attributes: ['is_primary', 'assigned_at'] },
       },
     ],
   });
@@ -321,7 +367,7 @@ const createCourse = asyncHandler(async (req, res) => {
  */
 const updateCourse = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { code, name, year, semester, instructor_id, description, is_active } = req.body;
+  const { code, name, year, semester, instructor_id, instructor_ids, description, is_active } = req.body;
 
   const course = await Course.findByPk(id);
 
@@ -329,7 +375,7 @@ const updateCourse = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
   }
 
-  // Check for duplicate if code/year/semester changed
+  // Check for duplicate if code/year/semester changed (only check against ACTIVE courses)
   if (code || year || semester) {
     const checkCode = code || course.code;
     const checkYear = year ? parseInt(year) : course.year;
@@ -341,35 +387,70 @@ const updateCourse = asyncHandler(async (req, res) => {
         year: checkYear,
         semester: checkSemester,
         id: { [Op.ne]: id },
+        is_active: true, // Only check active courses
       },
     });
     if (existingCourse) {
-      throw new ApiError(400, 'รายวิชานี้มีอยู่ในระบบแล้ว (รหัส-ปี-ภาคเรียน ซ้ำ)');
+      throw new ApiError(400, 'รายวิชานี้มีเปิดใช้งานอยู่แล้ว (รหัส-ปี-ภาคเรียน ซ้ำ)');
     }
   }
 
-  // Validate instructor if provided
-  if (instructor_id) {
-    const instructor = await User.findOne({
-      where: { id: instructor_id, role: 'instructor' },
+  // Prepare instructor IDs if provided
+  let instructorIdList = [];
+  let shouldUpdateInstructors = false;
+  
+  if (instructor_ids !== undefined) {
+    shouldUpdateInstructors = true;
+    if (Array.isArray(instructor_ids)) {
+      instructorIdList = instructor_ids.map(id => parseInt(id));
+    }
+  } else if (instructor_id !== undefined) {
+    shouldUpdateInstructors = true;
+    if (instructor_id) {
+      instructorIdList = [parseInt(instructor_id)];
+    }
+  }
+
+  // Validate all instructors if updating
+  if (shouldUpdateInstructors && instructorIdList.length > 0) {
+    const instructors = await User.findAll({
+      where: { id: instructorIdList, role: 'instructor' },
     });
-    if (!instructor) {
-      throw new ApiError(400, 'ไม่พบอาจารย์ที่ระบุในระบบ');
+    if (instructors.length !== instructorIdList.length) {
+      throw new ApiError(400, 'ไม่พบอาจารย์บางคนที่ระบุในระบบ');
     }
   }
 
   // Update course
   const { image } = req.body;
+  const primaryInstructorId = instructorIdList.length > 0 ? instructorIdList[0] : null;
+  
   await course.update({
     code: code || course.code,
     name: name || course.name,
     year: year ? parseInt(year) : course.year,
     semester: semester ? parseInt(semester) : course.semester,
-    instructor_id: instructor_id !== undefined ? instructor_id : course.instructor_id,
+    instructor_id: shouldUpdateInstructors ? primaryInstructorId : course.instructor_id,
     description: description !== undefined ? description : course.description,
     image: image !== undefined ? image : course.image,
     is_active: is_active !== undefined ? is_active : course.is_active,
   });
+
+  // Update course_instructors if needed
+  if (shouldUpdateInstructors) {
+    // Remove existing instructors
+    await CourseInstructor.destroy({ where: { course_id: id } });
+    
+    // Add new instructors
+    if (instructorIdList.length > 0) {
+      const courseInstructorData = instructorIdList.map((userId, index) => ({
+        course_id: id,
+        user_id: userId,
+        is_primary: index === 0,
+      }));
+      await CourseInstructor.bulkCreate(courseInstructorData);
+    }
+  }
 
   // Reload with associations
   const updatedCourse = await Course.findByPk(id, {
@@ -378,6 +459,12 @@ const updateCourse = asyncHandler(async (req, res) => {
         model: User,
         as: 'instructor',
         attributes: ['id', 'full_name', 'email'],
+      },
+      {
+        model: User,
+        as: 'instructors',
+        attributes: ['id', 'full_name', 'email'],
+        through: { attributes: ['is_primary', 'assigned_at'] },
       },
     ],
   });
@@ -439,11 +526,29 @@ const toggleCourseStatus = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
   }
 
-  await course.update({ is_active: !course.is_active });
+  const willBeActive = !course.is_active;
+
+  // If trying to activate, check for duplicate active course
+  if (willBeActive) {
+    const existingActiveCourse = await Course.findOne({
+      where: {
+        code: course.code,
+        year: course.year,
+        semester: course.semester,
+        is_active: true,
+        id: { [Op.ne]: id },
+      },
+    });
+    if (existingActiveCourse) {
+      throw new ApiError(400, `ไม่สามารถเปิดใช้งานได้ เนื่องจากมีรายวิชา ${course.code} ปี ${course.year} ภาคเรียน ${course.semester} เปิดใช้งานอยู่แล้ว กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน`);
+    }
+  }
+
+  await course.update({ is_active: willBeActive });
 
   res.json({
     success: true,
-    message: course.is_active ? 'เปิดใช้งานรายวิชาสำเร็จ' : 'ปิดใช้งานรายวิชาสำเร็จ',
+    message: willBeActive ? 'เปิดใช้งานรายวิชาสำเร็จ' : 'ปิดใช้งานรายวิชาสำเร็จ',
     data: course,
   });
 });

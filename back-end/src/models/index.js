@@ -5,6 +5,7 @@ const RefreshToken = require('./RefreshToken');
 const SystemLog = require('./SystemLog');
 const Course = require('./Course');
 const CourseSection = require('./CourseSection');
+const CourseInstructor = require('./CourseInstructor');
 const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
@@ -72,6 +73,31 @@ Course.belongsTo(User, {
 User.hasMany(Course, {
   foreignKey: 'instructor_id',
   as: 'instructorCourses',
+});
+
+// Course -> Multiple Instructors (through CourseInstructor)
+Course.belongsToMany(User, {
+  through: CourseInstructor,
+  foreignKey: 'course_id',
+  otherKey: 'user_id',
+  as: 'instructors',
+});
+
+User.belongsToMany(Course, {
+  through: CourseInstructor,
+  foreignKey: 'user_id',
+  otherKey: 'course_id',
+  as: 'instructingCourses',
+});
+
+CourseInstructor.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+CourseInstructor.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
 });
 
 // Course -> Sections
@@ -489,6 +515,7 @@ module.exports = {
   SystemLog,
   Course,
   CourseSection,
+  CourseInstructor,
   CourseTA,
   CourseSectionStudent,
   Classroom,

@@ -47,12 +47,9 @@ const Course = sequelize.define('Course', {
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  indexes: [
-    {
-      unique: true,
-      fields: ['code', 'year', 'semester'],
-    },
-  ],
+  // Note: Removed unique constraint on (code, year, semester)
+  // Duplicate validation is handled by application logic in course.controller.js
+  // Only active courses with the same code+year+semester will be rejected
 });
 
 module.exports = Course;

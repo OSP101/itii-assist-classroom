@@ -79,6 +79,9 @@ export default function CoursesPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isToggleStatusModalOpen, setIsToggleStatusModalOpen] = useState(false);
+    const [isDuplicateWarningModalOpen, setIsDuplicateWarningModalOpen] = useState(false);
+    const [duplicateCourse, setDuplicateCourse] = useState<Course | null>(null);
     const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,6 +92,7 @@ export default function CoursesPage() {
         year: new Date().getFullYear() + 543,
         semester: 1,
         instructor_id: null,
+        instructor_ids: [],
         description: "",
         image: "",
     });
@@ -189,6 +193,7 @@ export default function CoursesPage() {
             year: currentYear,
             semester: 1,
             instructor_id: null,
+            instructor_ids: [],
             description: "",
             image: "",
         });
@@ -239,12 +244,16 @@ export default function CoursesPage() {
     // Open edit modal
     const openEditModal = (course: Course) => {
         setSelectedCourse(course);
+        // Get instructor IDs from the instructors array
+        const instructorIdList = course.instructors?.map(i => i.id) || 
+            (course.instructor_id ? [course.instructor_id] : []);
         setFormData({
             code: course.code,
             name: course.name,
             year: course.year,
             semester: course.semester,
             instructor_id: course.instructor_id,
+            instructor_ids: instructorIdList,
             description: course.description || "",
             image: course.image || "",
         });
@@ -256,6 +265,30 @@ export default function CoursesPage() {
     const openDeleteModal = (course: Course) => {
         setSelectedCourse(course);
         setIsDeleteModalOpen(true);
+    };
+
+    // Open toggle status modal (check for duplicates when activating)
+    const openToggleStatusModal = (course: Course) => {
+        setSelectedCourse(course);
+        
+        // If trying to activate (currently inactive), check for duplicate active course
+        if (!course.is_active) {
+            const duplicateActiveCourse = courses.find(
+                c => c.id !== course.id && 
+                     c.code === course.code && 
+                     c.year === course.year && 
+                     c.semester === course.semester && 
+                     c.is_active === true
+            );
+            
+            if (duplicateActiveCourse) {
+                setDuplicateCourse(duplicateActiveCourse);
+                setIsDuplicateWarningModalOpen(true);
+                return;
+            }
+        }
+        
+        setIsToggleStatusModalOpen(true);
     };
 
     // Handle create
@@ -282,6 +315,16 @@ export default function CoursesPage() {
                 resetForm();
                 fetchCourses();
                 fetchStats();
+            } else {
+                // Handle API error response (e.g., duplicate course)
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "เกิดข้อผิดพลาดในการสร้างรายวิชา";
+                addToast({
+                    title: "ไม่สามารถสร้างรายวิชาได้",
+                    description: errorMessage,
+                    color: "danger",
+                });
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -313,7 +356,7 @@ export default function CoursesPage() {
                 name: formData.name,
                 year: formData.year,
                 semester: formData.semester,
-                instructor_id: formData.instructor_id,
+                instructor_ids: formData.instructor_ids,
                 description: formData.description,
                 image: formData.image,
             };
@@ -329,6 +372,15 @@ export default function CoursesPage() {
                 resetForm();
                 setSelectedCourse(null);
                 fetchCourses();
+            } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "เกิดข้อผิดพลาดในการอัปเดตรายวิชา";
+                addToast({
+                    title: "ไม่สามารถอัปเดตรายวิชาได้",
+                    description: errorMessage,
+                    color: "danger",
+                });
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -372,18 +424,32 @@ export default function CoursesPage() {
         }
     };
 
-    // Handle toggle status
-    const handleToggleStatus = async (course: Course) => {
+    // Handle toggle status (called from modal)
+    const handleToggleStatus = async () => {
+        if (!selectedCourse) return;
+
+        setIsSubmitting(true);
         try {
-            const response = await courseService.toggleStatus(course.id);
+            const response = await courseService.toggleStatus(selectedCourse.id);
             if (response.success) {
                 addToast({
                     title: "สำเร็จ",
-                    description: course.is_active ? "ปิดใช้งานรายวิชาแล้ว" : "เปิดใช้งานรายวิชาแล้ว",
+                    description: selectedCourse.is_active ? "ปิดใช้งานรายวิชาแล้ว" : "เปิดใช้งานรายวิชาแล้ว",
                     color: "success",
                 });
+                setIsToggleStatusModalOpen(false);
+                setSelectedCourse(null);
                 fetchCourses();
                 fetchStats();
+            } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "เกิดข้อผิดพลาดในการเปลี่ยนสถานะ";
+                addToast({
+                    title: "ไม่สามารถเปลี่ยนสถานะได้",
+                    description: errorMessage,
+                    color: "danger",
+                });
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -392,6 +458,8 @@ export default function CoursesPage() {
                 description: err.message || "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -445,12 +513,41 @@ export default function CoursesPage() {
                     </div>
                 );
             case "instructor":
-                return course.instructor ? (
-                    <div className="flex items-center gap-2">
-                        <span className="text-slate-600">{course.instructor.full_name}</span>
-                    </div>
-                ) : (
-                    <span className="text-slate-400 italic">ยังไม่กำหนด</span>
+                // Show multiple instructors if available
+                const instructorList = course.instructors?.length ? course.instructors : 
+                    (course.instructor ? [course.instructor] : []);
+                
+                if (instructorList.length === 0) {
+                    return <span className="text-slate-400 italic">ยังไม่กำหนด</span>;
+                }
+                
+                if (instructorList.length === 1) {
+                    return (
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-600">{instructorList[0].full_name}</span>
+                        </div>
+                    );
+                }
+                
+                return (
+                    <Tooltip 
+                        content={
+                            <div className="py-1">
+                                {instructorList.map((instructor, idx) => (
+                                    <div key={instructor.id} className="text-sm">
+                                        {idx + 1}. {instructor.full_name}
+                                    </div>
+                                ))}
+                            </div>
+                        }
+                    >
+                        <div className="flex items-center gap-2 cursor-help">
+                            <span className="text-slate-600">{instructorList[0].full_name}</span>
+                            <Chip size="sm" variant="flat" color="primary">
+                                +{instructorList.length - 1}
+                            </Chip>
+                        </div>
+                    </Tooltip>
                 );
             case "sections":
                 return (
@@ -503,7 +600,7 @@ export default function CoursesPage() {
                                 isIconOnly
                                 size="sm"
                                 variant="light"
-                                onPress={() => handleToggleStatus(course)}
+                                onPress={() => openToggleStatusModal(course)}
                             >
                                 <Icon
                                     icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
@@ -900,13 +997,21 @@ export default function CoursesPage() {
                                     <Select
                                         label="อาจารย์ผู้สอน"
                                         labelPlacement="outside"
-                                        placeholder="เลือกอาจารย์ผู้สอน (ถ้ามี)"
+                                        placeholder="เลือกอาจารย์ผู้สอน (สามารถเลือกได้หลายคน)"
                                         variant="bordered"
                                         size="lg"
-                                        selectedKeys={formData.instructor_id ? [formData.instructor_id.toString()] : []}
-                                        onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value ? parseInt(e.target.value) : null })}
+                                        selectionMode="multiple"
+                                        selectedKeys={new Set(formData.instructor_ids?.map(id => id.toString()) || [])}
+                                        onSelectionChange={(keys) => {
+                                            const selectedIds = Array.from(keys as Set<string>).map(k => parseInt(k));
+                                            setFormData({ 
+                                                ...formData, 
+                                                instructor_ids: selectedIds,
+                                                instructor_id: selectedIds.length > 0 ? selectedIds[0] : null 
+                                            });
+                                        }}
                                         classNames={{
-                                            trigger: "h-12 bg-white border-slate-200 hover:border-blue-300",
+                                            trigger: "min-h-12 bg-white border-slate-200 hover:border-blue-300",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     >
@@ -916,6 +1021,18 @@ export default function CoursesPage() {
                                             </SelectItem>
                                         ))}
                                     </Select>
+                                    {formData.instructor_ids && formData.instructor_ids.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                            {formData.instructor_ids.map(id => {
+                                                const instructor = instructors.find(i => i.id === id);
+                                                return instructor ? (
+                                                    <Chip key={id} size="sm" variant="flat" color="primary">
+                                                        {instructor.full_name}
+                                                    </Chip>
+                                                ) : null;
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
@@ -1123,13 +1240,21 @@ export default function CoursesPage() {
                                     <Select
                                         label="อาจารย์ผู้สอน"
                                         labelPlacement="outside"
-                                        placeholder="เลือกอาจารย์ผู้สอน (ถ้ามี)"
+                                        placeholder="เลือกอาจารย์ผู้สอน (สามารถเลือกได้หลายคน)"
                                         variant="bordered"
                                         size="lg"
-                                        selectedKeys={formData.instructor_id ? [formData.instructor_id.toString()] : []}
-                                        onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value ? parseInt(e.target.value) : null })}
+                                        selectionMode="multiple"
+                                        selectedKeys={new Set(formData.instructor_ids?.map(id => id.toString()) || [])}
+                                        onSelectionChange={(keys) => {
+                                            const selectedIds = Array.from(keys as Set<string>).map(k => parseInt(k));
+                                            setFormData({ 
+                                                ...formData, 
+                                                instructor_ids: selectedIds,
+                                                instructor_id: selectedIds.length > 0 ? selectedIds[0] : null 
+                                            });
+                                        }}
                                         classNames={{
-                                            trigger: "h-12 bg-white border-slate-200 hover:border-amber-300",
+                                            trigger: "min-h-12 bg-white border-slate-200 hover:border-amber-300",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     >
@@ -1139,6 +1264,18 @@ export default function CoursesPage() {
                                             </SelectItem>
                                         ))}
                                     </Select>
+                                    {formData.instructor_ids && formData.instructor_ids.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1">
+                                            {formData.instructor_ids.map(id => {
+                                                const instructor = instructors.find(i => i.id === id);
+                                                return instructor ? (
+                                                    <Chip key={id} size="sm" variant="flat" color="warning">
+                                                        {instructor.full_name}
+                                                    </Chip>
+                                                ) : null;
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
@@ -1233,6 +1370,161 @@ export default function CoursesPage() {
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
                         >
                             ลบรายวิชา
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Toggle Status Modal */}
+            <Modal 
+                isOpen={isToggleStatusModalOpen} 
+                onClose={() => {
+                    setIsToggleStatusModalOpen(false);
+                    setSelectedCourse(null);
+                }} 
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg ${
+                                selectedCourse?.is_active 
+                                    ? "bg-gradient-to-br from-orange-500 to-red-600 shadow-orange-500/30"
+                                    : "bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/30"
+                            }`}>
+                                <Icon 
+                                    icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} 
+                                    className="text-2xl text-white" 
+                                />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">
+                                    {selectedCourse?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
+                                </h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    {selectedCourse?.code} - {selectedCourse?.name}
+                                </p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className={`rounded-xl p-4 border ${
+                            selectedCourse?.is_active 
+                                ? "bg-orange-50 border-orange-100"
+                                : "bg-green-50 border-green-100"
+                        }`}>
+                            {selectedCourse?.is_active ? (
+                                <>
+                                    <p className="text-slate-700">
+                                        คุณต้องการ<span className="font-bold text-orange-600">ปิดใช้งาน</span>รายวิชานี้ใช่หรือไม่?
+                                    </p>
+                                    <p className="text-sm text-slate-500 mt-2">
+                                        รายวิชาที่ปิดใช้งานจะไม่แสดงในรายการสำหรับผู้ใช้ทั่วไป แต่ข้อมูลจะยังคงอยู่ในระบบ
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-slate-700">
+                                        คุณต้องการ<span className="font-bold text-green-600">เปิดใช้งาน</span>รายวิชานี้ใช่หรือไม่?
+                                    </p>
+                                    <p className="text-sm text-slate-500 mt-2">
+                                        <Icon icon="solar:info-circle-linear" className="inline mr-1" />
+                                        หากมีรายวิชาที่ใช้รหัส ปี และภาคเรียนเดียวกันเปิดใช้งานอยู่ ระบบจะไม่อนุญาตให้เปิด กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            variant="light"
+                            color="default"
+                            onPress={() => {
+                                setIsToggleStatusModalOpen(false);
+                                setSelectedCourse(null);
+                            }}
+                            className="font-medium px-6"
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color={selectedCourse?.is_active ? "warning" : "success"}
+                            onPress={handleToggleStatus}
+                            isLoading={isSubmitting}
+                            className={`font-medium px-6 ${
+                                selectedCourse?.is_active 
+                                    ? "bg-gradient-to-r from-orange-500 to-red-600"
+                                    : "bg-gradient-to-r from-green-500 to-emerald-600"
+                            } text-white`}
+                            startContent={!isSubmitting && (
+                                <Icon 
+                                    icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} 
+                                    className="text-lg" 
+                                />
+                            )}
+                        >
+                            {selectedCourse?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Duplicate Warning Modal */}
+            <Modal 
+                isOpen={isDuplicateWarningModalOpen} 
+                onClose={() => {
+                    setIsDuplicateWarningModalOpen(false);
+                    setSelectedCourse(null);
+                    setDuplicateCourse(null);
+                }} 
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ไม่สามารถเปิดใช้งานได้</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">พบรายวิชาที่ซ้ำกันเปิดใช้งานอยู่</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className="bg-red-50 rounded-xl p-4 border border-red-100 space-y-3">
+                            <p className="text-slate-700">
+                                ไม่สามารถเปิดใช้งานรายวิชา <span className="font-bold text-red-600">{selectedCourse?.code}</span> ได้
+                            </p>
+                            <p className="text-sm text-slate-600">
+                                เนื่องจากมีรายวิชาที่ใช้รหัส ปี และภาคเรียนเดียวกันเปิดใช้งานอยู่แล้ว:
+                            </p>
+                            <div className="bg-white rounded-lg p-3 border border-red-200">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <Chip size="sm" color="danger" variant="flat">เปิดใช้งานอยู่</Chip>
+                                </div>
+                                <p className="font-semibold text-slate-800">{duplicateCourse?.code} - {duplicateCourse?.name}</p>
+                                <p className="text-sm text-slate-500 mt-1">
+                                    ปี {duplicateCourse?.year} / {duplicateCourse?.semester === 3 ? "ภาคฤดูร้อน" : `ภาคเรียนที่ ${duplicateCourse?.semester}`}
+                                </p>
+                            </div>
+                            <p className="text-sm text-slate-500">
+                                <Icon icon="solar:info-circle-linear" className="inline mr-1" />
+                                กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน จึงจะสามารถเปิดใช้งานรายวิชานี้ได้
+                            </p>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            color="primary"
+                            onPress={() => {
+                                setIsDuplicateWarningModalOpen(false);
+                                setSelectedCourse(null);
+                                setDuplicateCourse(null);
+                            }}
+                            className="font-medium px-6"
+                        >
+                            รับทราบ
                         </Button>
                     </ModalFooter>
                 </ModalContent>
