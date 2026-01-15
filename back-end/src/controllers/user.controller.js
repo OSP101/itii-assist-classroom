@@ -7,6 +7,35 @@ const SystemLog = require('../models/SystemLog');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { Op } = require('sequelize');
+const crypto = require('crypto');
+
+/**
+ * Generate a random password
+ * @param {number} length - Password length (default: 12)
+ * @returns {string} Generated password
+ */
+const generatePassword = (length = 12) => {
+  const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+  const numbers = '23456789';
+  const special = '!@#$%';
+  
+  // Ensure at least one of each type
+  let password = '';
+  password += uppercase[Math.floor(Math.random() * uppercase.length)];
+  password += lowercase[Math.floor(Math.random() * lowercase.length)];
+  password += numbers[Math.floor(Math.random() * numbers.length)];
+  password += special[Math.floor(Math.random() * special.length)];
+  
+  // Fill the rest
+  const allChars = uppercase + lowercase + numbers + special;
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
+  }
+  
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+};
 
 /**
  * Get all users with pagination, search, and filtering
@@ -95,10 +124,10 @@ const getUserById = asyncHandler(async (req, res) => {
  * @route POST /api/users
  */
 const createUser = asyncHandler(async (req, res) => {
-  const { username, password, role, full_name, email, is_active = true, avatar } = req.body;
+  const { username, role, full_name, email, is_active = true, avatar } = req.body;
 
   // Validation
-  if (!username || !password || !role) {
+  if (!username || !role) {
     throw new ApiError(400, 'กรุณากรอกข้อมูลให้ครบถ้วน');
   }
 
@@ -120,16 +149,20 @@ const createUser = asyncHandler(async (req, res) => {
     }
   }
 
-  // Create user
+  // Generate random password
+  const generatedPassword = generatePassword(12);
+
+  // Create user with must_change_password = true
   const user = await User.create({
     username,
-    password_hash: password, // Will be hashed by beforeCreate hook
+    password_hash: generatedPassword, // Will be hashed by beforeCreate hook
     role,
     full_name,
     email,
     is_active,
     provider: 'local',
     avatar,
+    must_change_password: true, // Force password change on first login
   });
 
   // Log action
@@ -146,7 +179,13 @@ const createUser = asyncHandler(async (req, res) => {
   res.status(201).json({
     success: true,
     message: 'สร้างผู้ใช้สำเร็จ',
-    data: user.toSafeObject(),
+    data: {
+      user: user.toSafeObject(),
+      credentials: {
+        username: username,
+        password: generatedPassword, // Return plain password for admin to share
+      },
+    },
   });
 });
 

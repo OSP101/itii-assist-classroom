@@ -47,6 +47,11 @@ const User = sequelize.define('User', {
     allowNull: false,
     defaultValue: true,
   },
+  must_change_password: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
   avatar: {
     type: DataTypes.TEXT('long'),
     allowNull: true,

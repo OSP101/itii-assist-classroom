@@ -23,11 +23,18 @@ export interface User {
 
 export interface CreateUserDto {
   username: string;
-  password: string;
   full_name: string;
   email?: string;
   role: 'admin' | 'instructor' | 'ta';
   avatar?: string;
+}
+
+export interface CreateUserResponse {
+  user: User;
+  credentials: {
+    username: string;
+    password: string;
+  };
 }
 
 export interface UpdateUserDto {
@@ -107,10 +114,10 @@ class UserService {
   }
 
   /**
-   * Create new user
+   * Create new user (password will be auto-generated)
    */
   async createUser(data: CreateUserDto) {
-    return apiService.post<User>(API_ENDPOINTS.USERS, data);
+    return apiService.post<CreateUserResponse>(API_ENDPOINTS.USERS, data);
   }
 
   /**
