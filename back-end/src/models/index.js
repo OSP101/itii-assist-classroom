@@ -5,6 +5,7 @@ const RefreshToken = require('./RefreshToken');
 const SystemLog = require('./SystemLog');
 const Course = require('./Course');
 const CourseSection = require('./CourseSection');
+const CourseInstructor = require('./CourseInstructor');
 const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
@@ -14,9 +15,11 @@ const StudentGroup = require('./StudentGroup');
 const StudentGroupMember = require('./StudentGroupMember');
 const Assignment = require('./Assignment');
 const AssignmentSubItem = require('./AssignmentSubItem');
+const AssignmentAttendanceLink = require('./AssignmentAttendanceLink');
 const Score = require('./Score');
 const ScoreEditRequest = require('./ScoreEditRequest');
 const AttendanceSession = require('./AttendanceSession');
+const AttendanceSessionSection = require('./AttendanceSessionSection');
 const AttendanceRecord = require('./AttendanceRecord');
 const BonusScore = require('./BonusScore');
 
@@ -70,6 +73,31 @@ Course.belongsTo(User, {
 User.hasMany(Course, {
   foreignKey: 'instructor_id',
   as: 'instructorCourses',
+});
+
+// Course -> Multiple Instructors (through CourseInstructor)
+Course.belongsToMany(User, {
+  through: CourseInstructor,
+  foreignKey: 'course_id',
+  otherKey: 'user_id',
+  as: 'instructors',
+});
+
+User.belongsToMany(Course, {
+  through: CourseInstructor,
+  foreignKey: 'user_id',
+  otherKey: 'course_id',
+  as: 'instructingCourses',
+});
+
+CourseInstructor.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+CourseInstructor.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
 });
 
 // Course -> Sections
@@ -247,7 +275,7 @@ AssignmentSubItem.belongsTo(Assignment, {
   as: 'assignment',
 });
 
-// Assignment -> AttendanceSession (optional link)
+// Assignment -> AttendanceSession (optional link - legacy, kept for backward compatibility)
 Assignment.belongsTo(AttendanceSession, {
   foreignKey: 'linked_attendance_session_id',
   as: 'linkedAttendanceSession',
@@ -256,6 +284,32 @@ Assignment.belongsTo(AttendanceSession, {
 AttendanceSession.hasMany(Assignment, {
   foreignKey: 'linked_attendance_session_id',
   as: 'linkedAssignments',
+});
+
+// Assignment <-> AttendanceSession (many-to-many through AssignmentAttendanceLink)
+Assignment.belongsToMany(AttendanceSession, {
+  through: AssignmentAttendanceLink,
+  foreignKey: 'assignment_id',
+  otherKey: 'attendance_session_id',
+  as: 'linkedAttendanceSessions', // Note: plural for new many-to-many
+});
+
+AttendanceSession.belongsToMany(Assignment, {
+  through: AssignmentAttendanceLink,
+  foreignKey: 'attendance_session_id',
+  otherKey: 'assignment_id',
+  as: 'linkedAssignmentsMany',
+});
+
+// AssignmentAttendanceLink associations
+AssignmentAttendanceLink.belongsTo(Assignment, {
+  foreignKey: 'assignment_id',
+  as: 'assignment',
+});
+
+AssignmentAttendanceLink.belongsTo(AttendanceSession, {
+  foreignKey: 'attendance_session_id',
+  as: 'attendanceSession',
 });
 
 // Score -> SubItem (optional)
@@ -341,7 +395,7 @@ Course.hasMany(AttendanceSession, {
   as: 'attendanceSessions',
 });
 
-// AttendanceSession -> CourseSection
+// AttendanceSession -> CourseSection (legacy one-to-one, kept for backward compatibility)
 AttendanceSession.belongsTo(CourseSection, {
   foreignKey: 'course_section_id',
   as: 'section',
@@ -350,6 +404,33 @@ AttendanceSession.belongsTo(CourseSection, {
 CourseSection.hasMany(AttendanceSession, {
   foreignKey: 'course_section_id',
   as: 'attendanceSessions',
+});
+
+// AttendanceSession <-> CourseSection (many-to-many through AttendanceSessionSection)
+AttendanceSession.belongsToMany(CourseSection, {
+  through: AttendanceSessionSection,
+  foreignKey: 'attendance_session_id',
+  otherKey: 'course_section_id',
+  as: 'sections', // Plural: multiple sections per session
+});
+
+CourseSection.belongsToMany(AttendanceSession, {
+  through: AttendanceSessionSection,
+  foreignKey: 'course_section_id',
+  otherKey: 'attendance_session_id',
+  as: 'linkedAttendanceSessions',
+});
+
+// AttendanceSessionSection -> AttendanceSession
+AttendanceSessionSection.belongsTo(AttendanceSession, {
+  foreignKey: 'attendance_session_id',
+  as: 'session',
+});
+
+// AttendanceSessionSection -> CourseSection
+AttendanceSessionSection.belongsTo(CourseSection, {
+  foreignKey: 'course_section_id',
+  as: 'section',
 });
 
 // AttendanceSession -> Creator (User)
@@ -434,6 +515,7 @@ module.exports = {
   SystemLog,
   Course,
   CourseSection,
+  CourseInstructor,
   CourseTA,
   CourseSectionStudent,
   Classroom,
@@ -443,9 +525,11 @@ module.exports = {
   StudentGroupMember,
   Assignment,
   AssignmentSubItem,
+  AssignmentAttendanceLink,
   Score,
   ScoreEditRequest,
   AttendanceSession,
+  AttendanceSessionSection,
   AttendanceRecord,
   BonusScore,
 };

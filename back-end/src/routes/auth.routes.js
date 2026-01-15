@@ -47,6 +47,17 @@ router.post(
 );
 
 /**
+ * @route   POST /api/auth/force-change-password
+ * @desc    Force change password (for first login)
+ * @access  Private
+ */
+router.post(
+  '/force-change-password',
+  authenticate,
+  authController.forceChangePassword
+);
+
+/**
  * @route   PUT /api/auth/profile
  * @desc    Update user profile
  * @access  Private

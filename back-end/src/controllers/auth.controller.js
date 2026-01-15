@@ -47,6 +47,7 @@ const login = asyncHandler(async (req, res, next) => {
           user: user.toSafeObject(),
           accessToken,
           refreshToken,
+          mustChangePassword: user.must_change_password || false,
         },
       });
     } catch (error) {
@@ -180,8 +181,9 @@ const changePassword = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Current password is incorrect');
   }
   
-  // Update password
+  // Update password and reset must_change_password flag
   user.password_hash = newPassword; // Will be hashed by beforeUpdate hook
+  user.must_change_password = false;
   await user.save();
   
   // Revoke all refresh tokens for this user
@@ -196,6 +198,48 @@ const changePassword = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Password changed successfully. Please login again.',
+  });
+});
+
+/**
+ * Force change password (for first login)
+ * POST /api/auth/force-change-password
+ */
+const forceChangePassword = asyncHandler(async (req, res) => {
+  const { newPassword } = req.body;
+  
+  if (!newPassword || newPassword.length < 6) {
+    throw ApiError.badRequest('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+  }
+  
+  const user = await User.findByPk(req.user.id);
+  
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+  
+  // Only allow if must_change_password is true
+  if (!user.must_change_password) {
+    throw ApiError.badRequest('ไม่จำเป็นต้องเปลี่ยนรหัสผ่าน');
+  }
+  
+  // Update password and reset flag
+  user.password_hash = newPassword; // Will be hashed by beforeUpdate hook
+  user.must_change_password = false;
+  await user.save();
+  
+  // Revoke all refresh tokens for this user
+  await RefreshToken.update(
+    { revoked: true },
+    { where: { user_id: user.id } }
+  );
+  
+  // Log password change
+  await authLogger.logPasswordChange(req, user);
+  
+  res.json({
+    success: true,
+    message: 'เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบใหม่',
   });
 });
 
@@ -290,5 +334,6 @@ module.exports = {
   getMe,
   updateProfile,
   changePassword,
+  forceChangePassword,
   googleCallback,
 };

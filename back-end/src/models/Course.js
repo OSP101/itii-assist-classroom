@@ -42,17 +42,20 @@ const Course = sequelize.define('Course', {
     allowNull: false,
     defaultValue: true,
   },
+  attention_threshold: {
+    type: DataTypes.TINYINT.UNSIGNED,
+    allowNull: false,
+    defaultValue: 60,
+    comment: 'Percentage threshold for low performer alert (default 60%)',
+  },
 }, {
   tableName: 'courses',
   timestamps: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
-  indexes: [
-    {
-      unique: true,
-      fields: ['code', 'year', 'semester'],
-    },
-  ],
+  // Note: Removed unique constraint on (code, year, semester)
+  // Duplicate validation is handled by application logic in course.controller.js
+  // Only active courses with the same code+year+semester will be rejected
 });
 
 module.exports = Course;

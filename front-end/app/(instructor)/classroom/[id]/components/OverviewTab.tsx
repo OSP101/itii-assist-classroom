@@ -23,7 +23,7 @@ import type { Course, CourseOverview, ScoreDistribution } from "@/services/cours
 import type { AssignmentType } from "./types";
 
 // ============================================
-// Animated Counter Hook
+// Animated Counter Hook กำลังแก้ไข มันเปิดหน้าแรกบ่ได้เลย เห้ออ
 // ============================================
 function useAnimatedCounter(end: number, duration: number = 1000, decimals: number = 0) {
     const [count, setCount] = useState(0);
@@ -493,8 +493,8 @@ export default function OverviewTab({
                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
-                                <span className="font-semibold text-slate-800 block">ต้องการความสนใจ</span>
-                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า 60%</span>
+                                <span className="font-semibold text-slate-800 block">นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}%</span>
                             </div>
                         </div>
                     </CardHeader>

@@ -26,6 +26,7 @@ export interface LoginResponse {
   user: User;
   accessToken: string;
   refreshToken: string;
+  mustChangePassword?: boolean;
 }
 
 export interface AuthState {
@@ -38,11 +39,11 @@ class AuthService {
   /**
    * Login with username and password
    */
-  async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; error?: string }> {
+  async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; mustChangePassword?: boolean; error?: string }> {
     const response = await apiService.post<LoginResponse>(API_ENDPOINTS.LOGIN, credentials);
 
     if (response.success && response.data) {
-      const { user, accessToken, refreshToken } = response.data;
+      const { user, accessToken, refreshToken, mustChangePassword } = response.data;
       
       // Store tokens
       apiService.setAuthTokens(accessToken, refreshToken);
@@ -52,7 +53,7 @@ class AuthService {
         localStorage.setItem('user', JSON.stringify(user));
       }
 
-      return { success: true, user };
+      return { success: true, user, mustChangePassword };
     }
 
     // Extract error message - handle both string and object errors
@@ -230,6 +231,24 @@ class AuthService {
   getGoogleAuthUrl(): string {
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
     return `${apiBaseUrl}/auth/google`;
+  }
+
+  /**
+   * Force change password (for first login)
+   */
+  async forceChangePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+    const response = await apiService.post<{ message: string }>('/auth/force-change-password', { newPassword });
+
+    if (response.success) {
+      // Clear tokens after password change - user needs to login again
+      this.clearTokens();
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้',
+    };
   }
 }
 

@@ -12,6 +12,10 @@ export interface Instructor {
   email: string | null;
   username: string;
   avatar: string | null;
+  CourseInstructor?: {
+    is_primary: boolean;
+    assigned_at: string;
+  };
 }
 
 export interface TA {
@@ -44,6 +48,7 @@ export interface Course {
   description: string | null;
   image: string | null;
   is_active: boolean;
+  attention_threshold: number;
   created_at: string;
   updated_at: string;
   instructor?: Instructor | null;
@@ -51,6 +56,7 @@ export interface Course {
   tas?: TA[];
   taCount?: number;
   studentCount?: number;
+  instructors?: Instructor[];
 }
 
 export interface CreateCourseDto {
@@ -59,8 +65,10 @@ export interface CreateCourseDto {
   year: number;
   semester: number;
   instructor_id?: number | null;
+  instructor_ids?: number[];
   description?: string;
   image?: string;
+  attention_threshold?: number;
 }
 
 export interface UpdateCourseDto {
@@ -69,9 +77,11 @@ export interface UpdateCourseDto {
   year?: number;
   semester?: number;
   instructor_id?: number | null;
+  instructor_ids?: number[];
   description?: string;
   image?: string;
   is_active?: boolean;
+  attention_threshold?: number;
 }
 
 export interface CourseListParams {
@@ -388,6 +398,28 @@ class CourseService {
    */
   async removeTA(courseId: string, userId: number) {
     return apiService.delete(API_ENDPOINTS.COURSES.REMOVE_TA(courseId, userId));
+  }
+
+  // Instructor Management in Courses
+  /**
+   * Add instructor to course
+   */
+  async addCourseInstructor(courseId: string, userId: number) {
+    return apiService.post<Instructor>(`/courses/${courseId}/instructors`, { user_id: userId });
+  }
+
+  /**
+   * Add multiple instructors to course
+   */
+  async bulkAddCourseInstructors(courseId: string, userIds: number[]) {
+    return apiService.post<{ added: Instructor[]; skipped: number }>(`/courses/${courseId}/instructors/bulk`, { user_ids: userIds });
+  }
+
+  /**
+   * Remove instructor from course
+   */
+  async removeCourseInstructor(courseId: string, userId: number) {
+    return apiService.delete(`/courses/${courseId}/instructors/${userId}`);
   }
 
   // Student Management in Sections

@@ -26,7 +26,7 @@ import assignmentService from "@/services/assignment.service";
 import scoreService from "@/services/score.service";
 import attendanceService, { type AttendanceSession } from "@/services/attendance.service";
 import type { Assignment as AssignmentType, AssignmentSubItem } from "@/services/assignment.service";
-import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember } from "@/services/course.service";
+import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember, Instructor } from "@/services/course.service";
 import type { Student } from "@/services/student.service";
 import type { StudentScore, ScoresData, Group } from "@/services/score.service";
 import scoreEditRequestService from "@/services/scoreEditRequest.service";
@@ -115,6 +115,15 @@ const BonusScoreModal = dynamic(() => import("./components/BonusScoreModal"), {
     ssr: false,
 });
 
+const SettingsTab = dynamic(() => import("./components/SettingsTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
 
 // Team/Group Types (local extension of service types)
 interface TeamMember {
@@ -145,6 +154,7 @@ export default function ClassroomDetailPage() {
     const [studentsList, setStudentsList] = useState<Student[]>([]);
     const [activeTab, setActiveTab] = useState("overview");
     const [userRole, setUserRole] = useState<string>("");
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [overview, setOverview] = useState<CourseOverview | null>(null);
     const [isOverviewLoading, setIsOverviewLoading] = useState(true);
 
@@ -193,6 +203,12 @@ export default function ClassroomDetailPage() {
     const [selectedTAIds, setSelectedTAIds] = useState<number[]>([]);
     const [taSearchQuery, setTASearchQuery] = useState("");
 
+    // Instructor states (for adding instructors to course)
+    const [isAddInstructorModalOpen, setIsAddInstructorModalOpen] = useState(false);
+    const [selectedInstructorIds, setSelectedInstructorIds] = useState<number[]>([]);
+    const [instructorSearchQuery, setInstructorSearchQuery] = useState("");
+    const [instructorsList, setInstructorsList] = useState<Instructor[]>([]);
+
     // Student states
     const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
     const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
@@ -203,7 +219,7 @@ export default function ClassroomDetailPage() {
 
     // Delete confirmation modal states
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [deleteType, setDeleteType] = useState<"student" | "team" | "section" | "ta" | null>(null);
+    const [deleteType, setDeleteType] = useState<"student" | "team" | "section" | "ta" | "instructor" | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<{
         // For student deletion
         studentId?: number;
@@ -224,6 +240,11 @@ export default function ClassroomDetailPage() {
         taName?: string;
         taEmail?: string;
         taAvatar?: string;
+        // For instructor deletion
+        instructorId?: number;
+        instructorName?: string;
+        instructorEmail?: string;
+        instructorAvatar?: string;
     } | null>(null);
 
     // Bulk delete teams modal state
@@ -252,6 +273,8 @@ export default function ClassroomDetailPage() {
         assignment_type: "individual" | "permanent_group" | "weekly_group";
         week_number?: number;
         linked_attendance_session_id?: number | null;
+        linked_attendance_session_ids: number[]; // New: array of session IDs
+        attendance_condition: "and" | "or"; // New: condition for multi-session
         hasSubItems: boolean;
         subItems: LocalSubItem[];
         maxScore: number;
@@ -261,6 +284,8 @@ export default function ClassroomDetailPage() {
         name: "",
         assignment_type: "individual",
         linked_attendance_session_id: null,
+        linked_attendance_session_ids: [], // New: empty array
+        attendance_condition: "or", // New: default to 'or'
         hasSubItems: false,
         subItems: [],
         maxScore: 10,
@@ -346,6 +371,18 @@ export default function ClassroomDetailPage() {
             console.error("Error fetching TAs:", error);
         } finally {
             setIsPeopleLoading(false);
+        }
+    }, []);
+
+    // Fetch instructors list for dropdown (for adding instructors to course)
+    const fetchInstructorsList = useCallback(async () => {
+        try {
+            const response = await courseService.getInstructors();
+            if (response.success && response.data) {
+                setInstructorsList(response.data);
+            }
+        } catch (error) {
+            console.error("Error fetching instructors:", error);
         }
     }, []);
 
@@ -618,6 +655,7 @@ export default function ClassroomDetailPage() {
         fetchCourse();
         fetchOverview();
         fetchTAsList();
+        fetchInstructorsList();
         fetchStudentsList();
         fetchTeams(); // เรียกเลยไม่ต้องรอ course
         fetchAssignments(); // เรียก assignments
@@ -628,6 +666,7 @@ export default function ClassroomDetailPage() {
             const user = await authService.getCurrentUser();
             if (user) {
                 setUserRole(user.role);
+                setCurrentUserId(user.id);
                 // Fetch pending count only for instructor
                 if (user.role === 'instructor') {
                     try {
@@ -906,6 +945,147 @@ export default function ClassroomDetailPage() {
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    // ============================================
+    // Instructor Management Handlers
+    // ============================================
+
+    // Add instructors to course
+    const handleAddInstructors = async () => {
+        if (selectedInstructorIds.length === 0) {
+            addToast({
+                title: "กรุณาเลือกอาจารย์",
+                description: "เลือกอาจารย์อย่างน้อย 1 คน",
+                color: "warning",
+            });
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const response = await courseService.bulkAddCourseInstructors(courseId, selectedInstructorIds);
+            if (response.success) {
+                addToast({
+                    title: "สำเร็จ",
+                    description: `เพิ่มอาจารย์ ${response.data?.added?.length || selectedInstructorIds.length} คนสำเร็จ`,
+                    color: "success",
+                });
+                // Refresh course data
+                fetchCourse();
+                setIsAddInstructorModalOpen(false);
+                setSelectedInstructorIds([]);
+                setInstructorSearchQuery("");
+            } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || "ไม่สามารถเพิ่มอาจารย์ได้";
+                addToast({
+                    title: "เกิดข้อผิดพลาด",
+                    description: errorMessage,
+                    color: "danger",
+                });
+            }
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: err.message || "ไม่สามารถเพิ่มอาจารย์ได้",
+                color: "danger",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Remove instructor from course
+    const handleRemoveInstructor = (userId: number) => {
+        const instructor = course?.instructors?.find(i => i.id === userId);
+        if (!instructor) return;
+
+        setDeleteType("instructor" as any);
+        setDeleteTarget({
+            instructorId: userId,
+            instructorName: instructor.full_name,
+            instructorEmail: instructor.email || undefined,
+        } as any);
+        setIsDeleteModalOpen(true);
+    };
+
+    // Actually remove instructor (called after confirmation)
+    const confirmRemoveInstructor = async () => {
+        if (!(deleteTarget as any)?.instructorId) return;
+
+        const userId = (deleteTarget as any).instructorId;
+        setIsSubmitting(true);
+        try {
+            const response = await courseService.removeCourseInstructor(courseId, userId);
+            if (response.success) {
+                // อัปเดต local state
+                setCourse(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        instructors: prev.instructors?.filter(inst => inst.id !== userId) || []
+                    };
+                });
+                addToast({
+                    title: "สำเร็จ",
+                    description: `นำ ${(deleteTarget as any).instructorName} ออกจากรายวิชาแล้ว`,
+                    color: "success",
+                });
+                setIsDeleteModalOpen(false);
+                setDeleteTarget(null);
+                setDeleteType(null);
+            } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || "ไม่สามารถนำอาจารย์ออกได้";
+                addToast({
+                    title: "เกิดข้อผิดพลาด",
+                    description: errorMessage,
+                    color: "danger",
+                });
+            }
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: err.message || "ไม่สามารถนำอาจารย์ออกได้",
+                color: "danger",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Filter instructors (exclude those already in course)
+    const filteredInstructors = instructorsList.filter(instructor => {
+        // Exclude instructors already in this course
+        const existingIds = course?.instructors?.map(i => i.id) || [];
+        if (existingIds.includes(instructor.id)) return false;
+        
+        // Search filter
+        if (instructorSearchQuery) {
+            const query = instructorSearchQuery.toLowerCase();
+            return instructor.full_name.toLowerCase().includes(query) ||
+                   instructor.email?.toLowerCase().includes(query);
+        }
+        return true;
+    });
+
+    // Select all instructors
+    const selectAllInstructors = () => {
+        const existingIds = course?.instructors?.map(i => i.id) || [];
+        const availableIds = instructorsList
+            .filter(inst => !existingIds.includes(inst.id))
+            .map(inst => inst.id);
+        setSelectedInstructorIds(availableIds);
+    };
+
+    // Clear instructor selection
+    const clearInstructorSelection = () => {
+        setSelectedInstructorIds([]);
     };
 
     // Open add student modal
@@ -1663,6 +1843,12 @@ export default function ClassroomDetailPage() {
             badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
+        // ตั้งค่ารายวิชา - แสดงเฉพาะอาจารย์
+        ...(userRole === 'instructor' ? [{
+            key: "settings",
+            label: "ตั้งค่ารายวิชา",
+            icon: "solar:settings-bold",
+        }] : []),
     ];
 
     // console.log("Course data:", course);
@@ -2005,9 +2191,12 @@ export default function ClassroomDetailPage() {
                                 course={course}
                                 isLoading={isLoading}
                                 userRole={userRole}
+                                currentUserId={currentUserId}
                                 isPeopleLoading={isPeopleLoading}
                                 onOpenAddTAModal={() => setIsAddTAModalOpen(true)}
+                                onOpenAddInstructorModal={() => setIsAddInstructorModalOpen(true)}
                                 onRemoveTA={handleRemoveTA}
+                                onRemoveInstructor={handleRemoveInstructor}
                             />
                         )}
 
@@ -2030,12 +2219,17 @@ export default function ClassroomDetailPage() {
                                             dueDate: "",
                                             description: "",
                                             linked_attendance_session_id: null,
+                                            linked_attendance_session_ids: [],
+                                            attendance_condition: "or",
                                         });
                                         setEditingAssignment(null);
                                         setIsAddAssignmentModalOpen(true);
                                     }}
                                     onOpenEditModal={(assignment) => {
                                         setEditingAssignment(assignment);
+                                        // Get linked session IDs from linkedAttendanceSessions array if available
+                                        const linkedSessionIds = assignment.linkedAttendanceSessions?.map(s => s.id) || 
+                                            (assignment.linked_attendance_session_id ? [assignment.linked_attendance_session_id] : []);
                                         setNewAssignment({
                                             name: assignment.name,
                                             assignment_type: assignment.assignment_type,
@@ -2050,6 +2244,8 @@ export default function ClassroomDetailPage() {
                                             dueDate: assignment.due_date || "",
                                             description: assignment.description || "",
                                             linked_attendance_session_id: assignment.linked_attendance_session_id || null,
+                                            linked_attendance_session_ids: linkedSessionIds,
+                                            attendance_condition: assignment.attendance_condition || "or",
                                         });
                                         setIsAddAssignmentModalOpen(true);
                                     }}
@@ -2087,6 +2283,17 @@ export default function ClassroomDetailPage() {
                             <ScoreApprovalTab 
                                 courseId={courseId} 
                                 onPendingCountChange={(count) => setPendingApprovalCount(count)}
+                            />
+                        )}
+
+                        {/* Settings Tab - Instructor Only */}
+                        {activeTab === "settings" && userRole === "instructor" && (
+                            <SettingsTab 
+                                course={course}
+                                onCourseUpdate={(updatedCourse) => {
+                                    setCourse(updatedCourse);
+                                    fetchCourse(); // Refresh full course data
+                                }}
                             />
                         )}
                             </>
@@ -2557,6 +2764,206 @@ export default function ClassroomDetailPage() {
                 </ModalContent>
             </Modal>
 
+            {/* Add Instructor Modal */}
+            <Modal 
+                isOpen={isAddInstructorModalOpen} 
+                onClose={() => {
+                    setIsAddInstructorModalOpen(false);
+                    setSelectedInstructorIds([]);
+                    setInstructorSearchQuery("");
+                }} 
+                size="2xl"
+                scrollBehavior="inside"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-circle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มอาจารย์ผู้สอน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกอาจารย์ที่ต้องการเพิ่มเป็นผู้สอนร่วม (เลือกได้หลายคน)</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        {/* Stats */}
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
+                                <span>อาจารย์ในระบบ <span className="font-semibold text-indigo-600">{instructorsList.length}</span> คน</span>
+                                {course?.instructors && course.instructors.length > 0 && (
+                                    <span className="text-slate-400">
+                                        (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.instructors.length}</span> คน)
+                                    </span>
+                                )}
+                            </div>
+                            {selectedInstructorIds.length > 0 && (
+                                <Chip size="sm" color="secondary" variant="flat">
+                                    เลือกแล้ว {selectedInstructorIds.length} คน
+                                </Chip>
+                            )}
+                        </div>
+
+                        {/* Search */}
+                        <Input
+                            placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
+                            variant="bordered"
+                            size="lg"
+                            value={instructorSearchQuery}
+                            onValueChange={setInstructorSearchQuery}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                            endContent={
+                                instructorSearchQuery && (
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => setInstructorSearchQuery("")}
+                                    >
+                                        <Icon icon="solar:close-circle-bold" className="text-slate-400" />
+                                    </Button>
+                                )
+                            }
+                            classNames={{
+                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
+                            }}
+                        />
+
+                        {/* Quick Actions */}
+                        <div className="flex items-center gap-2 mt-3">
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                color="secondary"
+                                onPress={selectAllInstructors}
+                                startContent={<Icon icon="solar:checklist-bold" />}
+                            >
+                                เลือกทั้งหมด
+                            </Button>
+                            {selectedInstructorIds.length > 0 && (
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="danger"
+                                    onPress={clearInstructorSelection}
+                                    startContent={<Icon icon="solar:close-circle-bold" />}
+                                >
+                                    ล้างการเลือก
+                                </Button>
+                            )}
+                        </div>
+                        
+                        {/* Instructor List */}
+                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {filteredInstructors.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-500">
+                                        <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
+                                        <p>{instructorSearchQuery ? "ไม่พบอาจารย์ที่ค้นหา" : "อาจารย์ทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
+                                    </div>
+                                ) : (
+                                    filteredInstructors.map((instructor) => {
+                                        const isSelected = selectedInstructorIds.includes(instructor.id);
+                                        const isSelf = instructor.id === currentUserId;
+
+                                        return (
+                                            <div
+                                                key={instructor.id}
+                                                onClick={() => {
+                                                    if (isSelf) return; // ไม่ให้เลือกตัวเอง (เพราะอยู่ในวิชาอยู่แล้ว)
+                                                    if (isSelected) {
+                                                        setSelectedInstructorIds(prev => prev.filter(id => id !== instructor.id));
+                                                    } else {
+                                                        setSelectedInstructorIds(prev => [...prev, instructor.id]);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
+                                                    isSelf 
+                                                        ? "bg-slate-100 cursor-not-allowed opacity-60"
+                                                        : isSelected
+                                                            ? "bg-indigo-50 cursor-pointer"
+                                                            : "hover:bg-slate-50 cursor-pointer"
+                                                }`}
+                                            >
+                                                {/* Checkbox */}
+                                                <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0">
+                                                    {isSelected && (
+                                                        <FaCheckCircle className="text-lg text-indigo-500" />
+                                                    )}
+                                                </div>
+
+                                                <Avatar
+                                                    name={instructor.full_name}
+                                                    src={instructor.avatar || undefined}
+                                                    size="sm"
+                                                    className="flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600"
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium truncate text-slate-800">
+                                                        {instructor.full_name}
+                                                        {isSelf && <span className="text-xs text-slate-400 ml-2">(คุณ)</span>}
+                                                    </p>
+                                                    <p className="text-xs truncate text-slate-500">
+                                                        {instructor.email}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Selected Instructors Preview */}
+                        {selectedInstructorIds.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-sm font-medium text-slate-600 mb-2">อาจารย์ที่เลือก ({selectedInstructorIds.length} คน)</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedInstructorIds.map(instId => {
+                                        const inst = instructorsList.find(i => i.id === instId);
+                                        if (!inst) return null;
+                                        return (
+                                            <Chip
+                                                key={instId}
+                                                variant="flat"
+                                                color="secondary"
+                                                onClose={() => setSelectedInstructorIds(prev => prev.filter(id => id !== instId))}
+                                            >
+                                                {inst.full_name}
+                                            </Chip>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={() => {
+                                setIsAddInstructorModalOpen(false);
+                                setSelectedInstructorIds([]);
+                                setInstructorSearchQuery("");
+                            }}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="secondary"
+                            onPress={handleAddInstructors}
+                            isLoading={isSubmitting}
+                            isDisabled={selectedInstructorIds.length === 0}
+                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-400/25"
+                        >
+                            เพิ่มอาจารย์ {selectedInstructorIds.length > 0 ? `(${selectedInstructorIds.length} คน)` : ""}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
             {/* Add Student Modal */}
             <Modal isOpen={isAddStudentModalOpen} onClose={resetAddStudentModal} size="2xl">
                 <ModalContent>
@@ -2833,12 +3240,12 @@ export default function ClassroomDetailPage() {
                                 labelPlacement="outside"
                                 placeholder="เช่น งานที่ 1, Quiz 1, โปรเจคกลุ่ม"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 value={newAssignment.name}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, name: val }))}
                                 isRequired
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -2905,6 +3312,7 @@ export default function ClassroomDetailPage() {
                                         <Select
                                             placeholder="เลือกสัปดาห์"
                                             selectedKeys={newAssignment.week_number ? [newAssignment.week_number.toString()] : []}
+                                            size="md"
                                             onSelectionChange={(keys) => {
                                                 const val = Array.from(keys)[0] as string;
                                                 if (val) {
@@ -2941,7 +3349,7 @@ export default function ClassroomDetailPage() {
                                 </div>
                             )}
 
-                            {/* Link to Attendance Session */}
+                            {/* Link to Attendance Session - Multi-select */}
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-3">
@@ -2950,38 +3358,47 @@ export default function ClassroomDetailPage() {
                                         </div>
                                         <div>
                                             <span className="font-semibold text-slate-700">ลิงก์กับการเช็คชื่อ</span>
-                                            <p className="text-xs text-slate-500">ถ้านักศึกษาขาดเรียน จะไม่อนุญาตให้ลงคะแนน</p>
+                                            <p className="text-xs text-slate-500">สามารถเลือกหลายรอบเช็คชื่อได้</p>
                                         </div>
                                     </div>
                                     <Button
                                         size="sm"
-                                        variant={newAssignment.linked_attendance_session_id ? "solid" : "bordered"}
-                                        color={newAssignment.linked_attendance_session_id ? "primary" : "default"}
+                                        variant={newAssignment.linked_attendance_session_ids.length > 0 ? "solid" : "bordered"}
+                                        color={newAssignment.linked_attendance_session_ids.length > 0 ? "primary" : "default"}
                                         onPress={() => {
-                                            if (newAssignment.linked_attendance_session_id) {
-                                                setNewAssignment(prev => ({ ...prev, linked_attendance_session_id: null }));
+                                            if (newAssignment.linked_attendance_session_ids.length > 0) {
+                                                setNewAssignment(prev => ({ 
+                                                    ...prev, 
+                                                    linked_attendance_session_ids: [],
+                                                    linked_attendance_session_id: null 
+                                                }));
                                             }
                                         }}
                                         startContent={
                                             <Icon 
-                                                icon={newAssignment.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"} 
+                                                icon={newAssignment.linked_attendance_session_ids.length > 0 ? "solar:link-bold" : "solar:link-broken-bold"} 
                                                 className="text-lg" 
                                             />
                                         }
                                     >
-                                        {newAssignment.linked_attendance_session_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
+                                        {newAssignment.linked_attendance_session_ids.length > 0 
+                                            ? `ลิงก์ ${newAssignment.linked_attendance_session_ids.length} รอบ` 
+                                            : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
                                 
                                 {attendanceSessions.length > 0 ? (
                                     <Select
-                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์"
-                                        selectedKeys={newAssignment.linked_attendance_session_id ? [String(newAssignment.linked_attendance_session_id)] : []}
+                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์ (เลือกได้หลายรอบ)"
+                                        selectionMode="multiple"
+                                        size="md"
+                                        selectedKeys={new Set(newAssignment.linked_attendance_session_ids.map(String))}
                                         onSelectionChange={(keys) => {
-                                            const val = Array.from(keys)[0] as string;
+                                            const selectedIds = Array.from(keys).map(k => parseInt(k as string));
                                             setNewAssignment(prev => ({ 
                                                 ...prev, 
-                                                linked_attendance_session_id: val ? parseInt(val) : null 
+                                                linked_attendance_session_ids: selectedIds,
+                                                linked_attendance_session_id: selectedIds.length === 1 ? selectedIds[0] : null
                                             }));
                                         }}
                                         variant="bordered"
@@ -2993,12 +3410,12 @@ export default function ClassroomDetailPage() {
                                         {attendanceSessions.map((session) => (
                                             <SelectItem key={String(session.id)} textValue={session.title}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
+                                                    {/* <Icon 
                                                         icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
                                                               session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
                                                         className={session.session_type === "lecture" ? "text-blue-500" : 
                                                                    session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
-                                                    />
+                                                    /> */}
                                                     <div>
                                                         <span className="font-medium">{session.title}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
@@ -3020,13 +3437,71 @@ export default function ClassroomDetailPage() {
                                     </div>
                                 )}
                                 
-                                {newAssignment.linked_attendance_session_id && (
+                                {/* Attendance Condition (AND/OR) - Only show when multiple sessions selected */}
+                                {newAssignment.linked_attendance_session_ids.length > 1 && (
+                                    <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200">
+                                        <label className="text-slate-600 font-medium text-sm mb-3 block">
+                                            เงื่อนไขการเช็คชื่อ
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "or" }))}
+                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                                    newAssignment.attendance_condition === "or"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-slate-200 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Icon 
+                                                        icon="solar:alt-arrow-right-bold" 
+                                                        className={newAssignment.attendance_condition === "or" ? "text-blue-600" : "text-slate-400"} 
+                                                    />
+                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "or" ? "text-blue-700" : "text-slate-600"}`}>
+                                                        อย่างน้อย 1 รอบ
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500">มาเรียนอย่างน้อย 1 รอบถึงจะลงคะแนนได้</p>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "and" }))}
+                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                                    newAssignment.attendance_condition === "and"
+                                                        ? "border-amber-500 bg-amber-50"
+                                                        : "border-slate-200 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Icon 
+                                                        icon="solar:check-circle-bold" 
+                                                        className={newAssignment.attendance_condition === "and" ? "text-amber-600" : "text-slate-400"} 
+                                                    />
+                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "and" ? "text-amber-700" : "text-slate-600"}`}>
+                                                        ทุกรอบ
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500">ต้องมาเรียนครบทุกรอบถึงจะลงคะแนนได้</p>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {newAssignment.linked_attendance_session_ids.length > 0 && (
                                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                        <div className="flex items-center gap-2 text-blue-700">
-                                            <Icon icon="solar:info-circle-bold" />
-                                            <span className="text-sm font-medium">
-                                                นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้
-                                            </span>
+                                        <div className="flex items-start gap-2 text-blue-700">
+                                            <Icon icon="solar:info-circle-bold" className="mt-0.5" />
+                                            <div className="text-sm">
+                                                <span className="font-medium">
+                                                    {newAssignment.linked_attendance_session_ids.length === 1 
+                                                        ? "นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้"
+                                                        : newAssignment.attendance_condition === "or"
+                                                            ? `นักศึกษาที่ขาดเรียนทั้ง ${newAssignment.linked_attendance_session_ids.length} รอบ จะไม่สามารถลงคะแนนได้`
+                                                            : `นักศึกษาต้องมาเรียนครบทุกรอบ (${newAssignment.linked_attendance_session_ids.length} รอบ) จึงจะลงคะแนนได้`
+                                                    }
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -3087,7 +3562,7 @@ export default function ClassroomDetailPage() {
                                     labelPlacement="outside"
                                     placeholder="เช่น 10, 20, 100"
                                     variant="bordered"
-                                    size="lg"
+                                    size="md"
                                     min={0}
                                     step="any"
                                     value={newAssignment.maxScore.toString()}
@@ -3096,7 +3571,7 @@ export default function ClassroomDetailPage() {
                                     endContent={<span className="text-slate-400 text-sm">คะแนน</span>}
                                     className="pt-6"
                                     classNames={{
-                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                        inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                         label: "text-slate-600 font-medium text-sm",
                                     }}
                                 />
@@ -3128,7 +3603,7 @@ export default function ClassroomDetailPage() {
                                                             ...prev.subItems,
                                                             {
                                                                 name: `ข้อ ${prev.subItems.length + 1}`,
-                                                                max_score: 5
+                                                                max_score: 10
                                                             }
                                                         ]
                                                     }));
@@ -3231,12 +3706,12 @@ export default function ClassroomDetailPage() {
                                 labelPlacement="outside"
                                 placeholder="คำอธิบายเกี่ยวกับงาน (ถ้ามี)"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 value={newAssignment.description}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, description: val }))}
                                 className="pt-4"
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -3300,7 +3775,13 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
-                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || null,
+                                                    // Use new multi-session format
+                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
+                                                        ? newAssignment.linked_attendance_session_ids 
+                                                        : [],
+                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
+                                                        ? newAssignment.attendance_condition 
+                                                        : undefined,
                                                 });
                                                 if (result) {
                                                     await fetchAssignmentsNew();
@@ -3331,7 +3812,13 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
-                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || undefined,
+                                                    // Use new multi-session format
+                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
+                                                        ? newAssignment.linked_attendance_session_ids 
+                                                        : undefined,
+                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
+                                                        ? newAssignment.attendance_condition 
+                                                        : undefined,
                                                 });
                                                 if (result) {
                                                     await fetchAssignmentsNew();
@@ -3767,7 +4254,7 @@ export default function ClassroomDetailPage() {
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">
-                                    {deleteType === "student" ? "นำนักศึกษาออกจากวิชา" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : "ลบกลุ่ม"}
+                                    {deleteType === "student" ? "นำนักศึกษาออกจากวิชา" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : deleteType === "instructor" ? "นำอาจารย์ออก" : "ลบกลุ่ม"}
                                 </h3>
                                 <p className="text-sm text-slate-500 font-normal mt-1">
                                     กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
@@ -4121,6 +4608,74 @@ export default function ClassroomDetailPage() {
                                 </div>
                             </div>
                         )}
+
+                        {/* Instructor Delete Content */}
+                        {deleteType === "instructor" && deleteTarget && (
+                            <div className="space-y-4">
+                                {/* Instructor Info Card */}
+                                <Card className="border border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50">
+                                    <CardBody className="py-4">
+                                        <div className="flex items-center gap-4">
+                                            <Avatar
+                                                src={deleteTarget.instructorAvatar || undefined}
+                                                name={deleteTarget.instructorName}
+                                                size="lg"
+                                                className="w-16 h-16"
+                                            />
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-lg text-slate-800">
+                                                    {deleteTarget.instructorName}
+                                                </p>
+                                                <p className="text-sm text-slate-500">
+                                                    {deleteTarget.instructorEmail}
+                                                </p>
+                                                <Chip 
+                                                    size="sm" 
+                                                    color="secondary" 
+                                                    variant="flat"
+                                                    startContent={<Icon icon="solar:user-speak-bold" className="text-xs" />}
+                                                    className="mt-1"
+                                                >
+                                                    อาจารย์ผู้สอน
+                                                </Chip>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* What happens info */}
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium text-amber-800">สิ่งที่จะเกิดขึ้น</p>
+                                                <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
+                                                    <li>อาจารย์จะไม่สามารถเข้าถึงรายวิชานี้ได้อีก</li>
+                                                    <li>ไม่สามารถจัดการงานมอบหมายหรือคะแนนในรายวิชานี้ได้</li>
+                                                    <li>ประวัติการทำงานที่ผ่านมาจะยังคงอยู่ในระบบ</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                คุณต้องการนำอาจารย์ท่านนี้ออกจากรายวิชาใช่หรือไม่?
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                สามารถเพิ่มกลับได้ภายหลัง
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
@@ -4142,13 +4697,15 @@ export default function ClassroomDetailPage() {
                                         ? confirmRemoveSection 
                                         : deleteType === "ta"
                                             ? confirmRemoveTA
-                                            : confirmDeleteTeam
+                                            : deleteType === "instructor"
+                                                ? confirmRemoveInstructor
+                                                : confirmDeleteTeam
                             }
                             isLoading={isSubmitting}
                             className="bg-red-500"
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
                         >
-                            {deleteType === "student" ? "นำนักศึกษาออก" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : "ลบกลุ่ม"}
+                            {deleteType === "student" ? "นำนักศึกษาออก" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : deleteType === "instructor" ? "นำอาจารย์ออก" : "ลบกลุ่ม"}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
