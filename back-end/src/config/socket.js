@@ -12,21 +12,22 @@ let io = null;
  * Initialize Socket.io with HTTP server
  */
 const initializeSocket = (httpServer) => {
-  io = new Server(httpServer, {
-    cors: {
-      origin: [
-        config.frontendUrl,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'https://itii.osp101.dev',
-      ],
-      methods: ['GET', 'POST'],
-      credentials: true,
-    },
-    // Enable reconnection
-    pingTimeout: 60000,
-    pingInterval: 25000,
-  });
+io = new Server(httpServer, {
+  path: "/socket.io",
+  cors: {
+    origin: [
+      config.frontendUrl,
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://itii.osp101.dev",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+});
+
 
   // Connection handler
   io.on('connection', (socket) => {
