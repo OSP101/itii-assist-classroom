@@ -310,10 +310,10 @@ export default function StudentCheckInPage() {
 
     // Initialize socket
     useEffect(() => {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:3001";
-        const socket = io(backendUrl, {
-            transports: ["websocket", "polling"],
-        });
+  const socket = io(window.location.origin, {
+    path: "/socket.io",
+    transports: ["websocket"],
+  });
 
         socket.on("connect", () => {
             socket.emit("join-attendance", sessionId);
