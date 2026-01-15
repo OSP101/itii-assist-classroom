@@ -42,6 +42,12 @@ const Course = sequelize.define('Course', {
     allowNull: false,
     defaultValue: true,
   },
+  attention_threshold: {
+    type: DataTypes.TINYINT.UNSIGNED,
+    allowNull: false,
+    defaultValue: 60,
+    comment: 'Percentage threshold for low performer alert (default 60%)',
+  },
 }, {
   tableName: 'courses',
   timestamps: true,

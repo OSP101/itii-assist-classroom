@@ -271,7 +271,7 @@ const getCourseById = asyncHandler(async (req, res) => {
  * @route POST /api/courses
  */
 const createCourse = asyncHandler(async (req, res) => {
-  const { code, name, year, semester, instructor_id, instructor_ids, description, image } = req.body;
+  const { code, name, year, semester, instructor_id, instructor_ids, description, image, attention_threshold } = req.body;
   const currentUser = req.user;
 
   // Validate required fields
@@ -298,9 +298,23 @@ const createCourse = asyncHandler(async (req, res) => {
     instructorIdList = instructor_ids.map(id => parseInt(id));
   } else if (instructor_id) {
     instructorIdList = [parseInt(instructor_id)];
-  } else if (currentUser.role === 'instructor') {
-    instructorIdList = [currentUser.id];
   }
+  
+  // IMPORTANT: Always add current user (the creator) as instructor if they are an instructor
+  // and not already in the list
+  if (currentUser.role === 'instructor' && !instructorIdList.includes(currentUser.id)) {
+    // Add creator as first (primary) instructor
+    instructorIdList = [currentUser.id, ...instructorIdList];
+  }
+
+  // If still no instructors (admin creating without specifying), default to empty
+  // Admin must specify instructors explicitly
+
+  // Debug log
+  console.log('createCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
+  console.log('createCourse - instructor_ids from request:', instructor_ids);
+  console.log('createCourse - instructor_id from request:', instructor_id);
+  console.log('createCourse - final instructorIdList:', instructorIdList);
 
   // Validate all instructors
   if (instructorIdList.length > 0) {
@@ -325,6 +339,7 @@ const createCourse = asyncHandler(async (req, res) => {
     description: description || null,
     image: image || null,
     is_active: true,
+    attention_threshold: attention_threshold !== undefined ? parseInt(attention_threshold) : 60,
   });
 
   // Add all instructors to course_instructors table
@@ -367,7 +382,7 @@ const createCourse = asyncHandler(async (req, res) => {
  */
 const updateCourse = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { code, name, year, semester, instructor_id, instructor_ids, description, is_active } = req.body;
+  const { code, name, year, semester, instructor_id, instructor_ids, description, is_active, attention_threshold } = req.body;
 
   const course = await Course.findByPk(id);
 
@@ -391,7 +406,7 @@ const updateCourse = asyncHandler(async (req, res) => {
       },
     });
     if (existingCourse) {
-      throw new ApiError(400, 'รายวิชานี้มีเปิดใช้งานอยู่แล้ว (รหัส-ปี-ภาคเรียน ซ้ำ)');
+      throw new ApiError(400, `รหัสวิชา "${checkCode}" ปีการศึกษา ${checkYear} ภาคเรียน ${checkSemester} มีเปิดใช้งานอยู่แล้ว กรุณาใช้รหัสวิชา ปีการศึกษา หรือภาคเรียนอื่น`);
     }
   }
 
@@ -410,6 +425,29 @@ const updateCourse = asyncHandler(async (req, res) => {
       instructorIdList = [parseInt(instructor_id)];
     }
   }
+
+  // IMPORTANT: For instructor users editing their course, always include themselves
+  // This ensures the creator/editor doesn't accidentally remove themselves
+  const currentUser = req.user;
+  if (shouldUpdateInstructors && currentUser.role === 'instructor' && !instructorIdList.includes(currentUser.id)) {
+    // Check if current user is already an instructor of this course
+    const isCurrentInstructor = await CourseInstructor.findOne({
+      where: { course_id: id, user_id: currentUser.id }
+    });
+    if (isCurrentInstructor) {
+      // Keep them as primary if they were primary, otherwise add at the end
+      if (isCurrentInstructor.is_primary) {
+        instructorIdList = [currentUser.id, ...instructorIdList];
+      } else {
+        instructorIdList = [...instructorIdList, currentUser.id];
+      }
+    }
+  }
+
+  // Debug log
+  console.log('updateCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
+  console.log('updateCourse - instructor_ids from request:', instructor_ids);
+  console.log('updateCourse - final instructorIdList:', instructorIdList);
 
   // Validate all instructors if updating
   if (shouldUpdateInstructors && instructorIdList.length > 0) {
@@ -434,6 +472,7 @@ const updateCourse = asyncHandler(async (req, res) => {
     description: description !== undefined ? description : course.description,
     image: image !== undefined ? image : course.image,
     is_active: is_active !== undefined ? is_active : course.is_active,
+    attention_threshold: attention_threshold !== undefined ? parseInt(attention_threshold) : course.attention_threshold,
   });
 
   // Update course_instructors if needed
@@ -780,6 +819,220 @@ const removeTA = asyncHandler(async (req, res) => {
 });
 
 // ============================================
+// Instructor Management
+// ============================================
+
+/**
+ * Add instructor to course
+ * @route POST /api/courses/:id/instructors
+ */
+const addInstructor = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { user_id } = req.body;
+  const currentUser = req.user;
+
+  // Check course access (only admin or existing instructor of this course)
+  const course = await Course.findByPk(id, {
+    include: [{
+      model: User,
+      as: 'instructors',
+      attributes: ['id'],
+    }],
+  });
+  
+  if (!course) {
+    throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
+  }
+
+  if (currentUser.role !== 'admin') {
+    const isInstructor = course.instructors?.some(inst => inst.id === currentUser.id);
+    if (!isInstructor) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์เพิ่มอาจารย์ในรายวิชานี้');
+    }
+  }
+
+  const instructor = await User.findOne({
+    where: { id: user_id, role: 'instructor' },
+  });
+  if (!instructor) {
+    throw new ApiError(400, 'ไม่พบอาจารย์ที่ระบุ');
+  }
+
+  // Check duplicate
+  const existing = await CourseInstructor.findOne({
+    where: { course_id: id, user_id },
+  });
+  if (existing) {
+    throw new ApiError(400, 'อาจารย์นี้อยู่ในรายวิชาแล้ว');
+  }
+
+  await CourseInstructor.create({ 
+    course_id: id, 
+    user_id,
+    is_primary: false, // New instructors added later are not primary
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'เพิ่มอาจารย์สำเร็จ',
+    data: instructor.toSafeObject(),
+  });
+});
+
+/**
+ * Add multiple instructors to course
+ * @route POST /api/courses/:id/instructors/bulk
+ */
+const bulkAddInstructors = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { user_ids } = req.body; // Array of user IDs
+  const currentUser = req.user;
+
+  if (!Array.isArray(user_ids) || user_ids.length === 0) {
+    throw new ApiError(400, 'กรุณาระบุรายชื่ออาจารย์');
+  }
+
+  // Check course access
+  const course = await Course.findByPk(id, {
+    include: [{
+      model: User,
+      as: 'instructors',
+      attributes: ['id'],
+    }],
+  });
+  
+  if (!course) {
+    throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
+  }
+
+  if (currentUser.role !== 'admin') {
+    const isInstructor = course.instructors?.some(inst => inst.id === currentUser.id);
+    if (!isInstructor) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์เพิ่มอาจารย์ในรายวิชานี้');
+    }
+  }
+
+  // Validate all instructors exist
+  const instructors = await User.findAll({
+    where: { id: user_ids, role: 'instructor' },
+  });
+
+  if (instructors.length === 0) {
+    throw new ApiError(400, 'ไม่พบอาจารย์ที่ระบุ');
+  }
+
+  // Get existing instructors in course
+  const existingInstructors = await CourseInstructor.findAll({
+    where: { course_id: id, user_id: user_ids },
+  });
+  const existingIds = existingInstructors.map(ci => ci.user_id);
+
+  // Filter out instructors that are already in the course
+  const newInstructors = instructors.filter(inst => !existingIds.includes(inst.id));
+
+  if (newInstructors.length === 0) {
+    throw new ApiError(400, 'อาจารย์ที่เลือกทั้งหมดอยู่ในรายวิชาแล้ว');
+  }
+
+  // Bulk create
+  await CourseInstructor.bulkCreate(
+    newInstructors.map(inst => ({ 
+      course_id: id, 
+      user_id: inst.id,
+      is_primary: false,
+    }))
+  );
+
+  res.status(201).json({
+    success: true,
+    message: `เพิ่มอาจารย์ ${newInstructors.length} คนสำเร็จ`,
+    data: {
+      added: newInstructors.map(inst => inst.toSafeObject()),
+      skipped: existingIds.length,
+    },
+  });
+});
+
+/**
+ * Remove instructor from course
+ * @route DELETE /api/courses/:id/instructors/:userId
+ */
+const removeInstructor = asyncHandler(async (req, res) => {
+  const { id, userId } = req.params;
+  const currentUser = req.user;
+
+  // Check course access
+  const course = await Course.findByPk(id, {
+    include: [{
+      model: User,
+      as: 'instructors',
+      attributes: ['id'],
+    }],
+  });
+  
+  if (!course) {
+    throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
+  }
+
+  if (currentUser.role !== 'admin') {
+    const isInstructor = course.instructors?.some(inst => inst.id === currentUser.id);
+    if (!isInstructor) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์นำอาจารย์ออกจากรายวิชานี้');
+    }
+  }
+
+  // Check if trying to remove self
+  if (parseInt(userId) === currentUser.id && currentUser.role !== 'admin') {
+    throw new ApiError(400, 'ไม่สามารถนำตัวเองออกจากรายวิชาได้');
+  }
+
+  // Check if this is the last instructor (primary)
+  const instructorRecord = await CourseInstructor.findOne({
+    where: { course_id: id, user_id: userId },
+  });
+
+  if (!instructorRecord) {
+    throw new ApiError(404, 'ไม่พบอาจารย์ในรายวิชานี้');
+  }
+
+  if (instructorRecord.is_primary) {
+    // Check if there are other instructors
+    const otherInstructors = await CourseInstructor.count({
+      where: { 
+        course_id: id, 
+        user_id: { [Op.ne]: userId },
+      },
+    });
+
+    if (otherInstructors === 0) {
+      throw new ApiError(400, 'ไม่สามารถนำอาจารย์หลักออกได้ เนื่องจากเป็นอาจารย์คนเดียวในรายวิชา');
+    }
+
+    // Transfer primary status to another instructor
+    const nextInstructor = await CourseInstructor.findOne({
+      where: { 
+        course_id: id, 
+        user_id: { [Op.ne]: userId },
+      },
+      order: [['assigned_at', 'ASC']],
+    });
+
+    if (nextInstructor) {
+      await nextInstructor.update({ is_primary: true });
+      // Also update course.instructor_id for backward compatibility
+      await course.update({ instructor_id: nextInstructor.user_id });
+    }
+  }
+
+  await instructorRecord.destroy();
+
+  res.json({
+    success: true,
+    message: 'นำอาจารย์ออกจากรายวิชาสำเร็จ',
+  });
+});
+
+// ============================================
 // Student Management
 // ============================================
 
@@ -1041,10 +1294,7 @@ const getMyCourses = asyncHandler(async (req, res) => {
   // Build where clause with proper AND/OR structure
   const whereConditions = [];
 
-  // For instructor - get courses they own
-  if (userRole === 'instructor') {
-    whereConditions.push({ instructor_id: userId });
-  }
+  // Note: For instructor, we now use CourseInstructor join instead of instructor_id
 
   // Search filter (OR between code and name)
   if (search && search.trim()) {
@@ -1121,7 +1371,7 @@ const getMyCourses = asyncHandler(async (req, res) => {
     courses = taCourses;
     count = taCount;
   } else {
-    // For instructor - courses they own
+    // For instructor - courses they are assigned to via CourseInstructor
     const { count: instructorCount, rows: instructorCourses } = await Course.findAndCountAll({
       where,
       limit: parseInt(limit),
@@ -1137,6 +1387,14 @@ const getMyCourses = asyncHandler(async (req, res) => {
           model: CourseSection,
           as: 'sections',
           attributes: ['id', 'section_no', 'note'],
+        },
+        {
+          model: User,
+          as: 'instructors',
+          attributes: ['id'],
+          through: { attributes: ['is_primary'] },
+          where: { id: userId },
+          required: true, // INNER JOIN - only courses where this instructor is assigned
         },
       ],
     });
@@ -1193,13 +1451,13 @@ const getMyCoursesStats = asyncHandler(async (req, res) => {
   let courseIds = [];
 
   if (userRole === 'instructor') {
-    // Get courses where user is instructor
-    const courses = await Course.findAll({
-      where: { instructor_id: userId },
-      attributes: ['id'],
+    // Get courses where user is instructor (via CourseInstructor table)
+    const instructorAssignments = await CourseInstructor.findAll({
+      where: { user_id: userId },
+      attributes: ['course_id'],
       raw: true,
     });
-    courseIds = courses.map(c => c.id);
+    courseIds = instructorAssignments.map(i => i.course_id);
   } else if (userRole === 'ta') {
     // Get courses where user is TA
     const taAssignments = await CourseTA.findAll({
@@ -1414,11 +1672,12 @@ const getCourseOverview = asyncHandler(async (req, res) => {
       percentage: totalMaxScore > 0 ? Math.round((s.totalScore / totalMaxScore) * 100) : 0,
     }));
 
-  // Low performers (< 60% and have at least 1 graded assignment)
+  // Low performers (< attention_threshold% and have at least 1 graded assignment)
+  const attentionThreshold = course.attention_threshold || 60;
   const lowPerformers = studentScores
     .filter(s => {
       const percentage = totalMaxScore > 0 ? (s.totalScore / totalMaxScore) * 100 : 0;
-      return s.assignmentsGraded > 0 && percentage < 60;
+      return s.assignmentsGraded > 0 && percentage < attentionThreshold;
     })
     .slice(0, 8)
     .map(s => ({
@@ -1667,6 +1926,9 @@ module.exports = {
   addTA,
   bulkAddTAs,
   removeTA,
+  addInstructor,
+  bulkAddInstructors,
+  removeInstructor,
   getSectionStudents,
   addStudentToSection,
   bulkAddStudentsToSection,

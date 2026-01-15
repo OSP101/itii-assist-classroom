@@ -493,8 +493,8 @@ export default function OverviewTab({
                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
-                                <span className="font-semibold text-slate-800 block">ต้องการความสนใจ</span>
-                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า 60%</span>
+                                <span className="font-semibold text-slate-800 block">นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}%</span>
                             </div>
                         </div>
                     </CardHeader>
