@@ -130,14 +130,18 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<AttendanceSession | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AttendanceSession | null>(null);
+    const [closeTarget, setCloseTarget] = useState<AttendanceSession | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Form states
+    // Form states - default to all sections
+    const allSectionIds = (course.sections || []).map(s => s.id);
     const [formData, setFormData] = useState<CreateAttendanceData>({
         course_id: course.id,
         course_section_id: null,
+        course_section_ids: allSectionIds, // Default: all sections selected
         title: "",
         session_type: "lecture",
         check_location: false,
@@ -346,20 +350,27 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
         window.open(`/classroom/${course.id}/attendance/${session.id}/live`, "_blank");
     };
 
-    // Handle close session - sets end_time to now
-    const handleCloseSession = async (session: AttendanceSession) => {
-        if (!window.confirm("ต้องการปิดรอบเช็คชื่อนี้ทันทีหรือไม่?")) {
-            return;
-        }
+    // Handle close session - opens confirmation modal
+    const handleCloseSession = (session: AttendanceSession) => {
+        setCloseTarget(session);
+        setIsCloseModalOpen(true);
+    };
 
+    // Confirm close session - sets end_time to now
+    const confirmCloseSession = async () => {
+        if (!closeTarget) return;
+
+        setIsSubmitting(true);
         try {
-            const result = await attendanceService.closeSession(session.id);
+            const result = await attendanceService.closeSession(closeTarget.id);
             if (result) {
                 addToast({
                     title: "สำเร็จ",
                     description: "ปิดรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
                 });
+                setIsCloseModalOpen(false);
+                setCloseTarget(null);
                 fetchSessionsNew();
             }
         } catch (error: unknown) {
@@ -369,15 +380,21 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 description: error instanceof Error ? error.message : "ไม่สามารถปิดรอบการเช็คชื่อได้",
                 color: "danger",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
     // Open edit modal with session data
     const openEditModal = (session: AttendanceSession) => {
         setEditTarget(session);
+        // Prepare section IDs - use sections array if available, fallback to single section_id
+        const sectionIds = session.sections?.map(s => s.id) || 
+            (session.course_section_id ? [session.course_section_id] : []);
         setFormData({
             course_id: course.id,
             course_section_id: session.course_section_id,
+            course_section_ids: sectionIds, // Set multi-select array
             title: session.title,
             session_type: session.session_type,
             check_location: session.check_location,
@@ -425,9 +442,16 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 late_threshold_minutes: formData.late_threshold_minutes,
             };
 
-            // Only include course_section_id if it's set
-            if (formData.course_section_id) {
-                data.course_section_id = formData.course_section_id;
+            // Use course_section_ids (multi-select) if available
+            if (formData.course_section_ids && formData.course_section_ids.length > 0) {
+                data.course_section_ids = formData.course_section_ids;
+                // Also set legacy field for backward compatibility
+                data.course_section_id = formData.course_section_ids.length === 1 
+                    ? formData.course_section_ids[0] 
+                    : null;
+            } else {
+                data.course_section_ids = [];
+                data.course_section_id = null;
             }
 
             const result = await attendanceService.updateSession(editTarget.id, data);
@@ -459,6 +483,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
         setFormData({
             course_id: course.id,
             course_section_id: null,
+            course_section_ids: (course.sections || []).map(s => s.id), // ให้มันลงได้ทุก sec น่าจะใช้ได้แล้วมั้ง
             title: "",
             session_type: "lecture",
             check_location: false,
@@ -762,12 +787,20 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    {session.section ? (
-                                                        <span className="text-slate-800 text-sm">
+                                                    {session.sections && session.sections.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {session.sections.map((sec) => (
+                                                                <Chip key={sec.id} size="sm" variant="flat" color="default">
+                                                                    {sec.section_no}
+                                                                </Chip>
+                                                            ))}
+                                                        </div>
+                                                    ) : session.section ? (
+                                                        <Chip size="sm" variant="flat" color="default">
                                                             {session.section.section_no}
-                                                        </span>
+                                                        </Chip>
                                                     ) : (
-                                                        <span className="text-slate-800 text-sm">All sections</span>
+                                                        <span className="text-slate-500 text-sm">ทุกเซคชัน</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
@@ -810,6 +843,11 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                                             <Tooltip content="มาเรียน">
                                                                 <Chip size="sm" color="success" variant="flat">
                                                                     {session.stats.present + session.stats.late}
+                                                                </Chip>
+                                                            </Tooltip>
+                                                            <Tooltip content="สาย">
+                                                                <Chip size="sm" color="warning" variant="flat">
+                                                                    {session.stats.late}
                                                                 </Chip>
                                                             </Tooltip>
                                                             <Tooltip content="ขาด">
@@ -1026,34 +1064,34 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                 size="md"
                             />
 
-                            {/* Section */}
+                            {/* Section - Multi-select */}
                             <Select
-                                label="เซคชัน"
-                                placeholder="เลือกเซคชัน"
-                                selectedKeys={formData.course_section_id ? [String(formData.course_section_id)] : ["all"]}
+                                label="กลุ่มเรียน"
+                                placeholder="เลือกกลุ่มเรียน"
+                                selectionMode="multiple"
+                                selectedKeys={new Set((formData.course_section_ids || []).map(String))}
                                 labelPlacement="outside-top"
                                 variant="bordered"
                                 size="md"
                                 onSelectionChange={(keys) => {
-                                    const selected = Array.from(keys)[0] as string;
+                                    const selectedIds = Array.from(keys).map(k => Number(k));
                                     setFormData((prev) => ({
                                         ...prev,
-                                        course_section_id: selected && selected !== "all" ? Number(selected) : null,
+                                        course_section_ids: selectedIds,
+                                        course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
                                     }));
                                 }}
-                                items={[
-                                    { id: "all", name: "All sections" },
-                                    ...(course.sections || []).map((section) => ({
-                                        id: String(section.id),
-                                        name: `${section.section_no}${section.note ? ` - ${section.note}` : ""}`
-                                    }))
-                                ]}
+                                // description={
+                                //     (formData.course_section_ids || []).length === allSectionIds.length
+                                //         ? "เลือกทุกกลุ่มเรียนแล้ว"
+                                //         : `เลือกแล้ว ${(formData.course_section_ids || []).length} จาก ${allSectionIds.length} กลุ่มเรียน`
+                                // }
                             >
-                                {(item) => (
-                                    <SelectItem key={item.id} textValue={item.name}>
-                                        {item.name}
+                                {(course.sections || []).map((section) => (
+                                    <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
+                                        {section.section_no}{section.note ? ` - ${section.note}` : ""}
                                     </SelectItem>
-                                )}
+                                ))}
                             </Select>
 
                             {/* Session Type */}
@@ -1415,6 +1453,47 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 </ModalContent>
             </Modal>
 
+            {/* Close Session Confirmation Modal */}
+            <Modal isOpen={isCloseModalOpen} onClose={() => setIsCloseModalOpen(false)} size="sm">
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <div className="p-2 bg-red-100 rounded-lg">
+                                <Icon icon="solar:stop-bold" className="text-xl text-red-600" />
+                            </div>
+                            <span>ยืนยันการปิดรอบเช็คชื่อ</span>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p>
+                            คุณต้องการปิดรอบการเช็คชื่อ <strong>{closeTarget?.title}</strong> ทันทีหรือไม่?
+                        </p>
+                        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:danger-triangle-bold" className="text-amber-500 text-lg mt-0.5" />
+                                <div className="text-sm text-amber-700">
+                                    <p className="font-medium">หลังจากปิดแล้ว:</p>
+                                    <ul className="list-disc list-inside mt-1 space-y-1">
+                                        <li>นักศึกษาจะไม่สามารถเช็คชื่อได้อีก</li>
+                                        <li>สถานะจะเปลี่ยนเป็น &quot;ปิดแล้ว&quot;</li>
+                                        <li>สามารถเปิดใหม่ได้โดยการขยายเวลา</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsCloseModalOpen(false)}>
+                            ยกเลิก
+                        </Button>
+                        <Button color="danger" onPress={confirmCloseSession} isLoading={isSubmitting}>
+                            <Icon icon="solar:stop-bold" className="text-lg" />
+                            ปิดรอบเช็คชื่อ
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
             {/* Edit Session Modal */}
             <Modal
                 isOpen={isEditModalOpen}
@@ -1447,34 +1526,37 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                 size="md"
                             />
 
-                            {/* Section */}
+                            {/* Section - Multi-select */}
                             <Select
-                                label="เซคชัน"
-                                placeholder="เลือกเซคชัน"
-                                selectedKeys={formData.course_section_id ? [String(formData.course_section_id)] : ["all"]}
+                                label="กลุ่มเรียน"
+                                placeholder="เลือกกลุ่มเรียน"
+                                selectionMode="multiple"
+                                selectedKeys={new Set((formData.course_section_ids || []).map(String))}
                                 labelPlacement="outside-top"
                                 variant="bordered"
                                 size="md"
                                 onSelectionChange={(keys) => {
-                                    const selected = Array.from(keys)[0] as string;
+                                    const selectedIds = Array.from(keys).map(k => Number(k));
                                     setFormData((prev) => ({
                                         ...prev,
-                                        course_section_id: selected && selected !== "all" ? Number(selected) : null,
+                                        course_section_ids: selectedIds,
+                                        course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
                                     }));
                                 }}
-                                items={[
-                                    { id: "all", name: "ทุกเซคชัน" },
-                                    ...(course.sections || []).map((section) => ({
-                                        id: String(section.id),
-                                        name: `${section.section_no}${section.note ? ` - ${section.note}` : ""}`
-                                    }))
-                                ]}
+                                description={
+                                    (formData.course_section_ids || []).length === allSectionIds.length
+                                        ? "เลือกทุกกลุ่มเรียนแล้ว"
+                                        : `เลือกแล้ว ${(formData.course_section_ids || []).length} จาก ${allSectionIds.length} กลุ่มเรียน`
+                                }
+                                classNames={{
+                                    trigger: "min-h-[50px]",
+                                }}
                             >
-                                {(item) => (
-                                    <SelectItem key={item.id} textValue={item.name}>
-                                        {item.name}
+                                {(course.sections || []).map((section) => (
+                                    <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
+                                        {section.section_no}{section.note ? ` - ${section.note}` : ""}
                                     </SelectItem>
-                                )}
+                                ))}
                             </Select>
 
                             {/* Session Type */}

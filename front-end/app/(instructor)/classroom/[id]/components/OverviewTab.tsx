@@ -23,7 +23,7 @@ import type { Course, CourseOverview, ScoreDistribution } from "@/services/cours
 import type { AssignmentType } from "./types";
 
 // ============================================
-// Animated Counter Hook
+// Animated Counter Hook กำลังแก้ไข มันเปิดหน้าแรกบ่ได้เลย เห้ออ
 // ============================================
 function useAnimatedCounter(end: number, duration: number = 1000, decimals: number = 0) {
     const [count, setCount] = useState(0);

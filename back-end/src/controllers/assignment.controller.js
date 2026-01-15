@@ -1,4 +1,4 @@
-const { Assignment, AssignmentSubItem, Score, Course, Student, User, StudentGroup, AttendanceSession, sequelize } = require('../models');
+const { Assignment, AssignmentSubItem, AssignmentAttendanceLink, Score, Course, Student, User, StudentGroup, AttendanceSession, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
@@ -29,10 +29,18 @@ const getAssignments = asyncHandler(async (req, res) => {
                 as: 'creator',
                 attributes: ['id', 'full_name'],
             },
+            // Legacy single link (backward compatibility)
             {
                 model: AttendanceSession,
                 as: 'linkedAttendanceSession',
                 attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+            },
+            // New many-to-many links
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSessions',
+                attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+                through: { attributes: [] },
             },
         ],
         order: [['order_index', 'ASC'], ['created_at', 'DESC']],
@@ -67,6 +75,12 @@ const getAssignment = asyncHandler(async (req, res) => {
                 as: 'linkedAttendanceSession',
                 attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
             },
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSessions',
+                attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+                through: { attributes: [] },
+            },
         ],
     });
 
@@ -90,7 +104,9 @@ const createAssignment = asyncHandler(async (req, res) => {
         description, 
         assignment_type, 
         week_number,
-        linked_attendance_session_id,
+        linked_attendance_session_id, // Legacy: single session
+        linked_attendance_session_ids, // New: array of session IDs
+        attendance_condition, // 'and' or 'or'
         max_score, 
         sub_items,
         due_date 
@@ -100,16 +116,19 @@ const createAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'course_id and name are required');
     }
 
-    // Validate linked attendance session if provided
-    if (linked_attendance_session_id) {
-        const attendanceSession = await AttendanceSession.findOne({
+    // Validate linked attendance sessions if provided (new array format)
+    const sessionIdsToLink = linked_attendance_session_ids || 
+        (linked_attendance_session_id ? [linked_attendance_session_id] : []);
+    
+    if (sessionIdsToLink.length > 0) {
+        const validSessions = await AttendanceSession.findAll({
             where: { 
-                id: linked_attendance_session_id,
+                id: { [Op.in]: sessionIdsToLink },
                 course_id: course_id 
             }
         });
-        if (!attendanceSession) {
-            throw new ApiError(400, 'Invalid attendance session or session does not belong to this course');
+        if (validSessions.length !== sessionIdsToLink.length) {
+            throw new ApiError(400, 'One or more attendance sessions are invalid or do not belong to this course');
         }
     }
 
@@ -128,12 +147,23 @@ const createAssignment = asyncHandler(async (req, res) => {
             description,
             assignment_type: assignment_type || 'individual',
             week_number,
-            linked_attendance_session_id: linked_attendance_session_id || null,
+            // Legacy field - still set for backward compatibility
+            linked_attendance_session_id: sessionIdsToLink.length === 1 ? sessionIdsToLink[0] : null,
+            attendance_condition: attendance_condition || 'or',
             max_score: max_score || 10,
             due_date,
             order_index: maxOrder + 1,
             created_by: req.user.id,
         }, { transaction });
+
+        // Create attendance links (new many-to-many)
+        if (sessionIdsToLink.length > 0) {
+            const linkData = sessionIdsToLink.map(sessionId => ({
+                assignment_id: assignment.id,
+                attendance_session_id: sessionId,
+            }));
+            await AssignmentAttendanceLink.bulkCreate(linkData, { transaction });
+        }
 
         // Create sub-items if any
         if (sub_items && sub_items.length > 0) {
@@ -153,7 +183,7 @@ const createAssignment = asyncHandler(async (req, res) => {
 
         await transaction.commit();
 
-        // Fetch complete assignment with sub-items
+        // Fetch complete assignment with sub-items and attendance sessions
         const completeAssignment = await Assignment.findByPk(assignment.id, {
             include: [
                 {
@@ -165,6 +195,12 @@ const createAssignment = asyncHandler(async (req, res) => {
                     model: AttendanceSession,
                     as: 'linkedAttendanceSession',
                     attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+                },
+                {
+                    model: AttendanceSession,
+                    as: 'linkedAttendanceSessions',
+                    attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+                    through: { attributes: [] },
                 },
             ],
         });
@@ -190,7 +226,9 @@ const updateAssignment = asyncHandler(async (req, res) => {
         description, 
         assignment_type,
         week_number,
-        linked_attendance_session_id,
+        linked_attendance_session_id, // Legacy: single session
+        linked_attendance_session_ids, // New: array of session IDs
+        attendance_condition, // 'and' or 'or'
         max_score, 
         sub_items,
         due_date 
@@ -202,16 +240,23 @@ const updateAssignment = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
-    // Validate linked attendance session if provided
-    if (linked_attendance_session_id !== undefined && linked_attendance_session_id !== null) {
-        const attendanceSession = await AttendanceSession.findOne({
+    // Determine which session IDs to use
+    const sessionIdsToLink = linked_attendance_session_ids !== undefined 
+        ? linked_attendance_session_ids 
+        : (linked_attendance_session_id !== undefined 
+            ? (linked_attendance_session_id ? [linked_attendance_session_id] : [])
+            : null); // null means don't update
+
+    // Validate linked attendance sessions if provided
+    if (sessionIdsToLink !== null && sessionIdsToLink.length > 0) {
+        const validSessions = await AttendanceSession.findAll({
             where: { 
-                id: linked_attendance_session_id,
+                id: { [Op.in]: sessionIdsToLink },
                 course_id: assignment.course_id 
             }
         });
-        if (!attendanceSession) {
-            throw new ApiError(400, 'Invalid attendance session or session does not belong to this course');
+        if (validSessions.length !== sessionIdsToLink.length) {
+            throw new ApiError(400, 'One or more attendance sessions are invalid or do not belong to this course');
         }
     }
 
@@ -219,15 +264,44 @@ const updateAssignment = asyncHandler(async (req, res) => {
 
     try {
         // Update assignment
-        await assignment.update({
+        const updateData = {
             name: name || assignment.name,
             description: description !== undefined ? description : assignment.description,
             assignment_type: assignment_type || assignment.assignment_type,
             week_number: week_number !== undefined ? week_number : assignment.week_number,
-            linked_attendance_session_id: linked_attendance_session_id !== undefined ? linked_attendance_session_id : assignment.linked_attendance_session_id,
             max_score: max_score !== undefined ? max_score : assignment.max_score,
             due_date: due_date !== undefined ? due_date : assignment.due_date,
-        }, { transaction });
+        };
+
+        // Update attendance condition if provided
+        if (attendance_condition !== undefined) {
+            updateData.attendance_condition = attendance_condition;
+        }
+
+        // Update legacy field for backward compatibility
+        if (sessionIdsToLink !== null) {
+            updateData.linked_attendance_session_id = sessionIdsToLink.length === 1 ? sessionIdsToLink[0] : null;
+        }
+
+        await assignment.update(updateData, { transaction });
+
+        // Update attendance links if session IDs were provided
+        if (sessionIdsToLink !== null) {
+            // Delete existing links
+            await AssignmentAttendanceLink.destroy({
+                where: { assignment_id: id },
+                transaction,
+            });
+
+            // Create new links
+            if (sessionIdsToLink.length > 0) {
+                const linkData = sessionIdsToLink.map(sessionId => ({
+                    assignment_id: parseInt(id),
+                    attendance_session_id: sessionId,
+                }));
+                await AssignmentAttendanceLink.bulkCreate(linkData, { transaction });
+            }
+        }
 
         // Handle sub-items update if provided
         if (sub_items !== undefined) {
@@ -268,6 +342,12 @@ const updateAssignment = asyncHandler(async (req, res) => {
                     model: AttendanceSession,
                     as: 'linkedAttendanceSession',
                     attributes: ['id', 'title', 'start_time', 'end_time', 'session_type'],
+                },
+                {
+                    model: AttendanceSession,
+                    as: 'linkedAttendanceSessions',
+                    attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+                    through: { attributes: [] },
                 },
             ],
         });

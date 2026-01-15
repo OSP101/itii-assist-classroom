@@ -252,6 +252,8 @@ export default function ClassroomDetailPage() {
         assignment_type: "individual" | "permanent_group" | "weekly_group";
         week_number?: number;
         linked_attendance_session_id?: number | null;
+        linked_attendance_session_ids: number[]; // New: array of session IDs
+        attendance_condition: "and" | "or"; // New: condition for multi-session
         hasSubItems: boolean;
         subItems: LocalSubItem[];
         maxScore: number;
@@ -261,6 +263,8 @@ export default function ClassroomDetailPage() {
         name: "",
         assignment_type: "individual",
         linked_attendance_session_id: null,
+        linked_attendance_session_ids: [], // New: empty array
+        attendance_condition: "or", // New: default to 'or'
         hasSubItems: false,
         subItems: [],
         maxScore: 10,
@@ -2030,12 +2034,17 @@ export default function ClassroomDetailPage() {
                                             dueDate: "",
                                             description: "",
                                             linked_attendance_session_id: null,
+                                            linked_attendance_session_ids: [],
+                                            attendance_condition: "or",
                                         });
                                         setEditingAssignment(null);
                                         setIsAddAssignmentModalOpen(true);
                                     }}
                                     onOpenEditModal={(assignment) => {
                                         setEditingAssignment(assignment);
+                                        // Get linked session IDs from linkedAttendanceSessions array if available
+                                        const linkedSessionIds = assignment.linkedAttendanceSessions?.map(s => s.id) || 
+                                            (assignment.linked_attendance_session_id ? [assignment.linked_attendance_session_id] : []);
                                         setNewAssignment({
                                             name: assignment.name,
                                             assignment_type: assignment.assignment_type,
@@ -2050,6 +2059,8 @@ export default function ClassroomDetailPage() {
                                             dueDate: assignment.due_date || "",
                                             description: assignment.description || "",
                                             linked_attendance_session_id: assignment.linked_attendance_session_id || null,
+                                            linked_attendance_session_ids: linkedSessionIds,
+                                            attendance_condition: assignment.attendance_condition || "or",
                                         });
                                         setIsAddAssignmentModalOpen(true);
                                     }}
@@ -2833,12 +2844,12 @@ export default function ClassroomDetailPage() {
                                 labelPlacement="outside"
                                 placeholder="เช่น งานที่ 1, Quiz 1, โปรเจคกลุ่ม"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 value={newAssignment.name}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, name: val }))}
                                 isRequired
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -2905,6 +2916,7 @@ export default function ClassroomDetailPage() {
                                         <Select
                                             placeholder="เลือกสัปดาห์"
                                             selectedKeys={newAssignment.week_number ? [newAssignment.week_number.toString()] : []}
+                                            size="md"
                                             onSelectionChange={(keys) => {
                                                 const val = Array.from(keys)[0] as string;
                                                 if (val) {
@@ -2941,7 +2953,7 @@ export default function ClassroomDetailPage() {
                                 </div>
                             )}
 
-                            {/* Link to Attendance Session */}
+                            {/* Link to Attendance Session - Multi-select */}
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-3">
@@ -2950,38 +2962,47 @@ export default function ClassroomDetailPage() {
                                         </div>
                                         <div>
                                             <span className="font-semibold text-slate-700">ลิงก์กับการเช็คชื่อ</span>
-                                            <p className="text-xs text-slate-500">ถ้านักศึกษาขาดเรียน จะไม่อนุญาตให้ลงคะแนน</p>
+                                            <p className="text-xs text-slate-500">สามารถเลือกหลายรอบเช็คชื่อได้</p>
                                         </div>
                                     </div>
                                     <Button
                                         size="sm"
-                                        variant={newAssignment.linked_attendance_session_id ? "solid" : "bordered"}
-                                        color={newAssignment.linked_attendance_session_id ? "primary" : "default"}
+                                        variant={newAssignment.linked_attendance_session_ids.length > 0 ? "solid" : "bordered"}
+                                        color={newAssignment.linked_attendance_session_ids.length > 0 ? "primary" : "default"}
                                         onPress={() => {
-                                            if (newAssignment.linked_attendance_session_id) {
-                                                setNewAssignment(prev => ({ ...prev, linked_attendance_session_id: null }));
+                                            if (newAssignment.linked_attendance_session_ids.length > 0) {
+                                                setNewAssignment(prev => ({ 
+                                                    ...prev, 
+                                                    linked_attendance_session_ids: [],
+                                                    linked_attendance_session_id: null 
+                                                }));
                                             }
                                         }}
                                         startContent={
                                             <Icon 
-                                                icon={newAssignment.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"} 
+                                                icon={newAssignment.linked_attendance_session_ids.length > 0 ? "solar:link-bold" : "solar:link-broken-bold"} 
                                                 className="text-lg" 
                                             />
                                         }
                                     >
-                                        {newAssignment.linked_attendance_session_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
+                                        {newAssignment.linked_attendance_session_ids.length > 0 
+                                            ? `ลิงก์ ${newAssignment.linked_attendance_session_ids.length} รอบ` 
+                                            : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
                                 
                                 {attendanceSessions.length > 0 ? (
                                     <Select
-                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์"
-                                        selectedKeys={newAssignment.linked_attendance_session_id ? [String(newAssignment.linked_attendance_session_id)] : []}
+                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์ (เลือกได้หลายรอบ)"
+                                        selectionMode="multiple"
+                                        size="md"
+                                        selectedKeys={new Set(newAssignment.linked_attendance_session_ids.map(String))}
                                         onSelectionChange={(keys) => {
-                                            const val = Array.from(keys)[0] as string;
+                                            const selectedIds = Array.from(keys).map(k => parseInt(k as string));
                                             setNewAssignment(prev => ({ 
                                                 ...prev, 
-                                                linked_attendance_session_id: val ? parseInt(val) : null 
+                                                linked_attendance_session_ids: selectedIds,
+                                                linked_attendance_session_id: selectedIds.length === 1 ? selectedIds[0] : null
                                             }));
                                         }}
                                         variant="bordered"
@@ -2993,12 +3014,12 @@ export default function ClassroomDetailPage() {
                                         {attendanceSessions.map((session) => (
                                             <SelectItem key={String(session.id)} textValue={session.title}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
+                                                    {/* <Icon 
                                                         icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
                                                               session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
                                                         className={session.session_type === "lecture" ? "text-blue-500" : 
                                                                    session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
-                                                    />
+                                                    /> */}
                                                     <div>
                                                         <span className="font-medium">{session.title}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
@@ -3020,13 +3041,71 @@ export default function ClassroomDetailPage() {
                                     </div>
                                 )}
                                 
-                                {newAssignment.linked_attendance_session_id && (
+                                {/* Attendance Condition (AND/OR) - Only show when multiple sessions selected */}
+                                {newAssignment.linked_attendance_session_ids.length > 1 && (
+                                    <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200">
+                                        <label className="text-slate-600 font-medium text-sm mb-3 block">
+                                            เงื่อนไขการเช็คชื่อ
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "or" }))}
+                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                                    newAssignment.attendance_condition === "or"
+                                                        ? "border-blue-500 bg-blue-50"
+                                                        : "border-slate-200 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Icon 
+                                                        icon="solar:alt-arrow-right-bold" 
+                                                        className={newAssignment.attendance_condition === "or" ? "text-blue-600" : "text-slate-400"} 
+                                                    />
+                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "or" ? "text-blue-700" : "text-slate-600"}`}>
+                                                        อย่างน้อย 1 รอบ
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500">มาเรียนอย่างน้อย 1 รอบถึงจะลงคะแนนได้</p>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "and" }))}
+                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                                    newAssignment.attendance_condition === "and"
+                                                        ? "border-amber-500 bg-amber-50"
+                                                        : "border-slate-200 hover:border-slate-300"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <Icon 
+                                                        icon="solar:check-circle-bold" 
+                                                        className={newAssignment.attendance_condition === "and" ? "text-amber-600" : "text-slate-400"} 
+                                                    />
+                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "and" ? "text-amber-700" : "text-slate-600"}`}>
+                                                        ทุกรอบ
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-slate-500">ต้องมาเรียนครบทุกรอบถึงจะลงคะแนนได้</p>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {newAssignment.linked_attendance_session_ids.length > 0 && (
                                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                        <div className="flex items-center gap-2 text-blue-700">
-                                            <Icon icon="solar:info-circle-bold" />
-                                            <span className="text-sm font-medium">
-                                                นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้
-                                            </span>
+                                        <div className="flex items-start gap-2 text-blue-700">
+                                            <Icon icon="solar:info-circle-bold" className="mt-0.5" />
+                                            <div className="text-sm">
+                                                <span className="font-medium">
+                                                    {newAssignment.linked_attendance_session_ids.length === 1 
+                                                        ? "นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้"
+                                                        : newAssignment.attendance_condition === "or"
+                                                            ? `นักศึกษาที่ขาดเรียนทั้ง ${newAssignment.linked_attendance_session_ids.length} รอบ จะไม่สามารถลงคะแนนได้`
+                                                            : `นักศึกษาต้องมาเรียนครบทุกรอบ (${newAssignment.linked_attendance_session_ids.length} รอบ) จึงจะลงคะแนนได้`
+                                                    }
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -3087,7 +3166,7 @@ export default function ClassroomDetailPage() {
                                     labelPlacement="outside"
                                     placeholder="เช่น 10, 20, 100"
                                     variant="bordered"
-                                    size="lg"
+                                    size="md"
                                     min={0}
                                     step="any"
                                     value={newAssignment.maxScore.toString()}
@@ -3096,7 +3175,7 @@ export default function ClassroomDetailPage() {
                                     endContent={<span className="text-slate-400 text-sm">คะแนน</span>}
                                     className="pt-6"
                                     classNames={{
-                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                        inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                         label: "text-slate-600 font-medium text-sm",
                                     }}
                                 />
@@ -3128,7 +3207,7 @@ export default function ClassroomDetailPage() {
                                                             ...prev.subItems,
                                                             {
                                                                 name: `ข้อ ${prev.subItems.length + 1}`,
-                                                                max_score: 5
+                                                                max_score: 10
                                                             }
                                                         ]
                                                     }));
@@ -3231,12 +3310,12 @@ export default function ClassroomDetailPage() {
                                 labelPlacement="outside"
                                 placeholder="คำอธิบายเกี่ยวกับงาน (ถ้ามี)"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 value={newAssignment.description}
                                 onValueChange={(val) => setNewAssignment(prev => ({ ...prev, description: val }))}
                                 className="pt-4"
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -3300,7 +3379,13 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
-                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || null,
+                                                    // Use new multi-session format
+                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
+                                                        ? newAssignment.linked_attendance_session_ids 
+                                                        : [],
+                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
+                                                        ? newAssignment.attendance_condition 
+                                                        : undefined,
                                                 });
                                                 if (result) {
                                                     await fetchAssignmentsNew();
@@ -3331,7 +3416,13 @@ export default function ClassroomDetailPage() {
                                                     max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
                                                     sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
                                                     due_date: newAssignment.dueDate || undefined,
-                                                    linked_attendance_session_id: newAssignment.linked_attendance_session_id || undefined,
+                                                    // Use new multi-session format
+                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
+                                                        ? newAssignment.linked_attendance_session_ids 
+                                                        : undefined,
+                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
+                                                        ? newAssignment.attendance_condition 
+                                                        : undefined,
                                                 });
                                                 if (result) {
                                                     await fetchAssignmentsNew();
