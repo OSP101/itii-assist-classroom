@@ -297,7 +297,7 @@ export default function LoginPage() {
                                 </div> */}
 
                                     {/* Turnstile - Only render on client after key is loaded */}
-                                    {/* <div className="w-full mt-2" suppressHydrationWarning>
+                                    <div className="w-full mt-2" suppressHydrationWarning>
                                     {turnstileKey ? (
                                         <Turnstile
                                             id='turnstile-1'
@@ -325,13 +325,14 @@ export default function LoginPage() {
                                     ) : !turnstileReady ? (
                                         <Skeleton className="w-full h-[65px] rounded-lg" />
                                     ) : null}
-                                </div> */}
+                                </div>
 
                                     <Button
                                         type="submit"
                                         size="md"
                                         className="w-full font-medium mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                         isLoading={isLoading}
+                                        disabled={canSubmit || !turnstileReady || isLoading}
                                     >
                                         เข้าสู่ระบบ
                                     </Button>
