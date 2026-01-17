@@ -15,7 +15,6 @@ export interface User {
   is_active: boolean;
   provider: 'local' | 'google';
   google_id: string | null;
-  linked_student_id: number | null;
   avatar: string | null;
   created_at: string;
   updated_at: string;
