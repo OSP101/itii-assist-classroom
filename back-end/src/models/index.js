@@ -25,18 +25,7 @@ const BonusScore = require('./BonusScore');
 
 // ============================================
 // Define Associations
-// ============================================
-
-// User -> Student (linked_student_id)
-User.belongsTo(Student, {
-  foreignKey: 'linked_student_id',
-  as: 'linkedStudent',
-});
-
-Student.hasOne(User, {
-  foreignKey: 'linked_student_id',
-  as: 'userAccount',
-});
+// ============================================;
 
 // User -> RefreshToken
 User.hasMany(RefreshToken, {
