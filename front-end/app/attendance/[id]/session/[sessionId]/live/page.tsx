@@ -138,15 +138,25 @@ export default function LiveAttendancePage() {
 
     // Initialize socket connection
     useEffect(() => {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:3001";
-        const socket = io(backendUrl, {
-            transports: ["websocket", "polling"],
+        const socket = io(window.location.origin, {
+            path: "/socket.io",
+            transports: ["websocket"],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
         });
 
         socket.on("connect", () => {
-            console.log("Socket connected");
-            // Join instructor room
+            console.log("✅ Socket connected:", socket.id);
             socket.emit("join-instructor", sessionId);
+        });
+
+        socket.on("connect_error", (err) => {
+            console.error("❌ Socket connect error:", err.message);
+        });
+
+        socket.on("disconnect", (reason) => {
+            console.warn("⚠️ Socket disconnected:", reason);
         });
 
         // Listen for new check-ins
@@ -626,7 +636,7 @@ export default function LiveAttendancePage() {
                                                         </div>
                                                     </div>
                                                 </TableCell>
-                                                
+
                                                 <TableCell>
                                                     <span className="font-mono text-slate-600">
                                                         {formatTime(record.check_in_time)}

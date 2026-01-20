@@ -64,7 +64,7 @@ const getTeams = asyncHandler(async (req, res) => {
         through: { attributes: ['joined_at'] },
       },
     ],
-    order: [['created_at', 'ASC']],
+    order: [['id', 'ASC']],  // Sort by ID to maintain creation order (especially for bulk-created teams)
   });
 
   // Transform data

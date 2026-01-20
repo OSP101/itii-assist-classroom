@@ -91,8 +91,8 @@ Validation: Joi
    - Log ประวัติการแก้ไขคะแนน
 
 6. ระบบกลุ่มนักศึกษา (Student Groups)
-   - กลุ่มถาวร (Permanent)
-   - กลุ่มชั่วคราว (Temporary)
+   - กลุ่มโปรเจกต์ (Permanent)
+   - กลุ่มโปรเจกต์รายสัปดาห์ (Temporary)
 
 7. ระบบจองคิวตรวจงาน (Queue System)
    - สร้าง Queue Session

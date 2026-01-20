@@ -1,0 +1,45 @@
+services:
+  backend:
+    build: 
+      context: ./back-end
+    image: itii-backend:dev
+    container_name:  itii-dev-backend
+    env_file:
+      - ./back-end/.env
+    environment:
+      NODE_ENV: development
+      DB_HOST: itii-mysql
+      DB_PORT: 3306
+    ports:
+      - "3001:3001"
+    networks:
+      - itii-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+      start_period: 30s
+    restart: always
+
+  frontend:
+    build: 
+      context: ./front-end
+      args:
+        NEXT_PUBLIC_API_URL:  ${NEXT_PUBLIC_API_URL}
+    image: itii-frontend:dev
+    container_name:  itii-dev-frontend
+    env_file:
+      - ./front-end/.env.local
+    ports:
+      - "3000:3000"
+    depends_on: 
+      backend:
+        condition:  service_healthy
+    networks: 
+      - itii-network
+    restart: always
+
+networks:
+  itii-network:  
+    external: true

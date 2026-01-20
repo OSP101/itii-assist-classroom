@@ -7,7 +7,8 @@ import api from './api.service';
 export interface AttendanceSession {
     id: number;
     course_id: string;
-    course_section_id: number | null;
+    course_section_id: number | null; // Legacy single section
+    course_section_ids?: number[]; // New: array of section IDs
     title: string;
     pin_code: string;
     session_type: 'lecture' | 'lab' | 'online';
@@ -26,6 +27,10 @@ export interface AttendanceSession {
         id: number;
         section_no: number;
     };
+    sections?: Array<{
+        id: number;
+        section_no: number;
+    }>; // New: array of sections for multi-select
     course?: {
         id: string;
         code: string;
@@ -75,7 +80,8 @@ export interface AttendanceRecord {
 
 export interface CreateAttendanceData {
     course_id: string;
-    course_section_id?: number | null;
+    course_section_id?: number | null; // Legacy single section
+    course_section_ids?: number[]; // New: array of section IDs for multi-select
     title: string;
     session_type: 'lecture' | 'lab' | 'online';
     check_location: boolean;

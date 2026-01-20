@@ -23,6 +23,9 @@ interface Instructor {
     email: string | null;
     username?: string;
     avatar: string | null;
+    CourseInstructor?: {
+        is_primary: boolean;
+    };
 }
 
 interface TA {
@@ -35,6 +38,7 @@ interface TA {
 
 interface Course {
     instructor?: Instructor | null;
+    instructors?: Instructor[];
     tas?: TA[];
 }
 
@@ -43,8 +47,11 @@ interface PeopleTabProps {
     isLoading: boolean;
     isPeopleLoading: boolean;
     onOpenAddTAModal: () => void;
+    onOpenAddInstructorModal: () => void;
     onRemoveTA: (taId: number) => void;
+    onRemoveInstructor: (instructorId: number) => void;
     userRole: string;
+    currentUserId: number | null;
 }
 
 // Loading Skeleton
@@ -74,9 +81,16 @@ export default function PeopleTab({
     isLoading,
     isPeopleLoading,
     onOpenAddTAModal,
+    onOpenAddInstructorModal,
     onRemoveTA,
+    onRemoveInstructor,
     userRole,
+    currentUserId,
 }: PeopleTabProps) {
+    // Get instructors count - use instructors array if available, otherwise fallback to single instructor
+    const instructorsCount = course.instructors?.length || (course.instructor ? 1 : 0);
+    const instructorsList = course.instructors || (course.instructor ? [course.instructor] : []);
+    
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -85,15 +99,29 @@ export default function PeopleTab({
                     <h2 className="text-lg font-semibold text-slate-800">บุคลากรในรายวิชา</h2>
                     <p className="text-sm text-slate-500">จัดการอาจารย์ผู้สอนและผู้ช่วยสอน (TA)</p>
                 </div>
-                <Button
-                    color="primary"
-                    startContent={<Icon icon="solar:user-plus-bold" />}
-                    onPress={onOpenAddTAModal}
-                    isDisabled={isPeopleLoading}
-                    className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
-                >
-                    เพิ่มผู้ช่วยสอน
-                </Button>
+                <div className="flex gap-2">
+                    {userRole === "instructor" && (
+                        <Button
+                            color="secondary"
+                            variant="flat"
+                            startContent={<Icon icon="solar:user-plus-bold" />}
+                            onPress={onOpenAddInstructorModal}
+                            isDisabled={isPeopleLoading}
+                            className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                        >
+                            เพิ่มอาจารย์
+                        </Button>
+                    )}
+                    <Button
+                        color="primary"
+                        startContent={<Icon icon="solar:user-plus-bold" />}
+                        onPress={onOpenAddTAModal}
+                        isDisabled={isPeopleLoading}
+                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                    >
+                        เพิ่มผู้ช่วยสอน
+                    </Button>
+                </div>
             </div>
 
             {/* Loading state */}
@@ -130,7 +158,7 @@ export default function PeopleTab({
                                     <div>
                                         <p className="text-xs text-slate-500">บุคลากรทั้งหมด</p>
                                         <p className="text-2xl font-bold text-slate-800">
-                                            {(course.instructor ? 1 : 0) + (course.tas?.length || 0)}
+                                            {instructorsCount + (course.tas?.length || 0)}
                                         </p>
                                     </div>
                                 </div>
@@ -144,7 +172,7 @@ export default function PeopleTab({
                                     </div>
                                     <div>
                                         <p className="text-xs text-slate-500">อาจารย์ผู้สอน</p>
-                                        <p className="text-2xl font-bold text-slate-800">{course.instructor ? 1 : 0}</p>
+                                        <p className="text-2xl font-bold text-slate-800">{instructorsCount}</p>
                                     </div>
                                 </div>
                             </CardBody>
@@ -189,22 +217,25 @@ export default function PeopleTab({
                                         </div>
                                     }>
                                         {[
-                                            // Instructor Row
-                                            ...(course.instructor ? [{
-                                                id: `instructor-${course.instructor.id}`,
+                                            // Instructor Rows (multiple instructors)
+                                            ...instructorsList.map(instructor => ({
+                                                id: `instructor-${instructor.id}`,
                                                 type: 'instructor' as const,
-                                                full_name: course.instructor.full_name,
-                                                email: course.instructor.email || "-",
-                                                avatar: course.instructor.avatar,
-                                            }] : []),
+                                                personId: instructor.id,
+                                                full_name: instructor.full_name,
+                                                email: instructor.email || "-",
+                                                avatar: instructor.avatar,
+                                                isPrimary: instructor.CourseInstructor?.is_primary || false,
+                                            })),
                                             // TA Rows
                                             ...(course.tas?.map(ta => ({
                                                 id: `ta-${ta.id}`,
                                                 type: 'ta' as const,
+                                                personId: ta.id,
                                                 full_name: ta.full_name,
                                                 email: ta.email || ta.username || "-",
-                                                taId: ta.id,
                                                 avatar: ta.avatar,
+                                                isPrimary: false,
                                             })) || [])
                                         ].map((person) => (
                                             <TableRow key={person.id}>
@@ -229,20 +260,30 @@ export default function PeopleTab({
                                                 </TableCell>
                                                 <TableCell>
                                                     {person.type === 'instructor' ? (
-                                                        <Chip
-                                                            size="sm"
-                                                            variant="flat"
-                                                            className="bg-blue-100 text-blue-700"
-                                                            // startContent={<Icon icon="solar:crown-bold" className="text-sm" />}
-                                                        >
-                                                            อาจารย์ผู้สอน
-                                                        </Chip>
+                                                        <div className="flex items-center gap-2">
+                                                            <Chip
+                                                                size="sm"
+                                                                variant="flat"
+                                                                className="bg-blue-100 text-blue-700"
+                                                            >
+                                                                อาจารย์ผู้สอน
+                                                            </Chip>
+                                                            {person.isPrimary && (
+                                                                <Chip
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    className="bg-amber-100 text-amber-700"
+                                                                    startContent={<Icon icon="solar:crown-bold" className="text-xs" />}
+                                                                >
+                                                                    หลัก
+                                                                </Chip>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <Chip
                                                             size="sm"
                                                             variant="flat"
                                                             className="bg-emerald-100 text-emerald-700"
-                                                            // startContent={<Icon icon="solar:user-hands-bold" className="text-sm" />}
                                                         >
                                                             ผู้ช่วยสอน
                                                         </Chip>
@@ -250,24 +291,54 @@ export default function PeopleTab({
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center gap-1">
-                                                        {person.type === 'instructor' || userRole !== 'instructor' ? (
-                                                            <Tooltip content={`${person.type === 'instructor' ? "อาจารย์ผู้สอนไม่สามารถลบออกจากรายวิชา" : "เฉพาะอาจารย์ผู้สอนเท่านั้นที่สามารถลบผู้ช่วยสอนได้"}`}>
-                                                                <span className="text-slate-300">
-                                                                    <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
-                                                                </span>
-                                                            </Tooltip>
+                                                        {person.type === 'instructor' ? (
+                                                            // Instructor: can remove if not primary and not self, or if admin
+                                                            person.isPrimary || person.personId === currentUserId ? (
+                                                                <Tooltip content={person.isPrimary ? "อาจารย์หลักไม่สามารถลบออกได้" : "ไม่สามารถลบตัวเองออกได้"}>
+                                                                    <span className="text-slate-300">
+                                                                        <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
+                                                                    </span>
+                                                                </Tooltip>
+                                                            ) : userRole === 'instructor' ? (
+                                                                <Tooltip content="ลบออกจากรายวิชา" color="danger">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="light"
+                                                                        color="danger"
+                                                                        onPress={() => onRemoveInstructor(person.personId)}
+                                                                    >
+                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <Tooltip content="เฉพาะอาจารย์ผู้สอนเท่านั้นที่สามารถจัดการได้">
+                                                                    <span className="text-slate-300">
+                                                                        <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
+                                                                    </span>
+                                                                </Tooltip>
+                                                            )
                                                         ) : (
-                                                            <Tooltip content="ลบออกจากรายวิชา" color="danger">
-                                                                <Button
-                                                                    isIconOnly
-                                                                    size="sm"
-                                                                    variant="light"
-                                                                    color="danger"
-                                                                    onPress={() => 'taId' in person && onRemoveTA(person.taId as number)}
-                                                                >
-                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
-                                                                </Button>
-                                                            </Tooltip>
+                                                            // TA: same logic as before
+                                                            userRole !== 'instructor' ? (
+                                                                <Tooltip content="เฉพาะอาจารย์ผู้สอนเท่านั้นที่สามารถลบผู้ช่วยสอนได้">
+                                                                    <span className="text-slate-300">
+                                                                        <Icon icon="solar:lock-keyhole-bold" className="text-lg" />
+                                                                    </span>
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <Tooltip content="ลบออกจากรายวิชา" color="danger">
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        variant="light"
+                                                                        color="danger"
+                                                                        onPress={() => onRemoveTA(person.personId)}
+                                                                    >
+                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                    </Button>
+                                                                </Tooltip>
+                                                            )
                                                         )}
                                                     </div>
                                                 </TableCell>
@@ -280,7 +351,7 @@ export default function PeopleTab({
                     </Card>
 
                     {/* Empty state when no people at all */}
-                    {!course.instructor && (!course.tas || course.tas.length === 0) && (
+                    {instructorsCount === 0 && (!course.tas || course.tas.length === 0) && (
                         <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
                             <CardBody className="text-center py-16">
                                 <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
@@ -288,16 +359,29 @@ export default function PeopleTab({
                                 </div>
                                 <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีบุคลากร</h3>
                                 <p className="text-slate-500 mb-6 max-w-md mx-auto">
-                                    เพิ่มผู้ช่วยสอน (TA) เพื่อช่วยจัดการรายวิชานี้
+                                    เพิ่มอาจารย์หรือผู้ช่วยสอน (TA) เพื่อช่วยจัดการรายวิชานี้
                                 </p>
-                                <Button
-                                    color="primary"
-                                    startContent={<Icon icon="solar:user-plus-bold" />}
-                                    onPress={onOpenAddTAModal}
-                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
-                                >
-                                    เพิ่มผู้ช่วยสอน
-                                </Button>
+                                <div className="flex gap-2 justify-center">
+                                    {userRole === "instructor" && (
+                                        <Button
+                                            color="secondary"
+                                            variant="flat"
+                                            startContent={<Icon icon="solar:user-plus-bold" />}
+                                            onPress={onOpenAddInstructorModal}
+                                            className="bg-indigo-100 text-indigo-700"
+                                        >
+                                            เพิ่มอาจารย์
+                                        </Button>
+                                    )}
+                                    <Button
+                                        color="primary"
+                                        startContent={<Icon icon="solar:user-plus-bold" />}
+                                        onPress={onOpenAddTAModal}
+                                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                                    >
+                                        เพิ่มผู้ช่วยสอน
+                                    </Button>
+                                </div>
                             </CardBody>
                         </Card>
                     )}

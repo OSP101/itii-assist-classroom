@@ -22,9 +22,9 @@ import { OverviewSkeleton } from "./Skeletons";
 import type { Course, CourseOverview, ScoreDistribution } from "@/services/course.service";
 import type { AssignmentType } from "./types";
 
-// ============================================
-// Animated Counter Hook
-// ============================================
+
+// Animated Counter Hook กำลังแก้ไข มันเปิดหน้าแรกบ่ได้เลย เห้ออ
+
 function useAnimatedCounter(end: number, duration: number = 1000, decimals: number = 0) {
     const [count, setCount] = useState(0);
 
@@ -57,9 +57,6 @@ function useAnimatedCounter(end: number, duration: number = 1000, decimals: numb
     return decimals > 0 ? count.toFixed(decimals) : Math.round(count);
 }
 
-// ============================================
-// Circular Progress Component
-// ============================================
 function CircularProgress({ 
     value, 
     size = 120, 
@@ -131,9 +128,6 @@ function CircularProgress({
     );
 }
 
-// ============================================
-// Score Distribution Bar
-// ============================================
 function ScoreDistributionBar({ distribution }: { distribution: ScoreDistribution }) {
     const total = distribution.excellent + distribution.good + distribution.average + distribution.poor;
     
@@ -173,9 +167,7 @@ function ScoreDistributionBar({ distribution }: { distribution: ScoreDistributio
     );
 }
 
-// ============================================
-// Stats Card Component
-// ============================================
+
 function StatsCard({ 
     icon, 
     iconBg,
@@ -212,9 +204,7 @@ function StatsCard({
     );
 }
 
-// ============================================
-// Main Component
-// ============================================
+
 interface OverviewTabProps {
     course: Course;
     overview: CourseOverview | null;
@@ -493,8 +483,8 @@ export default function OverviewTab({
                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
-                                <span className="font-semibold text-slate-800 block">ต้องการความสนใจ</span>
-                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า 60%</span>
+                                <span className="font-semibold text-slate-800 block">นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}%</span>
                             </div>
                         </div>
                     </CardHeader>

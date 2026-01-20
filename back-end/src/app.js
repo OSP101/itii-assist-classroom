@@ -28,8 +28,9 @@ app.use(helmet());
 // CORS configuration
 const allowedOrigins = [
   config.frontendUrl,
+  'https://itii.osp101.dev',
   'http://localhost:3000',
-  'http://127.0.0.1:3000',
+  'http://10.199.10.10:3000',
 ];
 
 // In development, allow any local network IP

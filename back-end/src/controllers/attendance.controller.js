@@ -6,6 +6,7 @@
 const { Op } = require('sequelize');
 const {
   AttendanceSession,
+  AttendanceSessionSection,
   AttendanceRecord,
   Student,
   Course,
@@ -115,8 +116,14 @@ const getAttendanceSessions = asyncHandler(async (req, res) => {
     include: [
       {
         model: CourseSection,
-        as: 'section',
+        as: 'section', // Legacy single section
         attributes: ['id', 'section_no'],
+      },
+      {
+        model: CourseSection,
+        as: 'sections', // New: multiple sections via junction table
+        attributes: ['id', 'section_no'],
+        through: { attributes: [] },
       },
       {
         model: User,
@@ -153,8 +160,15 @@ const getAttendanceSessions = asyncHandler(async (req, res) => {
       });
 
       // Add computed status based on time
+      const sessionData = addComputedStatus(session);
+      
+      // Add course_section_ids for frontend compatibility
+      const sectionIds = session.sections?.map(s => s.id) || 
+        (session.course_section_id ? [session.course_section_id] : []);
+      
       return {
-        ...addComputedStatus(session),
+        ...sessionData,
+        course_section_ids: sectionIds,
         stats: statusCounts,
       };
     })
@@ -256,6 +270,7 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
   const {
     course_id,
     course_section_id,
+    course_section_ids, // New: array of section IDs
     title,
     session_type,
     check_location,
@@ -274,59 +289,96 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
   // Generate PIN
   const pin_code = generatePIN();
 
-  // Status will be computed from time, no need to store in DB
-  const session = await AttendanceSession.create({
-    course_id,
-    course_section_id: course_section_id || null,
-    title,
-    pin_code,
-    session_type: session_type || 'lecture',
-    check_location: check_location || false,
-    location_lat: check_location ? location_lat : null,
-    location_lng: check_location ? location_lng : null,
-    radius_meters: radius_meters || 50,
-    start_time,
-    end_time,
-    late_threshold_minutes: late_threshold_minutes || 15,
-    status: 'draft', // Default value, but will be computed from time when queried
-    created_by: req.user.id,
-  });
+  // Determine which section IDs to use
+  // Priority: course_section_ids (array) > course_section_id (single)
+  const sectionIds = course_section_ids && course_section_ids.length > 0
+    ? course_section_ids
+    : (course_section_id ? [course_section_id] : []);
 
-  // Pre-create attendance records for all students (status = absent)
-  let studentIds = [];
-  if (course_section_id) {
-    const enrollments = await CourseSectionStudent.findAll({
-      where: { course_section_id },
+  // For legacy compatibility, store single section_id
+  const legacySectionId = sectionIds.length === 1 ? sectionIds[0] : null;
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    // Status will be computed from time, no need to store in DB
+    const session = await AttendanceSession.create({
+      course_id,
+      course_section_id: legacySectionId, // Legacy field for backward compatibility
+      title,
+      pin_code,
+      session_type: session_type || 'lecture',
+      check_location: check_location || false,
+      location_lat: check_location ? location_lat : null,
+      location_lng: check_location ? location_lng : null,
+      radius_meters: radius_meters || 50,
+      start_time,
+      end_time,
+      late_threshold_minutes: late_threshold_minutes || 15,
+      status: 'draft', // Default value, but will be computed from time when queried
+      created_by: req.user.id,
+    }, { transaction });
+
+    // Create records in junction table for selected sections
+    if (sectionIds.length > 0) {
+      const sectionLinks = sectionIds.map(sectionId => ({
+        attendance_session_id: session.id,
+        course_section_id: sectionId,
+      }));
+      await AttendanceSessionSection.bulkCreate(sectionLinks, { transaction });
+    }
+
+    // Pre-create attendance records for students in selected sections
+    let studentIds = [];
+    if (sectionIds.length > 0) {
+      // Get students from selected sections
+      const enrollments = await CourseSectionStudent.findAll({
+        where: { course_section_id: { [Op.in]: sectionIds } },
+        transaction,
+      });
+      studentIds = [...new Set(enrollments.map((e) => e.student_id))];
+    } else {
+      // All sections (no specific sections selected)
+      const sections = await CourseSection.findAll({
+        where: { course_id },
+        transaction,
+      });
+      const allSectionIds = sections.map((s) => s.id);
+      const enrollments = await CourseSectionStudent.findAll({
+        where: { course_section_id: { [Op.in]: allSectionIds } },
+        transaction,
+      });
+      studentIds = [...new Set(enrollments.map((e) => e.student_id))];
+    }
+
+    // Bulk create records
+    const records = studentIds.map((student_id) => ({
+      attendance_session_id: session.id,
+      student_id,
+      status: 'absent',
+    }));
+
+    if (records.length > 0) {
+      await AttendanceRecord.bulkCreate(records, { transaction });
+    }
+
+    await transaction.commit();
+
+    // Return response with section info
+    const responseData = {
+      ...addComputedStatus(session),
+      course_section_ids: sectionIds, // Include selected section IDs in response
+    };
+
+    res.status(201).json({
+      success: true,
+      data: responseData,
+      message: `Created attendance session with ${records.length} student records`,
     });
-    studentIds = enrollments.map((e) => e.student_id);
-  } else {
-    // All sections
-    const sections = await CourseSection.findAll({
-      where: { course_id },
-    });
-    const sectionIds = sections.map((s) => s.id);
-    const enrollments = await CourseSectionStudent.findAll({
-      where: { course_section_id: { [Op.in]: sectionIds } },
-    });
-    studentIds = [...new Set(enrollments.map((e) => e.student_id))];
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-
-  // Bulk create records
-  const records = studentIds.map((student_id) => ({
-    attendance_session_id: session.id,
-    student_id,
-    status: 'absent',
-  }));
-
-  if (records.length > 0) {
-    await AttendanceRecord.bulkCreate(records);
-  }
-
-  res.status(201).json({
-    success: true,
-    data: addComputedStatus(session),
-    message: `Created attendance session with ${records.length} student records`,
-  });
 });
 
 /**
@@ -351,17 +403,70 @@ const updateAttendanceSession = asyncHandler(async (req, res) => {
   // Remove status from updateData - status is computed from time
   delete updateData.status;
 
-  await session.update(updateData);
+  // Handle course_section_ids (multi-select)
+  let sectionIds = null;
+  if (updateData.course_section_ids !== undefined) {
+    sectionIds = updateData.course_section_ids;
+    // Set legacy field for backward compatibility
+    updateData.course_section_id = sectionIds.length === 1 ? sectionIds[0] : null;
+    // Remove course_section_ids from updateData (not a DB column)
+    delete updateData.course_section_ids;
+  }
 
-  const sessionWithStatus = addComputedStatus(session);
+  const transaction = await sequelize.transaction();
 
-  // Emit update to connected clients
-  emitToAttendance(id, 'session-updated', sessionWithStatus);
+  try {
+    await session.update(updateData, { transaction });
 
-  res.json({
-    success: true,
-    data: sessionWithStatus,
-  });
+    // Update junction table if section IDs were provided
+    if (sectionIds !== null) {
+      // Delete existing section links
+      await AttendanceSessionSection.destroy({
+        where: { attendance_session_id: id },
+        transaction,
+      });
+
+      // Create new section links
+      if (sectionIds.length > 0) {
+        const sectionLinks = sectionIds.map(sectionId => ({
+          attendance_session_id: parseInt(id),
+          course_section_id: sectionId,
+        }));
+        await AttendanceSessionSection.bulkCreate(sectionLinks, { transaction });
+      }
+    }
+
+    await transaction.commit();
+
+    // Fetch updated session with sections
+    const updatedSession = await AttendanceSession.findByPk(id, {
+      include: [
+        {
+          model: CourseSection,
+          as: 'sections',
+          attributes: ['id', 'section_no'],
+          through: { attributes: [] },
+        },
+      ],
+    });
+
+    const sessionWithStatus = addComputedStatus(updatedSession);
+    const responseSectionIds = updatedSession.sections?.map(s => s.id) || [];
+
+    // Emit update to connected clients
+    emitToAttendance(id, 'session-updated', sessionWithStatus);
+
+    res.json({
+      success: true,
+      data: {
+        ...sessionWithStatus,
+        course_section_ids: responseSectionIds,
+      },
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
 });
 
 /**

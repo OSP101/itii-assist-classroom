@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Card, CardBody, CardFooter } from "@heroui/card";
@@ -12,10 +12,12 @@ import { Chip } from "@heroui/chip";
 import { Pagination } from "@heroui/pagination";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
+import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import { authService } from "@/services/auth.service";
-import { courseService, Course } from "@/services/course.service";
+import { courseService, Course, Instructor } from "@/services/course.service";
+import { useSocket } from "@/contexts/SocketContext";
 import { IoSchool, IoBook, IoPeople, IoPersonAdd } from "react-icons/io5";
 
 interface Stats {
@@ -29,12 +31,27 @@ interface Stats {
 
 export default function HomePage() {
     const router = useRouter();
+    const { subscribeToCourseUpdates, unsubscribeFromCourseUpdates, onCourseUpdate, emitCourseUpdate, isConnected } = useSocket();
     const [allCourses, setAllCourses] = useState<Course[]>([]); // All courses from API
     const [stats, setStats] = useState<Stats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [userRole, setUserRole] = useState<string>("");
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 12;
+
+    // View mode & status tab
+    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+    const [statusTab, setStatusTab] = useState<"active" | "inactive">("active");
+
+    // Instructors list (for multi-select)
+    const [instructors, setInstructors] = useState<Instructor[]>([]);
+
+    // Toggle status modal states
+    const [isToggleStatusModalOpen, setIsToggleStatusModalOpen] = useState(false);
+    const [isDuplicateWarningModalOpen, setIsDuplicateWarningModalOpen] = useState(false);
+    const [duplicateCourse, setDuplicateCourse] = useState<Course | null>(null);
+    const [courseToToggle, setCourseToToggle] = useState<Course | null>(null);
 
     // Create course modal
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -50,24 +67,42 @@ export default function HomePage() {
         semester: 1,
         description: "",
         image: "",
+        instructor_ids: [] as number[],
+        attention_threshold: 60,
     });
 
     // Filters
     const [search, setSearch] = useState("");
     const [yearFilter, setYearFilter] = useState("");
     const [semesterFilter, setSemesterFilter] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
 
-    // Get user role
+    // Get user role and ID
     useEffect(() => {
         const fetchUser = async () => {
             const user = await authService.getCurrentUser();
             if (user) {
                 setUserRole(user.role);
+                setCurrentUserId(user.id);
             }
         };
         fetchUser();
     }, []);
+
+    // Fetch instructors for multi-select (exclude current user)
+    const fetchInstructors = useCallback(async () => {
+        try {
+            const response = await courseService.getInstructors();
+            if (response.success && response.data) {
+                setInstructors(response.data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch instructors:", error);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchInstructors();
+    }, [fetchInstructors]);
 
     // Fetch all courses once on load
     const fetchCourses = useCallback(async () => {
@@ -102,9 +137,46 @@ export default function HomePage() {
         fetchStats();
     }, [fetchCourses, fetchStats]);
 
+    // Subscribe to real-time course updates
+    useEffect(() => {
+        if (currentUserId) {
+            subscribeToCourseUpdates(currentUserId);
+            
+            return () => {
+                unsubscribeFromCourseUpdates(currentUserId);
+            };
+        }
+    }, [currentUserId, subscribeToCourseUpdates, unsubscribeFromCourseUpdates]);
+
+    // Handle real-time course updates from other clients
+    useEffect(() => {
+        const unsubscribe = onCourseUpdate((data) => {
+            console.log("📥 Received course update:", data);
+            // Refresh data when any course change is detected
+            fetchCourses();
+            fetchStats();
+            
+            // Show notification
+            addToast({
+                title: "ข้อมูลอัปเดต",
+                description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
+                color: "primary",
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [onCourseUpdate, fetchCourses, fetchStats]);
+
     // Client-side filtering
     const filteredCourses = useMemo(() => {
         let result = [...allCourses];
+
+        // Status tab filter (active/inactive)
+        result = result.filter(course => 
+            statusTab === "active" ? course.is_active === true : course.is_active === false
+        );
 
         // Search filter
         if (search.trim()) {
@@ -127,15 +199,8 @@ export default function HomePage() {
             result = result.filter(course => course.semester === semester);
         }
 
-        // Status filter
-        if (statusFilter === 'active') {
-            result = result.filter(course => course.is_active === true);
-        } else if (statusFilter === 'inactive') {
-            result = result.filter(course => course.is_active === false);
-        }
-
         return result;
-    }, [allCourses, search, yearFilter, semesterFilter, statusFilter]);
+    }, [allCourses, search, yearFilter, semesterFilter, statusTab]);
 
     // Client-side pagination
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -147,16 +212,15 @@ export default function HomePage() {
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, yearFilter, semesterFilter, statusFilter]);
+    }, [search, yearFilter, semesterFilter, statusTab]);
 
     const clearFilters = () => {
         setSearch("");
         setYearFilter("");
         setSemesterFilter("");
-        setStatusFilter("");
     };
 
-    const hasActiveFilters = search || yearFilter || semesterFilter || statusFilter;
+    const hasActiveFilters = search || yearFilter || semesterFilter;
 
     // Generate year options from actual data
     const yearOptions = useMemo(() => {
@@ -171,11 +235,6 @@ export default function HomePage() {
         { value: "1", label: "เทอม 1" },
         { value: "2", label: "เทอม 2" },
         { value: "3", label: "ฤดูร้อน" },
-    ];
-
-    const statusOptions = [
-        { value: "active", label: "เปิดใช้งาน" },
-        { value: "inactive", label: "ปิดใช้งาน" },
     ];
 
     const getSemesterText = (semester: number) => {
@@ -224,6 +283,8 @@ export default function HomePage() {
             semester: 1,
             description: "",
             image: "",
+            instructor_ids: [],
+            attention_threshold: 60,
         });
         setImagePreview(null);
     };
@@ -247,6 +308,8 @@ export default function HomePage() {
                 semester: formData.semester,
                 description: formData.description || undefined,
                 image: formData.image || undefined,
+                instructor_ids: formData.instructor_ids.length > 0 ? formData.instructor_ids : undefined,
+                attention_threshold: formData.attention_threshold,
             });
 
             if (response.success) {
@@ -259,10 +322,16 @@ export default function HomePage() {
                 resetForm();
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("create", response.data?.id);
             } else {
+                // Handle API error response (e.g., duplicate course)
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "ไม่สามารถสร้างรายวิชาได้";
                 addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: response.message || "ไม่สามารถสร้างรายวิชาได้",
+                    title: "ไม่สามารถสร้างรายวิชาได้",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -280,6 +349,8 @@ export default function HomePage() {
     // Open Edit Modal
     const openEditModal = (course: Course) => {
         setSelectedCourse(course);
+        // Get instructor IDs from the instructors array (exclude self)
+        const instructorIdList = course.instructors?.map(i => i.id).filter(id => id !== currentUserId) || [];
         setFormData({
             code: course.code,
             name: course.name,
@@ -287,6 +358,8 @@ export default function HomePage() {
             semester: course.semester,
             description: course.description || "",
             image: course.image || "",
+            instructor_ids: instructorIdList,
+            attention_threshold: course.attention_threshold ?? 60,
         });
         setImagePreview(course.image || null);
         setIsEditModalOpen(true);
@@ -313,6 +386,8 @@ export default function HomePage() {
                 semester: formData.semester,
                 description: formData.description || undefined,
                 image: formData.image || undefined,
+                instructor_ids: formData.instructor_ids.length > 0 ? formData.instructor_ids : undefined,
+                attention_threshold: formData.attention_threshold,
             });
 
             if (response.success) {
@@ -325,10 +400,15 @@ export default function HomePage() {
                 resetForm();
                 setSelectedCourse(null);
                 fetchCourses();
+                // Emit real-time update to other clients
+                emitCourseUpdate("update", selectedCourse.id);
             } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "ไม่สามารถแก้ไขรายวิชาได้";
                 addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: response.message || "ไม่สามารถแก้ไขรายวิชาได้",
+                    title: "ไม่สามารถแก้ไขรายวิชาได้",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -343,22 +423,56 @@ export default function HomePage() {
         }
     };
 
-    // Handle Toggle Status
-    const handleToggleStatus = async (course: Course) => {
+    // Open toggle status modal (check for duplicates when activating)
+    const openToggleStatusModal = (course: Course) => {
+        setCourseToToggle(course);
+
+        // If trying to activate (currently inactive), check for duplicate active course
+        if (!course.is_active) {
+            const duplicateActiveCourse = allCourses.find(
+                c => c.id !== course.id &&
+                    c.code === course.code &&
+                    c.year === course.year &&
+                    c.semester === course.semester &&
+                    c.is_active === true
+            );
+
+            if (duplicateActiveCourse) {
+                setDuplicateCourse(duplicateActiveCourse);
+                setIsDuplicateWarningModalOpen(true);
+                return;
+            }
+        }
+
+        setIsToggleStatusModalOpen(true);
+    };
+
+    // Handle Toggle Status (called from modal)
+    const handleToggleStatus = async () => {
+        if (!courseToToggle) return;
+
+        setIsSubmitting(true);
         try {
-            const response = await courseService.toggleStatus(course.id);
+            const response = await courseService.toggleStatus(courseToToggle.id);
             if (response.success) {
                 addToast({
-                    title: course.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
-                    description: `รายวิชา ${course.code} ${course.is_active ? "ปิด" : "เปิด"}ใช้งานเรียบร้อยแล้ว`,
+                    title: courseToToggle.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
+                    description: `รายวิชา ${courseToToggle.code} ${courseToToggle.is_active ? "ปิด" : "เปิด"}ใช้งานเรียบร้อยแล้ว`,
                     color: "success",
                 });
+                setIsToggleStatusModalOpen(false);
+                setCourseToToggle(null);
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("toggle", courseToToggle.id);
             } else {
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || response.message || "ไม่สามารถเปลี่ยนสถานะได้";
                 addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: response.message || "ไม่สามารถเปลี่ยนสถานะได้",
+                    title: "ไม่สามารถเปลี่ยนสถานะได้",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -368,6 +482,8 @@ export default function HomePage() {
                 description: error.message || "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
             });
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -375,13 +491,26 @@ export default function HomePage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">รายวิชาของฉัน</h1>
-                    <p className="text-slate-500 mt-1">
-                        {userRole === "instructor"
-                            ? "รายวิชาที่คุณเป็นผู้สอน"
-                            : "รายวิชาที่คุณเป็นผู้ช่วยสอน"}
-                    </p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">รายวิชาของฉัน</h1>
+                        <p className="text-slate-500 mt-1">
+                            {userRole === "instructor"
+                                ? "รายวิชาที่คุณเป็นผู้สอน"
+                                : "รายวิชาที่คุณเป็นผู้ช่วยสอน"}
+                        </p>
+                    </div>
+                    {/* Real-time connection indicator */}
+                    <Tooltip content={isConnected ? "ข้อมูลอัปเดตแบบ Real-time" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                            isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500 animate-bounce"
+                            }`} />
+                            <span className="hidden sm:inline">{isConnected ? "Live" : "..."}</span>
+                        </div>
+                    </Tooltip>
                 </div>
 
                 {userRole === "instructor" && (
@@ -396,44 +525,61 @@ export default function HomePage() {
                 )}
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <Card className="border border-slate-200 shadow-sm">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-blue-100 p-2 sm:p-2.5">
-                            <IoBook className="text-xl sm:text-2xl text-blue-600" />
+            {/* Status Tabs & View Mode Toggle */}
+            <Card className="border border-slate-200 shadow-sm">
+                <CardBody className="p-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        {/* Status Tab Buttons */}
+                        <div className="flex gap-2">
+                            <Button
+                                variant={statusTab === "active" ? "solid" : "bordered"}
+                                color={statusTab === "active" ? "success" : "default"}
+                                onPress={() => setStatusTab("active")}
+                                startContent={<Icon icon="solar:check-circle-bold" className="text-lg" />}
+                                className={statusTab === "active" ? "" : "border-slate-300 text-slate-600"}
+                            >
+                                เปิดใช้งาน ({stats?.byStatus?.active ?? 0})
+                            </Button>
+                            <Button
+                                variant={statusTab === "inactive" ? "solid" : "bordered"}
+                                color={statusTab === "inactive" ? "danger" : "default"}
+                                onPress={() => setStatusTab("inactive")}
+                                startContent={<Icon icon="solar:close-circle-bold" className="text-lg" />}
+                                className={statusTab === "inactive" ? "" : "border-slate-300 text-slate-600"}
+                            >
+                                ปิดใช้งาน ({stats?.byStatus?.inactive ?? 0})
+                            </Button>
                         </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">รายวิชาทั้งหมด</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.total ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
 
-                <Card className="border border-slate-200 shadow-sm">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-green-100 p-2 sm:p-2.5">
-                            <IoSchool className="text-xl sm:text-2xl text-green-600" />
+                        {/* View Mode Toggle */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                            <Tooltip content="แบบการ์ด">
+                                <Button
+                                    isIconOnly
+                                    size="md"
+                                    variant="light"
+                                    className={`rounded-none ${viewMode === "grid" ? "bg-slate-100" : ""}`}
+                                    onPress={() => setViewMode("grid")}
+                                >
+                                    <Icon icon="solar:widget-bold" className={`text-lg ${viewMode === "grid" ? "text-blue-600" : "text-slate-400"}`} />
+                                </Button>
+                            </Tooltip>
+                            <div className="w-px h-5 bg-slate-200" />
+                            <Tooltip content="แบบรายการ">
+                                <Button
+                                    isIconOnly
+                                    size="md"
+                                    variant="light"
+                                    className={`rounded-none ${viewMode === "list" ? "bg-slate-100" : ""}`}
+                                    onPress={() => setViewMode("list")}
+                                >
+                                    <Icon icon="solar:list-bold" className={`text-lg ${viewMode === "list" ? "text-blue-600" : "text-slate-400"}`} />
+                                </Button>
+                            </Tooltip>
                         </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">เปิดใช้งาน</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.byStatus?.active ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
-
-                <Card className="border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-red-100 p-2 sm:p-2.5">
-                            <IoBook className="text-xl sm:text-2xl text-red-600" />
-                        </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">ปิดใช้งาน</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.byStatus?.inactive ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
-            </div>
+                    </div>
+                </CardBody>
+            </Card>
 
             {/* Filters */}
             <Card className="border border-slate-200 shadow-sm">
@@ -486,20 +632,6 @@ export default function HomePage() {
                                 ))}
                             </Select>
 
-                            <Select
-                                placeholder="สถานะ"
-                                selectedKeys={statusFilter ? [statusFilter] : []}
-                                onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string || "")}
-                                className="w-full sm:w-32"
-                                size="md"
-                                variant="bordered"
-
-                            >
-                                {statusOptions.map((option) => (
-                                    <SelectItem key={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </Select>
-
                             {hasActiveFilters && (
                                 <Button
                                     variant="flat"
@@ -516,7 +648,7 @@ export default function HomePage() {
                 </CardBody>
             </Card>
 
-            {/* Course Grid */}
+            {/* Course List */}
             {isLoading ? (
                 <div className="flex justify-center py-12">
                     <Spinner size="lg" color="primary" />
@@ -530,9 +662,11 @@ export default function HomePage() {
                         <p className="text-slate-500 text-center">
                             {hasActiveFilters
                                 ? "ไม่พบรายวิชาที่ตรงกับการค้นหา"
-                                : userRole === "instructor"
-                                    ? "คุณยังไม่มีรายวิชา กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
-                                    : "คุณยังไม่ได้รับมอบหมายเป็นผู้ช่วยสอนในรายวิชาใด ๆ"}
+                                : statusTab === "active"
+                                    ? userRole === "instructor"
+                                        ? "คุณยังไม่มีรายวิชาที่เปิดใช้งาน กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
+                                        : "คุณยังไม่มีรายวิชาที่เปิดใช้งาน"
+                                    : "ไม่มีรายวิชาที่ปิดใช้งาน"}
                         </p>
                         {hasActiveFilters && (
                             <Button
@@ -546,7 +680,8 @@ export default function HomePage() {
                         )}
                     </CardBody>
                 </Card>
-            ) : (
+            ) : viewMode === "grid" ? (
+                /* Grid View */
                 <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {paginatedCourses.map((course) => (
@@ -571,19 +706,6 @@ export default function HomePage() {
                                             <IoSchool className="text-white/20 text-7xl" />
                                         </div>
                                     )}
-                                    {/* Status Badge */}
-                                    <div className="absolute top-2 right-2">
-                                        <Chip
-                                            size="sm"
-                                            variant="solid"
-                                            className={course.is_active
-                                                ? "bg-green-500/90 text-white"
-                                                : "bg-red-500/90 text-white"
-                                            }
-                                        >
-                                            {course.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
-                                        </Chip>
-                                    </div>
                                 </div>
 
                                 <CardBody className="p-4">
@@ -616,7 +738,7 @@ export default function HomePage() {
                                                             if (key === "edit") {
                                                                 openEditModal(course);
                                                             } else if (key === "toggle") {
-                                                                handleToggleStatus(course);
+                                                                openToggleStatusModal(course);
                                                             }
                                                         }}
                                                     >
@@ -687,6 +809,131 @@ export default function HomePage() {
                         </div>
                     )}
                 </>
+            ) : (
+                /* List View */
+                <>
+                    <div className="space-y-2">
+                        {paginatedCourses.map((course) => (
+                            <Card
+                                key={course.id}
+                                isPressable
+                                onPress={() => handleCourseClick(course.id)}
+                                className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow w-full"
+                            >
+                                <CardBody className="p-3 sm:p-4">
+                                    <div className="flex items-center gap-3 sm:gap-4">
+                                        {/* Course Image/Icon */}
+                                        <div className="w-14 h-14 sm:w-16 sm:h-16 relative overflow-hidden rounded-lg shrink-0">
+                                            {course.image ? (
+                                                <Image
+                                                    src={course.image}
+                                                    alt={course.name}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                                                    <IoSchool className="text-white/30 text-2xl sm:text-3xl" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Course Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-slate-900 truncate">
+                                                        {course.code} - {course.name}
+                                                    </h3>
+                                                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                                                        <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                            {course.year}/{course.semester}
+                                                        </Chip>
+                                                        <span className="text-sm text-slate-500">
+                                                            {getSemesterText(course.semester)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                {/* Menu Button - Only for instructor */}
+                                                {userRole === "instructor" && (
+                                                    <Dropdown>
+                                                        <DropdownTrigger>
+                                                            <Button
+                                                                isIconOnly
+                                                                size="sm"
+                                                                variant="light"
+                                                                className="min-w-8 w-8 h-8"
+                                                            >
+                                                                <Icon icon="solar:menu-dots-bold" className="text-lg text-slate-500" />
+                                                            </Button>
+                                                        </DropdownTrigger>
+                                                        <DropdownMenu
+                                                            aria-label="Course actions"
+                                                            onAction={(key) => {
+                                                                if (key === "edit") {
+                                                                    openEditModal(course);
+                                                                } else if (key === "toggle") {
+                                                                    openToggleStatusModal(course);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <DropdownItem
+                                                                key="edit"
+                                                                startContent={<Icon icon="solar:pen-linear" className="text-lg" />}
+                                                            >
+                                                                แก้ไขรายวิชา
+                                                            </DropdownItem>
+                                                            <DropdownItem
+                                                                key="toggle"
+                                                                startContent={
+                                                                    <Icon
+                                                                        icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                                                                        className="text-lg"
+                                                                    />
+                                                                }
+                                                                color={course.is_active ? "warning" : "success"}
+                                                            >
+                                                                {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                                                            </DropdownItem>
+                                                        </DropdownMenu>
+                                                    </Dropdown>
+                                                )}
+                                            </div>
+                                            {/* Stats - Desktop Only */}
+                                            <div className="hidden sm:flex items-center gap-4 mt-2 text-sm text-slate-500">
+                                                <div className="flex items-center gap-1">
+                                                    <IoPeople className="text-lg" />
+                                                    <span>{course.taCount ?? 0} TA</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <IoPersonAdd className="text-lg" />
+                                                    <span>{course.studentCount ?? 0} นักศึกษา</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <IoBook className="text-lg" />
+                                                    <span>{course.sections?.length ?? 0} กลุ่ม</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+                        ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-center mt-6">
+                            <Pagination
+                                total={totalPages}
+                                page={currentPage}
+                                onChange={setCurrentPage}
+                                showControls
+                                color="primary"
+                            />
+                        </div>
+                    )}
+                </>
             )}
 
             {/* Create Course Modal อันนี้เอาของแอดมินมาใช้เลย ใส่รูปได้*/}
@@ -729,7 +976,7 @@ export default function HomePage() {
                                             <img
                                                 src={imagePreview}
                                                 alt="Course preview"
-                                                className="w-full h-48 object-cover rounded-xl border border-slate-200"
+                                                className="w-full h-40 object-cover rounded-xl border border-slate-200"
                                             />
                                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center gap-3">
                                                 <label className="cursor-pointer">
@@ -766,7 +1013,7 @@ export default function HomePage() {
                                                 onChange={handleImageUpload}
                                                 className="hidden"
                                             />
-                                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+                                            <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
                                                 <Icon icon="solar:cloud-upload-bold-duotone" className="text-5xl text-blue-400 mx-auto mb-3" />
                                                 <p className="text-slate-600 font-medium">คลิกเพื่ออัปโหลดรูปปกรายวิชา</p>
                                                 <p className="text-slate-400 text-sm mt-1">รองรับไฟล์ JPG, PNG ขนาดไม่เกิน 2MB</p>
@@ -789,13 +1036,13 @@ export default function HomePage() {
                                             labelPlacement="outside"
                                             placeholder="เช่น 101401"
                                             variant="bordered"
-                                            size="lg"
+                                            size="md"
                                             value={formData.code}
                                             onValueChange={(value) => setFormData({ ...formData, code: value })}
                                             isRequired
                                             startContent={<Icon icon="solar:hashtag-linear" className="text-blue-400 text-xl" />}
                                             classNames={{
-                                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                                 label: "text-slate-600 font-medium text-sm",
                                             }}
                                         />
@@ -806,13 +1053,13 @@ export default function HomePage() {
                                             labelPlacement="outside"
                                             placeholder="เช่น Object-Oriented Programming"
                                             variant="bordered"
-                                            size="lg"
+                                            size="md"
                                             value={formData.name}
                                             onValueChange={(value) => setFormData({ ...formData, name: value })}
                                             isRequired
                                             startContent={<Icon icon="solar:book-linear" className="text-blue-400 text-xl" />}
                                             classNames={{
-                                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                                inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                                 label: "text-slate-600 font-medium text-sm",
                                             }}
                                         />
@@ -822,14 +1069,14 @@ export default function HomePage() {
                                         labelPlacement="outside"
                                         placeholder="เช่น 2568"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         type="number"
                                         value={formData.year.toString()}
                                         onValueChange={(value) => setFormData({ ...formData, year: parseInt(value) || currentYear })}
                                         isRequired
                                         startContent={<Icon icon="solar:calendar-linear" className="text-blue-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -838,12 +1085,12 @@ export default function HomePage() {
                                         labelPlacement="outside"
                                         placeholder="เลือกภาคเรียน"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         selectedKeys={[formData.semester.toString()]}
                                         onChange={(e) => setFormData({ ...formData, semester: parseInt(e.target.value) || 1 })}
                                         isRequired
                                         classNames={{
-                                            trigger: "h-12 bg-white border-slate-200 hover:border-blue-300",
+                                            trigger: "bg-white border-slate-200 hover:border-blue-300",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     >
@@ -851,6 +1098,71 @@ export default function HomePage() {
                                         <SelectItem key="2">ภาคเรียนที่ 2</SelectItem>
                                         <SelectItem key="3">ภาคฤดูร้อน</SelectItem>
                                     </Select>
+                                </div>
+                            </div>
+
+                            {/* Co-Instructors Section */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:users-group-two-rounded-bold" className="text-lg text-blue-500" />
+                                    <span className="text-sm font-semibold text-slate-700">ผู้สอนร่วม</span>
+                                </div>
+                                <div className="py-3">
+                                    <Select
+                                        labelPlacement="outside"
+                                        placeholder="เลือกผู้สอนร่วม (ถ้ามี)"
+                                        variant="bordered"
+                                        selectionMode="multiple"
+                                        size="md"
+                                        selectedKeys={new Set(formData.instructor_ids.map(id => id.toString()))}
+                                        onSelectionChange={(keys) => {
+                                            const selectedIds = Array.from(keys).map(k => parseInt(k as string));
+                                            setFormData({ ...formData, instructor_ids: selectedIds });
+                                        }}
+                                        classNames={{
+                                            trigger: " bg-white border-slate-200 hover:border-blue-300",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    >
+                                        {instructors
+                                            .filter(inst => inst.id !== currentUserId) // Exclude self
+                                            .map(instructor => (
+                                                <SelectItem key={instructor.id.toString()}>
+                                                    {instructor.full_name}
+                                                </SelectItem>
+                                            ))}
+                                    </Select>
+                                </div>
+                            </div>
+
+                            {/* Attention Threshold Section */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:chart-bold" className="text-lg text-blue-500" />
+                                    <span className="text-sm font-semibold text-slate-700">เกณฑ์นักศึกษาที่นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                </div>
+                                <div className="py-3">
+                                    <Input
+                                        label="เปอร์เซ็นต์คะแนนขั้นต่ำ"
+                                        labelPlacement="outside"
+                                        placeholder="เช่น 60"
+                                        variant="bordered"
+                                        size="md"
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={formData.attention_threshold.toString()}
+                                        onValueChange={(value) => {
+                                            const num = parseInt(value) || 0;
+                                            setFormData({ ...formData, attention_threshold: Math.min(100, Math.max(0, num)) });
+                                        }}
+                                        endContent={<span className="text-slate-400">%</span>}
+                                        description="นักศึกษาที่มีคะแนนรวมต่ำกว่าเกณฑ์นี้จะแสดงในรายการ 'นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม'"
+                                        classNames={{
+                                            inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
                                 </div>
                             </div>
 
@@ -1071,6 +1383,74 @@ export default function HomePage() {
                                 </div>
                             </div>
 
+                            {/* Co-Instructors Section */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:users-group-two-rounded-bold" className="text-lg text-amber-500" />
+                                    <span className="text-sm font-semibold text-slate-700">ผู้สอนร่วม (ไม่รวมตัวคุณ)</span>
+                                </div>
+                                <div className="py-3">
+                                    <Select
+                                        label="เลือกผู้สอนร่วม"
+                                        labelPlacement="outside"
+                                        placeholder="เลือกผู้สอนร่วม (ถ้ามี)"
+                                        variant="bordered"
+                                        selectionMode="multiple"
+                                        selectedKeys={new Set(formData.instructor_ids.map(id => id.toString()))}
+                                        onSelectionChange={(keys) => {
+                                            const selectedIds = Array.from(keys).map(k => parseInt(k as string));
+                                            setFormData({ ...formData, instructor_ids: selectedIds });
+                                        }}
+                                        classNames={{
+                                            trigger: "min-h-12 bg-white border-slate-200 hover:border-amber-300",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    >
+                                        {instructors
+                                            .filter(inst => inst.id !== currentUserId) // Exclude self
+                                            .map(instructor => (
+                                                <SelectItem key={instructor.id.toString()}>
+                                                    {instructor.full_name}
+                                                </SelectItem>
+                                            ))}
+                                    </Select>
+                                    <p className="text-xs text-slate-400 mt-2">
+                                        คุณจะเป็นผู้สอนหลักโดยอัตโนมัติ สามารถเลือกผู้สอนร่วมเพิ่มเติมได้
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Attention Threshold Section */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:chart-bold" className="text-lg text-amber-500" />
+                                    <span className="text-sm font-semibold text-slate-700">เกณฑ์นักศึกษาที่นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                </div>
+                                <div className="py-3">
+                                    <Input
+                                        label="เปอร์เซ็นต์คะแนนขั้นต่ำ"
+                                        labelPlacement="outside"
+                                        placeholder="เช่น 60"
+                                        variant="bordered"
+                                        size="lg"
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={formData.attention_threshold.toString()}
+                                        onValueChange={(value) => {
+                                            const num = parseInt(value) || 0;
+                                            setFormData({ ...formData, attention_threshold: Math.min(100, Math.max(0, num)) });
+                                        }}
+                                        endContent={<span className="text-slate-400">%</span>}
+                                        description="นักศึกษาที่มีคะแนนรวมต่ำกว่าเกณฑ์นี้จะแสดงในรายการ 'นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม'"
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
                             {/* Description Section */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
@@ -1116,6 +1496,114 @@ export default function HomePage() {
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
                         >
                             บันทึกการแก้ไข
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Toggle Status Confirmation Modal */}
+            <Modal
+                isOpen={isToggleStatusModalOpen}
+                onClose={() => {
+                    setIsToggleStatusModalOpen(false);
+                    setCourseToToggle(null);
+                }}
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">
+                        <div className="flex items-center gap-3">
+                            <div className={`p-2.5 rounded-xl ${courseToToggle?.is_active ? 'bg-red-100' : 'bg-green-100'}`}>
+                                <Icon
+                                    icon={courseToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"}
+                                    className={`text-xl ${courseToToggle?.is_active ? 'text-red-600' : 'text-green-600'}`}
+                                />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">
+                                    {courseToToggle?.is_active ? "ปิดใช้งานรายวิชา" : "เปิดใช้งานรายวิชา"}
+                                </h3>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p className="text-slate-600">
+                            คุณต้องการ{courseToToggle?.is_active ? "ปิด" : "เปิด"}ใช้งานรายวิชา{" "}
+                            <span className="font-semibold">{courseToToggle?.code} - {courseToToggle?.name}</span>{" "}
+                            หรือไม่?
+                        </p>
+                        {courseToToggle?.is_active && (
+                            <p className="text-sm text-red-500 mt-2">
+                                * เมื่อปิดใช้งาน นักศึกษาและ TA จะไม่สามารถเข้าถึงรายวิชานี้ได้
+                            </p>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button
+                            variant="light"
+                            onPress={() => {
+                                setIsToggleStatusModalOpen(false);
+                                setCourseToToggle(null);
+                            }}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color={courseToToggle?.is_active ? "danger" : "success"}
+                            onPress={handleToggleStatus}
+                            isLoading={isSubmitting}
+                        >
+                            {courseToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Duplicate Warning Modal */}
+            <Modal
+                isOpen={isDuplicateWarningModalOpen}
+                onClose={() => {
+                    setIsDuplicateWarningModalOpen(false);
+                    setDuplicateCourse(null);
+                    setCourseToToggle(null);
+                }}
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-amber-100 rounded-xl">
+                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">ไม่สามารถเปิดใช้งานได้</h3>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p className="text-slate-600">
+                            มีรายวิชาที่ใช้รหัสวิชา ปีการศึกษา และภาคเรียนเดียวกันที่เปิดใช้งานอยู่แล้ว:
+                        </p>
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mt-3">
+                            <p className="font-semibold text-slate-800">{duplicateCourse?.code} - {duplicateCourse?.name}</p>
+                            <p className="text-sm text-slate-600 mt-1">
+                                ปีการศึกษา {duplicateCourse?.year} / ภาคเรียนที่ {duplicateCourse?.semester === 3 ? "ฤดูร้อน" : duplicateCourse?.semester}
+                            </p>
+                        </div>
+                        <p className="text-sm text-slate-500 mt-3">
+                            หากต้องการเปิดใช้งานรายวิชานี้ กรุณาปิดใช้งานรายวิชาที่ซ้ำกันก่อน
+                        </p>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button
+                            color="primary"
+                            onPress={() => {
+                                setIsDuplicateWarningModalOpen(false);
+                                setDuplicateCourse(null);
+                                setCourseToToggle(null);
+                            }}
+                        >
+                            เข้าใจแล้ว
                         </Button>
                     </ModalFooter>
                 </ModalContent>
