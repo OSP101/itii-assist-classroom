@@ -196,9 +196,7 @@ export default function LoginPage() {
                 <Card className="w-full max-w-[1024px] overflow-hidden shadow-2xl border border-blue-100">
                     <CardBody className="p-0">
                         <div className="flex flex-col md:flex-row">
-                            {/* Left Side - Image & Branding */}
                             <div className="relative hidden w-full md:flex md:w-1/2 min-h-[600px]">
-                                {/* Use CSS background for decorative image to avoid hydration issues */}
                                 <div
                                     className="absolute inset-0 bg-cover bg-center bg-no-repeat"
                                     style={{ backgroundImage: `url('/images/cp-image-login.jpg')` }}
@@ -216,11 +214,8 @@ export default function LoginPage() {
                                 </div>
                             </div>
 
-                            {/* Right Side - Login Form */}
                             <div className="w-full md:w-1/2 p-5 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center bg-white">
 
-
-                                {/* Header */}
                                 <div className="flex flex-col gap-1 sm:gap-2 mb-6 sm:mb-8">
                                     <h1 className="text-2xl sm:text-3xl font-bold leading-tight tracking-tight text-slate-800">
                                         ยินดีต้อนรับ
@@ -230,7 +225,6 @@ export default function LoginPage() {
                                     </p>
                                 </div>
 
-                                {/* Login Form */}
                                 <form onSubmit={handleSubmit} className="flex flex-col gap-4 sm:gap-5">
                                     <Input
                                         label="ชื่อผู้ใช้"
@@ -332,7 +326,7 @@ export default function LoginPage() {
                                         size="md"
                                         className="w-full font-medium mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                         isLoading={isLoading}
-                                        // disabled={canSubmit || !turnstileReady || isLoading}
+                                        disabled={canSubmit || !turnstileReady || isLoading}
                                     >
                                         เข้าสู่ระบบ
                                     </Button>

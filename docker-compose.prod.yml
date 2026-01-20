@@ -5,7 +5,7 @@ services:
     image: itii-backend:prod
     container_name: itii-prod-backend
     env_file:
-      - ./back-end/.env
+      - ./back-end/.env.prod
     environment:
       NODE_ENV: production
       DB_HOST: itii-mysql
@@ -31,7 +31,7 @@ services:
     container_name: itii-prod-frontend
     restart: always
     env_file:
-      - ./front-end/.env.local
+      - ./front-end/.env.local.prod
     ports:
       - "3010:3000"
     depends_on:
