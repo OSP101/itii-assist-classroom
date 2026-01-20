@@ -58,18 +58,20 @@ OR
                         case 'deploy': 
                             env.ENV_NAME = 'dev'
                             env.COMPOSE_FILE = 'docker-compose.dev.yml'
+                            env.COMPOSE_PROJECT = 'itii-dev'
                             break
 
                         case 'main':
                             env.ENV_NAME = 'prod'
                             env.COMPOSE_FILE = 'docker-compose.prod.yml'
+                            env.COMPOSE_PROJECT = 'itii-prod'
                             break
 
                         default:
                             error("❌ Branch '${env.BRANCH}' not allowed")
                     }
 
-                    echo "🚀 Deploy environment = ${env.ENV_NAME}"
+                    echo "🚀 Deploy environment = ${env.ENV_NAME} (project: ${env.COMPOSE_PROJECT})"
                 }
             }
         }
@@ -190,7 +192,7 @@ EOF
 
         stage('🏗 Build') {
             steps {
-                sh "docker compose -f ${COMPOSE_FILE} build"
+                sh "docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} build"
             }
         }
 
@@ -198,8 +200,8 @@ EOF
             steps {
                 sh """
                 docker network create ${DOCKER_NETWORK} || true
-                docker compose -f ${COMPOSE_FILE} down
-                docker compose -f ${COMPOSE_FILE} up -d
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
                 
                 echo "⏳ Waiting for containers to start..."
                 sleep 5
