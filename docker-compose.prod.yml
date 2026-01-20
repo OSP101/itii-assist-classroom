@@ -3,12 +3,12 @@ services:
     build:
       context: ./back-end
     image: itii-backend:prod
-    container_name: itii-network-backend
+    container_name: itii-prod-backend
     env_file:
       - ./back-end/.env
     environment:
       NODE_ENV: production
-      DB_HOST:  itii-mysql
+      DB_HOST: itii-mysql
       DB_PORT: 3306
     restart: always
     ports:
@@ -28,7 +28,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     image: itii-frontend:prod
-    container_name:  itii-network-frontend
+    container_name: itii-prod-frontend
     restart: always
     env_file:
       - ./front-end/.env.local
