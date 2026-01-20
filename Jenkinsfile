@@ -102,9 +102,9 @@ OR
 
             ]) {
                 sh '''
-                # Create backend .env file
+                # Create backend .env.dev file
                 mkdir -p back-end
-                cat <<EOF > back-end/.env
+                cat <<EOF > back-end/.env.dev
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
@@ -118,9 +118,9 @@ JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
 JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
 EOF
 
-                # Create frontend .env.local file
+                # Create frontend .env.local.dev file
                 mkdir -p front-end
-                cat <<EOF > front-end/.env.local
+                cat <<EOF > front-end/.env.local.dev
 NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
@@ -159,9 +159,9 @@ EOF
 
             ]) {
                 sh '''
-                # Create backend .env file
+                # Create backend .env.prod file
                 mkdir -p back-end
-                cat <<EOF > back-end/.env
+                cat <<EOF > back-end/.env.prod
 DB_NAME=$DB_NAME
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
@@ -175,9 +175,9 @@ JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
 JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
 EOF
 
-                # Create frontend .env.local file
+                # Create frontend .env.local.prod file
                 mkdir -p front-end
-                cat <<EOF > front-end/.env.local
+                cat <<EOF > front-end/.env.local.prod
 NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
@@ -200,7 +200,12 @@ EOF
             steps {
                 sh """
                 docker network create ${DOCKER_NETWORK} || true
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down
+                
+                # Stop and remove existing containers with same name (cleanup orphans)
+                echo "🧹 Cleaning up existing containers..."
+                docker rm -f itii-${ENV_NAME}-backend itii-${ENV_NAME}-frontend 2>/dev/null || true
+                
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down --remove-orphans
                 docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
                 
                 echo "⏳ Waiting for containers to start..."
