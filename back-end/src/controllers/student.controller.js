@@ -735,6 +735,137 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Search students by multiple student IDs within a specific course/section
+ * @route POST /api/students/search-by-ids
+ */
+const searchStudentsByIds = asyncHandler(async (req, res) => {
+  const { student_ids, course_id, section } = req.body;
+
+  if (!student_ids || !Array.isArray(student_ids) || student_ids.length === 0) {
+    throw new ApiError(400, 'student_ids array is required');
+  }
+
+  // Limit to prevent abuse
+  if (student_ids.length > 100) {
+    throw new ApiError(400, 'Maximum 100 student IDs allowed per request');
+  }
+
+  // Clean up input - trim and remove empty
+  const cleanedIds = student_ids
+    .map(id => String(id).trim())
+    .filter(id => id.length > 0);
+
+  if (cleanedIds.length === 0) {
+    return res.json({
+      success: true,
+      data: {
+        found: [],
+        not_found: student_ids,
+      },
+    });
+  }
+
+  let students;
+
+  // If course_id is provided, filter students by course enrollment
+  if (course_id) {
+    // Build section filter
+    const sectionWhere = { course_id };
+    if (section && section !== 'all') {
+      sectionWhere.section = section;
+    }
+
+    // Find course sections
+    const sections = await CourseSection.findAll({
+      where: sectionWhere,
+      attributes: ['id'],
+    });
+
+    const sectionIds = sections.map(s => s.id);
+
+    if (sectionIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          found: [],
+          not_found: cleanedIds,
+        },
+      });
+    }
+
+    // Find students enrolled in these sections
+    const enrollments = await CourseSectionStudent.findAll({
+      where: {
+        course_section_id: {
+          [Op.in]: sectionIds,
+        },
+      },
+      include: [{
+        model: Student,
+        as: 'student',
+        where: {
+          student_id: {
+            [Op.in]: cleanedIds,
+          },
+          is_active: true,
+        },
+        attributes: ['id', 'student_id', 'full_name', 'email'],
+      }],
+    });
+
+    students = enrollments
+      .map(e => e.student)
+      .filter(s => s !== null);
+  } else {
+    // Fallback: search all students (original behavior)
+    students = await Student.findAll({
+      where: {
+        student_id: {
+          [Op.in]: cleanedIds,
+        },
+        is_active: true,
+      },
+      attributes: ['id', 'student_id', 'full_name', 'email'],
+    });
+  }
+
+  // Build result map for found students
+  const foundMap = new Map();
+  students.forEach(s => {
+    foundMap.set(s.student_id.toLowerCase(), {
+      id: s.id,
+      student_id: s.student_id,
+      full_name: s.full_name,
+      email: s.email,
+    });
+  });
+
+  // Separate found and not found
+  const found = [];
+  const not_found = [];
+
+  cleanedIds.forEach(inputId => {
+    const student = foundMap.get(inputId.toLowerCase());
+    if (student) {
+      found.push({
+        input: inputId,
+        student,
+      });
+    } else {
+      not_found.push(inputId);
+    }
+  });
+
+  res.json({
+    success: true,
+    data: {
+      found,
+      not_found,
+    },
+  });
+});
+
 module.exports = {
   getStudents,
   getStudentStats,
@@ -745,4 +876,5 @@ module.exports = {
   toggleStudentStatus,
   importStudents,
   lookupStudentScores,
+  searchStudentsByIds,
 };

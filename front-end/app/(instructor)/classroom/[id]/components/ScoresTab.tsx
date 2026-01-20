@@ -111,7 +111,7 @@ export default function ScoresTab({
                                             variant="flat"
                                             color={selectedAssignment.assignment_type === "individual" ? "primary" : selectedAssignment.assignment_type === "permanent_group" ? "secondary" : "warning"}
                                         >
-                                            {selectedAssignment.assignment_type === "individual" ? "รายบุคคล" : selectedAssignment.assignment_type === "permanent_group" ? "กลุ่มถาวร" : `กลุ่มสัปดาห์ ${selectedAssignment.week_number}`}
+                                            {selectedAssignment.assignment_type === "individual" ? "รายบุคคล" : selectedAssignment.assignment_type === "permanent_group" ? "กลุ่มโปรเจกต์" : `กลุ่มสัปดาห์ ${selectedAssignment.week_number}`}
                                         </Chip>
                                         <span className="text-sm text-slate-500">
                                             คะแนนเต็ม: {selectedAssignment.subItems && selectedAssignment.subItems.length > 0 

@@ -225,6 +225,31 @@ class StudentService {
   async lookupStudentScores(studentId: string) {
     return apiService.get<StudentScoreLookupResponse>(`${API_ENDPOINTS.STUDENTS}/lookup/${studentId}`);
   }
+
+  /**
+   * Search students by multiple student IDs within a specific course/section
+   * @param studentIds - Array of student IDs to search
+   * @param courseId - Optional course ID to filter by enrollment (string or number)
+   * @param section - Optional section to filter (use 'all' for all sections in course)
+   */
+  async searchStudentsByIds(studentIds: string[], courseId?: string | number, section?: string) {
+    return apiService.post<{
+      found: Array<{
+        input: string;
+        student: {
+          id: number;
+          student_id: string;
+          full_name: string;
+          email: string | null;
+        };
+      }>;
+      not_found: string[];
+    }>(`${API_ENDPOINTS.STUDENTS}/search-by-ids`, { 
+      student_ids: studentIds,
+      course_id: courseId,
+      section: section,
+    });
+  }
 }
 
 export const studentService = new StudentService();

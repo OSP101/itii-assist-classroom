@@ -44,6 +44,7 @@ interface SectionsTabProps {
     onOpenDeleteStudentModal: (sectionId: number, student: SectionStudent) => void;
     onOpenCreateTeamModal: (type: "permanent" | "weekly", method: "manual" | "random") => void;
     onOpenDeleteTeamModal: (teamId: number, type: "permanent" | "weekly", weekNumber?: number) => void;
+    onOpenEditTeamModal: (teamId: number, type: "permanent" | "weekly", weekNumber?: number) => void;
     onCopyTeamsFromWeek: (sourceWeek: number) => void;
     onOpenBulkDeleteModal: () => void;
     getFilteredSectionStudents: (sectionId: number) => SectionStudent[];
@@ -72,6 +73,7 @@ export default function SectionsTab({
     onOpenDeleteStudentModal,
     onOpenCreateTeamModal,
     onOpenDeleteTeamModal,
+    onOpenEditTeamModal,
     onCopyTeamsFromWeek,
     onOpenBulkDeleteModal,
     getFilteredSectionStudents,
@@ -124,7 +126,7 @@ export default function SectionsTab({
                         title={
                             <div className="flex items-center gap-2">
                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-lg" />
-                                <span>กลุ่มถาวร</span>
+                                <span>กลุ่มโปรเจกต์</span>
                                 {permanentTeams.length > 0 && (
                                     <Chip size="sm" variant="flat" className="bg-purple-100 text-purple-700 h-5 min-w-5 px-1">
                                         {permanentTeams.length}
@@ -138,7 +140,7 @@ export default function SectionsTab({
                         title={
                             <div className="flex items-center gap-2">
                                 <Icon icon="solar:calendar-bold" className="text-lg" />
-                                <span className="hidden sm:inline">กลุ่มรายสัปดาห์</span>
+                                <span className="hidden sm:inline">กลุ่มโปรเจกต์รายสัปดาห์</span>
                                 <span className="sm:hidden">รายสัปดาห์</span>
                                 {Object.keys(weeklyTeams).filter(k => weeklyTeams[parseInt(k)]?.length > 0).length > 0 && (
                                     <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-700 h-5 min-w-5 px-1">
@@ -267,7 +269,7 @@ export default function SectionsTab({
                                                             <TableColumn width={50}>ลำดับ</TableColumn>
                                                             <TableColumn width={100}>รหัส</TableColumn>
                                                             <TableColumn>ชื่อ-นามสกุล</TableColumn>
-                                                            <TableColumn width={120}>กลุ่มถาวร</TableColumn>
+                                                            <TableColumn width={120}>กลุ่มโปรเจกต์</TableColumn>
                                                             {/* <TableColumn width={80}>สถานะ</TableColumn> */}
                                                             <TableColumn width={50} align="center">จัดการ</TableColumn>
                                                         </TableHeader>
@@ -367,8 +369,8 @@ export default function SectionsTab({
                     ) : (
                         <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
                             <CardBody className="text-center py-16">
-                                <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
-                                    <Icon icon="solar:notebook-bold-duotone" className="text-5xl text-amber-500" />
+                                <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
+                                    <Icon icon="solar:notebook-bold-duotone" className="text-5xl text-blue-500" />
                                 </div>
                                 <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มเรียน</h3>
                                 <p className="text-slate-500 mb-6 max-w-md mx-auto">
@@ -376,10 +378,10 @@ export default function SectionsTab({
                                 </p>
                                 <Button
                                     color="primary"
-                                    size="lg"
+                                    size="md"
                                     startContent={<Icon icon="solar:add-circle-bold" />}
                                     onPress={onOpenAddSectionModal}
-                                    className="bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25"
+                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25"
                                 >
                                     เพิ่มกลุ่มเรียนแรก
                                 </Button>
@@ -401,7 +403,7 @@ export default function SectionsTab({
                                         <Icon icon="solar:info-circle-bold" className="text-xl text-purple-500" />
                                     </div>
                                     <div>
-                                        <p className="font-medium text-slate-700">กลุ่มถาวร</p>
+                                        <p className="font-medium text-slate-700">กลุ่มโปรเจกต์</p>
                                         <p className="text-sm text-slate-500 ">กลุ่มที่ใช้ตลอดทั้งเทอม สำหรับโปรเจกต์ระยะยาว</p>
                                     </div>
                                 </div>
@@ -452,17 +454,30 @@ export default function SectionsTab({
                                                     <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
                                                 </div>
                                             </div>
-                                            <Tooltip content="ลบกลุ่ม" color="danger">
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="flat"
-                                                    className="bg-white/20 text-white hover:bg-red-500"
-                                                    onPress={() => onOpenDeleteTeamModal(team.id, "permanent")}
-                                                >
-                                                    <Icon icon="solar:trash-bin-trash-bold" />
-                                                </Button>
-                                            </Tooltip>
+                                            <div className="flex items-center gap-1">
+                                                <Tooltip content="แก้ไขกลุ่ม">
+                                                    <Button
+                                                        isIconOnly
+                                                        size="sm"
+                                                        variant="flat"
+                                                        className="bg-white/20 text-white hover:bg-white/40"
+                                                        onPress={() => onOpenEditTeamModal(team.id, "permanent")}
+                                                    >
+                                                        <Icon icon="solar:pen-bold" />
+                                                    </Button>
+                                                </Tooltip>
+                                                <Tooltip content="ลบกลุ่ม" color="danger">
+                                                    <Button
+                                                        isIconOnly
+                                                        size="sm"
+                                                        variant="flat"
+                                                        className="bg-white/20 text-white hover:bg-red-500"
+                                                        onPress={() => onOpenDeleteTeamModal(team.id, "permanent")}
+                                                    >
+                                                        <Icon icon="solar:trash-bin-trash-bold" />
+                                                    </Button>
+                                                </Tooltip>
+                                            </div>
                                         </div>
                                     </CardHeader>
                                     <CardBody className="px-4 py-3">
@@ -489,7 +504,7 @@ export default function SectionsTab({
                                 <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
                                     <Icon icon="solar:users-group-two-rounded-bold-duotone" className="text-5xl text-purple-500" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มถาวร</h3>
+                                <h3 className="text-lg font-semibold text-slate-700 mb-2">ยังไม่มีกลุ่มโปรเจกต์</h3>
                                 <p className="text-slate-500 mb-6 max-w-md mx-auto">
                                     สร้างกลุ่มสำหรับโปรเจกต์หรืองานกลุ่มระยะยาวที่ต้องทำงานร่วมกันตลอดเทอม
                                 </p>
@@ -652,17 +667,30 @@ export default function SectionsTab({
                                                     <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
                                                 </div>
                                             </div>
-                                            <Tooltip content="ลบกลุ่ม" color="danger">
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="flat"
-                                                    className="bg-white/20 text-white hover:bg-red-500"
-                                                    onPress={() => onOpenDeleteTeamModal(team.id, "weekly", selectedWeek)}
-                                                >
-                                                    <Icon icon="solar:trash-bin-trash-bold" />
-                                                </Button>
-                                            </Tooltip>
+                                            <div className="flex items-center gap-1">
+                                                <Tooltip content="แก้ไขกลุ่ม">
+                                                    <Button
+                                                        isIconOnly
+                                                        size="sm"
+                                                        variant="flat"
+                                                        className="bg-white/20 text-white hover:bg-white/40"
+                                                        onPress={() => onOpenEditTeamModal(team.id, "weekly", selectedWeek)}
+                                                    >
+                                                        <Icon icon="solar:pen-bold" />
+                                                    </Button>
+                                                </Tooltip>
+                                                <Tooltip content="ลบกลุ่ม" color="danger">
+                                                    <Button
+                                                        isIconOnly
+                                                        size="sm"
+                                                        variant="flat"
+                                                        className="bg-white/20 text-white hover:bg-red-500"
+                                                        onPress={() => onOpenDeleteTeamModal(team.id, "weekly", selectedWeek)}
+                                                    >
+                                                        <Icon icon="solar:trash-bin-trash-bold" />
+                                                    </Button>
+                                                </Tooltip>
+                                            </div>
                                         </div>
                                     </CardHeader>
                                     <CardBody className="px-4 py-3">

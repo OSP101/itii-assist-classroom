@@ -1584,7 +1584,10 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   // Get real assignment statistics
   // ========================================
   const assignments = await Assignment.findAll({
-    where: { course_id: id },
+    where: { 
+      course_id: id,
+      is_active: true  // Only get active (non-deleted) assignments
+    },
     include: [
       {
         model: AssignmentSubItem,

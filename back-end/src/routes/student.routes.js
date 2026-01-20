@@ -18,6 +18,13 @@ router.get('/lookup/:student_id', studentController.lookupStudentScores);
 router.use(authenticate);
 
 /**
+ * @route   POST /api/students/search-by-ids
+ * @desc    Search students by multiple student IDs (for bulk operations)
+ * @access  Admin, Instructor, TA
+ */
+router.post('/search-by-ids', studentController.searchStudentsByIds);
+
+/**
  * @route   GET /api/students
  * @desc    Get all students with pagination and filters
  * @access  Admin, Instructor, TA
