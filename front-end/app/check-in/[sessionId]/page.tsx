@@ -433,14 +433,14 @@ export default function StudentCheckInPage() {
                                 >
                                     {isGettingLocation ? "กำลังระบุตำแหน่ง..." : "อนุญาตการเข้าถึงตำแหน่ง"}
                                 </Button>
-                                <Button
+                                {/* <Button
                                     variant="flat"
                                     size="lg"
                                     className="w-full"
                                     onPress={skipLocation}
                                 >
                                     ข้ามขั้นตอนนี้
-                                </Button>
+                                </Button> */}
                             </div>
 
                             <p className="text-xs text-slate-400 mt-4">

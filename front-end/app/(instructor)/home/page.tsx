@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Card, CardBody, CardFooter } from "@heroui/card";
@@ -12,10 +12,12 @@ import { Chip } from "@heroui/chip";
 import { Pagination } from "@heroui/pagination";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
+import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import { authService } from "@/services/auth.service";
 import { courseService, Course, Instructor } from "@/services/course.service";
+import { useSocket } from "@/contexts/SocketContext";
 import { IoSchool, IoBook, IoPeople, IoPersonAdd } from "react-icons/io5";
 
 interface Stats {
@@ -29,6 +31,7 @@ interface Stats {
 
 export default function HomePage() {
     const router = useRouter();
+    const { subscribeToCourseUpdates, unsubscribeFromCourseUpdates, onCourseUpdate, emitCourseUpdate, isConnected } = useSocket();
     const [allCourses, setAllCourses] = useState<Course[]>([]); // All courses from API
     const [stats, setStats] = useState<Stats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -36,6 +39,10 @@ export default function HomePage() {
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 12;
+
+    // View mode & status tab
+    const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+    const [statusTab, setStatusTab] = useState<"active" | "inactive">("active");
 
     // Instructors list (for multi-select)
     const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -68,7 +75,6 @@ export default function HomePage() {
     const [search, setSearch] = useState("");
     const [yearFilter, setYearFilter] = useState("");
     const [semesterFilter, setSemesterFilter] = useState("");
-    const [statusFilter, setStatusFilter] = useState("");
 
     // Get user role and ID
     useEffect(() => {
@@ -131,9 +137,46 @@ export default function HomePage() {
         fetchStats();
     }, [fetchCourses, fetchStats]);
 
+    // Subscribe to real-time course updates
+    useEffect(() => {
+        if (currentUserId) {
+            subscribeToCourseUpdates(currentUserId);
+            
+            return () => {
+                unsubscribeFromCourseUpdates(currentUserId);
+            };
+        }
+    }, [currentUserId, subscribeToCourseUpdates, unsubscribeFromCourseUpdates]);
+
+    // Handle real-time course updates from other clients
+    useEffect(() => {
+        const unsubscribe = onCourseUpdate((data) => {
+            console.log("📥 Received course update:", data);
+            // Refresh data when any course change is detected
+            fetchCourses();
+            fetchStats();
+            
+            // Show notification
+            addToast({
+                title: "ข้อมูลอัปเดต",
+                description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
+                color: "primary",
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [onCourseUpdate, fetchCourses, fetchStats]);
+
     // Client-side filtering
     const filteredCourses = useMemo(() => {
         let result = [...allCourses];
+
+        // Status tab filter (active/inactive)
+        result = result.filter(course => 
+            statusTab === "active" ? course.is_active === true : course.is_active === false
+        );
 
         // Search filter
         if (search.trim()) {
@@ -156,15 +199,8 @@ export default function HomePage() {
             result = result.filter(course => course.semester === semester);
         }
 
-        // Status filter
-        if (statusFilter === 'active') {
-            result = result.filter(course => course.is_active === true);
-        } else if (statusFilter === 'inactive') {
-            result = result.filter(course => course.is_active === false);
-        }
-
         return result;
-    }, [allCourses, search, yearFilter, semesterFilter, statusFilter]);
+    }, [allCourses, search, yearFilter, semesterFilter, statusTab]);
 
     // Client-side pagination
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -176,16 +212,15 @@ export default function HomePage() {
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, yearFilter, semesterFilter, statusFilter]);
+    }, [search, yearFilter, semesterFilter, statusTab]);
 
     const clearFilters = () => {
         setSearch("");
         setYearFilter("");
         setSemesterFilter("");
-        setStatusFilter("");
     };
 
-    const hasActiveFilters = search || yearFilter || semesterFilter || statusFilter;
+    const hasActiveFilters = search || yearFilter || semesterFilter;
 
     // Generate year options from actual data
     const yearOptions = useMemo(() => {
@@ -200,11 +235,6 @@ export default function HomePage() {
         { value: "1", label: "เทอม 1" },
         { value: "2", label: "เทอม 2" },
         { value: "3", label: "ฤดูร้อน" },
-    ];
-
-    const statusOptions = [
-        { value: "active", label: "เปิดใช้งาน" },
-        { value: "inactive", label: "ปิดใช้งาน" },
     ];
 
     const getSemesterText = (semester: number) => {
@@ -292,6 +322,8 @@ export default function HomePage() {
                 resetForm();
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("create", response.data?.id);
             } else {
                 // Handle API error response (e.g., duplicate course)
                 const errorMessage = typeof response.error === 'object' && response.error !== null
@@ -368,6 +400,8 @@ export default function HomePage() {
                 resetForm();
                 setSelectedCourse(null);
                 fetchCourses();
+                // Emit real-time update to other clients
+                emitCourseUpdate("update", selectedCourse.id);
             } else {
                 const errorMessage = typeof response.error === 'object' && response.error !== null
                     ? (response.error as { message?: string }).message
@@ -430,6 +464,8 @@ export default function HomePage() {
                 setCourseToToggle(null);
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("toggle", courseToToggle.id);
             } else {
                 const errorMessage = typeof response.error === 'object' && response.error !== null
                     ? (response.error as { message?: string }).message
@@ -455,13 +491,26 @@ export default function HomePage() {
         <div className="space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-900">รายวิชาของฉัน</h1>
-                    <p className="text-slate-500 mt-1">
-                        {userRole === "instructor"
-                            ? "รายวิชาที่คุณเป็นผู้สอน"
-                            : "รายวิชาที่คุณเป็นผู้ช่วยสอน"}
-                    </p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-900">รายวิชาของฉัน</h1>
+                        <p className="text-slate-500 mt-1">
+                            {userRole === "instructor"
+                                ? "รายวิชาที่คุณเป็นผู้สอน"
+                                : "รายวิชาที่คุณเป็นผู้ช่วยสอน"}
+                        </p>
+                    </div>
+                    {/* Real-time connection indicator */}
+                    <Tooltip content={isConnected ? "ข้อมูลอัปเดตแบบ Real-time" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                            isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500 animate-bounce"
+                            }`} />
+                            <span className="hidden sm:inline">{isConnected ? "Live" : "..."}</span>
+                        </div>
+                    </Tooltip>
                 </div>
 
                 {userRole === "instructor" && (
@@ -476,44 +525,61 @@ export default function HomePage() {
                 )}
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <Card className="border border-slate-200 shadow-sm">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-blue-100 p-2 sm:p-2.5">
-                            <IoBook className="text-xl sm:text-2xl text-blue-600" />
+            {/* Status Tabs & View Mode Toggle */}
+            <Card className="border border-slate-200 shadow-sm">
+                <CardBody className="p-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        {/* Status Tab Buttons */}
+                        <div className="flex gap-2">
+                            <Button
+                                variant={statusTab === "active" ? "solid" : "bordered"}
+                                color={statusTab === "active" ? "success" : "default"}
+                                onPress={() => setStatusTab("active")}
+                                startContent={<Icon icon="solar:check-circle-bold" className="text-lg" />}
+                                className={statusTab === "active" ? "" : "border-slate-300 text-slate-600"}
+                            >
+                                เปิดใช้งาน ({stats?.byStatus?.active ?? 0})
+                            </Button>
+                            <Button
+                                variant={statusTab === "inactive" ? "solid" : "bordered"}
+                                color={statusTab === "inactive" ? "danger" : "default"}
+                                onPress={() => setStatusTab("inactive")}
+                                startContent={<Icon icon="solar:close-circle-bold" className="text-lg" />}
+                                className={statusTab === "inactive" ? "" : "border-slate-300 text-slate-600"}
+                            >
+                                ปิดใช้งาน ({stats?.byStatus?.inactive ?? 0})
+                            </Button>
                         </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">รายวิชาทั้งหมด</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.total ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
 
-                <Card className="border border-slate-200 shadow-sm">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-green-100 p-2 sm:p-2.5">
-                            <IoSchool className="text-xl sm:text-2xl text-green-600" />
+                        {/* View Mode Toggle */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                            <Tooltip content="แบบการ์ด">
+                                <Button
+                                    isIconOnly
+                                    size="md"
+                                    variant="light"
+                                    className={`rounded-none ${viewMode === "grid" ? "bg-slate-100" : ""}`}
+                                    onPress={() => setViewMode("grid")}
+                                >
+                                    <Icon icon="solar:widget-bold" className={`text-lg ${viewMode === "grid" ? "text-blue-600" : "text-slate-400"}`} />
+                                </Button>
+                            </Tooltip>
+                            <div className="w-px h-5 bg-slate-200" />
+                            <Tooltip content="แบบรายการ">
+                                <Button
+                                    isIconOnly
+                                    size="md"
+                                    variant="light"
+                                    className={`rounded-none ${viewMode === "list" ? "bg-slate-100" : ""}`}
+                                    onPress={() => setViewMode("list")}
+                                >
+                                    <Icon icon="solar:list-bold" className={`text-lg ${viewMode === "list" ? "text-blue-600" : "text-slate-400"}`} />
+                                </Button>
+                            </Tooltip>
                         </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">เปิดใช้งาน</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.byStatus?.active ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
-
-                <Card className="border border-slate-200 shadow-sm col-span-2 sm:col-span-1">
-                    <CardBody className="flex flex-row items-center gap-3 p-4">
-                        <div className="rounded-xl bg-red-100 p-2 sm:p-2.5">
-                            <IoBook className="text-xl sm:text-2xl text-red-600" />
-                        </div>
-                        <div>
-                            <p className="text-xs sm:text-sm text-slate-500">ปิดใช้งาน</p>
-                            <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats?.byStatus?.inactive ?? 0}</p>
-                        </div>
-                    </CardBody>
-                </Card>
-            </div>
+                    </div>
+                </CardBody>
+            </Card>
 
             {/* Filters */}
             <Card className="border border-slate-200 shadow-sm">
@@ -566,20 +632,6 @@ export default function HomePage() {
                                 ))}
                             </Select>
 
-                            <Select
-                                placeholder="สถานะ"
-                                selectedKeys={statusFilter ? [statusFilter] : []}
-                                onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string || "")}
-                                className="w-full sm:w-32"
-                                size="md"
-                                variant="bordered"
-
-                            >
-                                {statusOptions.map((option) => (
-                                    <SelectItem key={option.value}>{option.label}</SelectItem>
-                                ))}
-                            </Select>
-
                             {hasActiveFilters && (
                                 <Button
                                     variant="flat"
@@ -596,7 +648,7 @@ export default function HomePage() {
                 </CardBody>
             </Card>
 
-            {/* Course Grid */}
+            {/* Course List */}
             {isLoading ? (
                 <div className="flex justify-center py-12">
                     <Spinner size="lg" color="primary" />
@@ -610,9 +662,11 @@ export default function HomePage() {
                         <p className="text-slate-500 text-center">
                             {hasActiveFilters
                                 ? "ไม่พบรายวิชาที่ตรงกับการค้นหา"
-                                : userRole === "instructor"
-                                    ? "คุณยังไม่มีรายวิชา กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
-                                    : "คุณยังไม่ได้รับมอบหมายเป็นผู้ช่วยสอนในรายวิชาใด ๆ"}
+                                : statusTab === "active"
+                                    ? userRole === "instructor"
+                                        ? "คุณยังไม่มีรายวิชาที่เปิดใช้งาน กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
+                                        : "คุณยังไม่มีรายวิชาที่เปิดใช้งาน"
+                                    : "ไม่มีรายวิชาที่ปิดใช้งาน"}
                         </p>
                         {hasActiveFilters && (
                             <Button
@@ -626,7 +680,8 @@ export default function HomePage() {
                         )}
                     </CardBody>
                 </Card>
-            ) : (
+            ) : viewMode === "grid" ? (
+                /* Grid View */
                 <>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {paginatedCourses.map((course) => (
@@ -651,19 +706,6 @@ export default function HomePage() {
                                             <IoSchool className="text-white/20 text-7xl" />
                                         </div>
                                     )}
-                                    {/* Status Badge */}
-                                    <div className="absolute top-2 right-2">
-                                        <Chip
-                                            size="sm"
-                                            variant="solid"
-                                            className={course.is_active
-                                                ? "bg-green-500/90 text-white"
-                                                : "bg-red-500/90 text-white"
-                                            }
-                                        >
-                                            {course.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
-                                        </Chip>
-                                    </div>
                                 </div>
 
                                 <CardBody className="p-4">
@@ -750,6 +792,131 @@ export default function HomePage() {
                                         </div>
                                     </div>
                                 </CardFooter>
+                            </Card>
+                        ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-center mt-6">
+                            <Pagination
+                                total={totalPages}
+                                page={currentPage}
+                                onChange={setCurrentPage}
+                                showControls
+                                color="primary"
+                            />
+                        </div>
+                    )}
+                </>
+            ) : (
+                /* List View */
+                <>
+                    <div className="space-y-2">
+                        {paginatedCourses.map((course) => (
+                            <Card
+                                key={course.id}
+                                isPressable
+                                onPress={() => handleCourseClick(course.id)}
+                                className="border border-slate-200 shadow-sm hover:shadow-md transition-shadow w-full"
+                            >
+                                <CardBody className="p-3 sm:p-4">
+                                    <div className="flex items-center gap-3 sm:gap-4">
+                                        {/* Course Image/Icon */}
+                                        <div className="w-14 h-14 sm:w-16 sm:h-16 relative overflow-hidden rounded-lg shrink-0">
+                                            {course.image ? (
+                                                <Image
+                                                    src={course.image}
+                                                    alt={course.name}
+                                                    fill
+                                                    className="object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center">
+                                                    <IoSchool className="text-white/30 text-2xl sm:text-3xl" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Course Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="font-semibold text-slate-900 truncate">
+                                                        {course.code} - {course.name}
+                                                    </h3>
+                                                    <div className="flex items-center gap-2 flex-wrap mt-1">
+                                                        <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                            {course.year}/{course.semester}
+                                                        </Chip>
+                                                        <span className="text-sm text-slate-500">
+                                                            {getSemesterText(course.semester)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                {/* Menu Button - Only for instructor */}
+                                                {userRole === "instructor" && (
+                                                    <Dropdown>
+                                                        <DropdownTrigger>
+                                                            <Button
+                                                                isIconOnly
+                                                                size="sm"
+                                                                variant="light"
+                                                                className="min-w-8 w-8 h-8"
+                                                            >
+                                                                <Icon icon="solar:menu-dots-bold" className="text-lg text-slate-500" />
+                                                            </Button>
+                                                        </DropdownTrigger>
+                                                        <DropdownMenu
+                                                            aria-label="Course actions"
+                                                            onAction={(key) => {
+                                                                if (key === "edit") {
+                                                                    openEditModal(course);
+                                                                } else if (key === "toggle") {
+                                                                    openToggleStatusModal(course);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <DropdownItem
+                                                                key="edit"
+                                                                startContent={<Icon icon="solar:pen-linear" className="text-lg" />}
+                                                            >
+                                                                แก้ไขรายวิชา
+                                                            </DropdownItem>
+                                                            <DropdownItem
+                                                                key="toggle"
+                                                                startContent={
+                                                                    <Icon
+                                                                        icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                                                                        className="text-lg"
+                                                                    />
+                                                                }
+                                                                color={course.is_active ? "warning" : "success"}
+                                                            >
+                                                                {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                                                            </DropdownItem>
+                                                        </DropdownMenu>
+                                                    </Dropdown>
+                                                )}
+                                            </div>
+                                            {/* Stats - Desktop Only */}
+                                            <div className="hidden sm:flex items-center gap-4 mt-2 text-sm text-slate-500">
+                                                <div className="flex items-center gap-1">
+                                                    <IoPeople className="text-lg" />
+                                                    <span>{course.taCount ?? 0} TA</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <IoPersonAdd className="text-lg" />
+                                                    <span>{course.studentCount ?? 0} นักศึกษา</span>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <IoBook className="text-lg" />
+                                                    <span>{course.sections?.length ?? 0} กลุ่ม</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardBody>
                             </Card>
                         ))}
                     </div>

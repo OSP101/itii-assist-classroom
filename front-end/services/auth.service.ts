@@ -5,6 +5,12 @@
 import apiService from './api.service';
 import { API_ENDPOINTS } from '@/config/api';
 
+// BroadcastChannel for cross-tab auth sync
+let authChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined') {
+  authChannel = new BroadcastChannel('auth-sync');
+}
+
 export interface User {
   id: number;
   username: string;
@@ -86,8 +92,24 @@ class AuthService {
       apiService.clearAuthTokens();
       if (typeof window !== 'undefined') {
         localStorage.removeItem('user');
+        // Broadcast logout to other tabs
+        authChannel?.postMessage({ type: 'logout' });
       }
     }
+  }
+
+  /**
+   * Subscribe to auth changes from other tabs
+   */
+  onAuthChange(callback: (event: { type: 'logout' | 'login' }) => void): () => void {
+    if (!authChannel) return () => {};
+    
+    const handler = (event: MessageEvent) => {
+      callback(event.data);
+    };
+    
+    authChannel.addEventListener('message', handler);
+    return () => authChannel?.removeEventListener('message', handler);
   }
 
   /**

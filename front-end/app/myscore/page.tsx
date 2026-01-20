@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardBody, CardHeader } from "@heroui/card";
+import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Input } from "@heroui/input";
 import { Spinner } from "@heroui/spinner";
 import { Chip } from "@heroui/chip";
 import { Tabs, Tab } from "@heroui/tabs";
+import { Accordion, AccordionItem } from "@heroui/accordion";
 import { Link } from "@heroui/link";
 import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
@@ -19,6 +20,43 @@ export default function MyScorePage() {
     const [data, setData] = useState<StudentScoreLookupResponse | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
     const [cooldown, setCooldown] = useState(0);
+    const [searchHistory, setSearchHistory] = useState<Array<{id: string, name: string}>>([]);
+    const [showHistory, setShowHistory] = useState(false);
+
+    // Load search history from localStorage on mount
+    useEffect(() => {
+        const saved = localStorage.getItem("myscore_search_history");
+        if (saved) {
+            try {
+                setSearchHistory(JSON.parse(saved));
+            } catch {
+                setSearchHistory([]);
+            }
+        }
+    }, []);
+
+    // Save to search history
+    const saveToHistory = (id: string, name: string) => {
+        const newHistory = [
+            { id, name },
+            ...searchHistory.filter(h => h.id !== id)
+        ].slice(0, 10); // Keep only last 10 searches
+        setSearchHistory(newHistory);
+        localStorage.setItem("myscore_search_history", JSON.stringify(newHistory));
+    };
+
+    // Remove from history
+    const removeFromHistory = (id: string) => {
+        const newHistory = searchHistory.filter(h => h.id !== id);
+        setSearchHistory(newHistory);
+        localStorage.setItem("myscore_search_history", JSON.stringify(newHistory));
+    };
+
+    // Clear all history
+    const clearHistory = () => {
+        setSearchHistory([]);
+        localStorage.removeItem("myscore_search_history");
+    };
 
     // Cooldown timer
     useEffect(() => {
@@ -48,6 +86,7 @@ export default function MyScorePage() {
             const response = await studentService.lookupStudentScores(studentId.trim());
             if (response.success && response.data) {
                 setData(response.data);
+                saveToHistory(studentId.trim(), response.data.student.full_name);
                 addToast({
                     title: "ค้นหาสำเร็จ",
                     description: `พบข้อมูลของ ${response.data.student.full_name}`,
@@ -252,61 +291,108 @@ export default function MyScorePage() {
         );
     };
 
-    const renderCourseCard = (courseData: CourseScoreData) => {
+    const renderCourseCard = (courseData: CourseScoreData, index: number) => {
         const { course, assignments, totalScore, totalMaxScore, progress, attendance, bonusScore } = courseData;
         const gradedCount = assignments.filter(a => a.status === "graded").length;
 
+        // Sort assignments by graded_at (newest first), then by created_at
+        const sortedAssignments = [...assignments].sort((a, b) => {
+            // Graded items first, then pending
+            if (a.status === "graded" && b.status !== "graded") return -1;
+            if (a.status !== "graded" && b.status === "graded") return 1;
+            
+            // For graded items, sort by graded_at (newest first)
+            if (a.graded_at && b.graded_at) {
+                return new Date(b.graded_at).getTime() - new Date(a.graded_at).getTime();
+            }
+            
+            // Fallback to created_at or id
+            return b.id - a.id;
+        });
+
+        // Sort attendance records by date (newest first)
+        const sortedAttendance = [...attendance.records].sort((a, b) => {
+            if (a.date && b.date) {
+                return new Date(b.date).getTime() - new Date(a.date).getTime();
+            }
+            return 0;
+        });
+
+        // Sort bonus records by given_at (newest first)
+        const sortedBonusRecords = bonusScore ? [...bonusScore.records].sort((a, b) => {
+            if (a.given_at && b.given_at) {
+                return new Date(b.given_at).getTime() - new Date(a.given_at).getTime();
+            }
+            return 0;
+        }) : [];
+
         return (
-            <Card key={course.id} className="mb-6 shadow-lg border-none overflow-visible">
-                {/* Course Header */}
-                <CardHeader className="flex flex-col gap-3 bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white p-5 sm:p-6 rounded-t-xl">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start w-full gap-3">
-                        <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-                                    <Icon icon="solar:book-2-bold" className="text-xl" />
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-bold">{course.code}</h3>
-                                    <p className="text-blue-100 text-sm">{course.name}</p>
-                                </div>
+            <AccordionItem
+                key={String(index)}
+                aria-label={`${course.code} - ${course.name}`}
+                classNames={{
+                    base: "group shadow-md hover:shadow-lg transition-shadow border border-gray-100 rounded-2xl overflow-hidden bg-white",
+                    trigger: "px-4 py-4 sm:px-6 data-[hover=true]:bg-gray-50/50",
+                    content: "px-0 pb-0",
+                    title: "flex-1",
+                    indicator: "text-gray-400 data-[open=true]:text-blue-500 text-lg",
+                }}
+                startContent={
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                        <Icon icon="solar:book-2-bold" className="text-white text-xl" />
+                    </div>
+                }
+                title={
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 w-full ml-3">
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="text-base sm:text-lg font-bold text-gray-800">{course.code}</h3>
+                                <Chip size="sm" variant="flat" color="primary" className="text-xs">
+                                    {course.year}/{course.semester}
+                                </Chip>
                             </div>
-                            <div className="flex items-center gap-2 mt-2 text-blue-200 text-xs">
-                                <Icon icon="solar:calendar-linear" />
-                                <span>ปีการศึกษา {course.year} / ภาคเรียนที่ {course.semester}</span>
-                            </div>
+                            <p className="text-gray-500 text-sm truncate">{course.name}</p>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                             {bonusScore && bonusScore.total > 0 && (
-                                <div className="flex items-center gap-1 bg-amber-400/20 rounded-xl px-4 py-3">
-                                    <Icon icon="solar:star-bold" className="text-amber-300 text-2xl" />
-                                    <span className="text-4xl font-bold text-amber-300">{bonusScore.total}</span>
+                                <div className="flex items-center gap-1 bg-amber-50 text-amber-600 rounded-lg px-2 py-1">
+                                    <Icon icon="solar:star-bold" className="text-sm" />
+                                    <span className="text-sm font-bold">+{bonusScore.total}</span>
                                 </div>
                             )}
-                            <div className="flex items-end gap-1 bg-white/10 rounded-xl px-4 py-3">
-                                <span className="text-4xl font-bold">{totalScore.toFixed(1)}</span>
-                                <span className="text-blue-200 text-sm mb-1">/ {totalMaxScore.toFixed(1)}</span>
+                            <div className="flex items-baseline gap-0.5 bg-blue-50 text-blue-600 rounded-lg px-3 py-1.5">
+                                <span className="text-xl sm:text-2xl font-bold">{totalScore.toFixed(1)}</span>
+                                <span className="text-xs text-blue-400">/{totalMaxScore.toFixed(1)}</span>
                             </div>
                         </div>
                     </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full">
-                        <div className="flex justify-between text-xs mb-2">
-                            <span className="text-blue-100">คะแนนรวม {progress}%</span>
-                            <span className="text-blue-100">{gradedCount}/{assignments.length} รายการ</span>
+                }
+            >
+                {/* Course Summary Header */}
+                <div className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 px-4 sm:px-6 py-4 text-white">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-4 text-sm">
+                            <span className="flex items-center gap-1.5">
+                                <Icon icon="solar:document-text-bold" />
+                                {gradedCount}/{assignments.length} รายการ
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                                <Icon icon="solar:calendar-mark-bold" />
+                                {attendance.records.length} ครั้ง
+                            </span>
                         </div>
-                        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
+                        <span className="text-lg font-bold">{progress}%</span>
                     </div>
-                </CardHeader>
+                    <div className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500"
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                </div>
 
                 {/* Tabs Content */}
-                <CardBody className="p-0">
+                <div className="bg-white">
                     <Tabs
                         aria-label="Course tabs"
                         color="primary"
@@ -325,14 +411,14 @@ export default function MyScorePage() {
                                 <div className="flex items-center gap-2">
                                     <Icon icon="solar:document-text-linear" className="text-lg" />
                                     <span>คะแนนเก็บ</span>
-                                    <Chip size="sm" variant="flat" color="primary">{assignments.length}</Chip>
+                                    <Chip size="sm" variant="flat" color="primary">{sortedAssignments.length}</Chip>
                                 </div>
                             }
                         >
                             <div className="p-4 sm:p-5">
-                                {assignments.length > 0 ? (
+                                {sortedAssignments.length > 0 ? (
                                     <div className="grid gap-3 sm:gap-4">
-                                        {assignments.map(renderAssignmentCard)}
+                                        {sortedAssignments.map(renderAssignmentCard)}
                                     </div>
                                 ) : (
                                     <div className="text-center py-8 text-gray-400">
@@ -350,7 +436,7 @@ export default function MyScorePage() {
                                 <div className="flex items-center gap-2">
                                     <Icon icon="solar:calendar-mark-linear" className="text-lg" />
                                     <span>เช็คชื่อ</span>
-                                    <Chip size="sm" variant="flat" color="success">{attendance.records.length}</Chip>
+                                    <Chip size="sm" variant="flat" color="success">{sortedAttendance.length}</Chip>
                                 </div>
                             }
                         >
@@ -379,9 +465,9 @@ export default function MyScorePage() {
                                 </div>
 
                                 {/* Attendance Records */}
-                                {attendance.records.length > 0 ? (
+                                {sortedAttendance.length > 0 ? (
                                     <div className="space-y-2">
-                                        {attendance.records.map((record) => {
+                                        {sortedAttendance.map((record) => {
                                             const config = getAttendanceConfig(record.status);
                                             return (
                                                 <div
@@ -448,13 +534,13 @@ export default function MyScorePage() {
                                 </div>
 
                                 {/* Bonus Score Records */}
-                                {bonusScore && bonusScore.records.length > 0 ? (
+                                {sortedBonusRecords.length > 0 ? (
                                     <div className="space-y-2">
                                         <p className="text-sm font-medium text-gray-600 mb-3 flex items-center gap-2">
                                             <Icon icon="solar:history-linear" />
-                                            ประวัติการได้รับคะแนน ({bonusScore.records.length} รายการ)
+                                            ประวัติการได้รับคะแนน ({sortedBonusRecords.length} รายการ)
                                         </p>
-                                        {bonusScore.records.map((record, index) => (
+                                        {sortedBonusRecords.map((record, index) => (
                                             <div
                                                 key={index}
                                                 className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-100 hover:border-amber-300 transition-colors"
@@ -495,8 +581,8 @@ export default function MyScorePage() {
                             </div>
                         </Tab>
                     </Tabs>
-                </CardBody>
-            </Card>
+                </div>
+            </AccordionItem>
         );
     };
 
@@ -600,7 +686,7 @@ export default function MyScorePage() {
                                 </div>
 
                                 {/* Stats */}
-                                <div className="grid grid-cols-3 divide-x divide-gray-100">
+                                {/* <div className="grid grid-cols-3 divide-x divide-gray-100">
                                     <div className="p-4 text-center">
                                         <p className="text-3xl font-bold text-blue-600">{data.courses.length}</p>
                                         <p className="text-xs text-gray-500 mt-1">รายวิชา</p>
@@ -617,13 +703,19 @@ export default function MyScorePage() {
                                         </p>
                                         <p className="text-xs text-gray-500 mt-1">เช็คชื่อ</p>
                                     </div>
-                                </div>
+                                </div> */}
                             </CardBody>
                         </Card>
 
                         {/* Course Cards */}
                         {data.courses.length > 0 ? (
-                            data.courses.map(renderCourseCard)
+                            <Accordion 
+                                selectionMode="multiple"
+                                variant="light"
+                                className="px-0 flex flex-col gap-4"
+                            >
+                                {data.courses.map((courseData, index) => renderCourseCard(courseData, index))}
+                            </Accordion>
                         ) : (
                             <Card className="shadow-lg border-none">
                                 <CardBody className="p-12 text-center">

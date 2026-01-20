@@ -32,6 +32,7 @@ import attendanceService, {
     type AttendanceSession,
     type CreateAttendanceData,
 } from "@/services/attendance.service";
+import { useSocket } from "@/contexts/SocketContext";
 import { now, getLocalTimeZone, parseAbsolute, type DateValue } from "@internationalized/date";
 
 // Lazy load LocationPicker (contains Leaflet which doesn't work well with SSR)
@@ -55,6 +56,7 @@ interface Course {
 interface AttendanceTabProps {
     course: Course;
     isLoading: boolean;
+    onAttendanceChanged?: () => void;
 }
 
 // Loading Skeleton
@@ -118,8 +120,9 @@ const statusDisplay: Record<string, { label: string; color: "default" | "primary
     closed: { label: "ปิดแล้ว", color: "danger" },
 };
 
-export default function AttendanceTab({ course, isLoading }: AttendanceTabProps) {
+export default function AttendanceTab({ course, isLoading, onAttendanceChanged }: AttendanceTabProps) {
     const router = useRouter();
+    const { emitDataUpdate } = useSocket();
     const [sessions, setSessions] = useState<AttendanceSession[]>([]);
     const [isSessionsLoading, setIsSessionsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -281,6 +284,10 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 setIsCreateModalOpen(false);
                 resetForm();
                 fetchSessionsNew();
+                
+                // Emit real-time update and refresh overview
+                emitDataUpdate("attendance", "create", result.id);
+                onAttendanceChanged?.();
             }
         } catch (error: unknown) {
             console.error("Error creating session:", error);
@@ -310,6 +317,10 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                 setIsDeleteModalOpen(false);
                 setDeleteTarget(null);
                 fetchSessionsNew();
+                
+                // Emit real-time update and refresh overview
+                emitDataUpdate("attendance", "delete", deleteTarget.id);
+                onAttendanceChanged?.();
             }
         } catch (error: unknown) {
             console.error("Error deleting session:", error);
@@ -389,7 +400,7 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
     const openEditModal = (session: AttendanceSession) => {
         setEditTarget(session);
         // Prepare section IDs - use sections array if available, fallback to single section_id
-        const sectionIds = session.sections?.map(s => s.id) || 
+        const sectionIds = session.sections?.map(s => s.id) ||
             (session.course_section_id ? [session.course_section_id] : []);
         setFormData({
             course_id: course.id,
@@ -446,8 +457,8 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
             if (formData.course_section_ids && formData.course_section_ids.length > 0) {
                 data.course_section_ids = formData.course_section_ids;
                 // Also set legacy field for backward compatibility
-                data.course_section_id = formData.course_section_ids.length === 1 
-                    ? formData.course_section_ids[0] 
+                data.course_section_id = formData.course_section_ids.length === 1
+                    ? formData.course_section_ids[0]
                     : null;
             } else {
                 data.course_section_ids = [];
@@ -712,300 +723,9 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                         </CardBody>
                     </Card>
 
-                    {/* Sessions Table */}
-                    <Card className="shadow-sm border border-slate-200">
-                        <CardBody className="p-2">
-                            <div className="overflow-x-auto">
-                                <Table
-                                    aria-label="Attendance sessions table"
-                                    removeWrapper
-                                    classNames={{
-                                        th: "bg-slate-50 text-slate-600 font-semibold text-sm",
-                                        td: "py-3",
-                                    }}
-                                >
-                                    <TableHeader>
-                                        <TableColumn>รอบการเช็คชื่อ</TableColumn>
-                                        <TableColumn>เซคชัน</TableColumn>
-                                        <TableColumn>ประเภท</TableColumn>
-                                        <TableColumn>วันเวลา</TableColumn>
-                                        <TableColumn>สถานะ</TableColumn>
-                                        <TableColumn>สถิติ</TableColumn>
-                                        <TableColumn align="center">จัดการ</TableColumn>
-                                    </TableHeader>
-                                    <TableBody
-                                        emptyContent={
-                                            <div className="py-10 text-center">
-                                                <Icon
-                                                    icon="solar:clipboard-list-linear"
-                                                    className="text-5xl text-slate-300 mx-auto mb-3"
-                                                />
-                                                <p className="text-slate-400">ยังไม่มีรอบการเช็คชื่อ</p>
-                                                <Button
-                                                    color="primary"
-                                                    variant="flat"
-                                                    size="sm"
-                                                    className="mt-3"
-                                                    onPress={() => setIsCreateModalOpen(true)}
-                                                >
-                                                    สร้างรอบเช็คชื่อแรก
-                                                </Button>
-                                            </div>
-                                        }
-                                    >
-                                        {filteredSessions.map((session) => (
-                                            <TableRow key={session.id}>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-3">
-                                                        {/* <div
-                                                            className={`p-2 rounded-xl ${session.session_type === "lecture"
-                                                                ? "bg-blue-100"
-                                                                : session.session_type === "lab"
-                                                                    ? "bg-emerald-100"
-                                                                    : "bg-violet-100"
-                                                                }`}
-                                                        >
-                                                            <Icon
-                                                                icon={sessionTypeDisplay[session.session_type].icon}
-                                                                className={`text-xl ${session.session_type === "lecture"
-                                                                    ? "text-blue-600"
-                                                                    : session.session_type === "lab"
-                                                                        ? "text-emerald-600"
-                                                                        : "text-violet-600"
-                                                                    }`}
-                                                            />
-                                                        </div> */}
-                                                        <div>
-                                                            <p className="font-medium text-slate-800">{session.title}</p>
-                                                            {session.check_location && (
-                                                                <div className="flex items-center gap-1 text-xs text-slate-500">
-                                                                    {/* <Icon icon="solar:map-point-bold" className="text-sm" /> */}
-                                                                    <span>ตรวจสอบตำแหน่ง</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {session.sections && session.sections.length > 0 ? (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {session.sections.map((sec) => (
-                                                                <Chip key={sec.id} size="sm" variant="flat" color="default">
-                                                                    {sec.section_no}
-                                                                </Chip>
-                                                            ))}
-                                                        </div>
-                                                    ) : session.section ? (
-                                                        <Chip size="sm" variant="flat" color="default">
-                                                            {session.section.section_no}
-                                                        </Chip>
-                                                    ) : (
-                                                        <span className="text-slate-500 text-sm">ทุกเซคชัน</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        size="sm"
-                                                        color={sessionTypeDisplay[session.session_type].color}
-                                                        variant="flat"
-                                                    >
-                                                        {sessionTypeDisplay[session.session_type].label}
-                                                    </Chip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="text-sm">
-                                                        <p className="text-slate-800">{formatDate(session.start_time)}</p>
-                                                        <p className="text-slate-500">
-                                                            {formatTime(session.start_time)} - {formatTime(session.end_time)}
-                                                        </p>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        size="sm"
-                                                        color={statusDisplay[session.status].color}
-                                                        variant="flat"
-                                                        startContent={
-                                                            session.status === "active" ? (
-                                                                <span className="relative flex h-2 w-2 mr-1">
-                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                                                </span>
-                                                            ) : undefined
-                                                        }
-                                                    >
-                                                        {statusDisplay[session.status].label}
-                                                    </Chip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {session.stats ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <Tooltip content="มาเรียน">
-                                                                <Chip size="sm" color="success" variant="flat">
-                                                                    {session.stats.present + session.stats.late}
-                                                                </Chip>
-                                                            </Tooltip>
-                                                            <Tooltip content="สาย">
-                                                                <Chip size="sm" color="warning" variant="flat">
-                                                                    {session.stats.late}
-                                                                </Chip>
-                                                            </Tooltip>
-                                                            <Tooltip content="ขาด">
-                                                                <Chip size="sm" color="danger" variant="flat">
-                                                                    {session.stats.absent}
-                                                                </Chip>
-                                                            </Tooltip>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-slate-400">-</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        {session.status === "draft" && (
-                                                            <>
-                                                                <Tooltip content="เริ่มเปิดเช็คชื่อทันที">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="success"
-                                                                        onPress={() => handleActivateSession(session)}
-                                                                    >
-                                                                        <Icon icon="solar:play-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="แก้ไข">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => openEditModal(session)}
-                                                                    >
-                                                                        <Icon icon="solar:pen-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ลบ" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => {
-                                                                            setDeleteTarget(session);
-                                                                            setIsDeleteModalOpen(true);
-                                                                        }}
-                                                                    >
-                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                        {session.status === "active" && (
-                                                            <>
-                                                                <Tooltip content="ดูหน้าเช็คชื่อ">
-                                                                    <Link
-                                                                        className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
-                                                                        href={`/attendance/${course.id}/session/${session.id}/live`}
-                                                                        target="_blank"
-                                                                    >
-                                                                        <Icon icon="solar:eye-bold" className="text-lg text-blue-600" />
-                                                                    </Link>
-                                                                </Tooltip>
-                                                                <Tooltip content="ดูสรุป">
-                                                                    <Link
-                                                                        className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
-                                                                        href={`/classroom/${course.id}/attendance/${session.id}/summary`}
-                                                                        target="_blank"
-                                                                    >
-                                                                        <Icon icon="solar:chart-bold" className="text-lg" />
-                                                                    </Link>
-                                                                </Tooltip>
-                                                                <Tooltip content="แก้ไขเวลา">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => openEditModal(session)}
-                                                                    >
-                                                                        <Icon icon="solar:pen-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ปิดทันที" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => handleCloseSession(session)}
-                                                                    >
-                                                                        <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                        {session.status === "closed" && (
-                                                            <>
-                                                                <Tooltip content="ดูหน้าเช็คชื่อ">
-                                                                    <Link
-                                                                        className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
-                                                                        href={`/attendance/${course.id}/session/${session.id}/live`}
-                                                                        target="_blank"
-                                                                    >
-                                                                        <Icon icon="solar:eye-bold" className="text-lg" />
-                                                                    </Link>
-                                                                </Tooltip>
-
-                                                                <Tooltip content="ดูสรุป">
-                                                                    <Link
-                                                                        className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
-                                                                        href={`/classroom/${course.id}/attendance/${session.id}/summary`}
-                                                                        target="_blank"
-                                                                    >
-                                                                        <Icon icon="solar:chart-bold" className="text-lg" />
-                                                                    </Link>
-                                                                </Tooltip>
-                                                                <Tooltip content="แก้ไข/ขยายเวลา">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => openEditModal(session)}
-                                                                    >
-                                                                        <Icon icon="solar:pen-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ลบ" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => {
-                                                                            setDeleteTarget(session);
-                                                                            setIsDeleteModalOpen(true);
-                                                                        }}
-                                                                    >
-                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardBody>
-                    </Card>
 
                     {/* Empty state when no sessions at all */}
-                    {sessions.length === 0 && (
+                    {sessions.length === 0 ? (
                         <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
                             <CardBody className="text-center py-16">
                                 <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
@@ -1028,7 +748,299 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                 </Button>
                             </CardBody>
                         </Card>
-                    )}
+                    ) : (
+                        < Card className="shadow-sm border border-slate-200">
+                            <CardBody className="p-2">
+                                <div className="overflow-x-auto">
+                                    <Table
+                                        aria-label="Attendance sessions table"
+                                        removeWrapper
+                                        classNames={{
+                                            th: "bg-slate-50 text-slate-600 font-semibold text-sm",
+                                            td: "py-3",
+                                        }}
+                                    >
+                                        <TableHeader>
+                                            <TableColumn>รอบการเช็คชื่อ</TableColumn>
+                                            <TableColumn>เซคชัน</TableColumn>
+                                            <TableColumn>ประเภท</TableColumn>
+                                            <TableColumn>วันเวลา</TableColumn>
+                                            <TableColumn>สถานะ</TableColumn>
+                                            <TableColumn>สถิติ</TableColumn>
+                                            <TableColumn align="center">จัดการ</TableColumn>
+                                        </TableHeader>
+                                        <TableBody
+                                            emptyContent={
+                                                <div className="py-10 text-center">
+                                                    <Icon
+                                                        icon="solar:clipboard-list-linear"
+                                                        className="text-5xl text-slate-300 mx-auto mb-3"
+                                                    />
+                                                    <p className="text-slate-400">ยังไม่มีรอบการเช็คชื่อ</p>
+                                                    <Button
+                                                        color="primary"
+                                                        variant="flat"
+                                                        size="sm"
+                                                        className="mt-3"
+                                                        onPress={() => setIsCreateModalOpen(true)}
+                                                    >
+                                                        สร้างรอบเช็คชื่อแรก
+                                                    </Button>
+                                                </div>
+                                            }
+                                        >
+                                            {filteredSessions.map((session) => (
+                                                <TableRow key={session.id}>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-3">
+                                                            {/* <div
+                                                            className={`p-2 rounded-xl ${session.session_type === "lecture"
+                                                                ? "bg-blue-100"
+                                                                : session.session_type === "lab"
+                                                                    ? "bg-emerald-100"
+                                                                    : "bg-violet-100"
+                                                                }`}
+                                                        >
+                                                            <Icon
+                                                                icon={sessionTypeDisplay[session.session_type].icon}
+                                                                className={`text-xl ${session.session_type === "lecture"
+                                                                    ? "text-blue-600"
+                                                                    : session.session_type === "lab"
+                                                                        ? "text-emerald-600"
+                                                                        : "text-violet-600"
+                                                                    }`}
+                                                            />
+                                                        </div> */}
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{session.title}</p>
+                                                                {session.check_location && (
+                                                                    <div className="flex items-center gap-1 text-xs text-slate-500">
+                                                                        {/* <Icon icon="solar:map-point-bold" className="text-sm" /> */}
+                                                                        <span>ตรวจสอบตำแหน่ง</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {session.sections && session.sections.length > 0 ? (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {session.sections.map((sec) => (
+                                                                    <Chip key={sec.id} size="sm" variant="flat" color="default">
+                                                                        {sec.section_no}
+                                                                    </Chip>
+                                                                ))}
+                                                            </div>
+                                                        ) : session.section ? (
+                                                            <Chip size="sm" variant="flat" color="default">
+                                                                {session.section.section_no}
+                                                            </Chip>
+                                                        ) : (
+                                                            <span className="text-slate-500 text-sm">ทุกเซคชัน</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            size="sm"
+                                                            color={sessionTypeDisplay[session.session_type].color}
+                                                            variant="flat"
+                                                        >
+                                                            {sessionTypeDisplay[session.session_type].label}
+                                                        </Chip>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="text-sm">
+                                                            <p className="text-slate-800">{formatDate(session.start_time)}</p>
+                                                            <p className="text-slate-500">
+                                                                {formatTime(session.start_time)} - {formatTime(session.end_time)}
+                                                            </p>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip
+                                                            size="sm"
+                                                            color={statusDisplay[session.status].color}
+                                                            variant="flat"
+                                                            startContent={
+                                                                session.status === "active" ? (
+                                                                    <span className="relative flex h-2 w-2 mr-1">
+                                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                                    </span>
+                                                                ) : undefined
+                                                            }
+                                                        >
+                                                            {statusDisplay[session.status].label}
+                                                        </Chip>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {session.stats ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <Tooltip content="มาเรียน">
+                                                                    <Chip size="sm" color="success" variant="flat">
+                                                                        {session.stats.present + session.stats.late}
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                                <Tooltip content="สาย">
+                                                                    <Chip size="sm" color="warning" variant="flat">
+                                                                        {session.stats.late}
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                                <Tooltip content="ขาด">
+                                                                    <Chip size="sm" color="danger" variant="flat">
+                                                                        {session.stats.absent}
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            {session.status === "draft" && (
+                                                                <>
+                                                                    <Tooltip content="เริ่มเปิดเช็คชื่อทันที">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="success"
+                                                                            onPress={() => handleActivateSession(session)}
+                                                                        >
+                                                                            <Icon icon="solar:play-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="แก้ไข">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="primary"
+                                                                            onPress={() => openEditModal(session)}
+                                                                        >
+                                                                            <Icon icon="solar:pen-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="ลบ" color="danger">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="danger"
+                                                                            onPress={() => {
+                                                                                setDeleteTarget(session);
+                                                                                setIsDeleteModalOpen(true);
+                                                                            }}
+                                                                        >
+                                                                            <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                </>
+                                                            )}
+                                                            {session.status === "active" && (
+                                                                <>
+                                                                    <Tooltip content="ดูหน้าเช็คชื่อ">
+                                                                        <Link
+                                                                            className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
+                                                                            href={`/attendance/${course.id}/session/${session.id}/live`}
+                                                                            target="_blank"
+                                                                        >
+                                                                            <Icon icon="solar:eye-bold" className="text-lg text-blue-600" />
+                                                                        </Link>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="ดูสรุป">
+                                                                        <Link
+                                                                            className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
+                                                                            href={`/classroom/${course.id}/attendance/${session.id}/summary`}
+                                                                            target="_blank"
+                                                                        >
+                                                                            <Icon icon="solar:chart-bold" className="text-lg" />
+                                                                        </Link>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="แก้ไขเวลา">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="primary"
+                                                                            onPress={() => openEditModal(session)}
+                                                                        >
+                                                                            <Icon icon="solar:pen-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="ปิดทันที" color="danger">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="danger"
+                                                                            onPress={() => handleCloseSession(session)}
+                                                                        >
+                                                                            <Icon icon="solar:stop-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                </>
+                                                            )}
+                                                            {session.status === "closed" && (
+                                                                <>
+                                                                    <Tooltip content="ดูหน้าเช็คชื่อ">
+                                                                        <Link
+                                                                            className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
+                                                                            href={`/attendance/${course.id}/session/${session.id}/live`}
+                                                                            target="_blank"
+                                                                        >
+                                                                            <Icon icon="solar:eye-bold" className="text-lg" />
+                                                                        </Link>
+                                                                    </Tooltip>
+
+                                                                    <Tooltip content="ดูสรุป">
+                                                                        <Link
+                                                                            className="inline-flex items-center justify-center p-2 rounded-lg hover:bg-gray-100"
+                                                                            href={`/classroom/${course.id}/attendance/${session.id}/summary`}
+                                                                            target="_blank"
+                                                                        >
+                                                                            <Icon icon="solar:chart-bold" className="text-lg" />
+                                                                        </Link>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="แก้ไข/ขยายเวลา">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="primary"
+                                                                            onPress={() => openEditModal(session)}
+                                                                        >
+                                                                            <Icon icon="solar:pen-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                    <Tooltip content="ลบ" color="danger">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="danger"
+                                                                            onPress={() => {
+                                                                                setDeleteTarget(session);
+                                                                                setIsDeleteModalOpen(true);
+                                                                            }}
+                                                                        >
+                                                                            <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </CardBody>
+                        </Card>
+                    )
+                    }
                 </>
             )}
 
@@ -1081,11 +1093,11 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                                         course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
                                     }));
                                 }}
-                                // description={
-                                //     (formData.course_section_ids || []).length === allSectionIds.length
-                                //         ? "เลือกทุกกลุ่มเรียนแล้ว"
-                                //         : `เลือกแล้ว ${(formData.course_section_ids || []).length} จาก ${allSectionIds.length} กลุ่มเรียน`
-                                // }
+                            // description={
+                            //     (formData.course_section_ids || []).length === allSectionIds.length
+                            //         ? "เลือกทุกกลุ่มเรียนแล้ว"
+                            //         : `เลือกแล้ว ${(formData.course_section_ids || []).length} จาก ${allSectionIds.length} กลุ่มเรียน`
+                            // }
                             >
                                 {(course.sections || []).map((section) => (
                                     <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
@@ -1729,6 +1741,6 @@ export default function AttendanceTab({ course, isLoading }: AttendanceTabProps)
                     </ModalFooter>
                 </ModalContent>
             </Modal>
-        </div>
+        </div >
     );
 }

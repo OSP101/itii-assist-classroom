@@ -30,6 +30,7 @@ import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import { useRouter } from "next/navigation";
 import { courseService } from "@/services/course.service";
+import { useSocket } from "@/contexts/SocketContext";
 import type { Course, CreateCourseDto, UpdateCourseDto, CourseStats, Instructor } from "@/services/course.service";
 
 // Column definitions
@@ -58,6 +59,7 @@ const semesterOptions = [
 
 export default function CoursesPage() {
     const router = useRouter();
+    const { subscribeToCourseUpdates, unsubscribeFromCourseUpdates, onCourseUpdate, emitCourseUpdate, isConnected } = useSocket();
     const [courses, setCourses] = useState<Course[]>([]);
     const [stats, setStats] = useState<CourseStats | null>(null);
     const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -174,6 +176,37 @@ export default function CoursesPage() {
         fetchStats();
         fetchInstructors();
     }, []);
+
+    // Subscribe to real-time course updates
+    useEffect(() => {
+        // Admin subscribes with userId = 0 (global admin)
+        subscribeToCourseUpdates(0);
+        
+        return () => {
+            unsubscribeFromCourseUpdates(0);
+        };
+    }, [subscribeToCourseUpdates, unsubscribeFromCourseUpdates]);
+
+    // Handle real-time course updates from other clients
+    useEffect(() => {
+        const unsubscribe = onCourseUpdate((data) => {
+            console.log("📥 Admin received course update:", data);
+            // Refresh data when any course change is detected
+            fetchCourses();
+            fetchStats();
+            
+            // Show notification
+            addToast({
+                title: "ข้อมูลอัปเดต",
+                description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
+                color: "primary",
+            });
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [onCourseUpdate, fetchCourses, fetchStats]);
 
     // Handle sort
     const handleSort = (column: string) => {
@@ -315,6 +348,8 @@ export default function CoursesPage() {
                 resetForm();
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("create", response.data?.id);
             } else {
                 // Handle API error response (e.g., duplicate course)
                 const errorMessage = typeof response.error === 'object' && response.error !== null
@@ -372,6 +407,8 @@ export default function CoursesPage() {
                 resetForm();
                 setSelectedCourse(null);
                 fetchCourses();
+                // Emit real-time update to other clients
+                emitCourseUpdate("update", selectedCourse.id);
             } else {
                 const errorMessage = typeof response.error === 'object' && response.error !== null
                     ? (response.error as { message?: string }).message
@@ -411,6 +448,8 @@ export default function CoursesPage() {
                 setSelectedCourse(null);
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("delete", selectedCourse.id);
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -441,6 +480,8 @@ export default function CoursesPage() {
                 setSelectedCourse(null);
                 fetchCourses();
                 fetchStats();
+                // Emit real-time update to other clients
+                emitCourseUpdate("toggle", selectedCourse.id);
             } else {
                 const errorMessage = typeof response.error === 'object' && response.error !== null
                     ? (response.error as { message?: string }).message
@@ -630,11 +671,24 @@ export default function CoursesPage() {
         <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">
-                        จัดการรายวิชา
-                    </h1>
-                    <p className="text-sm text-default-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold text-default-900">
+                            จัดการรายวิชา
+                        </h1>
+                        <p className="text-sm text-default-500 mt-1">จัดการรายวิชาทั้งหมดในระบบ</p>
+                    </div>
+                    {/* Real-time connection indicator */}
+                    <Tooltip content={isConnected ? "ข้อมูลอัปเดตแบบ Real-time" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
+                            isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500 animate-bounce"
+                            }`} />
+                            <span className="hidden sm:inline">{isConnected ? "Live" : "..."}</span>
+                        </div>
+                    </Tooltip>
                 </div>
                 <Button
                     color="primary"

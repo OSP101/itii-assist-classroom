@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
     Table,
     TableHeader,
@@ -10,6 +10,7 @@ import {
     TableCell,
     getKeyValue,
 } from "@heroui/table";
+import { useSocket } from "@/contexts/SocketContext";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 import { Button } from "@heroui/button";
@@ -69,6 +70,8 @@ const roleColors: Record<string, "primary" | "secondary" | "success" | "warning"
 
 export default function UsersPage() {
     const { user: authUser } = useAdmin();
+    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, isConnected } = useSocket();
+    const isUpdatingRef = useRef(false);
     const [users, setUsers] = useState<User[]>([]);
     const [stats, setStats] = useState<UserStats | null>(null);
 
@@ -155,6 +158,24 @@ export default function UsersPage() {
         fetchStats();
     }, [fetchUsers, fetchStats]);
 
+    // Real-time sync - Subscribe to user updates
+    useEffect(() => {
+        subscribeToUpdates();
+        return () => unsubscribeFromUpdates();
+    }, [subscribeToUpdates, unsubscribeFromUpdates]);
+
+    // Handle real-time updates from other tabs/users
+    useEffect(() => {
+        const unsubscribe = onDataUpdate((data) => {
+            if (data.resource === "user" && !isUpdatingRef.current) {
+                console.log("📥 User data updated from another source:", data);
+                fetchUsers();
+                fetchStats();
+            }
+        });
+        return unsubscribe;
+    }, [onDataUpdate, fetchUsers, fetchStats]);
+
     // Debounced search
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -176,6 +197,7 @@ export default function UsersPage() {
         }
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await userService.createUser(formData);
             if (response.success && response.data) {
@@ -188,6 +210,7 @@ export default function UsersPage() {
                 
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "create");
             } else {
                 addToast({
                     title: "ไม่สามารถสร้างผู้ใช้ได้",
@@ -203,6 +226,7 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -211,6 +235,7 @@ export default function UsersPage() {
         if (!selectedUser) return;
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const updateData: UpdateUserDto = {
                 username: formData.username,
@@ -230,6 +255,7 @@ export default function UsersPage() {
                 setIsEditModalOpen(false);
                 resetForm();
                 fetchUsers();
+                emitDataUpdate("user", "update", selectedUser.id);
             } else {
                 addToast({
                     title: "ไม่สามารถอัปเดตผู้ใช้ได้",
@@ -245,6 +271,7 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -253,6 +280,7 @@ export default function UsersPage() {
         if (!selectedUser) return;
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await userService.deleteUser(selectedUser.id);
             if (response.success) {
@@ -265,6 +293,7 @@ export default function UsersPage() {
                 setSelectedUser(null);
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "delete", selectedUser.id);
             } else {
                 addToast({
                     title: "ไม่สามารถลบผู้ใช้ได้",
@@ -280,11 +309,13 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
     // Handle toggle status
     const handleToggleStatus = async (user: User) => {
+        isUpdatingRef.current = true;
         try {
             const response = await userService.toggleStatus(user.id);
             if (response.success) {
@@ -295,6 +326,7 @@ export default function UsersPage() {
                 });
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "toggle", user.id);
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
@@ -308,6 +340,8 @@ export default function UsersPage() {
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
             });
+        } finally {
+            isUpdatingRef.current = false;
         }
     };
 
@@ -506,9 +540,24 @@ export default function UsersPage() {
         <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
-                    <p className="text-sm text-default-500">จัดการผู้ใช้งานในระบบ</p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
+                        <p className="text-sm text-default-500">จัดการผู้ใช้งานในระบบ</p>
+                    </div>
+                    {/* Live Indicator */}
+                    <Tooltip content={isConnected ? "ซิงค์แบบเรียลไทม์กำลังทำงาน" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            isConnected 
+                                ? "bg-emerald-100 text-emerald-700" 
+                                : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-emerald-500 animate-pulse" : "bg-yellow-500"
+                            }`}></span>
+                            {isConnected ? "Live" : "..."}
+                        </div>
+                    </Tooltip>
                 </div>
                 <Button
                     color="primary"

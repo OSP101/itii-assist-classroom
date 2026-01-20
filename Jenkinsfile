@@ -74,7 +74,7 @@ OR
             }
         }
 
-        stage('🔐 Inject Secrets (.env)') {
+        stage('🔐 Inject Secrets (.env) - DEV') {
     when {
         expression { env.ENV_NAME == 'dev' }
     }
@@ -131,6 +131,63 @@ EOF
     }
 }
 
+        stage('🔐 Inject Secrets (.env) - PROD') {
+    when {
+        expression { env.ENV_NAME == 'prod' }
+    }
+    steps {
+        script {
+            withCredentials([
+                string(credentialsId: 'PROD_DB_NAME', variable: 'DB_NAME'),
+                string(credentialsId: 'PROD_DB_USER', variable: 'DB_USER'),
+                string(credentialsId: 'PROD_DB_PASSWORD', variable: 'DB_PASSWORD'),
+                string(credentialsId: 'PROD_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
+                string(credentialsId: 'PROD_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                string(credentialsId: 'PROD_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
+                string(credentialsId: 'PROD_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
+                string(credentialsId: 'PROD_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL'),
+                string(credentialsId: 'PROD_NEXT_PUBLIC_SOCKET_URL', variable: 'NEXT_PUBLIC_SOCKET_URL'),
+                string(credentialsId: 'PROD_NEXT_PUBLIC_FRONTEND_URL', variable: 'NEXT_PUBLIC_FRONTEND_URL'),
+                string(credentialsId: 'PROD_NEXT_PUBLIC_CLOUD', variable: 'NEXT_PUBLIC_CLOUD'),
+                string(credentialsId: 'PROD_GOOGLE_CALLBACK_URL', variable: 'GOOGLE_CALLBACK_URL'),
+                string(credentialsId: 'PROD_FRONTEND_URL', variable: 'FRONTEND_URL'),
+                string(credentialsId: 'PROD_NEXT_PUBLIC_GOOGLE_CLIENT_ID', variable: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'),
+                string(credentialsId: 'PROD_JWT_ACCESS_EXPIRES_IN', variable: 'JWT_ACCESS_EXPIRES_IN'),
+                string(credentialsId: 'PROD_JWT_REFRESH_EXPIRES_IN', variable: 'JWT_REFRESH_EXPIRES_IN'),
+
+            ]) {
+                sh '''
+                # Create backend .env file
+                mkdir -p back-end
+                cat <<EOF > back-end/.env
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+GOOGLE_CALLBACK_URL=$GOOGLE_CALLBACK_URL
+FRONTEND_URL=$FRONTEND_URL
+JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
+JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
+EOF
+
+                # Create frontend .env.local file
+                mkdir -p front-end
+                cat <<EOF > front-end/.env.local
+NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+EOF
+                '''
+            }
+        }
+    }
+}
+
         stage('🏗 Build') {
             steps {
                 sh "docker compose -f ${COMPOSE_FILE} build"
@@ -147,9 +204,9 @@ EOF
                 echo "⏳ Waiting for containers to start..."
                 sleep 5
                 
-                if !  docker ps | grep -q itii-dev-backend; then
-                    echo "❌ Backend failed to start.  Showing logs:"
-                    docker logs itii-dev-backend || true
+                if ! docker ps | grep -q itii-${ENV_NAME}-backend; then
+                    echo "❌ Backend failed to start. Showing logs:"
+                    docker logs itii-${ENV_NAME}-backend || true
                     exit 1
                 fi
                 """
@@ -164,7 +221,7 @@ EOF
                 
                 echo ""
                 echo "📊 Backend logs:"
-                docker logs itii-dev-backend --tail 20 || true
+                docker logs itii-${ENV_NAME}-backend --tail 20 || true
                 """
             }
         }
@@ -176,13 +233,13 @@ EOF
         }
         failure {
             echo "❌ DEPLOY FAILED"
-            sh '''
+            sh """
             echo "📋 Backend logs:"
-            docker logs itii-dev-backend --tail 100 || true
+            docker logs itii-${ENV_NAME}-backend --tail 100 || true
             echo ""
             echo "📋 Container status:"
             docker ps -a | grep itii || true
-            '''
+            """
         }
         always {
             sh 'docker image prune -f || true'

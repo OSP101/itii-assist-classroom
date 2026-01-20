@@ -13,6 +13,7 @@ import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@herou
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import assignmentService from "@/services/assignment.service";
+import { useSocket } from "@/contexts/SocketContext";
 import type { AssignmentType, NewAssignment, LocalSubItem } from "./types";
 
 interface AssignmentsTabProps {
@@ -25,6 +26,7 @@ interface AssignmentsTabProps {
     onOpenEditModal: (assignment: AssignmentType) => void;
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
+    onAssignmentDeleted?: () => void;
 }
 
 export default function AssignmentsTab({
@@ -37,7 +39,9 @@ export default function AssignmentsTab({
     onOpenEditModal,
     onOpenScoreModal,
     onOpenBonusScoreModal,
+    onAssignmentDeleted,
 }: AssignmentsTabProps) {
+    const { emitDataUpdate } = useSocket();
     const [searchQuery, setSearchQuery] = useState("");
     const [activeTab, setActiveTab] = useState<"all" | "individual" | "group">("all");
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -72,6 +76,14 @@ export default function AssignmentsTab({
                 description: "ลบงานเรียบร้อยแล้ว",
                 color: "success",
             });
+            
+            // Emit real-time update
+            emitDataUpdate("assignment", "delete", deleteTarget.id);
+            
+            // Callback to refresh overview data
+            console.log("📊 Calling onAssignmentDeleted callback");
+            onAssignmentDeleted?.();
+            
             closeDeleteModal();
         } catch (error) {
             addToast({
@@ -118,7 +130,7 @@ export default function AssignmentsTab({
             case "individual":
                 return { label: "เดี่ยว", color: "bg-indigo-100 text-indigo-700", icon: "solar:user-bold" };
             case "permanent_group":
-                return { label: "กลุ่มถาวร", color: "bg-purple-100 text-purple-700", icon: "solar:users-group-two-rounded-bold" };
+                return { label: "กลุ่มโปรเจกต์", color: "bg-purple-100 text-purple-700", icon: "solar:users-group-two-rounded-bold" };
             default:
                 return { label: "กลุ่มสัปดาห์", color: "bg-emerald-100 text-emerald-700", icon: "solar:users-group-rounded-bold" };
         }
@@ -539,7 +551,7 @@ export default function AssignmentsTab({
                                                         {deleteTarget.assignment_type === "individual" 
                                                             ? "งานเดี่ยว" 
                                                             : deleteTarget.assignment_type === "permanent_group"
-                                                                ? "กลุ่มถาวร"
+                                                                ? "กลุ่มโปรเจกต์"
                                                                 : "กลุ่มสัปดาห์"}
                                                     </Chip>
                                                     {deleteTarget.week_number && (
