@@ -152,22 +152,22 @@ class AuthService {
 
    // Change password
 
-  // async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<{ success: boolean; error?: string }> {
-  //   const response = await apiService.post(API_ENDPOINTS.CHANGE_PASSWORD, {
-  //     currentPassword,
-  //     newPassword,
-  //     confirmPassword,
-  //   });
+  async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<{ success: boolean; error?: string }> {
+    const response = await apiService.post(API_ENDPOINTS.CHANGE_PASSWORD, {
+      currentPassword,
+      newPassword,
+      confirmPassword,
+    });
 
-  //   if (response.success) {
-  //     return { success: true };
-  //   }
+    if (response.success) {
+      return { success: true };
+    }
 
-  //   return {
-  //     success: false,
-  //     error: response.message || response.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
-  //   };
-  // }
+    return {
+      success: false,
+      error: response.message || response.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
+    };
+  }
 
    // Update user profile
   async updateProfile(data: { full_name?: string; email?: string }): Promise<{ success: boolean; user?: User; error?: string }> {
