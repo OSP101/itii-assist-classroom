@@ -199,12 +199,25 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     // Total max score
     const totalMaxScore = useMemo(() => columns.reduce((sum, c) => sum + c.maxScore, 0), [columns]);
 
-    // Class average
+
     const classAverage = useMemo(() => {
-        if (filteredStudents.length === 0) return 0;
-        const total = filteredStudents.reduce((sum, s) => sum + toNum(s.total_score), 0);
-        return total / filteredStudents.length;
-    }, [filteredStudents]);
+        if (totalMaxScore === 0) return 0;
+        
+
+        const studentsWithScores = filteredStudents.filter(s => {
+            if (toNum(s.total_score) > 0) return true;
+            if (s.scores) {
+                return Object.values(s.scores).some(score => score?.score !== null && score?.score !== undefined);
+            }
+            return false;
+        });
+        
+        if (studentsWithScores.length === 0) return 0;
+        
+        const total = studentsWithScores.reduce((sum, s) => sum + toNum(s.total_score), 0);
+        const avgScore = total / studentsWithScores.length;
+        return (avgScore / totalMaxScore) * 100;
+    }, [filteredStudents, totalMaxScore]);
 
     // Get score color based on percentage
     const getScoreColor = (score: number | null, max: number) => {
