@@ -61,8 +61,10 @@ export interface StudentStats {
 }
 
 export interface ImportResult {
-  success: number;
+  created: number;
+  skipped: number;
   failed: number;
+  duplicates: Array<{ student_id: string; full_name: string }>;
   errors: Array<{ student_id: string; error: string }>;
 }
 

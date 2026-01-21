@@ -265,9 +265,11 @@ const importStudents = asyncHandler(async (req, res) => {
   }
 
   const results = {
-    success: 0,
-    failed: 0,
-    errors: [],
+    created: 0,      // สร้างใหม่สำเร็จ
+    skipped: 0,      // ข้ามเพราะซ้ำ
+    failed: 0,       // ล้มเหลว
+    duplicates: [],  // รายการที่ซ้ำ
+    errors: [],      // รายการที่ผิดพลาด
   };
 
   for (const studentData of students) {
@@ -276,16 +278,16 @@ const importStudents = asyncHandler(async (req, res) => {
 
       if (!student_id || !full_name) {
         results.failed++;
-        results.errors.push({ student_id, error: 'ข้อมูลไม่ครบถ้วน' });
+        results.errors.push({ student_id, error: 'ข้อมูลไม่ครบถ้วน (ต้องมีรหัสนักศึกษาและชื่อ)' });
         continue;
       }
 
       // Check if already exists
       const existing = await Student.findOne({ where: { student_id } });
       if (existing) {
-        // Update existing student
-        await existing.update({ full_name, email, extra });
-        results.success++;
+        // Skip - already exists
+        results.skipped++;
+        results.duplicates.push({ student_id, full_name });
       } else {
         // Create new student
         await Student.create({
@@ -295,7 +297,7 @@ const importStudents = asyncHandler(async (req, res) => {
           extra: extra || null,
           is_active: true,
         });
-        results.success++;
+        results.created++;
       }
     } catch (error) {
       results.failed++;
@@ -306,9 +308,12 @@ const importStudents = asyncHandler(async (req, res) => {
     }
   }
 
+  // For backward compatibility
+  results.success = results.created;
+
   res.json({
     success: true,
-    message: `นำเข้าสำเร็จ ${results.success} รายการ, ล้มเหลว ${results.failed} รายการ`,
+    message: `เพิ่มใหม่ ${results.created} คน, ซ้ำ ${results.skipped} คน, ล้มเหลว ${results.failed} รายการ`,
     data: results,
   });
 });

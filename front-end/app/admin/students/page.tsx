@@ -343,11 +343,11 @@ export default function StudentsPage() {
 
         for (const line of lines) {
             const parts = line.split(/[,\t]/).map(p => p.trim());
-            if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+            if (parts.length >= 2 && parts[0] && parts[1]) {
                 studentsToImport.push({
                     student_id: parts[0],
                     full_name: parts[1],
-                    email: parts[2],
+                    email: parts[2] || "",
                 });
             }
         }
@@ -355,7 +355,7 @@ export default function StudentsPage() {
         if (studentsToImport.length === 0) {
             addToast({
                 title: "ไม่พบข้อมูลที่ถูกต้อง",
-                description: "กรุณาตรวจสอบรูปแบบข้อมูล (ต้องมีรหัส, ชื่อ, อีเมล ครบทุกช่อง)",
+                description: "กรุณาตรวจสอบรูปแบบข้อมูล (ต้องมีรหัสและชื่อ)",
                 color: "warning",
             });
             return;
@@ -366,11 +366,30 @@ export default function StudentsPage() {
         try {
             const response = await studentService.importStudents(studentsToImport);
             if (response.success && response.data) {
+                const { created, skipped, failed } = response.data;
+                
+                // Build detailed message
+                let description = "";
+                if (created > 0) description += `✅ เพิ่มใหม่ ${created} คน`;
+                if (skipped > 0) description += `${description ? ", " : ""}ซ้ำ ${skipped} คน`;
+                if (failed > 0) description += `${description ? ", " : ""}ล้มเหลว ${failed} รายการ`;
+                
+                // Determine toast color based on results
+                let toastColor: "success" | "warning" | "danger" = "success";
+                if (created === 0 && skipped > 0) {
+                    toastColor = "warning";
+                } else if (failed > 0 && created === 0) {
+                    toastColor = "danger";
+                } else if (skipped > 0 || failed > 0) {
+                    toastColor = "warning";
+                }
+
                 addToast({
-                    title: "นำเข้าข้อมูลสำเร็จ",
-                    description: `สำเร็จ ${response.data.success} รายการ, ล้มเหลว ${response.data.failed} รายการ`,
-                    color: response.data.failed > 0 ? "warning" : "success",
+                    title: "นำเข้าข้อมูลเสร็จสิ้น",
+                    description: description || "ไม่มีการเปลี่ยนแปลง",
+                    color: toastColor,
                 });
+
                 setIsImportModalOpen(false);
                 setImportText("");
                 fetchStudents();
