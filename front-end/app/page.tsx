@@ -49,7 +49,6 @@ export default function Home() {
     checkAuthAndRedirect();
   }, [router]);
 
-  // Show loading while checking auth
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
       <Spinner size="lg" color="primary" />
