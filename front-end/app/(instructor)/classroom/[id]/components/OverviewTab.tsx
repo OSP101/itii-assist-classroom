@@ -342,8 +342,12 @@ export default function OverviewTab({
                     icon="solar:diploma-bold"
                     iconBg="bg-gradient-to-br from-emerald-500 to-emerald-600"
                     label="คะแนนเฉลี่ย"
-                    value={overview?.summary.averageScore || 0}
-                    suffix={overview?.summary.totalMaxScore ? `/${overview.summary.totalMaxScore}` : ""}
+                    value={
+                        overview?.summary.totalMaxScore && overview.summary.totalMaxScore > 0
+                            ? Math.round((overview.summary.averageScore / overview.summary.totalMaxScore) * 100)
+                            : 0
+                    }
+                    suffix="%"
                 />
                 <StatsCard
                     icon="solar:user-hands-bold"

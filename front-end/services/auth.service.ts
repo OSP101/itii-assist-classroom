@@ -1,11 +1,6 @@
-/**
- * Authentication Service
- */
-
 import apiService from './api.service';
 import { API_ENDPOINTS } from '@/config/api';
 
-// BroadcastChannel for cross-tab auth sync
 let authChannel: BroadcastChannel | null = null;
 if (typeof window !== 'undefined') {
   authChannel = new BroadcastChannel('auth-sync');
@@ -42,9 +37,7 @@ export interface AuthState {
 }
 
 class AuthService {
-  /**
-   * Login with username and password
-   */
+   // Login with username and password
   async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; mustChangePassword?: boolean; error?: string }> {
     const response = await apiService.post<LoginResponse>(API_ENDPOINTS.LOGIN, credentials);
 
@@ -80,9 +73,7 @@ class AuthService {
     };
   }
 
-  /**
-   * Logout
-   */
+   // Logout
   async logout(): Promise<void> {
     try {
       await apiService.post(API_ENDPOINTS.LOGOUT);
@@ -98,9 +89,10 @@ class AuthService {
     }
   }
 
-  /**
-   * Subscribe to auth changes from other tabs
-   */
+
+   // Subscribe to auth changes from other tabs
+
+
   onAuthChange(callback: (event: { type: 'logout' | 'login' }) => void): () => void {
     if (!authChannel) return () => {};
     
@@ -157,9 +149,9 @@ class AuthService {
     return apiService.isAuthenticated();
   }
 
-  /**
-   * Change password
-   */
+
+   // Change password
+
   async changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Promise<{ success: boolean; error?: string }> {
     const response = await apiService.post(API_ENDPOINTS.CHANGE_PASSWORD, {
       currentPassword,
@@ -177,9 +169,7 @@ class AuthService {
     };
   }
 
-  /**
-   * Update user profile
-   */
+   // Update user profile
   async updateProfile(data: { full_name?: string; email?: string }): Promise<{ success: boolean; user?: User; error?: string }> {
     const response = await apiService.put<{ user: User }>(API_ENDPOINTS.UPDATE_PROFILE, data);
 

@@ -212,9 +212,10 @@ export default function UsersPage() {
                 fetchStats();
                 emitDataUpdate("user", "create");
             } else {
+                const errorMessage = (response as { error?: { message?: string } }).error?.message || "เกิดข้อผิดพลาด";
                 addToast({
                     title: "ไม่สามารถสร้างผู้ใช้ได้",
-                    description: response.message || "เกิดข้อผิดพลาด",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -257,9 +258,10 @@ export default function UsersPage() {
                 fetchUsers();
                 emitDataUpdate("user", "update", selectedUser.id);
             } else {
+                const errorMessage = (response as { error?: { message?: string } }).error?.message || "เกิดข้อผิดพลาด";
                 addToast({
                     title: "ไม่สามารถอัปเดตผู้ใช้ได้",
-                    description: response.message || "เกิดข้อผิดพลาด",
+                    description: errorMessage,
                     color: "danger",
                 });
             }

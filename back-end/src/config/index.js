@@ -1,4 +1,18 @@
-require('dotenv').config();
+const path = require('path');
+
+// Only load .env file if DB_NAME is not already set (from docker env_file)
+if (!process.env.DB_NAME) {
+  const envFile = process.env.NODE_ENV === 'production' ? '.env.prod' : '.env.dev';
+  require('dotenv').config({ path: path.resolve(__dirname, '../../', envFile) });
+  
+  // Fallback to .env if specific file doesn't exist
+  if (!process.env.DB_NAME) {
+    require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+  }
+}
+
+// Debug: Log which database is being used
+console.log(`📦 Database config: ${process.env.DB_NAME} @ ${process.env.DB_HOST || 'localhost'}`);
 
 module.exports = {
   // Server
