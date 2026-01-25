@@ -12,13 +12,11 @@ export default function Home() {
   useEffect(() => {
     const checkAuthAndRedirect = async () => {
       try {
-        // Check if user is authenticated
         if (!authService.isAuthenticated()) {
           router.push("/login");
           return;
         }
 
-        // Get current user
         const user = await authService.getCurrentUser();
         
         if (!user) {
@@ -26,7 +24,6 @@ export default function Home() {
           return;
         }
 
-        // Redirect based on role
         switch (user.role) {
           case "admin":
             router.push("/admin/dashboard");
