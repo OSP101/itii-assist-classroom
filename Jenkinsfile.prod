@@ -73,6 +73,15 @@ NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
 NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
 EOF
+
+                        # Create .env for docker-compose build args
+                        cat <<EOF > .env
+NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+EOF
                         '''
                     }
                 }
@@ -81,7 +90,7 @@ EOF
 
         stage('🏗 Build') {
             steps {
-                sh "docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} build"
+                sh "docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} build --no-cache"
             }
         }
 
