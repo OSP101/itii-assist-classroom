@@ -23,7 +23,6 @@ declare module "@react-types/shared" {
   }
 }
 
-// Hook to sync auth across tabs
 function useAuthSync() {
   const router = useRouter();
   const pathname = usePathname();
