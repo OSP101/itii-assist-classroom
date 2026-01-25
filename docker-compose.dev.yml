@@ -26,7 +26,11 @@ services:
     build: 
       context: ./front-end
       args:
-        NEXT_PUBLIC_API_URL:  ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+        NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL}
+        NEXT_PUBLIC_CLOUD: ${NEXT_PUBLIC_CLOUD}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
     image: itii-frontend:dev
     container_name:  itii-dev-frontend
     env_file:
