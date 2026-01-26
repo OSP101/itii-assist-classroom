@@ -19,7 +19,7 @@ interface ScoreSummaryTabProps {
     courseId: string;
 }
 
-type AssignmentTabType = "individual" | "group";
+type AssignmentTabType = "lab" | "assignment" | "group";
 
 interface ScoreDetailModal {
     isOpen: boolean;
@@ -62,7 +62,7 @@ const formatDate = (dateStr?: string): string => {
 };
 
 export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
-    const [selectedTab, setSelectedTab] = useState<AssignmentTabType>("individual");
+    const [selectedTab, setSelectedTab] = useState<AssignmentTabType>("lab");
     const [selectedSection, setSelectedSection] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [isLoading, setIsLoading] = useState(false);
@@ -70,10 +70,11 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     const [hoverColKey, setHoverColKey] = useState<string | null>(null);
 
 
-    // Cache data for both tabs - avoid re-fetching when switching
-    const [individualData, setIndividualData] = useState<ScoreSummaryMatrix | null>(null);
+    // Cache data for all tabs - avoid re-fetching when switching
+    const [labData, setLabData] = useState<ScoreSummaryMatrix | null>(null);
+    const [assignmentData, setAssignmentData] = useState<ScoreSummaryMatrix | null>(null);
     const [groupData, setGroupData] = useState<ScoreSummaryMatrix | null>(null);
-    const hasFetchedRef = useRef({ individual: false, group: false });
+    const hasFetchedRef = useRef({ lab: false, assignment: false, group: false });
 
     // Score detail modal
     const [scoreModal, setScoreModal] = useState<ScoreDetailModal>({
@@ -86,7 +87,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     });
 
     // Get current matrix data based on selected tab
-    const matrixData = selectedTab === "individual" ? individualData : groupData;
+    const matrixData = selectedTab === "lab" ? labData : selectedTab === "assignment" ? assignmentData : groupData;
 
     // Fetch matrix data (with caching)
     const fetchMatrix = useCallback(async (type: AssignmentTabType, forceRefresh = false) => {
@@ -95,11 +96,15 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
 
         setIsLoading(true);
         try {
+            // Map tab type to API assignment type
+            const apiType = type === "lab" ? "individual" : type === "assignment" ? "assignment" : "group";
             const data = await scoreService.getScoreSummaryMatrix(courseId, {
-                assignmentType: type,
+                assignmentType: apiType,
             });
-            if (type === "individual") {
-                setIndividualData(data);
+            if (type === "lab") {
+                setLabData(data);
+            } else if (type === "assignment") {
+                setAssignmentData(data);
             } else {
                 setGroupData(data);
             }
@@ -202,7 +207,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
 
     const classAverage = useMemo(() => {
         if (totalMaxScore === 0) return 0;
-        
+
 
         const studentsWithScores = filteredStudents.filter(s => {
             if (toNum(s.total_score) > 0) return true;
@@ -211,9 +216,9 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
             }
             return false;
         });
-        
+
         if (studentsWithScores.length === 0) return 0;
-        
+
         const total = studentsWithScores.reduce((sum, s) => sum + toNum(s.total_score), 0);
         const avgScore = total / studentsWithScores.length;
         return (avgScore / totalMaxScore) * 100;
@@ -252,7 +257,8 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
     };
 
     // Count assignments for each tab from cache
-    const individualCount = individualData?.assignments?.length || 0;
+    const labCount = labData?.assignments?.length || 0;
+    const assignmentCount = assignmentData?.assignments?.length || 0;
     const groupCount = groupData?.assignments?.length || 0;
 
     console.log("Title: ScoreSummaryTab render", columns);
@@ -276,23 +282,37 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                 onSelectionChange={(key) => setSelectedTab(key as AssignmentTabType)}
                 variant="underlined"
                 classNames={{
-                    tabList: "gap-6",
+                    tabList: "gap-4 md:gap-6 flex-nowrap min-w-max",
                     cursor: "bg-blue-500",
                     tab: "px-0 h-10",
                     tabContent: "group-data-[selected=true]:text-blue-600 text-slate-500 font-medium text-sm",
                 }}
             >
                 <Tab
-                    key="individual"
+                    key="lab"
                     title={
                         <div className="flex items-center gap-2">
-                            <Icon icon="solar:user-bold" className="text-base" />
-                            <span>งานเดี่ยว</span>
-                            {/* {individualCount > 0 && (
-                                <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-600 h-5 px-1.5 text-xs">
-                                    {individualCount}
+                            <Icon icon="solar:monitor-bold" className="text-base" />
+                            <span>Laboratory</span>
+                            {labCount > 0 && (
+                                <Chip size="sm" variant="flat" className="bg-indigo-100 text-indigo-600 h-5 px-1.5 text-xs">
+                                    {labCount}
                                 </Chip>
-                            )} */}
+                            )}
+                        </div>
+                    }
+                />
+                <Tab
+                    key="assignment"
+                    title={
+                        <div className="flex items-center gap-2">
+                            <Icon icon="solar:document-text-bold" className="text-base" />
+                            <span>Assignment</span>
+                            {assignmentCount > 0 && (
+                                <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-600 h-5 px-1.5 text-xs">
+                                    {assignmentCount}
+                                </Chip>
+                            )}
                         </div>
                     }
                 />
@@ -302,11 +322,11 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                         <div className="flex items-center gap-2">
                             <Icon icon="solar:users-group-rounded-bold" className="text-base" />
                             <span>งานกลุ่ม</span>
-                            {/* {groupCount > 0 && (
-                                <Chip size="sm" variant="flat" className="bg-purple-100 text-purple-600 h-5 px-1.5 text-xs">
+                            {groupCount > 0 && (
+                                <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-600 h-5 px-1.5 text-xs">
                                     {groupCount}
                                 </Chip>
-                            )} */}
+                            )}
                         </div>
                     }
                 />
@@ -395,7 +415,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
                     ) : !matrixData || matrixData.assignments.length === 0 ? (
                         <div className="text-center py-20">
                             <Icon icon="solar:clipboard-list-linear" className="text-5xl text-slate-300 mx-auto mb-3" />
-                            <p className="text-slate-500">ยังไม่มี{selectedTab === "individual" ? "งานเดี่ยว" : "งานกลุ่ม"}</p>
+                            <p className="text-slate-500">ยังไม่มี{selectedTab === "lab" ? "Lab" : selectedTab === "assignment" ? "Assignment" : "งานกลุ่ม"}</p>
                         </div>
                     ) : filteredStudents.length === 0 ? (
                         <div className="text-center py-20">

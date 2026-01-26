@@ -1,11 +1,9 @@
 import "@/styles/globals.css";
-import { Providers } from "../providers";
-import { fontSans } from "@/config/fonts";
-import clsx from "clsx";
 
 export const metadata = {
-  title: "เข้าสู่ระบบ - ITII Assist Classroom",
-  description: "เข้าสู่ระบบ ITII Assist Classroom",
+  title: "เข้าสู่ระบบ",
+  description: "เข้าสู่ระบบ ITII Assist Classroom เพื่อจัดการห้องเรียนของคุณอย่างมีประสิทธิภาพและง่ายดาย",
+  image: "/cp-image-login.jpg",
 };
 
 export const viewport = {

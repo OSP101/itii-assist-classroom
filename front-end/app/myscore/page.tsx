@@ -20,7 +20,7 @@ export default function MyScorePage() {
     const [data, setData] = useState<StudentScoreLookupResponse | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
     const [cooldown, setCooldown] = useState(0);
-    const [searchHistory, setSearchHistory] = useState<Array<{id: string, name: string}>>([]);
+    const [searchHistory, setSearchHistory] = useState<Array<{ id: string, name: string }>>([]);
     const [showHistory, setShowHistory] = useState(false);
 
     // Load search history from localStorage on mount
@@ -167,6 +167,28 @@ export default function MyScorePage() {
         const hasSubItems = assignment.sub_items && assignment.sub_items.length > 0;
         const isGroupWork = assignment.is_group_assignment || assignment.type !== "individual";
 
+        // คำนวณคะแนนจาก sub_items ที่ตรวจแล้วเท่านั้น
+        const getCalculatedScore = () => {
+            if (hasSubItems) {
+                const gradedSubItems = assignment.sub_items.filter(s => s.score !== null);
+                return gradedSubItems.reduce((sum, s) => sum + (s.score || 0), 0);
+            }
+            return assignment.score || 0;
+        };
+
+        const getGradedMaxScore = () => {
+            if (hasSubItems) {
+                const gradedSubItems = assignment.sub_items.filter(s => s.score !== null);
+                return gradedSubItems.reduce((sum, s) => sum + s.max_score, 0);
+            }
+            return assignment.max_score;
+        };
+
+        const calculatedScore = getCalculatedScore();
+        const gradedMaxScore = getGradedMaxScore();
+        const allSubItemsGraded = hasSubItems && assignment.sub_items.every(s => s.score !== null);
+        const someSubItemsGraded = hasSubItems && assignment.sub_items.some(s => s.score !== null);
+
         return (
             <div
                 key={assignment.id}
@@ -197,10 +219,23 @@ export default function MyScorePage() {
                             )}
                         </div>
                         <div className="text-right flex-shrink-0">
-                            <div className={`text-2xl font-bold ${getScoreColor(assignment.score, assignment.max_score, assignment.status === "graded")}`}>
-                                {getDisplayScore(assignment.score, assignment.status === "graded")}<span className="text-xs text-gray-400">/ {assignment.max_score}</span>
+                            <div className={`text-2xl font-bold ${hasSubItems 
+                                ? getScoreColor(calculatedScore, gradedMaxScore, someSubItemsGraded)
+                                : getScoreColor(assignment.score, assignment.max_score, assignment.status === "graded")
+                            }`}>
+                                {hasSubItems 
+                                    ? (someSubItemsGraded ? calculatedScore.toFixed(1) : "0")
+                                    : getDisplayScore(assignment.score, assignment.status === "graded")
+                                }
+                                <span className="text-xs text-gray-400">
+                                    / {assignment.max_score}
+                                </span>
                             </div>
-                            
+                            {hasSubItems && !allSubItemsGraded && someSubItemsGraded && (
+                                <p className="text-[10px] text-amber-500">
+                                    ตรวจแล้ว {assignment.sub_items.filter(s => s.score !== null).length}/{assignment.sub_items.length} ข้อ
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -219,9 +254,8 @@ export default function MyScorePage() {
                                     <div key={subItem.id} className="bg-white/60 rounded-lg px-3 py-2 flex items-center justify-between">
                                         <span className="text-sm text-gray-700">{subItem.name}</span>
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-sm font-bold ${
-                                                subItemGraded ? "text-blue-600" : "text-gray-400"
-                                            }`}>
+                                            <span className={`text-sm font-bold ${subItemGraded ? "text-blue-600" : "text-gray-400"
+                                                }`}>
                                                 {subItemGraded ? subItem.score : 0}/{subItem.max_score}
                                             </span>
                                             {subItemGraded ? (
@@ -295,20 +329,25 @@ export default function MyScorePage() {
         const { course, assignments, totalScore, totalMaxScore, progress, attendance, bonusScore } = courseData;
         const gradedCount = assignments.filter(a => a.status === "graded").length;
 
-        // Sort assignments by graded_at (newest first), then by created_at
-        const sortedAssignments = [...assignments].sort((a, b) => {
-            // Graded items first, then pending
-            if (a.status === "graded" && b.status !== "graded") return -1;
-            if (a.status !== "graded" && b.status === "graded") return 1;
-            
-            // For graded items, sort by graded_at (newest first)
-            if (a.graded_at && b.graded_at) {
-                return new Date(b.graded_at).getTime() - new Date(a.graded_at).getTime();
-            }
-            
-            // Fallback to created_at or id
-            return b.id - a.id;
-        });
+        // Separate assignments by type
+        const labAssignments = assignments.filter(a => a.type === "individual");
+        const homeworkAssignments = assignments.filter(a => a.type === "assignment");
+        const groupAssignments = assignments.filter(a => a.type === "permanent_group" || a.type === "weekly_group");
+
+        // Calculate scores by type
+        const labScore = labAssignments.reduce((sum, a) => sum + (a.score || 0), 0);
+        const labMaxScore = labAssignments.reduce((sum, a) => sum + a.max_score, 0);
+        const homeworkScore = homeworkAssignments.reduce((sum, a) => sum + (a.score || 0), 0);
+        const homeworkMaxScore = homeworkAssignments.reduce((sum, a) => sum + a.max_score, 0);
+        const groupScore = groupAssignments.reduce((sum, a) => sum + (a.score || 0), 0);
+        const groupMaxScore = groupAssignments.reduce((sum, a) => sum + a.max_score, 0);
+
+        // Sort function for assignments - newest first by id
+        const sortAssignments = (list: AssignmentScore[]) => [...list].sort((a, b) => b.id - a.id);
+
+        const sortedLabAssignments = sortAssignments(labAssignments);
+        const sortedHomeworkAssignments = sortAssignments(homeworkAssignments);
+        const sortedGroupAssignments = sortAssignments(groupAssignments);
 
         // Sort attendance records by date (newest first)
         const sortedAttendance = [...attendance.records].sort((a, b) => {
@@ -325,6 +364,13 @@ export default function MyScorePage() {
             }
             return 0;
         }) : [];
+
+        // Check which types exist
+        const hasLab = labAssignments.length > 0;
+        const hasHomework = homeworkAssignments.length > 0;
+        const hasGroup = groupAssignments.length > 0;
+        const hasAttendance = attendance.records.length > 0;
+        const hasBonus = bonusScore && (bonusScore.total > 0 || bonusScore.records.length > 0);
 
         return (
             <AccordionItem
@@ -353,119 +399,257 @@ export default function MyScorePage() {
                             </div>
                             <p className="text-gray-500 text-sm truncate">{course.name}</p>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                        {/* <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 flex-wrap">
                             {bonusScore && bonusScore.total > 0 && (
                                 <div className="flex items-center gap-1 bg-amber-50 text-amber-600 rounded-lg px-2 py-1">
                                     <Icon icon="solar:star-bold" className="text-sm" />
                                     <span className="text-sm font-bold">+{bonusScore.total}</span>
                                 </div>
                             )}
-                            <div className="flex items-baseline gap-0.5 bg-blue-50 text-blue-600 rounded-lg px-3 py-1.5">
+                            {/* <div className="flex items-baseline gap-0.5 bg-blue-50 text-blue-600 rounded-lg px-3 py-1.5">
                                 <span className="text-xl sm:text-2xl font-bold">{totalScore.toFixed(1)}</span>
                                 <span className="text-xs text-blue-400">/{totalMaxScore.toFixed(1)}</span>
-                            </div>
-                        </div>
+                            </div> */}
+
+                        
                     </div>
                 }
             >
-                {/* Course Summary Header */}
-                <div className="bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-600 px-4 sm:px-6 py-4 text-white">
-                    <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-4 text-sm">
-                            <span className="flex items-center gap-1.5">
-                                <Icon icon="solar:document-text-bold" />
-                                {gradedCount}/{assignments.length} รายการ
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <Icon icon="solar:calendar-mark-bold" />
-                                {attendance.records.length} ครั้ง
-                            </span>
-                        </div>
-                        <span className="text-lg font-bold">{progress}%</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-white/20 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-gradient-to-r from-green-400 to-emerald-400 rounded-full transition-all duration-500"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                </div>
 
-                {/* Tabs Content */}
                 <div className="bg-white">
                     <Tabs
                         aria-label="Course tabs"
                         color="primary"
                         variant="underlined"
                         classNames={{
-                            tabList: "gap-6 w-full relative rounded-none p-0 border-b border-divider px-4",
+                            tabList: "gap-4 sm:gap-6 w-full relative rounded-none p-0 px-4 overflow-x-auto",
                             cursor: "w-full bg-blue-500",
                             tab: "max-w-fit px-0 h-12",
                             tabContent: "group-data-[selected=true]:text-blue-600",
                         }}
                     >
-                        {/* Scores Tab */}
-                        <Tab
-                            key="scores"
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:document-text-linear" className="text-lg" />
-                                    <span>คะแนนเก็บ</span>
-                                    <Chip size="sm" variant="flat" color="primary">{sortedAssignments.length}</Chip>
-                                </div>
-                            }
-                        >
-                            <div className="p-4 sm:p-5">
-                                {sortedAssignments.length > 0 ? (
-                                    <div className="grid gap-3 sm:gap-4">
-                                        {sortedAssignments.map(renderAssignmentCard)}
+                        {hasLab && (
+                            <Tab
+                                key="lab"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:monitor-bold" className="text-lg text-indigo-500" />
+                                        <span>Laboratory</span>
+                                        <Chip size="sm" variant="flat" className="bg-indigo-100 text-indigo-600">{sortedLabAssignments.length}</Chip>
                                     </div>
-                                ) : (
-                                    <div className="text-center py-8 text-gray-400">
-                                        <Icon icon="solar:document-text-linear" className="text-5xl mx-auto mb-2 opacity-50" />
-                                        <p>ยังไม่มีคะแนน</p>
-                                    </div>
-                                )}
-                            </div>
-                        </Tab>
-
-                        {/* Attendance Tab */}
-                        <Tab
-                            key="attendance"
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:calendar-mark-linear" className="text-lg" />
-                                    <span>เช็คชื่อ</span>
-                                    <Chip size="sm" variant="flat" color="success">{sortedAttendance.length}</Chip>
-                                </div>
-                            }
-                        >
-                            <div className="p-4 sm:p-5">
-                                {/* Attendance Summary */}
-                                <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
-                                    {[
-                                        { key: "present", label: "มาเรียน", color: "bg-green-500", icon: "solar:check-circle-bold" },
-                                        { key: "late", label: "สาย", color: "bg-amber-500", icon: "solar:clock-circle-bold" },
-                                        { key: "leave", label: "ลา", color: "bg-gray-400", icon: "solar:document-text-bold" },
-                                        { key: "absent", label: "ขาด", color: "bg-red-500", icon: "solar:close-circle-bold" },
-                                    ].map((item) => (
-                                        <div
-                                            key={item.key}
-                                            className="bg-gray-50 rounded-xl p-3 text-center"
-                                        >
-                                            <div className={`w-8 h-8 ${item.color} rounded-full flex items-center justify-center mx-auto mb-1`}>
-                                                <Icon icon={item.icon} className="text-white text-sm" />
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Lab Summary */}
+                                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 mb-4 border border-indigo-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
+                                                    <Icon icon="solar:monitor-bold" className="text-white text-lg" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-600">คะแนน Laboratory</p>
+                                                    <p className="text-2xl font-bold text-indigo-600">
+                                                        {labScore.toFixed(1)} <span className="text-sm text-gray-400">/ {labMaxScore}</span>
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <p className="text-xl font-bold text-gray-700">
-                                                {attendance.summary[item.key as keyof typeof attendance.summary]}
-                                            </p>
-                                            <p className="text-xs text-gray-500">{item.label}</p>
+                                            <div className="text-right">
+                                                <p className="text-3xl font-bold text-indigo-600">
+                                                    {labMaxScore > 0 ? ((labScore / labMaxScore) * 100).toFixed(0) : 0}%
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    ตรวจแล้ว {labAssignments.filter(a => a.status === "graded").length}/{labAssignments.length}
+                                                </p>
+                                            </div>
                                         </div>
-                                    ))}
-                                </div>
+                                        {/* Progress Bar */}
+                                        <div className="h-3 bg-indigo-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded-full transition-all duration-500"
+                                                style={{ width: `${labMaxScore > 0 ? (labScore / labMaxScore) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
 
-                                {/* Attendance Records */}
-                                {sortedAttendance.length > 0 ? (
+                                    <div className="grid gap-3 sm:gap-4">
+                                        {sortedLabAssignments.map(renderAssignmentCard)}
+                                    </div>
+                                </div>
+                            </Tab>
+                        )}
+
+                        {hasHomework && (
+                            <Tab
+                                key="assignment"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:document-text-bold" className="text-lg text-amber-500" />
+                                        <span>Assignment</span>
+                                        <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-600">{sortedHomeworkAssignments.length}</Chip>
+                                    </div>
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Assignment Summary */}
+                                    <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 mb-4 border border-amber-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-10 h-10 bg-amber-500 rounded-lg flex items-center justify-center">
+                                                    <Icon icon="solar:document-text-bold" className="text-white text-lg" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-600">คะแนน Assignment</p>
+                                                    <p className="text-2xl font-bold text-amber-600">
+                                                        {homeworkScore.toFixed(1)} <span className="text-sm text-gray-400">/ {homeworkMaxScore}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-3xl font-bold text-amber-600">
+                                                    {homeworkMaxScore > 0 ? ((homeworkScore / homeworkMaxScore) * 100).toFixed(0) : 0}%
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    ตรวจแล้ว {homeworkAssignments.filter(a => a.status === "graded").length}/{homeworkAssignments.length}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className="h-3 bg-amber-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all duration-500"
+                                                style={{ width: `${homeworkMaxScore > 0 ? (homeworkScore / homeworkMaxScore) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-3 sm:gap-4">
+                                        {sortedHomeworkAssignments.map(renderAssignmentCard)}
+                                    </div>
+                                </div>
+                            </Tab>
+                        )}
+
+                        {/* Group Tab - only show if has group assignments */}
+                        {hasGroup && (
+                            <Tab
+                                key="group"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:users-group-rounded-bold" className="text-lg text-emerald-500" />
+                                        <span>งานกลุ่ม</span>
+                                        <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-600">{sortedGroupAssignments.length}</Chip>
+                                    </div>
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Group Summary */}
+                                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 mb-4 border border-emerald-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center">
+                                                    <Icon icon="solar:users-group-rounded-bold" className="text-white text-lg" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-600">คะแนนงานกลุ่ม</p>
+                                                    <p className="text-2xl font-bold text-emerald-600">
+                                                        {groupScore.toFixed(1)} <span className="text-sm text-gray-400">/ {groupMaxScore}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-3xl font-bold text-emerald-600">
+                                                    {groupMaxScore > 0 ? ((groupScore / groupMaxScore) * 100).toFixed(0) : 0}%
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    ตรวจแล้ว {groupAssignments.filter(a => a.status === "graded").length}/{groupAssignments.length}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className="h-3 bg-emerald-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-500"
+                                                style={{ width: `${groupMaxScore > 0 ? (groupScore / groupMaxScore) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid gap-3 sm:gap-4">
+                                        {sortedGroupAssignments.map(renderAssignmentCard)}
+                                    </div>
+                                </div>
+                            </Tab>
+                        )}
+
+                        {hasAttendance && (
+                            <Tab
+                                key="attendance"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:calendar-mark-linear" className="text-lg text-sky-500" />
+                                        <span>เช็คชื่อ</span>
+                                        <Chip size="sm" variant="flat" className="bg-sky-100 text-sky-600">{sortedAttendance.length}</Chip>
+                                    </div>
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Attendance Summary with Progress */}
+                                    <div className="bg-gradient-to-r from-sky-50 to-cyan-50 rounded-xl p-4 mb-4 border border-sky-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-10 h-10 bg-sky-500 rounded-lg flex items-center justify-center">
+                                                    <Icon icon="solar:calendar-mark-bold" className="text-white text-lg" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-600">สถิติการเข้าเรียน</p>
+                                                    <p className="text-2xl font-bold text-sky-600">
+                                                        {attendance.summary.present + attendance.summary.late} <span className="text-sm text-gray-400">/ {sortedAttendance.length} ครั้ง</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-3xl font-bold text-sky-600">
+                                                    {sortedAttendance.length > 0 
+                                                        ? (((attendance.summary.present + attendance.summary.late) / sortedAttendance.length) * 100).toFixed(0) 
+                                                        : 0}%
+                                                </p>
+                                                <p className="text-xs text-gray-500">อัตราการเข้าเรียน</p>
+                                            </div>
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className="h-3 bg-sky-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-sky-500 to-cyan-500 rounded-full transition-all duration-500"
+                                                style={{ width: `${sortedAttendance.length > 0 ? ((attendance.summary.present + attendance.summary.late) / sortedAttendance.length) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Attendance Stats Grid */}
+                                    <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+                                        {[
+                                            { key: "present", label: "มาเรียน", color: "bg-green-500", icon: "solar:check-circle-bold" },
+                                            { key: "late", label: "สาย", color: "bg-amber-500", icon: "solar:clock-circle-bold" },
+                                            { key: "leave", label: "ลา", color: "bg-gray-400", icon: "solar:document-text-bold" },
+                                            { key: "absent", label: "ขาด", color: "bg-red-500", icon: "solar:close-circle-bold" },
+                                        ].map((item) => (
+                                            <div
+                                                key={item.key}
+                                                className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm"
+                                            >
+                                                <div className={`w-8 h-8 ${item.color} rounded-full flex items-center justify-center mx-auto mb-1`}>
+                                                    <Icon icon={item.icon} className="text-white text-sm" />
+                                                </div>
+                                                <p className="text-xl font-bold text-gray-700">
+                                                    {attendance.summary[item.key as keyof typeof attendance.summary]}
+                                                </p>
+                                                <p className="text-xs text-gray-500">{item.label}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Attendance Records */}
                                     <div className="space-y-2">
                                         {sortedAttendance.map((record) => {
                                             const config = getAttendanceConfig(record.status);
@@ -475,16 +659,14 @@ export default function MyScorePage() {
                                                     className={`flex items-center justify-between p-3 rounded-xl border ${config.bg}`}
                                                 >
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                                            record.status === "present" ? "bg-green-100" :
-                                                            record.status === "late" ? "bg-amber-100" :
-                                                            record.status === "absent" ? "bg-red-100" : "bg-gray-100"
-                                                        }`}>
-                                                            <Icon icon={config.icon} className={`text-lg ${
-                                                                record.status === "present" ? "text-green-600" :
-                                                                record.status === "late" ? "text-amber-600" :
-                                                                record.status === "absent" ? "text-red-600" : "text-gray-600"
-                                                            }`} />
+                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${record.status === "present" ? "bg-green-100" :
+                                                                record.status === "late" ? "bg-amber-100" :
+                                                                    record.status === "absent" ? "bg-red-100" : "bg-gray-100"
+                                                            }`}>
+                                                            <Icon icon={config.icon} className={`text-lg ${record.status === "present" ? "text-green-600" :
+                                                                    record.status === "late" ? "text-amber-600" :
+                                                                        record.status === "absent" ? "text-red-600" : "text-gray-600"
+                                                                }`} />
                                                         </div>
                                                         <div>
                                                             <p className="font-medium text-gray-800 text-sm">{record.session_title}</p>
@@ -498,88 +680,78 @@ export default function MyScorePage() {
                                             );
                                         })}
                                     </div>
-                                ) : (
-                                    <div className="text-center py-8 text-gray-400">
-                                        <Icon icon="solar:calendar-mark-linear" className="text-5xl mx-auto mb-2 opacity-50" />
-                                        <p>ยังไม่มีข้อมูลเช็คชื่อ</p>
-                                    </div>
-                                )}
-                            </div>
-                        </Tab>
-
-                        {/* Bonus Score Tab */}
-                        <Tab
-                            key="bonus"
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
-                                    <span>คะแนนพิเศษ</span>
-                                    {bonusScore && bonusScore.total > 0 && (
-                                        <Chip size="sm" variant="flat" color="warning">{bonusScore.total}</Chip>
-                                    )}
                                 </div>
-                            }
-                        >
-                            <div className="p-4 sm:p-5">
-                                {/* Bonus Score Summary */}
-                                <div className="flex items-center justify-center gap-4 mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-                                    <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                                        <Icon icon="solar:star-bold" className="text-3xl text-white" />
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-amber-700">คะแนนพิเศษรวม</p>
-                                        <p className="text-4xl font-bold text-amber-600">+{bonusScore?.total || 0}</p>
-                                        <p className="text-xs text-amber-500">คะแนน</p>
-                                    </div>
-                                </div>
+                            </Tab>
+                        )}
 
-                                {/* Bonus Score Records */}
-                                {sortedBonusRecords.length > 0 ? (
-                                    <div className="space-y-2">
-                                        <p className="text-sm font-medium text-gray-600 mb-3 flex items-center gap-2">
-                                            <Icon icon="solar:history-linear" />
-                                            ประวัติการได้รับคะแนน ({sortedBonusRecords.length} รายการ)
-                                        </p>
-                                        {sortedBonusRecords.map((record, index) => (
-                                            <div
-                                                key={index}
-                                                className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-100 hover:border-amber-300 transition-colors"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
-                                                        <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-medium text-gray-800 text-sm">{record.reason}</p>
-                                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                                            {record.given_by && (
+                        {hasBonus && (
+                            <Tab
+                                key="bonus"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
+                                        <span>พิเศษ</span>
+                                        {bonusScore && bonusScore.total > 0 && (
+                                            <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-600">+{bonusScore.total}</Chip>
+                                        )}
+                                    </div>
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Bonus Score Summary */}
+                                    <div className="flex items-center justify-center gap-4 mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
+                                        <div className="w-16 h-16 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                                            <Icon icon="solar:star-bold" className="text-3xl text-white" />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-amber-700">คะแนนพิเศษรวม</p>
+                                            <p className="text-4xl font-bold text-amber-600">+{bonusScore?.total || 0}</p>
+                                            <p className="text-xs text-amber-500">คะแนน</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Bonus Score Records */}
+                                    {sortedBonusRecords.length > 0 && (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-gray-600 mb-3 flex items-center gap-2">
+                                                <Icon icon="solar:history-linear" />
+                                                ประวัติการได้รับคะแนน ({sortedBonusRecords.length} รายการ)
+                                            </p>
+                                            {sortedBonusRecords.map((record, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="flex items-center justify-between p-3 bg-white rounded-xl border border-amber-100 hover:border-amber-300 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
+                                                            <Icon icon="solar:star-bold" className="text-lg text-amber-500" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-medium text-gray-800 text-sm">{record.reason}</p>
+                                                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                                {record.given_by && (
+                                                                    <span className="flex items-center gap-1">
+                                                                        <Icon icon="solar:user-check-linear" />
+                                                                        {record.given_by}
+                                                                    </span>
+                                                                )}
                                                                 <span className="flex items-center gap-1">
-                                                                    <Icon icon="solar:user-check-linear" />
-                                                                    {record.given_by}
+                                                                    <Icon icon="solar:calendar-linear" />
+                                                                    {formatDate(record.given_at)}
                                                                 </span>
-                                                            )}
-                                                            <span className="flex items-center gap-1">
-                                                                <Icon icon="solar:calendar-linear" />
-                                                                {formatDate(record.given_at)}
-                                                            </span>
+                                                            </div>
                                                         </div>
                                                     </div>
+                                                    <Chip size="sm" color="warning" variant="flat" className="font-bold">
+                                                        +{record.score}
+                                                    </Chip>
                                                 </div>
-                                                <Chip size="sm" color="warning" variant="flat" className="font-bold">
-                                                    +{record.score}
-                                                </Chip>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-center py-8 text-gray-400">
-                                        <Icon icon="solar:star-linear" className="text-5xl mx-auto mb-2 opacity-50" />
-                                        <p>ยังไม่มีคะแนนพิเศษ</p>
-                                        <p className="text-xs mt-1">คะแนนพิเศษจะได้รับจากการตอบคำถามในห้องเรียน</p>
-                                    </div>
-                                )}
-                            </div>
-                        </Tab>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </Tab>
+                        )}
                     </Tabs>
                 </div>
             </AccordionItem>
@@ -707,14 +879,16 @@ export default function MyScorePage() {
                             </CardBody>
                         </Card>
 
-                        {/* Course Cards */}
-                        {data.courses.length > 0 ? (
-                            <Accordion 
+                        {/* Course Cards - only show active courses */}
+                        {data.courses.filter(c => c.course.is_active).length > 0 ? (
+                            <Accordion
                                 selectionMode="multiple"
                                 variant="light"
                                 className="px-0 flex flex-col gap-4"
                             >
-                                {data.courses.map((courseData, index) => renderCourseCard(courseData, index))}
+                                {data.courses
+                                    .filter(c => c.course.is_active)
+                                    .map((courseData, index) => renderCourseCard(courseData, index))}
                             </Accordion>
                         ) : (
                             <Card className="shadow-lg border-none">

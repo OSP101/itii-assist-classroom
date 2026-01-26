@@ -43,7 +43,7 @@ export default function AssignmentsTab({
 }: AssignmentsTabProps) {
     const { emitDataUpdate } = useSocket();
     const [searchQuery, setSearchQuery] = useState("");
-    const [activeTab, setActiveTab] = useState<"all" | "individual" | "group">("all");
+    const [activeTab, setActiveTab] = useState<"all" | "lab" | "assignment" | "group">("all");
     const [viewMode, setViewMode] = useState<"grid" | "list">("list");
     
     // Delete confirmation modal states
@@ -108,31 +108,58 @@ export default function AssignmentsTab({
         );
     };
 
-    // Separate individual and group assignments
-    const individualAssignments = assignments.filter(a => a.assignment_type === "individual");
-    const groupAssignments = assignments.filter(a => a.assignment_type !== "individual");
+    // Separate assignments by type
+    const labAssignments = assignments.filter(a => a.assignment_type === "individual");
+    const homeworkAssignments = assignments.filter(a => a.assignment_type === "assignment");
+    const groupAssignments = assignments.filter(a => a.assignment_type === "permanent_group" || a.assignment_type === "weekly_group");
 
     // Get current tab assignments
     const currentAssignments = useMemo(() => {
         let list = assignments;
-        if (activeTab === "individual") list = individualAssignments;
+        if (activeTab === "lab") list = labAssignments;
+        if (activeTab === "assignment") list = homeworkAssignments;
         if (activeTab === "group") list = groupAssignments;
 
         if (searchQuery) {
             list = list.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
         }
         return list;
-    }, [assignments, activeTab, searchQuery, individualAssignments, groupAssignments]);
+    }, [assignments, activeTab, searchQuery, labAssignments, homeworkAssignments, groupAssignments]);
 
     // Get type label and color
     const getTypeInfo = (type: string) => {
         switch (type) {
             case "individual":
-                return { label: "เดี่ยว", color: "bg-indigo-100 text-indigo-700", icon: "solar:user-bold" };
+                return { label: "Laboratory", color: "bg-indigo-100 text-indigo-700", icon: "solar:monitor-bold" };
+            case "assignment":
+                return { label: "Assignment", color: "bg-amber-100 text-amber-700", icon: "solar:document-text-bold" };
             case "permanent_group":
                 return { label: "กลุ่มโปรเจกต์", color: "bg-purple-100 text-purple-700", icon: "solar:users-group-two-rounded-bold" };
-            default:
+            case "weekly_group":
                 return { label: "กลุ่มสัปดาห์", color: "bg-emerald-100 text-emerald-700", icon: "solar:users-group-rounded-bold" };
+            default:
+                return { label: "งาน", color: "bg-slate-100 text-slate-700", icon: "solar:clipboard-list-bold" };
+        }
+    };
+
+    // Helper function to get background color class
+    const getTypeBgColor = (type: string) => {
+        switch (type) {
+            case "individual": return "bg-indigo-100";
+            case "assignment": return "bg-amber-100";
+            case "permanent_group": return "bg-purple-100";
+            case "weekly_group": return "bg-emerald-100";
+            default: return "bg-slate-100";
+        }
+    };
+
+    const getTypeTextColor = (type: string) => {
+        switch (type) {
+            case "individual": return "text-indigo-600";
+            case "assignment": return "text-amber-600";
+            case "permanent_group": return "text-purple-600";
+            case "weekly_group": return "text-emerald-600";
+            default: return "text-slate-600";
         }
     };
 
@@ -144,8 +171,8 @@ export default function AssignmentsTab({
                 <CardBody className="p-4">
                     {/* Header with Actions */}
                     <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className={`p-2 rounded-lg ${assignment.assignment_type === "individual" ? "bg-indigo-100" : assignment.assignment_type === "permanent_group" ? "bg-purple-100" : "bg-emerald-100"}`}>
-                            <Icon icon={typeInfo.icon} className={`text-xl ${assignment.assignment_type === "individual" ? "text-indigo-600" : assignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-emerald-600"}`} />
+                        <div className={`p-2 rounded-lg ${getTypeBgColor(assignment.assignment_type)}`}>
+                            <Icon icon={typeInfo.icon} className={`text-xl ${getTypeTextColor(assignment.assignment_type)}`} />
                         </div>
                         <div className="flex items-center gap-1">
                             {/* <Tooltip content="ลงคะแนน">
@@ -207,8 +234,8 @@ export default function AssignmentsTab({
                 <CardBody className="p-3 sm:p-4">
                     <div className="flex items-center gap-3 sm:gap-4">
                         {/* Icon */}
-                        <div className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${assignment.assignment_type === "individual" ? "bg-indigo-100" : assignment.assignment_type === "permanent_group" ? "bg-purple-100" : "bg-emerald-100"}`}>
-                            <Icon icon={typeInfo.icon} className={`text-lg sm:text-xl ${assignment.assignment_type === "individual" ? "text-indigo-600" : assignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-emerald-600"}`} />
+                        <div className={`p-2 sm:p-2.5 rounded-lg shrink-0 ${getTypeBgColor(assignment.assignment_type)}`}>
+                            <Icon icon={typeInfo.icon} className={`text-lg sm:text-xl ${getTypeTextColor(assignment.assignment_type)}`} />
                         </div>
 
                         {/* Content */}
@@ -281,7 +308,7 @@ export default function AssignmentsTab({
                     <div className="overflow-x-auto scrollbar-hide -mx-4 px-3 lg:mx-0 lg:px-0">
                         <Tabs
                             selectedKey={activeTab}
-                            onSelectionChange={(key) => setActiveTab(key as "all" | "individual" | "group")}
+                            onSelectionChange={(key) => setActiveTab(key as "all" | "lab" | "assignment" | "group")}
                             variant="underlined"
                             classNames={{
                                 tabList: "gap-4 md:gap-6 flex-nowrap min-w-max",
@@ -305,14 +332,28 @@ export default function AssignmentsTab({
                                 }
                             />
                             <Tab
-                                key="individual"
+                                key="lab"
                                 title={
                                     <div className="flex items-center gap-2">
-                                        <Icon icon="solar:user-bold" className="text-lg" />
-                                        <span>งานเดี่ยว</span>
-                                        {individualAssignments.length > 0 && (
+                                        <Icon icon="solar:monitor-bold" className="text-lg" />
+                                        <span>Laboratory</span>
+                                        {labAssignments.length > 0 && (
                                             <Chip size="sm" variant="flat" className="bg-indigo-100 text-indigo-700 h-5 min-w-5 px-1">
-                                                {individualAssignments.length}
+                                                {labAssignments.length}
+                                            </Chip>
+                                        )}
+                                    </div>
+                                }
+                            />
+                            <Tab
+                                key="assignment"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:document-text-bold" className="text-lg" />
+                                        <span>Assignment</span>
+                                        {homeworkAssignments.length > 0 && (
+                                            <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-700 h-5 min-w-5 px-1">
+                                                {homeworkAssignments.length}
                                             </Chip>
                                         )}
                                     </div>
@@ -470,7 +511,8 @@ export default function AssignmentsTab({
                                             <Icon icon="solar:clipboard-list-bold-duotone" className="text-5xl text-blue-500" />
                                         </div>
                                         <h3 className="text-lg font-semibold text-slate-700 mb-2">
-                                            {activeTab === "individual" ? "ยังไม่มีงานเดี่ยว" :
+                                            {activeTab === "lab" ? "ยังไม่มี Lab" :
+                                                activeTab === "assignment" ? "ยังไม่มี Assignment" :
                                                 activeTab === "group" ? "ยังไม่มีงานกลุ่ม" : "ยังไม่มีงาน"}
                                         </h3>
                                         <p className="text-slate-500 mb-6 max-w-md mx-auto">

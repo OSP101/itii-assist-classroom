@@ -246,7 +246,7 @@ const scoreService = {
         courseId: string,
         options?: {
             sectionId?: number;
-            assignmentType?: 'individual' | 'group';
+            assignmentType?: 'individual' | 'assignment' | 'group';
         }
     ): Promise<ScoreSummaryMatrix | null> {
         let url = `/scores/matrix?course_id=${courseId}`;

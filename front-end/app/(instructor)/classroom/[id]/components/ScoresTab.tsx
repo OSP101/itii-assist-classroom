@@ -109,9 +109,9 @@ export default function ScoresTab({
                                         <Chip
                                             size="sm"
                                             variant="flat"
-                                            color={selectedAssignment.assignment_type === "individual" ? "primary" : selectedAssignment.assignment_type === "permanent_group" ? "secondary" : "warning"}
+                                            color={selectedAssignment.assignment_type === "individual" || selectedAssignment.assignment_type === "assignment" ? "primary" : selectedAssignment.assignment_type === "permanent_group" ? "secondary" : "warning"}
                                         >
-                                            {selectedAssignment.assignment_type === "individual" ? "รายบุคคล" : selectedAssignment.assignment_type === "permanent_group" ? "กลุ่มโปรเจกต์" : `กลุ่มสัปดาห์ ${selectedAssignment.week_number}`}
+                                            {selectedAssignment.assignment_type === "individual" ? "Lab" : selectedAssignment.assignment_type === "assignment" ? "Assignment" : selectedAssignment.assignment_type === "permanent_group" ? "กลุ่มโปรเจกต์" : `กลุ่มสัปดาห์ ${selectedAssignment.week_number}`}
                                         </Chip>
                                         <span className="text-sm text-slate-500">
                                             คะแนนเต็ม: {selectedAssignment.subItems && selectedAssignment.subItems.length > 0 
@@ -120,7 +120,7 @@ export default function ScoresTab({
                                         </span>
                                     </div>
                                 </div>
-                                {selectedAssignment.assignment_type !== "individual" && groupsForScore.length > 0 && (
+                                {selectedAssignment.assignment_type !== "individual" && selectedAssignment.assignment_type !== "assignment" && groupsForScore.length > 0 && (
                                     <Button
                                         color="secondary"
                                         variant="flat"

@@ -855,13 +855,21 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Build assignment type filter
     let assignmentTypeFilter = {};
+    console.log(`[getScoreSummaryMatrix] assignment_type param: "${assignment_type}"`);
+    
     if (assignment_type === 'individual') {
+        // Lab assignments (individual work done in class)
         assignmentTypeFilter = { assignment_type: 'individual' };
+    } else if (assignment_type === 'assignment') {
+        // Assignment/homework (individual work done at home)
+        assignmentTypeFilter = { assignment_type: 'assignment' };
     } else if (assignment_type === 'group') {
         assignmentTypeFilter = { 
             assignment_type: { [Op.in]: ['permanent_group', 'weekly_group'] } 
         };
     }
+    
+    console.log(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
 
     // Get all assignments for this course
     const assignments = await Assignment.findAll({
@@ -879,6 +887,8 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
         order: [['order_index', 'ASC']],
     });
+
+    console.log(`[getScoreSummaryMatrix] Found ${assignments.length} assignments with filter`);
 
     // Get all scores for these students and assignments
     const studentIds = studentsWithSection.map(s => s.id);
