@@ -24,10 +24,11 @@ const Assignment = sequelize.define('Assignment', {
         allowNull: true,
     },
     assignment_type: {
-        type: DataTypes.ENUM('individual', 'permanent_group', 'weekly_group'),
+        type: DataTypes.ENUM('individual', 'permanent_group', 'weekly_group', 'assignment'),
         allowNull: false,
         defaultValue: 'individual',
         field: 'assignment_type',
+        comment: 'individual=ปฏิบัติการเดี่ยว(Lab), permanent_group=กลุ่มถาวร, weekly_group=กลุ่มรายสัปดาห์, assignment=การบ้าน',
     },
     week_number: {
         type: DataTypes.INTEGER,

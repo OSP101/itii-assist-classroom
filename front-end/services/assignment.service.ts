@@ -26,7 +26,7 @@ export interface Assignment {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null;
     linkedAttendanceSession?: LinkedAttendanceSession | null;
@@ -50,7 +50,7 @@ export interface CreateAssignmentData {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null; // Legacy single session
     linked_attendance_session_ids?: number[]; // New: array of session IDs
@@ -63,7 +63,7 @@ export interface CreateAssignmentData {
 export interface UpdateAssignmentData {
     name?: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null; // Legacy single session
     linked_attendance_session_ids?: number[]; // New: array of session IDs

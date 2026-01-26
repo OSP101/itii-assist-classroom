@@ -296,7 +296,7 @@ export default function ClassroomDetailPage() {
     const [isAddAssignmentModalOpen, setIsAddAssignmentModalOpen] = useState(false);
     const [newAssignment, setNewAssignment] = useState<{
         name: string;
-        assignment_type: "individual" | "permanent_group" | "weekly_group";
+        assignment_type: "individual" | "permanent_group" | "weekly_group" | "assignment";
         week_number?: number;
         linked_attendance_session_id?: number | null;
         linked_attendance_session_ids: number[]; // New: array of session IDs
@@ -3721,53 +3721,66 @@ export default function ClassroomDetailPage() {
                             {/* Assignment Type */}
                             <div>
                                 <label className="text-slate-600 font-medium text-sm mb-2 block">ประเภทงาน</label>
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                     <button
                                         type="button"
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "individual", week_number: undefined }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "individual"
                                                 ? "border-indigo-500 bg-indigo-50"
-                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
-                                            }`}
+                                                : "border-slate-200 hover:border-slate-300"
+                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
                                         disabled={!!editingAssignment}
-
                                     >
-                                        <Icon icon="solar:user-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "individual" ? "text-indigo-500" : "text-slate-400"
+                                        <Icon icon="solar:test-tube-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "individual" ? "text-indigo-500" : "text-slate-400"
                                             }`} />
                                         <p className={`font-semibold text-sm ${newAssignment.assignment_type === "individual" ? "text-indigo-600" : "text-slate-600"
-                                            }`}>งานเดี่ยว</p>
-                                        <p className="text-xs text-slate-500 mt-1">คะแนนรายบุคคล</p>
+                                            }`}>Lab</p>
+                                        <p className="text-xs text-slate-500 mt-1">งานในคาบ</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "assignment", week_number: undefined }))}
+                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "assignment"
+                                                ? "border-amber-500 bg-amber-50"
+                                                : "border-slate-200 hover:border-slate-300"
+                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
+                                        disabled={!!editingAssignment}
+                                    >
+                                        <Icon icon="solar:document-text-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "assignment" ? "text-amber-500" : "text-slate-400"
+                                            }`} />
+                                        <p className={`font-semibold text-sm ${newAssignment.assignment_type === "assignment" ? "text-amber-600" : "text-slate-600"
+                                            }`}>Assignment</p>
+                                        <p className="text-xs text-slate-500 mt-1">การบ้าน</p>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "permanent_group", week_number: undefined }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "permanent_group"
                                                 ? "border-purple-500 bg-purple-50"
-                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
-                                            }`}
+                                                : "border-slate-200 hover:border-slate-300"
+                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
                                         disabled={!!editingAssignment}
-
                                     >
                                         <Icon icon="solar:users-group-rounded-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "permanent_group" ? "text-purple-500" : "text-slate-400"
                                             }`} />
                                         <p className={`font-semibold text-sm ${newAssignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-slate-600"
                                             }`}>กลุ่มโปรเจกต์</p>
-                                        <p className="text-xs text-slate-500 mt-1">ใช้กลุ่มโปรเจกต์ที่มีอยู่</p>
+                                        <p className="text-xs text-slate-500 mt-1">กลุ่มถาวร</p>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "weekly_group", week_number: selectedWeek }))}
                                         className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "weekly_group"
                                                 ? "border-emerald-500 bg-emerald-50"
-                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
-                                            }`}
+                                                : "border-slate-200 hover:border-slate-300"
+                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
                                         disabled={!!editingAssignment}
                                     >
                                         <Icon icon="solar:calendar-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "weekly_group" ? "text-emerald-500" : "text-slate-400"
                                             }`} />
                                         <p className={`font-semibold text-sm ${newAssignment.assignment_type === "weekly_group" ? "text-emerald-600" : "text-slate-600"
-                                            }`}>กลุ่มประจำสัปดาห์</p>
-                                        <p className="text-xs text-slate-500 mt-1">กลุ่มตามสัปดาห์</p>
+                                            }`}>กลุ่มสัปดาห์</p>
+                                        <p className="text-xs text-slate-500 mt-1">กลุ่มรายสัปดาห์</p>
                                     </button>
                                 </div>
                             </div>

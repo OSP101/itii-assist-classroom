@@ -1695,10 +1695,11 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   let totalReceivedScores = 0;
 
   assignments.forEach(assignment => {
-    const isGroupAssignment = assignment.assignment_type !== 'individual';
+    // individual and assignment types are both individual work
+    const isGroupAssignment = assignment.assignment_type !== 'individual' && assignment.assignment_type !== 'assignment';
     
     if (!isGroupAssignment) {
-      // For individual assignments
+      // For individual assignments (Lab and Assignment/Homework)
       const studentsWithScores = new Set(
         allScores
           .filter(s => s.assignment_id === assignment.id && s.student_id)
@@ -1841,7 +1842,8 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   // Assignment statistics for table
   // ========================================
   const assignmentStats = await Promise.all(assignments.slice(0, 10).map(async (assignment) => {
-    const isGroupAssignment = assignment.assignment_type !== 'individual';
+    // individual and assignment types are both individual work
+    const isGroupAssignment = assignment.assignment_type !== 'individual' && assignment.assignment_type !== 'assignment';
     
     // Get scores for this assignment
     const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);

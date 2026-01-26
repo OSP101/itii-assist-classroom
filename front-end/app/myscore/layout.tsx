@@ -1,8 +1,9 @@
 import { Metadata } from "next";
 
-export const metadata: Metadata = {
-  title: "ค้นหาคะแนนรายบุคคล - ITII Assist Classroom",
+export const metadata = {
+  title: "ค้นหาคะแนนรายบุคคล",
   description: "ตรวจสอบคะแนนเก็บและความคืบหน้าการเรียนของคุณได้ทันที",
+  image: "/cp-image-login.jpg",
 };
 
   export const viewport = {

@@ -22,9 +22,11 @@ io = new Server(httpServer, {
       const allowedOrigins = [
         config.frontendUrl,
         "http://localhost:3000",
+        "http://localhost:3010",
         "http://127.0.0.1:3000",
         "http://10.199.10.10:3000",
         "https://itii.osp101.dev",
+        "https://itii-mid.osp101.com",
       ];
       
       // Check if origin is in allowed list
