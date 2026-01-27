@@ -35,6 +35,7 @@ import { useSocket } from "@/contexts/SocketContext";
 
 // Import Skeletons directly (they're small and used for loading states)
 import { OverviewSkeleton, TeamsGridSkeleton } from "./components/Skeletons";
+import { stat } from "fs";
 
 // Lazy load heavy Tab components with custom loading states
 const OverviewTab = dynamic(() => import("./components/OverviewTab"), {
@@ -2284,13 +2285,12 @@ export default function ClassroomDetailPage() {
         );
     }, [sectionStudents, sectionSearchQuery]);
 
-    // Menu items for sidebar (แสดงเสมอ ไม่ต้องรอโหลด course)
+
     const menuItems = [
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
-        
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
         
         // ถ้าไม่ใช่อาจารย์ ไม่แสดง
@@ -2301,7 +2301,13 @@ export default function ClassroomDetailPage() {
             badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
             badgeColor: "warning" as const,
         }] : []),
-        { key: "attendance", label: "เช็คชื่อ", icon: "solar:clipboard-check-bold" },
+
+
+        { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
+
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', status: "coming_soon", badgeColor: "warning" as const },
+
+
         // ตั้งค่ารายวิชา - แสดงเฉพาะอาจารย์
         ...(userRole === 'instructor' ? [{
             key: "settings",
@@ -2472,11 +2478,12 @@ export default function ClassroomDetailPage() {
                         {menuItems.map((item) => (
                             <button
                                 key={item.key}
+                                disabled={item.status === "coming_soon"}
                                 onClick={() => setActiveTab(item.key)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all cursor-pointer ${activeTab === item.key
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${activeTab === item.key
                                         ? "bg-blue-50 text-blue-600 font-medium"
                                         : "text-slate-600 hover:bg-slate-50"
-                                    }`}
+                                    } ${item.status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>

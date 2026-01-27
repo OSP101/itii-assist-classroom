@@ -1856,31 +1856,96 @@ const getCourseOverview = asyncHandler(async (req, res) => {
 
     // Count unique students/groups scored
     let scoredCount = 0;
+    let totalExpected = 0;
+    
     if (isGroupAssignment) {
       scoredCount = new Set(assignmentScores.filter(s => s.group_id).map(s => s.group_id)).size;
+      // For group assignments, we need to count total groups
+      // This is approximate - ideally we'd query the groups table
+      totalExpected = scoredCount; // Can't calculate not scored for groups easily
     } else {
       scoredCount = new Set(assignmentScores.filter(s => s.student_id).map(s => s.student_id)).size;
+      totalExpected = totalStudents;
     }
 
     const notScoredCount = isGroupAssignment 
       ? 0
-      : totalStudents - scoredCount;
+      : Math.max(0, totalStudents - scoredCount);
 
     const submittedRate = isGroupAssignment 
-      ? 0 
+      ? (scoredCount > 0 ? 100 : 0) // Show 100% if any group scored
       : (totalStudents > 0 ? Math.round((scoredCount / totalStudents) * 100) : 0);
+
+    // Calculate actual max score (considering sub-items)
+    let actualMaxScore = 0;
+    if (assignment.subItems && assignment.subItems.length > 0) {
+      actualMaxScore = assignment.subItems.reduce((sum, item) => sum + (parseFloat(item.max_score) || 0), 0);
+    } else {
+      actualMaxScore = parseFloat(assignment.max_score) || 0;
+    }
 
     return {
       id: assignment.id,
       name: assignment.name,
-      max_score: assignment.max_score,
+      max_score: actualMaxScore,
       assignment_type: assignment.assignment_type,
       avgScore: avgScore !== null ? Math.round(avgScore * 10) / 10 : null,
       scoredCount,
-      notScoredCount: Math.max(0, notScoredCount),
+      notScoredCount,
       submittedRate,
+      hasSubItems: assignment.subItems && assignment.subItems.length > 0,
+      subItemsCount: assignment.subItems ? assignment.subItems.length : 0,
     };
   }));
+
+  // ========================================
+  // Assignment statistics by type (NEW)
+  // ========================================
+  const assignmentStatsByType = {};
+  assignments.forEach(assignment => {
+    const type = assignment.assignment_type || 'individual';
+    if (!assignmentStatsByType[type]) {
+      assignmentStatsByType[type] = {
+        count: 0,
+        totalMaxScore: 0,
+        totalScored: 0,
+        totalExpected: 0,
+      };
+    }
+    
+    // Calculate actual max score for this assignment
+    let assignmentMaxScore = 0;
+    if (assignment.subItems && assignment.subItems.length > 0) {
+      assignmentMaxScore = assignment.subItems.reduce((sum, item) => sum + (parseFloat(item.max_score) || 0), 0);
+    } else {
+      assignmentMaxScore = parseFloat(assignment.max_score) || 0;
+    }
+    
+    assignmentStatsByType[type].count += 1;
+    assignmentStatsByType[type].totalMaxScore += assignmentMaxScore;
+    
+    // Count scored for this assignment
+    const isGroupAssignment = type !== 'individual' && type !== 'assignment';
+    const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
+    
+    if (isGroupAssignment) {
+      const groupsScored = new Set(assignmentScores.filter(s => s.group_id).map(s => s.group_id)).size;
+      assignmentStatsByType[type].totalScored += groupsScored > 0 ? 1 : 0; // Count assignment as scored if any group scored
+      assignmentStatsByType[type].totalExpected += 1;
+    } else {
+      const studentsScored = new Set(assignmentScores.filter(s => s.student_id).map(s => s.student_id)).size;
+      assignmentStatsByType[type].totalScored += studentsScored;
+      assignmentStatsByType[type].totalExpected += totalStudents;
+    }
+  });
+
+  // Calculate progress percentage for each type
+  Object.keys(assignmentStatsByType).forEach(type => {
+    const stats = assignmentStatsByType[type];
+    stats.progressRate = stats.totalExpected > 0 
+      ? Math.round((stats.totalScored / stats.totalExpected) * 100) 
+      : 0;
+  });
 
   // ========================================
   // Course summary
@@ -1909,6 +1974,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
       lowPerformers,
       taActivity,
       assignments: assignmentStats,
+      assignmentStatsByType,
       recentActivities,
       scoreDistribution,
     },
