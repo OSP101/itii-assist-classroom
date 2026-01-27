@@ -2416,10 +2416,10 @@ export default function ClassroomDetailPage() {
                                         setActiveTab(item.key);
                                         setIsMobileSidebarOpen(false);
                                     }}
-                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all cursor-pointer ${activeTab === item.key
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all ${activeTab === item.key
                                             ? "bg-blue-50 text-blue-600"
-                                            : "text-slate-600 hover:bg-slate-50 cursor-pointer"
-                                        }`}
+                                            : "text-slate-600 hover:bg-slate-50 "
+                                        } ${item.status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
