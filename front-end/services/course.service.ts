@@ -237,6 +237,14 @@ export interface ScoreDistribution {
   poor: number;
 }
 
+export interface AssignmentTypeStats {
+  count: number;
+  totalMaxScore: number;
+  totalScored: number;
+  totalExpected: number;
+  progressRate: number;
+}
+
 export interface CourseOverviewSummary {
   totalStudents: number;
   totalSections: number;
@@ -257,6 +265,7 @@ export interface CourseOverview {
   lowPerformers: OverviewStudent[];
   taActivity: TAActivity[];
   assignments: OverviewAssignment[];
+  assignmentStatsByType?: Record<string, AssignmentTypeStats>;
   recentActivities: RecentActivity[];
   scoreDistribution: ScoreDistribution;
 }

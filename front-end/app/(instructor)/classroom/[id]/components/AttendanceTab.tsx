@@ -334,9 +334,7 @@ export default function AttendanceTab({ course, isLoading, onAttendanceChanged }
         }
     };
 
-    // Handle activate session - now just opens the live page
     const handleActivateSession = async (session: AttendanceSession) => {
-        // If session is draft (before start time), update start time to now
         const computedStatus = getComputedStatus(session);
         if (computedStatus === "draft") {
             try {
@@ -357,8 +355,8 @@ export default function AttendanceTab({ course, isLoading, onAttendanceChanged }
                 return;
             }
         }
-        // Open live page in new tab
-        window.open(`/classroom/${course.id}/attendance/${session.id}/live`, "_blank");
+        window.open(`/attendance/${course.id}/session/${session.id}/live`, "_blank");
+        
     };
 
     // Handle close session - opens confirmation modal
