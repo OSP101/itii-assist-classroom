@@ -5,6 +5,7 @@ const RefreshToken = require('./RefreshToken');
 const SystemLog = require('./SystemLog');
 const Course = require('./Course');
 const CourseSection = require('./CourseSection');
+const CourseInstructor = require('./CourseInstructor');
 const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
@@ -14,10 +15,13 @@ const StudentGroup = require('./StudentGroup');
 const StudentGroupMember = require('./StudentGroupMember');
 const Assignment = require('./Assignment');
 const AssignmentSubItem = require('./AssignmentSubItem');
+const AssignmentAttendanceLink = require('./AssignmentAttendanceLink');
 const Score = require('./Score');
 const ScoreEditRequest = require('./ScoreEditRequest');
 const AttendanceSession = require('./AttendanceSession');
+const AttendanceSessionSection = require('./AttendanceSessionSection');
 const AttendanceRecord = require('./AttendanceRecord');
+const BonusScore = require('./BonusScore');
 
 // Queue System Models
 const QueueSession = require('./QueueSession');
@@ -27,18 +31,7 @@ const QueueDeskStatus = require('./QueueDeskStatus');
 
 // ============================================
 // Define Associations
-// ============================================
-
-// User -> Student (linked_student_id)
-User.belongsTo(Student, {
-  foreignKey: 'linked_student_id',
-  as: 'linkedStudent',
-});
-
-Student.hasOne(User, {
-  foreignKey: 'linked_student_id',
-  as: 'userAccount',
-});
+// ============================================;
 
 // User -> RefreshToken
 User.hasMany(RefreshToken, {
@@ -75,6 +68,31 @@ Course.belongsTo(User, {
 User.hasMany(Course, {
   foreignKey: 'instructor_id',
   as: 'instructorCourses',
+});
+
+// Course -> Multiple Instructors (through CourseInstructor)
+Course.belongsToMany(User, {
+  through: CourseInstructor,
+  foreignKey: 'course_id',
+  otherKey: 'user_id',
+  as: 'instructors',
+});
+
+User.belongsToMany(Course, {
+  through: CourseInstructor,
+  foreignKey: 'user_id',
+  otherKey: 'course_id',
+  as: 'instructingCourses',
+});
+
+CourseInstructor.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+CourseInstructor.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
 });
 
 // Course -> Sections
@@ -252,7 +270,7 @@ AssignmentSubItem.belongsTo(Assignment, {
   as: 'assignment',
 });
 
-// Assignment -> AttendanceSession (optional link)
+// Assignment -> AttendanceSession (optional link - legacy, kept for backward compatibility)
 Assignment.belongsTo(AttendanceSession, {
   foreignKey: 'linked_attendance_session_id',
   as: 'linkedAttendanceSession',
@@ -261,6 +279,32 @@ Assignment.belongsTo(AttendanceSession, {
 AttendanceSession.hasMany(Assignment, {
   foreignKey: 'linked_attendance_session_id',
   as: 'linkedAssignments',
+});
+
+// Assignment <-> AttendanceSession (many-to-many through AssignmentAttendanceLink)
+Assignment.belongsToMany(AttendanceSession, {
+  through: AssignmentAttendanceLink,
+  foreignKey: 'assignment_id',
+  otherKey: 'attendance_session_id',
+  as: 'linkedAttendanceSessions', // Note: plural for new many-to-many
+});
+
+AttendanceSession.belongsToMany(Assignment, {
+  through: AssignmentAttendanceLink,
+  foreignKey: 'attendance_session_id',
+  otherKey: 'assignment_id',
+  as: 'linkedAssignmentsMany',
+});
+
+// AssignmentAttendanceLink associations
+AssignmentAttendanceLink.belongsTo(Assignment, {
+  foreignKey: 'assignment_id',
+  as: 'assignment',
+});
+
+AssignmentAttendanceLink.belongsTo(AttendanceSession, {
+  foreignKey: 'attendance_session_id',
+  as: 'attendanceSession',
 });
 
 // Score -> SubItem (optional)
@@ -346,7 +390,7 @@ Course.hasMany(AttendanceSession, {
   as: 'attendanceSessions',
 });
 
-// AttendanceSession -> CourseSection
+// AttendanceSession -> CourseSection (legacy one-to-one, kept for backward compatibility)
 AttendanceSession.belongsTo(CourseSection, {
   foreignKey: 'course_section_id',
   as: 'section',
@@ -355,6 +399,33 @@ AttendanceSession.belongsTo(CourseSection, {
 CourseSection.hasMany(AttendanceSession, {
   foreignKey: 'course_section_id',
   as: 'attendanceSessions',
+});
+
+// AttendanceSession <-> CourseSection (many-to-many through AttendanceSessionSection)
+AttendanceSession.belongsToMany(CourseSection, {
+  through: AttendanceSessionSection,
+  foreignKey: 'attendance_session_id',
+  otherKey: 'course_section_id',
+  as: 'sections', // Plural: multiple sections per session
+});
+
+CourseSection.belongsToMany(AttendanceSession, {
+  through: AttendanceSessionSection,
+  foreignKey: 'course_section_id',
+  otherKey: 'attendance_session_id',
+  as: 'linkedAttendanceSessions',
+});
+
+// AttendanceSessionSection -> AttendanceSession
+AttendanceSessionSection.belongsTo(AttendanceSession, {
+  foreignKey: 'attendance_session_id',
+  as: 'session',
+});
+
+// AttendanceSessionSection -> CourseSection
+AttendanceSessionSection.belongsTo(CourseSection, {
+  foreignKey: 'course_section_id',
+  as: 'section',
 });
 
 // AttendanceSession -> Creator (User)
@@ -392,125 +463,40 @@ AttendanceRecord.belongsTo(User, {
 });
 
 // ============================================
-// Queue System Associations
+// Bonus Score Associations
 // ============================================
 
-// QueueSession -> Course
-QueueSession.belongsTo(Course, {
+// BonusScore -> Course
+BonusScore.belongsTo(Course, {
   foreignKey: 'course_id',
   as: 'course',
 });
 
-Course.hasMany(QueueSession, {
+Course.hasMany(BonusScore, {
   foreignKey: 'course_id',
-  as: 'queueSessions',
+  as: 'bonusScores',
 });
 
-// QueueSession -> Classroom
-QueueSession.belongsTo(Classroom, {
-  foreignKey: 'classroom_id',
-  as: 'classroom',
-});
-
-Classroom.hasMany(QueueSession, {
-  foreignKey: 'classroom_id',
-  as: 'queueSessions',
-});
-
-// QueueSession -> Assignment (linked)
-QueueSession.belongsTo(Assignment, {
-  foreignKey: 'linked_assignment_id',
-  as: 'linkedAssignment',
-});
-
-// QueueSession -> AttendanceSession (linked)
-QueueSession.belongsTo(AttendanceSession, {
-  foreignKey: 'linked_attendance_session_id',
-  as: 'linkedAttendanceSession',
-});
-
-// QueueSession -> Creator (User)
-QueueSession.belongsTo(User, {
-  foreignKey: 'created_by',
-  as: 'creator',
-});
-
-// QueueSession -> Workers
-QueueSession.hasMany(QueueWorker, {
-  foreignKey: 'queue_session_id',
-  as: 'workers',
-});
-
-QueueWorker.belongsTo(QueueSession, {
-  foreignKey: 'queue_session_id',
-  as: 'queueSession',
-});
-
-// QueueWorker -> User
-QueueWorker.belongsTo(User, {
-  foreignKey: 'user_id',
-  as: 'user',
-});
-
-User.hasMany(QueueWorker, {
-  foreignKey: 'user_id',
-  as: 'queueWorkerSessions',
-});
-
-// QueueSession -> Bookings
-QueueSession.hasMany(QueueBooking, {
-  foreignKey: 'queue_session_id',
-  as: 'bookings',
-});
-
-QueueBooking.belongsTo(QueueSession, {
-  foreignKey: 'queue_session_id',
-  as: 'queueSession',
-});
-
-// QueueBooking -> Student
-QueueBooking.belongsTo(Student, {
+// BonusScore -> Student
+BonusScore.belongsTo(Student, {
   foreignKey: 'student_id',
   as: 'student',
 });
 
-Student.hasMany(QueueBooking, {
+Student.hasMany(BonusScore, {
   foreignKey: 'student_id',
-  as: 'queueBookings',
+  as: 'bonusScores',
 });
 
-// QueueBooking -> Desk
-QueueBooking.belongsTo(Desk, {
-  foreignKey: 'desk_id',
-  as: 'desk',
+// BonusScore -> User (given_by)
+BonusScore.belongsTo(User, {
+  foreignKey: 'given_by',
+  as: 'giver',
 });
 
-Desk.hasMany(QueueBooking, {
-  foreignKey: 'desk_id',
-  as: 'queueBookings',
-});
-
-// QueueBooking -> AssignedWorker (User)
-QueueBooking.belongsTo(User, {
-  foreignKey: 'assigned_worker_id',
-  as: 'assignedWorker',
-});
-
-// QueueDeskStatus -> QueueSession
-QueueDeskStatus.belongsTo(QueueSession, {
-  foreignKey: 'queue_session_id',
-  as: 'queueSession',
-});
-
-QueueSession.hasMany(QueueDeskStatus, {
-  foreignKey: 'queue_session_id',
-  as: 'deskStatuses',
-});
-
-// QueueDeskStatus -> Desk
-QueueDeskStatus.belongsTo(Desk, {
-  foreignKey: 'desk_id',
-  as: 'desk',
+User.hasMany(BonusScore, {
+  foreignKey: 'given_by',
+  as: 'givenBonusScores',
 });
 
 // ============================================
@@ -524,6 +510,7 @@ module.exports = {
   SystemLog,
   Course,
   CourseSection,
+  CourseInstructor,
   CourseTA,
   CourseSectionStudent,
   Classroom,
@@ -533,13 +520,11 @@ module.exports = {
   StudentGroupMember,
   Assignment,
   AssignmentSubItem,
+  AssignmentAttendanceLink,
   Score,
   ScoreEditRequest,
   AttendanceSession,
+  AttendanceSessionSection,
   AttendanceRecord,
-  // Queue System
-  QueueSession,
-  QueueWorker,
-  QueueBooking,
-  QueueDeskStatus,
+  BonusScore,
 };

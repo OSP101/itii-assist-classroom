@@ -18,6 +18,7 @@ export interface LinkedAttendanceSession {
     start_time: string;
     end_time: string;
     session_type?: string;
+    course_section_id?: number;
 }
 
 export interface Assignment {
@@ -25,10 +26,12 @@ export interface Assignment {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null;
     linkedAttendanceSession?: LinkedAttendanceSession | null;
+    linkedAttendanceSessions?: LinkedAttendanceSession[]; // New: array of linked sessions
+    attendance_condition?: 'and' | 'or'; // New: condition for multi-session attendance
     max_score: number;
     due_date?: string;
     order_index: number;
@@ -47,9 +50,11 @@ export interface CreateAssignmentData {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
-    linked_attendance_session_id?: number | null;
+    linked_attendance_session_id?: number | null; // Legacy single session
+    linked_attendance_session_ids?: number[]; // New: array of session IDs
+    attendance_condition?: 'and' | 'or'; // New: 'and' = must attend all, 'or' = must attend at least one
     max_score?: number;
     sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
     due_date?: string;
@@ -58,11 +63,13 @@ export interface CreateAssignmentData {
 export interface UpdateAssignmentData {
     name?: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
-    linked_attendance_session_id?: number | null;
+    linked_attendance_session_id?: number | null; // Legacy single session
+    linked_attendance_session_ids?: number[]; // New: array of session IDs
+    attendance_condition?: 'and' | 'or'; // New: 'and' = must attend all, 'or' = must attend at least one
     max_score?: number;
-    sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
+    sub_items?: Omit<AssignmentSubItem, 'assignment_id'>[]; // Include id for existing sub-items to preserve scores
     due_date?: string;
 }
 

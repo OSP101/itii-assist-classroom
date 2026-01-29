@@ -38,7 +38,7 @@ export interface LocalSubItem {
 
 export interface NewAssignment {
     name: string;
-    assignment_type: "individual" | "permanent_group" | "weekly_group";
+    assignment_type: "individual" | "permanent_group" | "weekly_group" | "assignment";
     week_number?: number;
     hasSubItems: boolean;
     subItems: LocalSubItem[];

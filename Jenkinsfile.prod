@@ -1,0 +1,153 @@
+pipeline {
+    agent any
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+    }
+
+    triggers {
+        githubPush()
+    }
+
+    environment {
+        PROJECT_NAME   = "itii"
+        DOCKER_NETWORK = "itii-network"
+        ENV_NAME = 'prod'
+        COMPOSE_FILE = 'docker-compose.prod.yml'
+        COMPOSE_PROJECT = 'itii-prod'
+    }
+
+    stages {
+
+        stage('📥 Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('🔐 Inject Secrets (.env)') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'PROD_DB_NAME', variable: 'DB_NAME'),
+                        string(credentialsId: 'PROD_DB_USER', variable: 'DB_USER'),
+                        string(credentialsId: 'PROD_DB_PASSWORD', variable: 'DB_PASSWORD'),
+                        string(credentialsId: 'PROD_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
+                        string(credentialsId: 'PROD_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                        string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
+                        string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
+                        string(credentialsId: 'PROD_NEXT_PUBLIC_API_URL', variable: 'NEXT_PUBLIC_API_URL'),
+                        string(credentialsId: 'PROD_NEXT_PUBLIC_SOCKET_URL', variable: 'NEXT_PUBLIC_SOCKET_URL'),
+                        string(credentialsId: 'PROD_NEXT_PUBLIC_FRONTEND_URL', variable: 'NEXT_PUBLIC_FRONTEND_URL'),
+                        string(credentialsId: 'PROD_NEXT_PUBLIC_CLOUD', variable: 'NEXT_PUBLIC_CLOUD'),
+                        string(credentialsId: 'PROD_GOOGLE_CALLBACK_URL', variable: 'GOOGLE_CALLBACK_URL'),
+                        string(credentialsId: 'PROD_FRONTEND_URL', variable: 'FRONTEND_URL'),
+                        string(credentialsId: 'PROD_NEXT_PUBLIC_GOOGLE_CLIENT_ID', variable: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'),
+                        string(credentialsId: 'PROD_JWT_ACCESS_EXPIRES_IN', variable: 'JWT_ACCESS_EXPIRES_IN'),
+                        string(credentialsId: 'PROD_JWT_REFRESH_EXPIRES_IN', variable: 'JWT_REFRESH_EXPIRES_IN'),
+                    ]) {
+                        sh '''
+                        # Create backend .env.prod file
+                        mkdir -p back-end
+                        cat <<EOF > back-end/.env.prod
+DB_NAME=$DB_NAME
+DB_USER=$DB_USER
+DB_PASSWORD=$DB_PASSWORD
+JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
+JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+GOOGLE_CALLBACK_URL=$GOOGLE_CALLBACK_URL
+FRONTEND_URL=$FRONTEND_URL
+JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
+JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
+EOF
+
+                        # Create frontend .env.local.prod file
+                        mkdir -p front-end
+                        cat <<EOF > front-end/.env.local.prod
+NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+EOF
+
+                        # Create .env for docker-compose build args
+                        cat <<EOF > .env
+NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
+NEXT_PUBLIC_FRONTEND_URL=$NEXT_PUBLIC_FRONTEND_URL
+NEXT_PUBLIC_CLOUD=$NEXT_PUBLIC_CLOUD
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=$NEXT_PUBLIC_GOOGLE_CLIENT_ID
+EOF
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('🏗 Build') {
+            steps {
+                sh "docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} build --no-cache"
+            }
+        }
+
+        stage('🚀 Deploy') {
+            steps {
+                sh """
+                docker network create ${DOCKER_NETWORK} || true
+                
+                # Stop and remove existing containers with same name (cleanup orphans)
+                echo "🧹 Cleaning up existing containers..."
+                docker rm -f itii-${ENV_NAME}-backend itii-${ENV_NAME}-frontend 2>/dev/null || true
+                
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down --remove-orphans
+                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
+                
+                echo "⏳ Waiting for containers to start..."
+                sleep 5
+                
+                if ! docker ps | grep -q itii-${ENV_NAME}-backend; then
+                    echo "❌ Backend failed to start. Showing logs:"
+                    docker logs itii-${ENV_NAME}-backend || true
+                    exit 1
+                fi
+                """
+            }
+        }
+
+        stage('🏥 Health Check') {
+            steps {
+                sh """
+                echo "🔍 Checking containers..."
+                docker ps | grep ${PROJECT_NAME} || true
+                
+                echo ""
+                echo "📊 Backend logs:"
+                docker logs itii-${ENV_NAME}-backend --tail 20 || true
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ DEPLOY SUCCESS (PROD)"
+        }
+        failure {
+            echo "❌ DEPLOY FAILED"
+            sh """
+            echo "📋 Backend logs:"
+            docker logs itii-${ENV_NAME}-backend --tail 100 || true
+            echo ""
+            echo "📋 Container status:"
+            docker ps -a | grep itii || true
+            """
+        }
+        always {
+            sh 'docker image prune -f || true'
+        }
+    }
+}

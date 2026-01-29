@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
     Table,
     TableHeader,
@@ -9,6 +9,7 @@ import {
     TableRow,
     TableCell,
 } from "@heroui/table";
+import { useSocket } from "@/contexts/SocketContext";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 import { Button } from "@heroui/button";
@@ -46,6 +47,8 @@ const statusOptions = [
 ];
 
 export default function StudentsPage() {
+    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, isConnected } = useSocket();
+    const isUpdatingRef = useRef(false);
     const [students, setStudents] = useState<Student[]>([]);
     const [stats, setStats] = useState<StudentStats | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -125,6 +128,24 @@ export default function StudentsPage() {
         fetchStats();
     }, [fetchStudents, fetchStats]);
 
+    // Real-time sync - Subscribe to student updates
+    useEffect(() => {
+        subscribeToUpdates();
+        return () => unsubscribeFromUpdates();
+    }, [subscribeToUpdates, unsubscribeFromUpdates]);
+
+    // Handle real-time updates from other tabs/users
+    useEffect(() => {
+        const unsubscribe = onDataUpdate((data) => {
+            if (data.resource === "student" && !isUpdatingRef.current) {
+                console.log("📥 Student data updated from another source:", data);
+                fetchStudents();
+                fetchStats();
+            }
+        });
+        return unsubscribe;
+    }, [onDataUpdate, fetchStudents, fetchStats]);
+
     // Debounced search
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -155,6 +176,7 @@ export default function StudentsPage() {
         }
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await studentService.createStudent(formData);
             if (response.success) {
@@ -167,6 +189,7 @@ export default function StudentsPage() {
                 resetForm();
                 fetchStudents();
                 fetchStats();
+                emitDataUpdate("student", "create");
             } else {
                 addToast({
                     title: "ไม่สามารถเพิ่มนักศึกษาได้",
@@ -182,6 +205,7 @@ export default function StudentsPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -199,6 +223,7 @@ export default function StudentsPage() {
         }
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const updateData: UpdateStudentDto = {
                 student_id: formData.student_id,
@@ -217,6 +242,7 @@ export default function StudentsPage() {
                 setSelectedStudent(null);
                 resetForm();
                 fetchStudents();
+                emitDataUpdate("student", "update", selectedStudent.id);
             } else {
                 addToast({
                     title: "ไม่สามารถอัปเดตข้อมูลได้",
@@ -232,6 +258,7 @@ export default function StudentsPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -240,6 +267,7 @@ export default function StudentsPage() {
         if (!selectedStudent) return;
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await studentService.deleteStudent(selectedStudent.id);
             if (response.success) {
@@ -252,6 +280,7 @@ export default function StudentsPage() {
                 setSelectedStudent(null);
                 fetchStudents();
                 fetchStats();
+                emitDataUpdate("student", "delete", selectedStudent.id);
             } else {
                 addToast({
                     title: "ไม่สามารถลบนักศึกษาได้",
@@ -267,11 +296,13 @@ export default function StudentsPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
     // Handle toggle status
     const handleToggleStatus = async (student: Student) => {
+        isUpdatingRef.current = true;
         try {
             const response = await studentService.toggleStatus(student.id);
             if (response.success) {
@@ -282,6 +313,7 @@ export default function StudentsPage() {
                 });
                 fetchStudents();
                 fetchStats();
+                emitDataUpdate("student", "toggle", student.id);
             }
         } catch (error) {
             addToast({
@@ -289,6 +321,8 @@ export default function StudentsPage() {
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
             });
+        } finally {
+            isUpdatingRef.current = false;
         }
     };
 
@@ -309,11 +343,11 @@ export default function StudentsPage() {
 
         for (const line of lines) {
             const parts = line.split(/[,\t]/).map(p => p.trim());
-            if (parts.length >= 3 && parts[0] && parts[1] && parts[2]) {
+            if (parts.length >= 2 && parts[0] && parts[1]) {
                 studentsToImport.push({
                     student_id: parts[0],
                     full_name: parts[1],
-                    email: parts[2],
+                    email: parts[2] || "",
                 });
             }
         }
@@ -321,25 +355,46 @@ export default function StudentsPage() {
         if (studentsToImport.length === 0) {
             addToast({
                 title: "ไม่พบข้อมูลที่ถูกต้อง",
-                description: "กรุณาตรวจสอบรูปแบบข้อมูล (ต้องมีรหัส, ชื่อ, อีเมล ครบทุกช่อง)",
+                description: "กรุณาตรวจสอบรูปแบบข้อมูล (ต้องมีรหัสและชื่อ)",
                 color: "warning",
             });
             return;
         }
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await studentService.importStudents(studentsToImport);
             if (response.success && response.data) {
+                const { created, skipped, failed } = response.data;
+                
+                // Build detailed message
+                let description = "";
+                if (created > 0) description += `✅ เพิ่มใหม่ ${created} คน`;
+                if (skipped > 0) description += `${description ? ", " : ""}ซ้ำ ${skipped} คน`;
+                if (failed > 0) description += `${description ? ", " : ""}ล้มเหลว ${failed} รายการ`;
+                
+                // Determine toast color based on results
+                let toastColor: "success" | "warning" | "danger" = "success";
+                if (created === 0 && skipped > 0) {
+                    toastColor = "warning";
+                } else if (failed > 0 && created === 0) {
+                    toastColor = "danger";
+                } else if (skipped > 0 || failed > 0) {
+                    toastColor = "warning";
+                }
+
                 addToast({
-                    title: "นำเข้าข้อมูลสำเร็จ",
-                    description: `สำเร็จ ${response.data.success} รายการ, ล้มเหลว ${response.data.failed} รายการ`,
-                    color: response.data.failed > 0 ? "warning" : "success",
+                    title: "นำเข้าข้อมูลเสร็จสิ้น",
+                    description: description || "ไม่มีการเปลี่ยนแปลง",
+                    color: toastColor,
                 });
+
                 setIsImportModalOpen(false);
                 setImportText("");
                 fetchStudents();
                 fetchStats();
+                emitDataUpdate("student", "bulk");
             }
         } catch (error) {
             addToast({
@@ -349,6 +404,7 @@ export default function StudentsPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -478,11 +534,26 @@ export default function StudentsPage() {
         <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">
-                        จัดการนักศึกษา
-                    </h1>
-                    <p className="text-sm text-default-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold text-default-900">
+                            จัดการนักศึกษา
+                        </h1>
+                        <p className="text-sm text-default-500 mt-1">จัดการข้อมูลนักศึกษาทั้งหมดในระบบ</p>
+                    </div>
+                    {/* Live Indicator */}
+                    <Tooltip content={isConnected ? "ซิงค์แบบเรียลไทม์กำลังทำงาน" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            isConnected 
+                                ? "bg-emerald-100 text-emerald-700" 
+                                : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-emerald-500 animate-pulse" : "bg-yellow-500"
+                            }`}></span>
+                            {isConnected ? "Live" : "..."}
+                        </div>
+                    </Tooltip>
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
                     <Button
@@ -499,7 +570,7 @@ export default function StudentsPage() {
                         color="primary"
                         startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
                         onPress={() => setIsCreateModalOpen(true)}
-                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                        className="font-medium flex-1 sm:flex-none sm:px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                     >
                         <span className="hidden sm:inline">เพิ่มนักศึกษา</span>
                         <span className="sm:hidden">เพิ่ม</span>
@@ -658,7 +729,7 @@ export default function StudentsPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -738,7 +809,7 @@ export default function StudentsPage() {
                             color="primary"
                             onPress={handleCreate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             เพิ่มนักศึกษา

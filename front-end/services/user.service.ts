@@ -15,7 +15,6 @@ export interface User {
   is_active: boolean;
   provider: 'local' | 'google';
   google_id: string | null;
-  linked_student_id: number | null;
   avatar: string | null;
   created_at: string;
   updated_at: string;
@@ -23,11 +22,18 @@ export interface User {
 
 export interface CreateUserDto {
   username: string;
-  password: string;
   full_name: string;
   email?: string;
   role: 'admin' | 'instructor' | 'ta';
   avatar?: string;
+}
+
+export interface CreateUserResponse {
+  user: User;
+  credentials: {
+    username: string;
+    password: string;
+  };
 }
 
 export interface UpdateUserDto {
@@ -107,10 +113,10 @@ class UserService {
   }
 
   /**
-   * Create new user
+   * Create new user (password will be auto-generated)
    */
   async createUser(data: CreateUserDto) {
-    return apiService.post<User>(API_ENDPOINTS.USERS, data);
+    return apiService.post<CreateUserResponse>(API_ENDPOINTS.USERS, data);
   }
 
   /**

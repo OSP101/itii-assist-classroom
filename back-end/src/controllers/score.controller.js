@@ -1,39 +1,115 @@
-const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, sequelize } = require('../models');
+const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, AssignmentAttendanceLink, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
 /**
- * Check if student attended the linked attendance session
- * Returns: { attended: boolean, status: string | null, message: string }
+ * Check if student attended the linked attendance session(s)
+ * Supports multiple attendance sessions with AND/OR conditions
+ * Returns: { attended: boolean, status: string | null, message: string, details: Array }
  */
 const checkStudentAttendance = async (assignmentId, studentId) => {
-    const assignment = await Assignment.findByPk(assignmentId);
+    const assignment = await Assignment.findByPk(assignmentId, {
+        include: [{
+            model: AttendanceSession,
+            as: 'linkedAttendanceSessions',
+            attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+            through: { attributes: [] },
+        }],
+    });
     
-    // If no linked session, allow scoring
-    if (!assignment || !assignment.linked_attendance_session_id) {
-        return { attended: true, status: null, message: 'ไม่มีการลิงก์กับการเช็คชื่อ' };
+    if (!assignment) {
+        return { attended: true, status: null, message: 'ไม่พบงาน', details: [] };
+    }
+
+    const linkedSessions = assignment.linkedAttendanceSessions || [];
+    
+    // Fallback: Check legacy single linked session if no many-to-many links exist
+    if (linkedSessions.length === 0) {
+        if (!assignment.linked_attendance_session_id) {
+            return { attended: true, status: null, message: 'ไม่มีการลิงก์กับการเช็คชื่อ', details: [] };
+        }
+        
+        // Legacy single session check
+        const record = await AttendanceRecord.findOne({
+            where: {
+                attendance_session_id: assignment.linked_attendance_session_id,
+                student_id: studentId,
+            },
+        });
+        
+        if (!record) {
+            return { attended: false, status: 'absent', message: 'นักศึกษาไม่มีข้อมูลการเช็คชื่อ', details: [] };
+        }
+        
+        if (record.status === 'absent') {
+            return { attended: false, status: 'absent', message: 'นักศึกษาขาดเรียน ไม่อนุญาตให้ลงคะแนน', details: [] };
+        }
+        
+        return { attended: true, status: record.status, message: 'นักศึกษามาเรียน', details: [] };
     }
     
-    // Check attendance record
-    const record = await AttendanceRecord.findOne({
+    // Multi-session check
+    const sessionIds = linkedSessions.map(s => s.id);
+    const attendanceRecords = await AttendanceRecord.findAll({
         where: {
-            attendance_session_id: assignment.linked_attendance_session_id,
+            attendance_session_id: { [Op.in]: sessionIds },
             student_id: studentId,
         },
     });
     
-    if (!record) {
-        return { attended: false, status: 'absent', message: 'นักศึกษาไม่มีข้อมูลการเช็คชื่อ' };
+    // Build status for each linked session
+    const recordMap = {};
+    attendanceRecords.forEach(record => {
+        recordMap[record.attendance_session_id] = record.status;
+    });
+    
+    const details = linkedSessions.map(session => {
+        const status = recordMap[session.id] || 'absent';
+        const attended = status !== 'absent';
+        return {
+            session_id: session.id,
+            session_title: session.title,
+            start_time: session.start_time,
+            end_time: session.end_time,
+            status: status,
+            attended: attended,
+        };
+    });
+    
+    const attendedCount = details.filter(d => d.attended).length;
+    const totalCount = details.length;
+    const condition = assignment.attendance_condition || 'or';
+    
+    let attended, message;
+    
+    if (condition === 'and') {
+        // Must attend ALL linked sessions
+        attended = attendedCount === totalCount;
+        if (attended) {
+            message = `นักศึกษามาเรียนครบทุกรอบ (${attendedCount}/${totalCount})`;
+        } else {
+            message = `นักศึกษาต้องมาเรียนครบทุกรอบ (มา ${attendedCount}/${totalCount}) ไม่อนุญาตให้ลงคะแนน`;
+        }
+    } else {
+        // Must attend at least ONE linked session
+        attended = attendedCount > 0;
+        if (attended) {
+            message = `นักศึกษามาเรียนอย่างน้อย 1 รอบ (${attendedCount}/${totalCount})`;
+        } else {
+            message = `นักศึกษาต้องมาเรียนอย่างน้อย 1 รอบ (มา 0/${totalCount}) ไม่อนุญาตให้ลงคะแนน`;
+        }
     }
     
-    // Check if status is 'absent'
-    if (record.status === 'absent') {
-        return { attended: false, status: 'absent', message: 'นักศึกษาขาดเรียน ไม่อนุญาตให้ลงคะแนน' };
-    }
-    
-    // Present, late, or leave are all considered attended
-    return { attended: true, status: record.status, message: 'นักศึกษามาเรียน' };
+    return { 
+        attended, 
+        status: attended ? (attendedCount === totalCount ? 'present' : 'partial') : 'absent', 
+        message, 
+        details,
+        condition,
+        attended_count: attendedCount,
+        total_count: totalCount,
+    };
 };
 
 /**
@@ -57,6 +133,12 @@ const getScores = asyncHandler(async (req, res) => {
                 model: AttendanceSession,
                 as: 'linkedAttendanceSession',
                 attributes: ['id', 'title', 'start_time', 'end_time'],
+            },
+            {
+                model: AttendanceSession,
+                as: 'linkedAttendanceSessions',
+                attributes: ['id', 'title', 'start_time', 'end_time', 'session_type', 'course_section_id'],
+                through: { attributes: [] },
             },
         ],
     });
@@ -115,15 +197,86 @@ const getScores = asyncHandler(async (req, res) => {
         }
     });
 
-    // Get attendance records if assignment is linked to attendance session
-    let attendanceMap = {};
-    if (assignment.linked_attendance_session_id) {
+    // Get attendance records for linked sessions (both legacy single and multi-session)
+    const linkedSessions = assignment.linkedAttendanceSessions || [];
+    const hasMultiSessions = linkedSessions.length > 0;
+    const condition = assignment.attendance_condition || 'or';
+    
+    let attendanceDataMap = {}; // student_id -> { status, canScore, details }
+    
+    if (hasMultiSessions) {
+        // Multi-session attendance check
+        const sessionIds = linkedSessions.map(s => s.id);
+        const attendanceRecords = await AttendanceRecord.findAll({
+            where: { attendance_session_id: { [Op.in]: sessionIds } },
+            attributes: ['student_id', 'attendance_session_id', 'status'],
+        });
+        
+        // Build record map: student_id -> session_id -> status
+        const recordsByStudent = {};
+        attendanceRecords.forEach(record => {
+            if (!recordsByStudent[record.student_id]) {
+                recordsByStudent[record.student_id] = {};
+            }
+            recordsByStudent[record.student_id][record.attendance_session_id] = record.status;
+        });
+        
+        // Calculate attendance status for each student
+        uniqueStudents.forEach(student => {
+            const studentRecords = recordsByStudent[student.id] || {};
+            const details = linkedSessions.map(session => {
+                const status = studentRecords[session.id] || 'absent';
+                return {
+                    session_id: session.id,
+                    session_title: session.title,
+                    start_time: session.start_time,
+                    status: status,
+                    attended: status !== 'absent',
+                };
+            });
+            
+            const attendedCount = details.filter(d => d.attended).length;
+            const totalCount = details.length;
+            
+            let canScore, overallStatus;
+            if (condition === 'and') {
+                canScore = attendedCount === totalCount;
+                overallStatus = canScore ? 'present' : 'absent';
+            } else {
+                canScore = attendedCount > 0;
+                overallStatus = canScore ? (attendedCount === totalCount ? 'present' : 'partial') : 'absent';
+            }
+            
+            attendanceDataMap[student.id] = {
+                status: overallStatus,
+                canScore: canScore,
+                details: details,
+                attended_count: attendedCount,
+                total_count: totalCount,
+            };
+        });
+    } else if (assignment.linked_attendance_session_id) {
+        // Legacy single session check
         const attendanceRecords = await AttendanceRecord.findAll({
             where: { attendance_session_id: assignment.linked_attendance_session_id },
             attributes: ['student_id', 'status'],
         });
         attendanceRecords.forEach(record => {
-            attendanceMap[record.student_id] = record.status;
+            attendanceDataMap[record.student_id] = {
+                status: record.status,
+                canScore: record.status !== 'absent',
+                details: [],
+            };
+        });
+        // Fill in missing students as absent
+        uniqueStudents.forEach(student => {
+            if (!attendanceDataMap[student.id]) {
+                attendanceDataMap[student.id] = {
+                    status: 'absent',
+                    canScore: false,
+                    details: [],
+                };
+            }
         });
     }
 
@@ -133,10 +286,10 @@ const getScores = asyncHandler(async (req, res) => {
         const studentSubItemScores = subItemScoreMap[student.id] || {};
         
         // Check attendance status
-        const attendanceStatus = assignment.linked_attendance_session_id 
-            ? (attendanceMap[student.id] || 'absent')
-            : null;
-        const canScore = !assignment.linked_attendance_session_id || attendanceStatus !== 'absent';
+        const attendanceData = attendanceDataMap[student.id];
+        const hasAttendanceLink = hasMultiSessions || assignment.linked_attendance_session_id;
+        const attendanceStatus = hasAttendanceLink ? (attendanceData?.status || 'absent') : null;
+        const canScore = !hasAttendanceLink || (attendanceData?.canScore ?? true);
         
         // Build sub-item scores array
         const subItemScores = assignment.subItems ? assignment.subItems.map(subItem => {
@@ -171,13 +324,21 @@ const getScores = asyncHandler(async (req, res) => {
             // Attendance info
             attendance_status: attendanceStatus,
             can_score: canScore,
+            attendance_details: attendanceData?.details || [],
+            attendance_condition: hasMultiSessions ? condition : null,
+            attended_count: attendanceData?.attended_count,
+            total_count: attendanceData?.total_count,
         };
     });
 
     res.json({
         success: true,
         data: {
-            assignment,
+            assignment: {
+                ...assignment.toJSON(),
+                attendance_condition: assignment.attendance_condition,
+                linked_sessions_count: linkedSessions.length,
+            },
             student_scores: studentScores,
         },
     });
@@ -694,13 +855,21 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Build assignment type filter
     let assignmentTypeFilter = {};
+    console.log(`[getScoreSummaryMatrix] assignment_type param: "${assignment_type}"`);
+    
     if (assignment_type === 'individual') {
+        // Lab assignments (individual work done in class)
         assignmentTypeFilter = { assignment_type: 'individual' };
+    } else if (assignment_type === 'assignment') {
+        // Assignment/homework (individual work done at home)
+        assignmentTypeFilter = { assignment_type: 'assignment' };
     } else if (assignment_type === 'group') {
         assignmentTypeFilter = { 
             assignment_type: { [Op.in]: ['permanent_group', 'weekly_group'] } 
         };
     }
+    
+    console.log(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
 
     // Get all assignments for this course
     const assignments = await Assignment.findAll({
@@ -718,6 +887,8 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
         order: [['order_index', 'ASC']],
     });
+
+    console.log(`[getScoreSummaryMatrix] Found ${assignments.length} assignments with filter`);
 
     // Get all scores for these students and assignments
     const studentIds = studentsWithSection.map(s => s.id);
@@ -737,6 +908,24 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
     });
 
+    // Get bonus scores for all students in this course
+    const bonusScoreRecords = await BonusScore.findAll({
+        where: {
+            course_id,
+            student_id: { [Op.in]: studentIds },
+        },
+        attributes: ['student_id', 'score'],
+    });
+
+    // Create bonus score map: { student_id: totalBonusScore }
+    const bonusScoreMap = {};
+    for (const record of bonusScoreRecords) {
+        if (!bonusScoreMap[record.student_id]) {
+            bonusScoreMap[record.student_id] = 0;
+        }
+        bonusScoreMap[record.student_id] += parseFloat(record.score) || 0;
+    }
+
     // Create score lookup map with full info: { `${student_id}_${assignment_id}_${sub_item_id}`: scoreObj }
     const scoreMap = {};
     for (const score of scores) {
@@ -755,6 +944,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             student_id: student.student_id,
             full_name: student.full_name,
             section_number: student.section_number,
+            bonus_score: bonusScoreMap[student.id] || 0,
             scores: {},
             total_score: 0,
             total_max_score: 0,

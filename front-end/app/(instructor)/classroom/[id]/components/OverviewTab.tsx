@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Divider } from "@heroui/divider";
@@ -18,12 +19,69 @@ import {
 } from "@heroui/table";
 import { Icon } from "@iconify/react";
 import { OverviewSkeleton } from "./Skeletons";
-import type { Course, CourseOverview, ScoreDistribution } from "@/services/course.service";
+import type { Course, CourseOverview, ScoreDistribution, OverviewAssignment, AssignmentTypeStats } from "@/services/course.service";
 import type { AssignmentType } from "./types";
 
-// ============================================
-// Animated Counter Hook
-// ============================================
+// Assignment Type Configuration
+const ASSIGNMENT_TYPE_CONFIG: Record<string, {
+    label: string;
+    shortLabel: string;
+    icon: string;
+    color: "primary" | "secondary" | "success" | "warning" | "danger";
+    bgClass: string;
+    textClass: string;
+    borderClass: string;
+    gradientClass: string;
+}> = {
+    individual: {
+        label: "Lab (งานเดี่ยว)",
+        shortLabel: "Laboratory",
+        icon: "solar:monitor-bold",
+        color: "primary",
+        bgClass: "bg-blue-100",
+        textClass: "text-blue-600",
+        borderClass: "border-blue-200",
+        gradientClass: "from-blue-500 to-blue-600",
+    },
+    assignment: {
+        label: "Assignment (การบ้าน)",
+        shortLabel: "Assignment",
+        icon: "solar:clipboard-text-bold",
+        color: "warning",
+        bgClass: "bg-amber-100",
+        textClass: "text-amber-600",
+        borderClass: "border-amber-200",
+        gradientClass: "from-amber-500 to-amber-600",
+    },
+    permanent_group: {
+        label: "กลุ่มถาวร",
+        shortLabel: "กลุ่มถาวร",
+        icon: "solar:users-group-rounded-bold",
+        color: "secondary",
+        bgClass: "bg-purple-100",
+        textClass: "text-purple-600",
+        borderClass: "border-purple-200",
+        gradientClass: "from-purple-500 to-purple-600",
+    },
+    weekly_group: {
+        label: "กลุ่มรายสัปดาห์",
+        shortLabel: "กลุ่มรายสัปดาห์",
+        icon: "solar:calendar-bold",
+        color: "success",
+        bgClass: "bg-emerald-100",
+        textClass: "text-emerald-600",
+        borderClass: "border-emerald-200",
+        gradientClass: "from-emerald-500 to-emerald-600",
+    },
+};
+
+const getAssignmentTypeConfig = (type: string) => {
+    return ASSIGNMENT_TYPE_CONFIG[type] || ASSIGNMENT_TYPE_CONFIG.individual;
+};
+
+
+// Animated Counter Hook กำลังแก้ไข มันเปิดหน้าแรกบ่ได้เลย เห้ออ
+
 function useAnimatedCounter(end: number, duration: number = 1000, decimals: number = 0) {
     const [count, setCount] = useState(0);
 
@@ -56,9 +114,6 @@ function useAnimatedCounter(end: number, duration: number = 1000, decimals: numb
     return decimals > 0 ? count.toFixed(decimals) : Math.round(count);
 }
 
-// ============================================
-// Circular Progress Component
-// ============================================
 function CircularProgress({ 
     value, 
     size = 120, 
@@ -130,9 +185,6 @@ function CircularProgress({
     );
 }
 
-// ============================================
-// Score Distribution Bar
-// ============================================
 function ScoreDistributionBar({ distribution }: { distribution: ScoreDistribution }) {
     const total = distribution.excellent + distribution.good + distribution.average + distribution.poor;
     
@@ -172,9 +224,7 @@ function ScoreDistributionBar({ distribution }: { distribution: ScoreDistributio
     );
 }
 
-// ============================================
-// Stats Card Component
-// ============================================
+
 function StatsCard({ 
     icon, 
     iconBg,
@@ -211,9 +261,57 @@ function StatsCard({
     );
 }
 
-// ============================================
-// Main Component
-// ============================================
+// Assignment Type Summary Card
+function AssignmentTypeSummaryCard({
+    type,
+    stats,
+}: {
+    type: string;
+    stats: AssignmentTypeStats;
+}) {
+    const config = getAssignmentTypeConfig(type);
+    
+    return (
+        <div className={`relative bg-white rounded-2xl p-4 border ${config.borderClass} shadow-sm hover:shadow-md transition-all overflow-hidden group`}>
+            <div className={`absolute -right-4 -top-4 w-20 h-20 rounded-full ${config.bgClass} opacity-30 group-hover:scale-125 transition-transform duration-500`} />
+            
+            <div className="relative">
+                <div className="flex items-center gap-3 mb-3">
+                    <div className={`w-10 h-10 ${config.bgClass} rounded-xl flex items-center justify-center`}>
+                        <Icon icon={config.icon} className={`text-xl ${config.textClass}`} />
+                    </div>
+                    <div>
+                        <p className={`font-semibold ${config.textClass}`}>{config.shortLabel}</p>
+                        <p className="text-xs text-slate-400">{stats.count} งาน</p>
+                    </div>
+                </div>
+                
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-slate-500">คะแนนเต็ม</span>
+                        <span className="font-semibold text-slate-700">{stats.totalMaxScore}</span>
+                    </div>
+                    <Progress
+                        value={stats.progressRate}
+                        color={config.color}
+                        size="sm"
+                        className="h-2"
+                    />
+                    <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-400">
+                            ตรวจแล้ว {stats.totalScored}/{stats.totalExpected}
+                        </span>
+                        <span className={`text-xs font-semibold ${config.textClass}`}>
+                            {stats.progressRate}%
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+
 interface OverviewTabProps {
     course: Course;
     overview: CourseOverview | null;
@@ -232,10 +330,62 @@ export default function OverviewTab({
     onNavigateToAssignments,
 }: OverviewTabProps) {
     const [mounted, setMounted] = useState(false);
+    const [selectedAssignmentType, setSelectedAssignmentType] = useState<string>("all");
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // Use assignment statistics from backend (or fallback to calculate from assignments)
+    const assignmentStatsByType = useMemo(() => {
+        // Prefer backend data if available
+        if (overview?.assignmentStatsByType && Object.keys(overview.assignmentStatsByType).length > 0) {
+            return overview.assignmentStatsByType;
+        }
+        
+        // Fallback: Calculate from assignments array
+        if (!overview?.assignments) return {};
+        
+        const stats: Record<string, AssignmentTypeStats> = {};
+        
+        overview.assignments.forEach(assignment => {
+            const type = assignment.assignment_type || 'individual';
+            if (!stats[type]) {
+                stats[type] = { 
+                    count: 0, 
+                    totalMaxScore: 0, 
+                    totalScored: 0, 
+                    totalExpected: 0, 
+                    progressRate: 0 
+                };
+            }
+            stats[type].count += 1;
+            stats[type].totalMaxScore += assignment.max_score;
+            stats[type].totalScored += assignment.scoredCount;
+            stats[type].totalExpected += assignment.scoredCount + assignment.notScoredCount;
+        });
+        
+        // Calculate progress rate
+        Object.keys(stats).forEach(type => {
+            if (stats[type].totalExpected > 0) {
+                stats[type].progressRate = Math.round((stats[type].totalScored / stats[type].totalExpected) * 100);
+            }
+        });
+        
+        return stats;
+    }, [overview?.assignmentStatsByType, overview?.assignments]);
+
+    // Get available assignment types for tabs
+    const availableTypes = useMemo(() => {
+        return Object.keys(assignmentStatsByType);
+    }, [assignmentStatsByType]);
+
+    // Filter assignments by type
+    const filteredAssignments = useMemo(() => {
+        if (!overview?.assignments) return [];
+        if (selectedAssignmentType === "all") return overview.assignments;
+        return overview.assignments.filter(a => a.assignment_type === selectedAssignmentType);
+    }, [overview?.assignments, selectedAssignmentType]);
 
     // Format relative time
     const formatRelativeTime = (dateString: string | null) => {
@@ -273,11 +423,15 @@ export default function OverviewTab({
                         {/* Course Image */}
                         <div className="shrink-0">
                             {course.image ? (
-                                <img
-                                    src={course.image}
-                                    alt={course.name}
-                                    className="w-full md:w-36 h-36 object-cover rounded-2xl border-2 border-white/20 shadow-xl"
-                                />
+                                <div className="relative w-full md:w-36 h-36">
+                                    <Image
+                                        src={course.image}
+                                        alt={course.name}
+                                        fill
+                                        className="object-cover rounded-2xl border-2 border-white/20 shadow-xl"
+                                        sizes="144px"
+                                    />
+                                </div>
                             ) : (
                                 <div className="w-full md:w-36 h-36 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center border-2 border-white/20">
                                     <Icon icon="solar:book-2-bold-duotone" className="text-5xl text-white/60" />
@@ -347,8 +501,12 @@ export default function OverviewTab({
                     icon="solar:diploma-bold"
                     iconBg="bg-gradient-to-br from-emerald-500 to-emerald-600"
                     label="คะแนนเฉลี่ย"
-                    value={overview?.summary.averageScore || 0}
-                    suffix={overview?.summary.totalMaxScore ? `/${overview.summary.totalMaxScore}` : ""}
+                    value={
+                        overview?.summary.totalMaxScore && overview.summary.totalMaxScore > 0
+                            ? Math.round((overview.summary.averageScore / overview.summary.totalMaxScore) * 100)
+                            : 0
+                    }
+                    suffix="%"
                 />
                 <StatsCard
                     icon="solar:user-hands-bold"
@@ -488,8 +646,8 @@ export default function OverviewTab({
                                 <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
-                                <span className="font-semibold text-slate-800 block">ต้องการความสนใจ</span>
-                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า 60%</span>
+                                <span className="font-semibold text-slate-800 block">นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
+                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}%</span>
                             </div>
                         </div>
                     </CardHeader>
@@ -529,102 +687,180 @@ export default function OverviewTab({
                 </Card>
             </div>
 
+            {/* Assignment Types Summary */}
+            {Object.keys(assignmentStatsByType).length > 0 && (
+                <Card className="shadow-sm border border-slate-200">
+                    <CardHeader className="px-5 py-4 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                            <Icon icon="solar:chart-2-bold" className="text-xl text-indigo-500" />
+                            <span className="font-semibold text-slate-800">สรุปประเภทงาน</span>
+                        </div>
+                    </CardHeader>
+                    <CardBody className="p-5">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {Object.entries(assignmentStatsByType).map(([type, stats]) => (
+                                <AssignmentTypeSummaryCard
+                                    key={type}
+                                    type={type}
+                                    stats={stats}
+                                />
+                            ))}
+                        </div>
+                    </CardBody>
+                </Card>
+            )}
+
             {/* Assignment Analysis & Recent Activity Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Assignment Analysis Table */}
                 <Card className="shadow-sm border border-slate-200 lg:col-span-2">
                     <CardHeader className="px-5 py-4 border-b border-slate-100">
-                        <div className="flex items-center justify-between w-full">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3">
                             <div className="flex items-center gap-2">
                                 <Icon icon="solar:document-text-bold" className="text-xl text-blue-500" />
                                 <span className="font-semibold text-slate-800">การวิเคราะห์งาน</span>
                             </div>
-                            {assignments.length > 0 && (
-                                <Button
-                                    size="sm"
-                                    variant="light"
-                                    color="primary"
-                                    onPress={onNavigateToAssignments}
-                                    endContent={<Icon icon="solar:arrow-right-linear" />}
-                                >
-                                    ดูทั้งหมด
-                                </Button>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {/* Assignment Type Filter Chips */}
+                                <div className="flex flex-wrap gap-1">
+                                    <Chip
+                                        size="sm"
+                                        variant={selectedAssignmentType === "all" ? "solid" : "flat"}
+                                        color={selectedAssignmentType === "all" ? "primary" : "default"}
+                                        className="cursor-pointer"
+                                        onClick={() => setSelectedAssignmentType("all")}
+                                    >
+                                        ทั้งหมด
+                                    </Chip>
+                                    {availableTypes.map((type) => {
+                                        const config = getAssignmentTypeConfig(type);
+                                        return (
+                                            <Chip
+                                                key={type}
+                                                size="sm"
+                                                variant={selectedAssignmentType === type ? "solid" : "flat"}
+                                                color={selectedAssignmentType === type ? config.color : "default"}
+                                                className="cursor-pointer"
+                                                onClick={() => setSelectedAssignmentType(type)}
+                                                startContent={<Icon icon={config.icon} className="text-xs" />}
+                                            >
+                                                <span className="hidden sm:inline">{config.shortLabel}</span>
+                                            </Chip>
+                                        );
+                                    })}
+                                </div>
+                                {assignments.length > 0 && (
+                                    <Button
+                                        size="sm"
+                                        variant="light"
+                                        color="primary"
+                                        onPress={onNavigateToAssignments}
+                                        endContent={<Icon icon="solar:arrow-right-linear" />}
+                                        className="hidden sm:flex"
+                                    >
+                                        ดูทั้งหมด
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </CardHeader>
                     <CardBody className="p-0">
-                        {overview?.assignments && overview.assignments.length > 0 ? (
-                            <Table removeWrapper aria-label="Assignment analysis table">
-                                <TableHeader>
-                                    <TableColumn>งาน</TableColumn>
-                                    <TableColumn align="center">เฉลี่ย</TableColumn>
-                                    <TableColumn align="center">ตรวจแล้ว</TableColumn>
-                                    <TableColumn align="center">ความก้าวหน้า</TableColumn>
-                                </TableHeader>
-                                <TableBody>
-                                    {overview.assignments.slice(0, 5).map((assignment) => (
-                                        <TableRow key={assignment.id}>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                        assignment.assignment_type === 'individual' 
-                                                            ? 'bg-blue-100' 
-                                                            : assignment.assignment_type === 'permanent_group'
-                                                                ? 'bg-purple-100'
-                                                                : 'bg-emerald-100'
-                                                    }`}>
-                                                        <Icon 
-                                                            icon={
-                                                                assignment.assignment_type === 'individual' 
-                                                                    ? 'solar:user-bold' 
-                                                                    : 'solar:users-group-rounded-bold'
-                                                            } 
-                                                            className={`text-sm ${
-                                                                assignment.assignment_type === 'individual' 
-                                                                    ? 'text-blue-600' 
-                                                                    : assignment.assignment_type === 'permanent_group'
-                                                                        ? 'text-purple-600'
-                                                                        : 'text-emerald-600'
-                                                            }`}
-                                                        />
+                        {filteredAssignments.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <Table removeWrapper aria-label="Assignment analysis table">
+                                    <TableHeader>
+                                        <TableColumn>งาน</TableColumn>
+                                        <TableColumn align="center">คะแนนเฉลี่ย</TableColumn>
+                                        <TableColumn align="center">ตรวจแล้ว</TableColumn>
+                                        <TableColumn align="center">ความก้าวหน้า</TableColumn>
+                                    </TableHeader>
+                                    <TableBody items={filteredAssignments.slice(0, 8)}>
+                                        {(assignment) => (
+                                            <TableRow key={assignment.id}>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-3">
+                                                        <Tooltip content={getAssignmentTypeConfig(assignment.assignment_type).label}>
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getAssignmentTypeConfig(assignment.assignment_type).bgClass}`}>
+                                                                <Icon icon={getAssignmentTypeConfig(assignment.assignment_type).icon} className={`text-lg ${getAssignmentTypeConfig(assignment.assignment_type).textClass}`} />
+                                                            </div>
+                                                        </Tooltip>
+                                                        <div>
+                                                            <p className="font-medium text-slate-800">{assignment.name}</p>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <Chip 
+                                                                    size="sm" 
+                                                                    variant="flat" 
+                                                                    color={getAssignmentTypeConfig(assignment.assignment_type).color}
+                                                                    className="h-5 text-xs"
+                                                                >
+                                                                    {getAssignmentTypeConfig(assignment.assignment_type).shortLabel}
+                                                                </Chip>
+                                                                <span className="text-xs text-slate-400">เต็ม {assignment.max_score}</span>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <p className="font-medium text-slate-800 text-sm">{assignment.name}</p>
-                                                        <p className="text-xs text-slate-400">เต็ม {assignment.max_score}</p>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {assignment.avgScore !== null ? (
+                                                        <div className="text-center">
+                                                            <span className="font-semibold text-slate-700 text-lg">{assignment.avgScore}</span>
+                                                            <span className="text-xs text-slate-400 ml-1">/ {assignment.max_score}</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-400 text-center block">-</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-col items-center">
+                                                        <Chip 
+                                                            size="sm" 
+                                                            color={assignment.scoredCount > 0 ? "success" : "default"} 
+                                                            variant="flat"
+                                                        >
+                                                            {assignment.scoredCount} {(assignment.assignment_type === 'permanent_group' || assignment.assignment_type === 'weekly_group') ? 'กลุ่ม' : 'คน'}
+                                                        </Chip>
+                                                        {!(assignment.assignment_type === 'permanent_group' || assignment.assignment_type === 'weekly_group') && assignment.notScoredCount > 0 && (
+                                                            <span className="text-xs text-slate-400 mt-1">
+                                                                ยังไม่ตรวจ {assignment.notScoredCount}
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                {assignment.avgScore !== null ? (
-                                                    <span className="font-semibold text-slate-700">{assignment.avgScore}</span>
-                                                ) : (
-                                                    <span className="text-slate-400">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Chip 
-                                                    size="sm" 
-                                                    color={assignment.scoredCount > 0 ? "success" : "default"} 
-                                                    variant="flat"
-                                                >
-                                                    {assignment.scoredCount} คน
-                                                </Chip>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Progress
-                                                        value={assignment.submittedRate}
-                                                        color={assignment.submittedRate >= 80 ? "success" : assignment.submittedRate >= 50 ? "warning" : "danger"}
-                                                        size="sm"
-                                                        className="w-16"
-                                                    />
-                                                    <span className="text-xs text-slate-500 w-8">{assignment.submittedRate}%</span>
-                                                </div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {!(assignment.assignment_type === 'permanent_group' || assignment.assignment_type === 'weekly_group') ? (
+                                                        <div className="flex items-center gap-2 justify-center">
+                                                            <Progress
+                                                                value={assignment.submittedRate}
+                                                                color={assignment.submittedRate >= 80 ? "success" : assignment.submittedRate >= 50 ? "warning" : "danger"}
+                                                                size="sm"
+                                                                className="w-20"
+                                                            />
+                                                            <span className="text-xs text-slate-500 w-10 text-right">{assignment.submittedRate}%</span>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-slate-400 text-center block">งานกลุ่ม</span>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        ) : overview?.assignments && overview.assignments.length > 0 ? (
+                            <div className="text-center py-12">
+                                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                    <Icon icon="solar:filter-linear" className="text-3xl text-slate-300" />
+                                </div>
+                                <p className="text-sm text-slate-500">ไม่มีงานประเภทนี้</p>
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    className="mt-3"
+                                    onPress={() => setSelectedAssignmentType("all")}
+                                >
+                                    แสดงงานทั้งหมด
+                                </Button>
+                            </div>
                         ) : (
                             <div className="text-center py-12">
                                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -640,6 +876,22 @@ export default function OverviewTab({
                                     startContent={<Icon icon="solar:add-circle-bold" />}
                                 >
                                     สร้างงานใหม่
+                                </Button>
+                            </div>
+                        )}
+                        
+                        {/* Mobile: Show all assignments button */}
+                        {assignments.length > 0 && (
+                            <div className="p-4 border-t border-slate-100 sm:hidden">
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="primary"
+                                    className="w-full"
+                                    onPress={onNavigateToAssignments}
+                                    endContent={<Icon icon="solar:arrow-right-linear" />}
+                                >
+                                    ดูงานทั้งหมด
                                 </Button>
                             </div>
                         )}

@@ -24,10 +24,11 @@ const Assignment = sequelize.define('Assignment', {
         allowNull: true,
     },
     assignment_type: {
-        type: DataTypes.ENUM('individual', 'permanent_group', 'weekly_group'),
+        type: DataTypes.ENUM('individual', 'permanent_group', 'weekly_group', 'assignment'),
         allowNull: false,
         defaultValue: 'individual',
         field: 'assignment_type',
+        comment: 'individual=ปฏิบัติการเดี่ยว(Lab), permanent_group=กลุ่มถาวร, weekly_group=กลุ่มรายสัปดาห์, assignment=การบ้าน',
     },
     week_number: {
         type: DataTypes.INTEGER,
@@ -41,7 +42,13 @@ const Assignment = sequelize.define('Assignment', {
             model: 'attendance_sessions',
             key: 'id',
         },
-        comment: 'ถ้า set ค่านี้ จะตรวจสอบว่านักศึกษามาเรียนหรือไม่ก่อนลงคะแนน',
+        comment: 'Legacy field - ถ้า set ค่านี้ จะตรวจสอบว่านักศึกษามาเรียนหรือไม่ก่อนลงคะแนน (ใช้ตาราง junction แทนแล้ว)',
+    },
+    attendance_condition: {
+        type: DataTypes.ENUM('and', 'or'),
+        allowNull: true,
+        defaultValue: 'or',
+        comment: 'and = ต้องเช็คชื่อทุกรอบ, or = เช็คชื่ออย่างน้อย 1 รอบ',
     },
     max_score: {
         type: DataTypes.DECIMAL(5, 2),

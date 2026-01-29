@@ -32,7 +32,13 @@ router.delete('/:id/sections/:sectionId', authorize('admin', 'instructor', 'ta')
 
 // TA management (admin or course instructor only)
 router.post('/:id/tas', authorize('admin', 'instructor'), courseController.addTA);
+router.post('/:id/tas/bulk', authorize('admin', 'instructor'), courseController.bulkAddTAs);
 router.delete('/:id/tas/:userId', authorize('admin', 'instructor'), courseController.removeTA);
+
+// Instructor management (admin or course instructor only)
+router.post('/:id/instructors', authorize('admin', 'instructor'), courseController.addInstructor);
+router.post('/:id/instructors/bulk', authorize('admin', 'instructor'), courseController.bulkAddInstructors);
+router.delete('/:id/instructors/:userId', authorize('admin', 'instructor'), courseController.removeInstructor);
 
 // Student management in sections (admin, instructor, or TA of course)
 router.get('/:id/sections/:sectionId/students', authorize('admin', 'instructor', 'ta'), courseController.getSectionStudents);

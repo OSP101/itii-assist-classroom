@@ -21,10 +21,6 @@ const User = sequelize.define('User', {
     type: DataTypes.ENUM('admin', 'instructor', 'ta'),
     allowNull: false,
   },
-  linked_student_id: {
-    type: DataTypes.BIGINT,
-    allowNull: true,
-  },
   full_name: {
     type: DataTypes.STRING(255),
     allowNull: true,
@@ -46,6 +42,11 @@ const User = sequelize.define('User', {
     type: DataTypes.BOOLEAN,
     allowNull: false,
     defaultValue: true,
+  },
+  must_change_password: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
   },
   avatar: {
     type: DataTypes.TEXT('long'),

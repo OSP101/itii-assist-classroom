@@ -99,6 +99,9 @@ export default function LiveAttendancePage() {
     // QR Modal
     const [isQRModalOpen, setIsQRModalOpen] = useState(false);
 
+    // Search filter
+    const [searchQuery, setSearchQuery] = useState("");
+
     // Calculate stats
     const stats = {
         total: records.length,
@@ -138,15 +141,25 @@ export default function LiveAttendancePage() {
 
     // Initialize socket connection
     useEffect(() => {
-        const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:3001";
-        const socket = io(backendUrl, {
-            transports: ["websocket", "polling"],
+        const socket = io(window.location.origin, {
+            path: "/socket.io",
+            transports: ["websocket"],
+            reconnection: true,
+            reconnectionAttempts: 5,
+            reconnectionDelay: 1000,
         });
 
         socket.on("connect", () => {
-            console.log("Socket connected");
-            // Join instructor room
+            console.log("✅ Socket connected:", socket.id);
             socket.emit("join-instructor", sessionId);
+        });
+
+        socket.on("connect_error", (err) => {
+            console.error("❌ Socket connect error:", err.message);
+        });
+
+        socket.on("disconnect", (reason) => {
+            console.warn("⚠️ Socket disconnected:", reason);
         });
 
         // Listen for new check-ins
@@ -369,7 +382,7 @@ export default function LiveAttendancePage() {
                         <p className="text-lg text-slate-600 mb-2">ไม่พบข้อมูลการเช็คชื่อ</p>
                         <p className="text-sm text-slate-400 mb-6">กรุณาตรวจสอบลิงก์อีกครั้ง</p>
                         <Button
-                            className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg"
+                            className="w-full bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg"
                             onPress={() => router.back()}
                         >
                             กลับหน้าหลัก
@@ -385,7 +398,7 @@ export default function LiveAttendancePage() {
             {/* Header Card with Purple Gradient Bar */}
             <Card className="mb-6 shadow-lg border-0 overflow-hidden">
                 {/* Purple Gradient Bar */}
-                <div className="h-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400" />
+                {/* <div className="h-2 bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400" /> */}
 
                 <CardBody className="p-6">
                     <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -408,7 +421,8 @@ export default function LiveAttendancePage() {
                             {session.status === "active" && (
                                 <Button
                                     variant="bordered"
-                                    className="border-slate-300 text-slate-600"
+                                    // className="border-slate-300 text-slate-600"
+                                    color="danger"
                                     startContent={<Icon icon="solar:close-circle-linear" className="text-lg" />}
                                     onPress={handleCloseSession}
                                     isLoading={isClosing}
@@ -455,18 +469,23 @@ export default function LiveAttendancePage() {
                             </div>
 
                             {/* QR CODE */}
-                            <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">QR CODE</p>
+                            <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">QR CODE (คลิกเพื่อขยาย)</p>
                             <div
-                                className="flex justify-center p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:shadow-lg transition-shadow mb-6"
+                                className="flex justify-center p-4 bg-white rounded-xl border-2 border-slate-200 cursor-pointer hover:shadow-lg hover:border-blue-300 transition-all mb-4"
                                 onClick={() => setIsQRModalOpen(true)}
                             >
                                 <QRCodeSVG
                                     value={checkInUrl}
-                                    size={200}
-                                    level="H"
-                                    fgColor="#2b7fff"
+                                    size={300}
+                                    level="L"
+                                    fgColor="#000000"
+                                    bgColor="#ffffff"
+                                    marginSize={2}
                                 />
                             </div>
+                            {/* <p className="text-xs text-slate-400 mb-4 text-center">
+                                หรือเข้าที่ <span className="font-mono text-blue-500">{checkInUrl.replace(/https?:\/\//, '')}</span>
+                            </p> */}
 
                             {/* Countdown */}
                             <div className="mt-4">
@@ -496,85 +515,103 @@ export default function LiveAttendancePage() {
                             </div>
                         </CardHeader>
                         <CardBody>
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                                {/* นักศึกษาทั้งหมด */}
-                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-blue-100 rounded-lg">
-                                            <Icon icon="solar:users-group-rounded-linear" className="text-xl text-blue-500" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1">นักศึกษาทั้งหมด</p>
-                                            <p className="text-2xl font-bold text-blue-500">{totalStudents}</p>
-                                            <p className="text-xs text-slate-400">ที่ลงทะเบียนวิชา</p>
-                                        </div>
+                            {/* Late threshold info */}
+                            {session.late_threshold_minutes > 0 && (
+                                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
+                                    <Icon icon="solar:clock-circle-bold" className="text-2xl text-amber-500" />
+                                    <div>
+                                        <p className="text-sm font-medium text-amber-700">เกณฑ์เวลาสาย</p>
+                                        <p className="text-xs text-amber-600">
+                                            เช็คชื่อหลังเวลาเริ่ม <span className="font-bold">{session.late_threshold_minutes} นาที</span> จะถือว่า "สาย"
+                                        </p>
                                     </div>
+                                </div>
+                            )}
+
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                                {/* นักศึกษาทั้งหมด */}
+                                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="p-1.5 bg-blue-100 rounded-lg">
+                                            <Icon icon="solar:users-group-rounded-bold" className="text-lg text-blue-500" />
+                                        </div>
+                                        <p className="text-xs text-blue-600 font-medium">เช็คชื่อแล้ว</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-blue-600">{stats.checkedIn}</p>
                                 </div>
 
                                 {/* มาเรียน (Present) */}
-                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-green-100 rounded-lg">
-                                            <Icon icon="solar:check-circle-linear" className="text-xl text-green-500" />
+                                <div className="p-3 bg-green-50 rounded-xl border border-green-100">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="p-1.5 bg-green-100 rounded-lg">
+                                            <Icon icon="solar:check-circle-bold" className="text-lg text-green-500" />
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1">มาเรียน (Present)</p>
-                                            <p className="text-2xl font-bold text-green-500">{stats.present}</p>
-                                            <p className="text-xs text-slate-400">
-                                                {totalStudents > 0 ? `${((stats.present / totalStudents) * 100).toFixed(1)}%` : "0%"}
-                                            </p>
-                                        </div>
+                                        <p className="text-xs text-green-600 font-medium">มาเรียน</p>
                                     </div>
+                                    <p className="text-2xl font-bold text-green-600">{stats.present}</p>
                                 </div>
 
-                                {/* เช็คชื่อทั้งหมด */}
-                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-indigo-100 rounded-lg">
-                                            <Icon icon="solar:checklist-linear" className="text-xl text-indigo-500" />
+                                {/* สาย (Late) */}
+                                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="p-1.5 bg-amber-100 rounded-lg">
+                                            <Icon icon="solar:clock-circle-bold" className="text-lg text-amber-500" />
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1">เช็คชื่อทั้งหมด</p>
-                                            <p className="text-2xl font-bold text-indigo-500">{stats.checkedIn}</p>
-                                            <p className="text-xs text-slate-400">รวมทุกสถานะ</p>
-                                        </div>
+                                        <p className="text-xs text-amber-600 font-medium">สาย</p>
                                     </div>
+                                    <p className="text-2xl font-bold text-amber-600">{stats.late}</p>
                                 </div>
 
-                                {/* ยังไม่เช็คชื่อ */}
-                                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                                    <div className="flex items-start gap-3">
-                                        <div className="p-2 bg-red-100 rounded-lg">
-                                            <Icon icon="solar:close-circle-linear" className="text-xl text-red-500" />
+                                {/* ลา (Leave) */}
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="p-1.5 bg-slate-100 rounded-lg">
+                                            <Icon icon="solar:document-bold" className="text-lg text-slate-500" />
                                         </div>
-                                        <div>
-                                            <p className="text-xs text-slate-400 mb-1">ยังไม่เช็คชื่อ</p>
-                                            <p className="text-2xl font-bold text-red-500">{totalStudents - stats.checkedIn}</p>
-                                            <p className="text-xs text-slate-400">นักศึกษาที่เหลือ</p>
-                                        </div>
+                                        <p className="text-xs text-slate-600 font-medium">ลา</p>
                                     </div>
+                                    <p className="text-2xl font-bold text-slate-600">{stats.leave}</p>
+                                </div>
+
+                                {/* ขาด (Absent) */}
+                                <div className="p-3 bg-red-50 rounded-xl border border-red-100">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <div className="p-1.5 bg-red-100 rounded-lg">
+                                            <Icon icon="solar:close-circle-bold" className="text-lg text-red-500" />
+                                        </div>
+                                        <p className="text-xs text-red-600 font-medium">ขาด</p>
+                                    </div>
+                                    <p className="text-2xl font-bold text-red-600">{stats.absent}</p>
                                 </div>
                             </div>
                         </CardBody>
                     </Card>
 
                     {/* Student List Table */}
-                    <Card className="shadow-lg border-0 border-t-4 border-blue-500/80 overflow-hidden">
-                        <CardHeader className="flex items-center justify-between p-5 border-b border-slate-200 bg-blue-50/50">
-                            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                                <Icon icon="solar:checklist-minimalistic-linear" className="text-2xl text-blue-600" />
+                    <Card className="shadow-lg border-0 overflow-hidden">
+                        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-b border-slate-200 bg-blue-50/50">
+                            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <Icon icon="solar:checklist-minimalistic-linear" className="text-xl text-blue-600" />
                                 รายชื่อผู้เช็คชื่อ
+                                <Chip size="sm" variant="flat" color="primary">{stats.checkedIn} คน</Chip>
                             </h2>
-                            {/* <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 text-sm shadow-inner border border-green-200">
-                                <span className="relative flex h-2.5 w-2.5">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                </span>
-                                <span className="text-xs text-slate-600 font-medium tracking-wider">LIVE REFRESH (2s)</span>
-                            </div> */}
+                            <Input
+                                placeholder="ค้นหาชื่อ / รหัสนักศึกษา..."
+                                value={searchQuery}
+                                onValueChange={setSearchQuery}
+                                size="sm"
+                                variant="bordered"
+                                isClearable
+                                startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                classNames={{
+                                    inputWrapper: "h-9 min-h-9 bg-white",
+                                    input: "text-sm"
+                                }}
+                                className="w-full sm:w-64"
+                            />
                         </CardHeader>
                         <CardBody className="p-0">
-                            <div className="overflow-x-auto p-3">
+                            <div className="overflow-y-auto max-h-[400px] p-3">
                                 <Table
                                     aria-label="Student attendance table"
                                     removeWrapper
@@ -584,9 +621,12 @@ export default function LiveAttendancePage() {
                                     }}
                                 >
                                     <TableHeader>
-                                        <TableColumn>สถานะ</TableColumn>
-                                        <TableColumn>ชื่อนักศึกษา / รหัส</TableColumn>
-                                        <TableColumn align="center">เวลาที่บันทึก</TableColumn>
+                                        {[
+                                            <TableColumn key="status">สถานะ</TableColumn>,
+                                            <TableColumn key="name">ชื่อนักศึกษา / รหัส</TableColumn>,
+                                            <TableColumn key="time" align="center">เวลาเช็คชื่อ</TableColumn>,
+                                            ...(session.check_location ? [<TableColumn key="distance" align="center">ระยะห่าง</TableColumn>] : [])
+                                        ]}
                                     </TableHeader>
                                     <TableBody
                                         emptyContent={
@@ -604,40 +644,79 @@ export default function LiveAttendancePage() {
                                             </div>
                                         }
                                     >
-                                        {records.filter(r => r.check_in_time).map((record) => (
+                                        {records
+                                            .filter(r => r.check_in_time)
+                                            .filter(r => {
+                                                if (!searchQuery.trim()) return true;
+                                                const query = searchQuery.toLowerCase();
+                                                return (
+                                                    r.student?.full_name?.toLowerCase().includes(query) ||
+                                                    r.student?.student_id?.toLowerCase().includes(query)
+                                                );
+                                            })
+                                            .sort((a, b) => {
+                                                // Sort by check_in_time descending (newest first)
+                                                const timeA = a.check_in_time ? new Date(a.check_in_time).getTime() : 0;
+                                                const timeB = b.check_in_time ? new Date(b.check_in_time).getTime() : 0;
+                                                return timeB - timeA;
+                                            })
+                                            .map((record) => (
                                             <TableRow key={record.id}>
-                                                <TableCell>
-                                                    <Chip
-                                                        size="sm"
-                                                        color={statusConfig[record.status]?.color || "default"}
-                                                        variant="flat"
-                                                    >
-                                                        {statusConfig[record.status]?.label || record.status}
-                                                    </Chip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar
-                                                            name={record.student?.full_name || "?"}
+                                                {[
+                                                    <TableCell key="status">
+                                                        <Chip
                                                             size="sm"
-                                                            className="bg-gradient-to-br from-blue-400 to-indigo-500"
-                                                        />
-                                                        <div>
-                                                            <p className="font-medium text-slate-800">
-                                                                {record.student?.full_name || "-"}
-                                                            </p>
-                                                            <p className="text-xs text-slate-400">
-                                                                ID: {record.student?.student_id || "-"}
-                                                            </p>
+                                                            color={statusConfig[record.status]?.color || "default"}
+                                                            variant="flat"
+                                                            startContent={<Icon icon={statusConfig[record.status]?.icon} className="text-xs" />}
+                                                        >
+                                                            {statusConfig[record.status]?.label || record.status}
+                                                        </Chip>
+                                                    </TableCell>,
+                                                    <TableCell key="name">
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar
+                                                                name={record.student?.full_name || "?"}
+                                                                size="sm"
+                                                                className="bg-gradient-to-br from-blue-400 to-indigo-500"
+                                                            />
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">
+                                                                    {record.student?.full_name || "-"}
+                                                                </p>
+                                                                <p className="text-xs text-slate-400">
+                                                                    {record.student?.student_id || "-"}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </TableCell>
-                                                
-                                                <TableCell>
-                                                    <span className="font-mono text-slate-600">
-                                                        {formatTime(record.check_in_time)}
-                                                    </span>
-                                                </TableCell>
+                                                    </TableCell>,
+                                                    <TableCell key="time">
+                                                        <span className="font-mono text-slate-600 text-sm">
+                                                            {formatTime(record.check_in_time)}
+                                                        </span>
+                                                    </TableCell>,
+                                                    ...(session.check_location ? [
+                                                        <TableCell key="distance">
+                                                            {record.distance_meters !== null ? (
+                                                                <Tooltip content={record.location_verified ? "ตำแหน่งถูกต้อง" : "ตำแหน่งไม่ตรง"}>
+                                                                    <Chip
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color={record.location_verified ? "success" : "warning"}
+                                                                        startContent={<Icon icon={record.location_verified ? "solar:map-point-bold" : "solar:map-point-wave-bold"} className="text-xs" />}
+                                                                    >
+                                                                        {record.distance_meters < 1000
+                                                                            ? `${Math.round(record.distance_meters)} ม.`
+                                                                            : `${(record.distance_meters / 1000).toFixed(1)} กม.`
+                                                                        }
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <span className="text-xs text-slate-400">-</span>
+                                                            )}
+                                                        </TableCell>
+                                                    ] : [])
+                                                ]}
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -648,32 +727,59 @@ export default function LiveAttendancePage() {
 
                     {/* QR Modal (Full Screen) */}
                     <Modal isOpen={isQRModalOpen} onClose={() => setIsQRModalOpen(false)} size="full">
-                        <ModalContent className="bg-slate-100">
+                        <ModalContent className="bg-white">
                             <ModalBody className="flex flex-col items-center justify-center min-h-screen py-10">
                                 <h2 className="text-3xl font-bold text-slate-800 mb-2">
                                     {session.title}
                                 </h2>
-                                <p className="text-slate-500 mb-8">สแกน QR Code เพื่อเช็คชื่อเข้าเรียน</p>
-                                <div className="p-8 bg-white rounded-3xl shadow-xl border-2 border-slate-200">
-                                    <QRCodeSVG value={checkInUrl} size={400} level="H" fgColor="#8B5CF6" />
+                                <p className="text-slate-500 mb-6">สแกน QR Code เพื่อเช็คชื่อเข้าเรียน</p>
+                                
+                                {/* QR Code - optimized for scanning */}
+                                <div className="p-2 bg-white rounded-3xl shadow-xl border-4 border-slate-100">
+                                    <QRCodeSVG 
+                                        value={checkInUrl} 
+                                        size={450} 
+                                        level="L" 
+                                        fgColor="#000000"
+                                        bgColor="#ffffff"
+                                        marginSize={1}
+                                    />
                                 </div>
-                                <div className="mt-8 text-center">
-                                    <p className="text-sm text-slate-400 mb-3">หรือใส่รหัส PIN</p>
-                                    <div className="inline-block px-8 py-4 bg-slate-700 rounded-2xl shadow-lg">
-                                        <p className="text-5xl font-bold tracking-[0.5em] text-white font-mono">
+
+                                {/* URL */}
+                                {/* <div className="mt-6 text-center">
+                                    <p className="text-sm text-slate-400 mb-2">หรือเปิดลิงก์</p>
+                                    <p className="font-mono text-lg text-blue-600 bg-blue-50 px-4 py-2 rounded-lg">
+                                        {checkInUrl.replace(/https?:\/\//, '')}
+                                    </p>
+                                </div> */}
+
+                                <div className="mt-6 text-center">
+                                    {/* <p className="text-sm text-slate-400 mb-3">หรือใส่รหัส PIN</p> */}
+                                    <div className="inline-block px-10 py-5 bg-slate-800 rounded-2xl shadow-lg">
+                                        <p className="text-6xl font-bold tracking-[0.4em] text-white font-mono">
                                             {session.pin_code}
                                         </p>
                                     </div>
                                 </div>
-                                <Button
-                                    className="mt-10"
+
+                                {/* Late threshold info */}
+                                {session.late_threshold_minutes > 0 && (
+                                    <div className="mt-6 flex items-center gap-2 text-amber-600 bg-amber-50 px-4 py-2 rounded-lg">
+                                        <Icon icon="solar:clock-circle-bold" className="text-xl" />
+                                        <span className="text-sm">เช็คชื่อหลัง {session.late_threshold_minutes} นาที ถือว่าสาย</span>
+                                    </div>
+                                )}
+
+                                {/* <Button
+                                    className="mt-4"
                                     variant="bordered"
                                     size="lg"
                                     onPress={() => setIsQRModalOpen(false)}
                                     startContent={<Icon icon="solar:close-circle-linear" />}
                                 >
                                     ปิด
-                                </Button>
+                                </Button> */}
                             </ModalBody>
                         </ModalContent>
                     </Modal>

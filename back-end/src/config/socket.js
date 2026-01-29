@@ -1,6 +1,6 @@
 /**
  * Socket.io Configuration
- * Real-time communication for attendance and queue system
+ * Real-time communication for attendance system and data sync
  */
 
 const { Server } = require('socket.io');
@@ -12,29 +12,51 @@ let io = null;
  * Initialize Socket.io with HTTP server
  */
 const initializeSocket = (httpServer) => {
-  io = new Server(httpServer, {
-    cors: {
-      origin: [
+io = new Server(httpServer, {
+  path: "/socket.io",
+  cors: {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
         config.frontendUrl,
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-      ],
-      methods: ['GET', 'POST'],
-      credentials: true,
+        "http://localhost:3000",
+        "http://localhost:3010",
+        "http://127.0.0.1:3000",
+        "http://10.199.10.10:3000",
+        "https://itii.osp101.dev",
+        "https://itii-mid.osp101.com",
+      ];
+      
+      // Check if origin is in allowed list
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      // Allow local network IPs (192.168.x.x, 10.x.x.x, etc.)
+      const localNetworkPattern = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/;
+      if (localNetworkPattern.test(origin)) {
+        return callback(null, true);
+      }
+      
+      console.log(`⚠️ Socket.IO CORS rejected origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
     },
-    // Enable reconnection
-    pingTimeout: 60000,
-    pingInterval: 25000,
-  });
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ["polling", "websocket"],
+});
+
 
   // Connection handler
   io.on('connection', (socket) => {
     console.log(`🔌 Socket connected: ${socket.id}`);
 
-    // ============================================
-    // Attendance System Rooms
-    // ============================================
-
+    // ========== Attendance Rooms ==========
     // Join attendance room
     socket.on('join-attendance', (sessionId) => {
       const room = `attendance-${sessionId}`;
@@ -63,50 +85,97 @@ const initializeSocket = (httpServer) => {
       console.log(`🎓 Instructor ${socket.id} left room: ${room}`);
     });
 
-    // ============================================
-    // Queue System Rooms
-    // ============================================
-
-    // Join queue session room (for projector view, workers, etc.)
-    socket.on('join-queue', (sessionId) => {
-      const room = `queue-${sessionId}`;
+    // ========== Course Sync Rooms ==========
+    // Join user's course updates room
+    socket.on('join-user-courses', (userId) => {
+      const room = `user-courses-${userId}`;
       socket.join(room);
-      console.log(`📋 Socket ${socket.id} joined queue room: ${room}`);
+      // Also join global course updates room
+      socket.join('global-courses');
+      console.log(`📚 Socket ${socket.id} joined course updates room: ${room}`);
     });
 
-    // Leave queue session room
-    socket.on('leave-queue', (sessionId) => {
-      const room = `queue-${sessionId}`;
+    // Leave user's course updates room
+    socket.on('leave-user-courses', (userId) => {
+      const room = `user-courses-${userId}`;
       socket.leave(room);
-      console.log(`📋 Socket ${socket.id} left queue room: ${room}`);
+      socket.leave('global-courses');
+      console.log(`📚 Socket ${socket.id} left course updates room: ${room}`);
     });
 
-    // Join worker room (for receiving task assignments)
-    socket.on('join-worker', (userId) => {
-      const room = `worker-${userId}`;
+    // Handle course change event - broadcast to all connected clients
+    socket.on('course-change', (data) => {
+      console.log(`📢 Course change event:`, data);
+      // Broadcast to all clients in global-courses room (except sender)
+      socket.to('global-courses').emit('course-updated', {
+        ...data,
+        timestamp: Date.now(),
+      });
+    });
+
+    // ========== Classroom Sync Rooms ==========
+    // Join classroom room for real-time updates
+    socket.on('join-classroom', (classroomId) => {
+      const room = `classroom-${classroomId}`;
       socket.join(room);
-      console.log(`👷 Worker ${socket.id} joined room: ${room}`);
+      console.log(`🏫 Socket ${socket.id} joined classroom room: ${room}`);
     });
 
-    // Leave worker room
-    socket.on('leave-worker', (userId) => {
-      const room = `worker-${userId}`;
+    // Leave classroom room
+    socket.on('leave-classroom', (classroomId) => {
+      const room = `classroom-${classroomId}`;
       socket.leave(room);
-      console.log(`👷 Worker ${socket.id} left room: ${room}`);
+      console.log(`🏫 Socket ${socket.id} left classroom room: ${room}`);
     });
 
-    // Join booking room (for student to track their booking)
-    socket.on('join-booking', (bookingId) => {
-      const room = `booking-${bookingId}`;
-      socket.join(room);
-      console.log(`🎫 Socket ${socket.id} joined booking room: ${room}`);
+    // Handle classroom data change
+    socket.on('classroom-change', (data) => {
+      const { classroomId, type, payload } = data;
+      console.log(`📢 Classroom ${classroomId} change:`, type);
+      // Broadcast to all clients in the classroom room (except sender)
+      socket.to(`classroom-${classroomId}`).emit('classroom-updated', {
+        type,
+        payload,
+        timestamp: Date.now(),
+      });
     });
 
-    // Leave booking room
-    socket.on('leave-booking', (bookingId) => {
-      const room = `booking-${bookingId}`;
-      socket.leave(room);
-      console.log(`🎫 Socket ${socket.id} left booking room: ${room}`);
+    // ========== Global Updates Room ==========
+    // Join global updates room (for all resources)
+    socket.on('join-global-updates', () => {
+      socket.join('global-updates');
+      console.log(`🌐 Socket ${socket.id} joined global updates room`);
+    });
+
+    // Leave global updates room
+    socket.on('leave-global-updates', () => {
+      socket.leave('global-updates');
+      console.log(`🌐 Socket ${socket.id} left global updates room`);
+    });
+
+    // ========== Generic Data Change Event ==========
+    // Handle any data change and broadcast to all clients
+    socket.on('data-change', (data) => {
+      const { resource, action, id, data: payload } = data;
+      console.log(`📢 Data change event - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
+      
+      // Broadcast to all clients in global-updates room (except sender)
+      socket.to('global-updates').emit('data-updated', {
+        resource,
+        action,
+        id,
+        data: payload,
+        timestamp: Date.now(),
+      });
+
+      // Also broadcast to global-courses room for backward compatibility
+      if (resource === 'course') {
+        socket.to('global-courses').emit('course-updated', {
+          action,
+          courseId: id,
+          timestamp: Date.now(),
+        });
+      }
     });
 
     // Handle disconnection
@@ -147,34 +216,50 @@ const emitToInstructor = (sessionId, event, data) => {
   }
 };
 
-// ============================================
-// Queue System Emit Functions
-// ============================================
-
 /**
- * Emit to queue session room
+ * Emit course update to all connected users
  */
-const emitToQueue = (sessionId, event, data) => {
+const emitCourseUpdate = (action, courseId, userId) => {
   if (io) {
-    io.to(`queue-${sessionId}`).emit(event, data);
+    io.to('global-courses').emit('course-updated', {
+      action,
+      courseId,
+      userId,
+      timestamp: Date.now(),
+    });
   }
 };
 
 /**
- * Emit to specific worker
+ * Emit classroom update
  */
-const emitToWorker = (userId, event, data) => {
+const emitToClassroom = (classroomId, type, payload) => {
   if (io) {
-    io.to(`worker-${userId}`).emit(event, data);
+    io.to(`classroom-${classroomId}`).emit('classroom-updated', {
+      type,
+      payload,
+      timestamp: Date.now(),
+    });
   }
 };
 
 /**
- * Emit to specific booking (student tracking)
+ * Emit generic data update to all connected clients
+ * @param {string} resource - Resource type (course, student, user, classroom, etc.)
+ * @param {string} action - Action type (create, update, delete, toggle, bulk)
+ * @param {string|number} id - Optional resource ID
+ * @param {any} data - Optional additional data
  */
-const emitToBooking = (bookingId, event, data) => {
+const emitDataUpdate = (resource, action, id = null, data = null) => {
   if (io) {
-    io.to(`booking-${bookingId}`).emit(event, data);
+    io.to('global-updates').emit('data-updated', {
+      resource,
+      action,
+      id,
+      data,
+      timestamp: Date.now(),
+    });
+    console.log(`📢 Data update emitted - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
   }
 };
 
@@ -184,8 +269,7 @@ module.exports = {
   // Attendance
   emitToAttendance,
   emitToInstructor,
-  // Queue
-  emitToQueue,
-  emitToWorker,
-  emitToBooking,
+  emitCourseUpdate,
+  emitToClassroom,
+  emitDataUpdate,
 };

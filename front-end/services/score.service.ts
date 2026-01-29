@@ -37,6 +37,15 @@ export interface SubItemScoreData {
     graded_at?: string | null;
 }
 
+// Attendance detail for multi-session attendance
+export interface AttendanceDetail {
+    session_id: number;
+    session_title: string;
+    start_time: string;
+    status: 'present' | 'late' | 'leave' | 'absent';
+    attended: boolean;
+}
+
 export interface StudentScore {
     student: Student;
     score?: number | null;
@@ -51,12 +60,20 @@ export interface StudentScore {
     graded_at?: string;
     sub_item_scores?: SubItemScoreData[];
     // Attendance info (if assignment is linked to attendance session)
-    attendance_status?: 'present' | 'late' | 'leave' | 'absent' | null;
+    attendance_status?: 'present' | 'late' | 'leave' | 'absent' | 'partial' | null;
     can_score?: boolean;
+    // Multi-session attendance info
+    attendance_details?: AttendanceDetail[];
+    attendance_condition?: 'and' | 'or' | null;
+    attended_count?: number;
+    total_count?: number;
 }
 
 export interface ScoresData {
-    assignment: Assignment;
+    assignment: Assignment & {
+        attendance_condition?: 'and' | 'or';
+        linked_sessions_count?: number;
+    };
     student_scores: StudentScore[];
 }
 
@@ -229,7 +246,7 @@ const scoreService = {
         courseId: string,
         options?: {
             sectionId?: number;
-            assignmentType?: 'individual' | 'group';
+            assignmentType?: 'individual' | 'assignment' | 'group';
         }
     ): Promise<ScoreSummaryMatrix | null> {
         let url = `/scores/matrix?course_id=${courseId}`;
@@ -249,6 +266,7 @@ export interface ScoreSummaryMatrixStudent {
     student_id: string;
     full_name: string;
     section_number: number;
+    bonus_score: number;
     scores: {
         [key: string]: {
             score: number | null;

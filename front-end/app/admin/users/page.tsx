@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
     Table,
     TableHeader,
@@ -10,6 +10,7 @@ import {
     TableCell,
     getKeyValue,
 } from "@heroui/table";
+import { useSocket } from "@/contexts/SocketContext";
 import { Pagination } from "@heroui/pagination";
 import { Input } from "@heroui/input";
 import { Button } from "@heroui/button";
@@ -69,6 +70,8 @@ const roleColors: Record<string, "primary" | "secondary" | "success" | "warning"
 
 export default function UsersPage() {
     const { user: authUser } = useAdmin();
+    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, isConnected } = useSocket();
+    const isUpdatingRef = useRef(false);
     const [users, setUsers] = useState<User[]>([]);
     const [stats, setStats] = useState<UserStats | null>(null);
 
@@ -90,13 +93,14 @@ export default function UsersPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [newCredentials, setNewCredentials] = useState<{ username: string; password: string } | null>(null);
 
     // Form data
     const [formData, setFormData] = useState<CreateUserDto>({
         username: "",
-        password: "",
         full_name: "",
         email: "",
         role: "ta",
@@ -154,6 +158,24 @@ export default function UsersPage() {
         fetchStats();
     }, [fetchUsers, fetchStats]);
 
+    // Real-time sync - Subscribe to user updates
+    useEffect(() => {
+        subscribeToUpdates();
+        return () => unsubscribeFromUpdates();
+    }, [subscribeToUpdates, unsubscribeFromUpdates]);
+
+    // Handle real-time updates from other tabs/users
+    useEffect(() => {
+        const unsubscribe = onDataUpdate((data) => {
+            if (data.resource === "user" && !isUpdatingRef.current) {
+                console.log("📥 User data updated from another source:", data);
+                fetchUsers();
+                fetchStats();
+            }
+        });
+        return unsubscribe;
+    }, [onDataUpdate, fetchUsers, fetchStats]);
+
     // Debounced search
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -165,32 +187,35 @@ export default function UsersPage() {
 
     // Handle create user
     const handleCreate = async () => {
-        if (!formData.username || !formData.password || !formData.full_name) {
+        if (!formData.username || !formData.full_name) {
             addToast({
                 title: "กรุณากรอกข้อมูลให้ครบ",
-                description: "ชื่อผู้ใช้ รหัสผ่าน และชื่อ-นามสกุล จำเป็นต้องกรอก",
+                description: "ชื่อผู้ใช้ และชื่อ-นามสกุล จำเป็นต้องกรอก",
                 color: "warning",
             });
             return;
         }
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await userService.createUser(formData);
-            if (response.success) {
-                addToast({
-                    title: "สร้างผู้ใช้สำเร็จ",
-                    description: `ผู้ใช้ ${formData.username} ถูกสร้างเรียบร้อยแล้ว`,
-                    color: "success",
-                });
+            if (response.success && response.data) {
                 setIsCreateModalOpen(false);
                 resetForm();
+                
+                // Show credentials modal
+                setNewCredentials(response.data.credentials);
+                setIsCredentialsModalOpen(true);
+                
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "create");
             } else {
+                const errorMessage = (response as { error?: { message?: string } }).error?.message || "เกิดข้อผิดพลาด";
                 addToast({
                     title: "ไม่สามารถสร้างผู้ใช้ได้",
-                    description: response.message || "เกิดข้อผิดพลาด",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -202,6 +227,7 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -210,6 +236,7 @@ export default function UsersPage() {
         if (!selectedUser) return;
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const updateData: UpdateUserDto = {
                 username: formData.username,
@@ -218,11 +245,6 @@ export default function UsersPage() {
                 role: formData.role,
                 avatar: formData.avatar,
             };
-
-            // Only include password if it was changed
-            if (formData.password) {
-                updateData.password = formData.password;
-            }
 
             const response = await userService.updateUser(selectedUser.id, updateData);
             if (response.success) {
@@ -234,10 +256,12 @@ export default function UsersPage() {
                 setIsEditModalOpen(false);
                 resetForm();
                 fetchUsers();
+                emitDataUpdate("user", "update", selectedUser.id);
             } else {
+                const errorMessage = (response as { error?: { message?: string } }).error?.message || "เกิดข้อผิดพลาด";
                 addToast({
                     title: "ไม่สามารถอัปเดตผู้ใช้ได้",
-                    description: response.message || "เกิดข้อผิดพลาด",
+                    description: errorMessage,
                     color: "danger",
                 });
             }
@@ -249,6 +273,7 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
@@ -257,6 +282,7 @@ export default function UsersPage() {
         if (!selectedUser) return;
 
         setIsSubmitting(true);
+        isUpdatingRef.current = true;
         try {
             const response = await userService.deleteUser(selectedUser.id);
             if (response.success) {
@@ -269,6 +295,7 @@ export default function UsersPage() {
                 setSelectedUser(null);
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "delete", selectedUser.id);
             } else {
                 addToast({
                     title: "ไม่สามารถลบผู้ใช้ได้",
@@ -284,11 +311,13 @@ export default function UsersPage() {
             });
         } finally {
             setIsSubmitting(false);
+            isUpdatingRef.current = false;
         }
     };
 
     // Handle toggle status
     const handleToggleStatus = async (user: User) => {
+        isUpdatingRef.current = true;
         try {
             const response = await userService.toggleStatus(user.id);
             if (response.success) {
@@ -299,6 +328,7 @@ export default function UsersPage() {
                 });
                 fetchUsers();
                 fetchStats();
+                emitDataUpdate("user", "toggle", user.id);
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
@@ -312,6 +342,8 @@ export default function UsersPage() {
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
             });
+        } finally {
+            isUpdatingRef.current = false;
         }
     };
 
@@ -319,7 +351,6 @@ export default function UsersPage() {
     const resetForm = () => {
         setFormData({
             username: "",
-            password: "",
             full_name: "",
             email: "",
             role: "ta",
@@ -329,12 +360,29 @@ export default function UsersPage() {
         setSelectedUser(null);
     };
 
+    // Copy to clipboard
+    const copyToClipboard = async (text: string, label: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            addToast({
+                title: "คัดลอกแล้ว",
+                description: `${label} ถูกคัดลอกไปยังคลิปบอร์ดแล้ว`,
+                color: "success",
+            });
+        } catch (error) {
+            addToast({
+                title: "ไม่สามารถคัดลอกได้",
+                description: "กรุณาคัดลอกด้วยตนเอง",
+                color: "danger",
+            });
+        }
+    };
+
     // Open edit modal
     const openEditModal = (user: User) => {
         setSelectedUser(user);
         setFormData({
             username: user.username,
-            password: "",
             full_name: user.full_name,
             email: user.email || "",
             role: user.role,
@@ -387,7 +435,7 @@ export default function UsersPage() {
                             size="md"
                             src={user.avatar || undefined}
                             name={user.full_name}
-                            className="bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                            className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                         />
                         <div>
                             <p className="font-medium">{user.username}</p>
@@ -494,9 +542,24 @@ export default function UsersPage() {
         <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
-                    <p className="text-sm text-default-500">จัดการผู้ใช้งานในระบบ</p>
+                <div className="flex items-center gap-3">
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold text-default-900">จัดการผู้ใช้งาน</h1>
+                        <p className="text-sm text-default-500">จัดการผู้ใช้งานในระบบ</p>
+                    </div>
+                    {/* Live Indicator */}
+                    <Tooltip content={isConnected ? "ซิงค์แบบเรียลไทม์กำลังทำงาน" : "กำลังเชื่อมต่อ..."}>
+                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            isConnected 
+                                ? "bg-emerald-100 text-emerald-700" 
+                                : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                            <span className={`w-2 h-2 rounded-full ${
+                                isConnected ? "bg-emerald-500 animate-pulse" : "bg-yellow-500"
+                            }`}></span>
+                            {isConnected ? "Live" : "..."}
+                        </div>
+                    </Tooltip>
                 </div>
                 <Button
                     color="primary"
@@ -505,7 +568,7 @@ export default function UsersPage() {
                         resetForm();
                         setIsCreateModalOpen(true);
                     }}
-                    className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600 w-full sm:w-auto"
+                    className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 w-full sm:w-auto"
                 >
                     เพิ่มผู้ใช้
                 </Button>
@@ -570,11 +633,13 @@ export default function UsersPage() {
                             placeholder="ค้นหาผู้ใช้..."
                             value={search}
                             onValueChange={setSearch}
-                            startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                             isClearable
                             onClear={() => setSearch("")}
+                            variant="bordered"
                             classNames={{
-                                inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
+                                inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                label: "text-blue-400 text-sm",
                             }}
                         />
                         <div className="flex gap-2 flex-wrap md:flex-nowrap">
@@ -590,6 +655,7 @@ export default function UsersPage() {
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
                                 }}
+                                variant="bordered"
                             >
                                 {roleOptions.map((option) => (
                                     <SelectItem key={option.key}>{option.label}</SelectItem>
@@ -607,6 +673,7 @@ export default function UsersPage() {
                                 classNames={{
                                     trigger: "bg-slate-50 border-slate-200 hover:border-slate-300",
                                 }}
+                                variant="bordered"
                             >
                                 {statusOptions.map((option) => (
                                     <SelectItem key={option.key}>{option.label}</SelectItem>
@@ -657,9 +724,9 @@ export default function UsersPage() {
                                                 <TableCell>{renderCell(item, columnKey)}</TableCell>
                                             )}
                                         </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
+                                    )}
+                                </TableBody>
+                            </Table>
                         </div>
                     </div>
                 </div>
@@ -684,9 +751,9 @@ export default function UsersPage() {
             </div>
 
             {/* Create Modal */}
-            <Modal 
-                isOpen={isCreateModalOpen} 
-                onClose={() => setIsCreateModalOpen(false)} 
+            <Modal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
                 size="2xl"
                 scrollBehavior="inside"
                 classNames={{
@@ -697,7 +764,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:user-plus-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -719,8 +786,8 @@ export default function UsersPage() {
                                         <Avatar
                                             size="lg"
                                             src={avatarPreview || undefined}
-                                            name={formData.full_name || "User"}
-                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                            name={formData.full_name || "I T"}
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                         />
                                         {avatarPreview && (
                                             <Button
@@ -753,87 +820,25 @@ export default function UsersPage() {
                                 </div>
                             </div>
 
-                            {/* ข้อมูลบัญชี */}
-                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Icon icon="solar:shield-user-bold" className="text-lg text-blue-500" />
-                                    <span className="text-sm font-semibold text-slate-700">ข้อมูลบัญชี</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-3">
-                                    <Input
-                                        label="ชื่อผู้ใช้"
-                                        labelPlacement="outside"
-                                        placeholder="กรอกชื่อผู้ใช้"
-                                        variant="bordered"
-                                        size="lg"
-                                        value={formData.username}
-                                        onValueChange={(value) => setFormData({ ...formData, username: value })}
-                                        isRequired
-                                        startContent={<Icon icon="solar:user-linear" className="text-blue-400 text-xl" />}
-                                        classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                            label: "text-slate-600 font-medium text-sm",
-                                        }}
-                                    />
-                                    <Input
-                                        label="รหัสผ่าน"
-                                        labelPlacement="outside"
-                                        placeholder="กรอกรหัสผ่าน"
-                                        type="password"
-                                        variant="bordered"
-                                        size="lg"
-                                        value={formData.password}
-                                        onValueChange={(value) => setFormData({ ...formData, password: value })}
-                                        isRequired
-                                        startContent={<Icon icon="solar:lock-password-linear" className="text-blue-400 text-xl" />}
-                                        classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                            label: "text-slate-600 font-medium text-sm",
-                                        }}
-                                    />
-                                </div>
-                                <Select
-                                    label="บทบาท"
-                                    labelPlacement="outside"
-                                    placeholder="เลือกบทบาท"
-                                    variant="bordered"
-                                    size="lg"
-                                    selectedKeys={[formData.role]}
-                                    onSelectionChange={(keys) => {
-                                        const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
-                                        setFormData({ ...formData, role: value });
-                                    }}
-                                    isRequired
-                                    classNames={{
-                                        trigger: "text-sm h-12 bg-white border-slate-200 hover:border-blue-300 data-[focus=true]:border-blue-400",
-                                        label: "text-slate-600 font-medium text-sm",
-                                    }}
-                                >
-                                    <SelectItem key="admin" startContent={<Icon icon="solar:shield-user-bold" className="text-red-500" />}>ผู้ดูแลระบบ</SelectItem>
-                                    <SelectItem key="instructor" startContent={<Icon icon="solar:user-check-bold" className="text-purple-500" />}>อาจารย์</SelectItem>
-                                    <SelectItem key="ta" startContent={<Icon icon="solar:user-hand-up-bold" className="text-green-500" />}>ผู้ช่วยสอน</SelectItem>
-                                </Select>
-                            </div>
-
                             {/* ข้อมูลส่วนตัว */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
                                     <Icon icon="solar:user-id-bold" className="text-lg text-emerald-500" />
                                     <span className="text-sm font-semibold text-slate-700">ข้อมูลส่วนตัว</span>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-3">
+                                <div className="grid grid-cols-1 gap-4 py-3">
                                     <Input
                                         label="ชื่อ-นามสกุล"
                                         labelPlacement="outside"
                                         placeholder="กรอกชื่อ-นามสกุล"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         value={formData.full_name}
                                         onValueChange={(value) => setFormData({ ...formData, full_name: value })}
                                         isRequired
                                         startContent={<Icon icon="solar:user-id-linear" className="text-emerald-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -843,33 +848,81 @@ export default function UsersPage() {
                                         placeholder="กรอกอีเมล (ไม่บังคับ)"
                                         type="email"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         value={formData.email}
                                         onValueChange={(value) => setFormData({ ...formData, email: value })}
                                         startContent={<Icon icon="solar:letter-linear" className="text-emerald-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
                                 </div>
                             </div>
+
+                            {/* ข้อมูลบัญชี */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:shield-user-bold" className="text-lg text-blue-500" />
+                                    <span className="text-sm font-semibold text-slate-700">ข้อมูลบัญชี</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-5 py-3">
+                                    <Input
+                                        label="ชื่อผู้ใช้"
+                                        labelPlacement="outside"
+                                        placeholder="กรอกชื่อผู้ใช้"
+                                        variant="bordered"
+                                        size="md"
+                                        value={formData.username}
+                                        onValueChange={(value) => setFormData({ ...formData, username: value })}
+                                        isRequired
+                                        startContent={<Icon icon="solar:user-linear" className="text-blue-400 text-xl" />}
+                                        classNames={{
+                                            inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />                                
+                                </div>
+                                <Select
+                                    label="บทบาท"
+                                    labelPlacement="outside"
+                                    placeholder="เลือกบทบาท"
+                                    variant="bordered"
+                                    size="md"
+                                    selectedKeys={[formData.role]}
+                                    onSelectionChange={(keys) => {
+                                        const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
+                                        setFormData({ ...formData, role: value });
+                                    }}
+                                    isRequired
+                                    classNames={{
+                                        trigger: "text-sm bg-white border-slate-200 hover:border-blue-300 data-[focus=true]:border-blue-400",
+                                        label: "text-slate-600 font-medium text-sm",
+                                    }}
+                                >
+                                    <SelectItem key="admin" startContent={<Icon icon="solar:shield-user-bold" className="text-red-500" />}>ผู้ดูแลระบบ</SelectItem>
+                                    <SelectItem key="instructor" startContent={<Icon icon="solar:user-check-bold" className="text-purple-500" />}>อาจารย์</SelectItem>
+                                    <SelectItem key="ta" startContent={<Icon icon="solar:user-hand-up-bold" className="text-green-500" />}>ผู้ช่วยสอน</SelectItem>
+                                </Select>
+                            </div>
+
+
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button 
-                            variant="flat" 
+                        <Button
+                            variant="flat"
                             color="default"
                             onPress={() => setIsCreateModalOpen(false)}
                             className="font-medium px-6"
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
-                            onPress={handleCreate} 
+                        <Button
+                            color="primary"
+                            onPress={handleCreate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-blue-500 to-indigo-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" className="text-lg" />}
                         >
                             เพิ่มผู้ใช้
@@ -906,7 +959,7 @@ export default function UsersPage() {
                                             size="lg"
                                             src={avatarPreview || undefined}
                                             name={formData.full_name || "User"}
-                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white"
+                                            className="w-24 h-24 text-2xl bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                         />
                                         {avatarPreview && (
                                             <Button
@@ -939,68 +992,6 @@ export default function UsersPage() {
                                 </div>
                             </div>
 
-                            {/* ข้อมูลบัญชี */}
-                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Icon icon="solar:shield-user-bold" className="text-lg text-blue-500" />
-                                    <span className="text-sm font-semibold text-slate-700">ข้อมูลบัญชี</span>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-3">
-                                    <Input
-                                        label="ชื่อผู้ใช้"
-                                        labelPlacement="outside"
-                                        placeholder="กรอกชื่อผู้ใช้"
-                                        variant="bordered"
-                                        size="lg"
-                                        value={formData.username}
-                                        onValueChange={(value) => setFormData({ ...formData, username: value })}
-                                        isRequired
-                                        startContent={<Icon icon="solar:user-linear" className="text-blue-400 text-xl" />}
-                                        classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                            label: "text-slate-600 font-medium text-sm",
-                                        }}
-                                    />
-                                    <Input
-                                        label="รหัสผ่านใหม่"
-                                        labelPlacement="outside"
-                                        placeholder="เว้นว่างถ้าไม่ต้องการเปลี่ยน"
-                                        type="password"
-                                        variant="bordered"
-                                        size="lg"
-                                        value={formData.password}
-                                        onValueChange={(value) => setFormData({ ...formData, password: value })}
-                                        startContent={<Icon icon="solar:lock-password-linear" className="text-blue-400 text-xl" />}
-                                        classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                            label: "text-slate-600 font-medium text-sm",
-                                        }}
-                                    />
-                                </div>
-                                <Select
-                                    label="บทบาท"
-                                    labelPlacement="outside"
-                                    placeholder="เลือกบทบาท"
-                                    variant="bordered"
-                                    size="lg"
-                                    selectedKeys={[formData.role]}
-                                    onSelectionChange={(keys) => {
-                                        const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
-                                        setFormData({ ...formData, role: value });
-                                    }}
-                                    isRequired
-                                    isDisabled={selectedUser?.id === authUser?.id}
-                                    classNames={{
-                                        trigger: "h-12 bg-white border-slate-200 hover:border-blue-300 data-[focus=true]:border-blue-400",
-                                        label: "text-slate-600 font-medium text-sm",
-                                    }}
-                                >
-                                    <SelectItem key="admin" startContent={<Icon icon="solar:shield-user-bold" className="text-red-500" />}>ผู้ดูแลระบบ</SelectItem>
-                                    <SelectItem key="instructor" startContent={<Icon icon="solar:user-check-bold" className="text-purple-500" />}>อาจารย์</SelectItem>
-                                    <SelectItem key="ta" startContent={<Icon icon="solar:user-hand-up-bold" className="text-green-500" />}>ผู้ช่วยสอน</SelectItem>
-                                </Select>
-                            </div>
-
                             {/* ข้อมูลส่วนตัว */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
@@ -1013,13 +1004,13 @@ export default function UsersPage() {
                                         labelPlacement="outside"
                                         placeholder="กรอกชื่อ-นามสกุล"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         value={formData.full_name}
                                         onValueChange={(value) => setFormData({ ...formData, full_name: value })}
                                         isRequired
                                         startContent={<Icon icon="solar:user-id-linear" className="text-emerald-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -1029,31 +1020,80 @@ export default function UsersPage() {
                                         placeholder="กรอกอีเมล (ไม่บังคับ)"
                                         type="email"
                                         variant="bordered"
-                                        size="lg"
+                                        size="md"
                                         value={formData.email}
                                         onValueChange={(value) => setFormData({ ...formData, email: value })}
                                         startContent={<Icon icon="solar:letter-linear" className="text-emerald-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
                                 </div>
                             </div>
+
+                            {/* ข้อมูลบัญชี */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-5">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon icon="solar:shield-user-bold" className="text-lg text-blue-500" />
+                                    <span className="text-sm font-semibold text-slate-700">ข้อมูลบัญชี</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-3">
+                                    <Input
+                                        label="ชื่อผู้ใช้"
+                                        labelPlacement="outside"
+                                        placeholder="กรอกชื่อผู้ใช้"
+                                        variant="bordered"
+                                        size="md"
+                                        value={formData.username}
+                                        onValueChange={(value) => setFormData({ ...formData, username: value })}
+                                        isRequired
+                                        startContent={<Icon icon="solar:user-linear" className="text-blue-400 text-xl" />}
+                                        classNames={{
+                                            inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
+                                </div>
+                                <Select
+                                    label="บทบาท"
+                                    labelPlacement="outside"
+                                    placeholder="เลือกบทบาท"
+                                    variant="bordered"
+                                    size="md"
+                                    selectedKeys={[formData.role]}
+                                    onSelectionChange={(keys) => {
+                                        const value = Array.from(keys)[0] as "admin" | "instructor" | "ta";
+                                        setFormData({ ...formData, role: value });
+                                    }}
+                                    isRequired
+                                    isDisabled={selectedUser?.id === authUser?.id}
+                                    classNames={{
+                                        trigger: "bg-white border-slate-200 hover:border-blue-300 data-[focus=true]:border-blue-400",
+                                        label: "text-slate-600 font-medium text-sm",
+                                    }}
+                                >
+                                    <SelectItem key="admin" startContent={<Icon icon="solar:shield-user-bold" className="text-red-500" />}>ผู้ดูแลระบบ</SelectItem>
+                                    <SelectItem key="instructor" startContent={<Icon icon="solar:user-check-bold" className="text-purple-500" />}>อาจารย์</SelectItem>
+                                    <SelectItem key="ta" startContent={<Icon icon="solar:user-hand-up-bold" className="text-green-500" />}>ผู้ช่วยสอน</SelectItem>
+                                </Select>
+                            </div>
+
+                            
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button 
-                            variant="flat" 
+                        <Button
+                            variant="flat"
                             color="default"
                             onPress={() => setIsEditModalOpen(false)}
                             className="font-medium px-6"
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="warning" 
-                            onPress={handleUpdate} 
+                        <Button
+                            color="warning"
+                            onPress={handleUpdate}
                             isLoading={isSubmitting}
                             className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
@@ -1090,22 +1130,135 @@ export default function UsersPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button 
-                            variant="flat" 
+                        <Button
+                            variant="flat"
                             color="default"
                             onPress={() => setIsDeleteModalOpen(false)}
                             className="font-medium px-6"
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="danger" 
-                            onPress={handleDelete} 
+                        <Button
+                            color="danger"
+                            onPress={handleDelete}
                             isLoading={isSubmitting}
                             className="font-medium px-6 bg-gradient-to-r from-red-500 to-rose-600"
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
                         >
                             ลบผู้ใช้
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Credentials Modal - Show after user creation */}
+            <Modal 
+                isOpen={isCredentialsModalOpen} 
+                onClose={() => {
+                    setIsCredentialsModalOpen(false);
+                    setNewCredentials(null);
+                }} 
+                size="md"
+                isDismissable={false}
+                isKeyboardDismissDisabled={true}
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg shadow-green-500/30">
+                                <Icon icon="solar:check-circle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">สร้างผู้ใช้สำเร็จ!</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">กรุณาบันทึกข้อมูลด้านล่างนี้</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className="space-y-4">
+                            {/* Warning */}
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div className="flex items-start gap-3">
+                                    <Icon icon="solar:danger-triangle-bold" className="text-amber-500 text-xl mt-0.5" />
+                                    <div className="text-sm text-amber-700">
+                                        <p className="font-semibold">สำคัญ!</p>
+                                        <p className="mt-1">กรุณาคัดลอกรหัสผ่านนี้และส่งให้ผู้ใช้ เนื่องจากรหัสผ่านจะไม่สามารถดูได้อีกครั้ง</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Credentials */}
+                            <div className="bg-slate-50 rounded-xl p-5 space-y-4">
+                                {/* Username */}
+                                <div>
+                                    <label className="text-sm font-medium text-slate-600 mb-2 block">ชื่อผู้ใช้</label>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-mono text-slate-800">
+                                            {newCredentials?.username}
+                                        </div>
+                                        <Button
+                                            isIconOnly
+                                            variant="flat"
+                                            color="primary"
+                                            onPress={() => copyToClipboard(newCredentials?.username || "", "ชื่อผู้ใช้")}
+                                        >
+                                            <Icon icon="solar:copy-bold" className="text-lg" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Password */}
+                                <div>
+                                    <label className="text-sm font-medium text-slate-600 mb-2 block">รหัสผ่าน (ชั่วคราว)</label>
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 p-3 bg-white border border-slate-200 rounded-lg font-mono text-slate-800">
+                                            {newCredentials?.password}
+                                        </div>
+                                        <Button
+                                            isIconOnly
+                                            variant="flat"
+                                            color="primary"
+                                            onPress={() => copyToClipboard(newCredentials?.password || "", "รหัสผ่าน")}
+                                        >
+                                            <Icon icon="solar:copy-bold" className="text-lg" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Copy All Button */}
+                                <Button
+                                    variant="flat"
+                                    color="secondary"
+                                    className="w-full mt-2"
+                                    startContent={<Icon icon="solar:clipboard-list-bold" className="text-lg" />}
+                                    onPress={() => copyToClipboard(
+                                        `ชื่อผู้ใช้: ${newCredentials?.username}\nรหัสผ่าน: ${newCredentials?.password}`,
+                                        "ข้อมูลทั้งหมด"
+                                    )}
+                                >
+                                    คัดลอกทั้งหมด
+                                </Button>
+                            </div>
+
+                            {/* Note */}
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center gap-2 text-sm text-blue-700">
+                                    <Icon icon="solar:info-circle-bold" className="text-blue-500" />
+                                    <span>ผู้ใช้จะต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก</span>
+                                </div>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            color="primary"
+                            onPress={() => {
+                                setIsCredentialsModalOpen(false);
+                                setNewCredentials(null);
+                            }}
+                            className="w-full font-medium bg-gradient-to-r from-blue-400 to-indigo-500"
+                        >
+                            เสร็จสิ้น
                         </Button>
                     </ModalFooter>
                 </ModalContent>

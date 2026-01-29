@@ -7,8 +7,22 @@ const router = express.Router();
 const { authenticate, authorize } = require('../middlewares/auth');
 const studentController = require('../controllers/student.controller');
 
-// All routes require authentication
+/**
+ * @route   GET /api/students/lookup/:student_id
+ * @desc    Lookup student scores by student_id (public endpoint for students)
+ * @access  Public - no authentication required
+ */
+router.get('/lookup/:student_id', studentController.lookupStudentScores);
+
+// All routes below require authentication
 router.use(authenticate);
+
+/**
+ * @route   POST /api/students/search-by-ids
+ * @desc    Search students by multiple student IDs (for bulk operations)
+ * @access  Admin, Instructor, TA
+ */
+router.post('/search-by-ids', studentController.searchStudentsByIds);
 
 /**
  * @route   GET /api/students

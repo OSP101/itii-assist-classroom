@@ -61,9 +61,98 @@ export interface StudentStats {
 }
 
 export interface ImportResult {
-  success: number;
+  created: number;
+  skipped: number;
   failed: number;
+  duplicates: Array<{ student_id: string; full_name: string }>;
   errors: Array<{ student_id: string; error: string }>;
+}
+
+// Student Score Lookup types
+export interface AssignmentSubItemScore {
+  id: number;
+  name: string;
+  max_score: number;
+  score: number | null;
+  grader: string | null;
+  graded_at: string | null;
+}
+
+export interface AssignmentScore {
+  id: number;
+  title: string;
+  type: string;
+  max_score: number;
+  score: number | null;
+  status: 'pending' | 'graded';
+  grader: string | null;
+  graded_at: string | null;
+  comment: string | null;
+  sub_items: AssignmentSubItemScore[];
+  is_group_assignment?: boolean;
+  group_info?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
+export interface AttendanceRecordData {
+  id: number;
+  session_title: string;
+  date: string;
+  status: 'present' | 'late' | 'leave' | 'absent';
+  check_in_time: string | null;
+  note: string | null;
+}
+
+export interface AttendanceSummary {
+  present: number;
+  late: number;
+  leave: number;
+  absent: number;
+}
+
+export interface BonusScoreRecord {
+  score: number;
+  reason: string;
+  given_by: string | null;
+  given_at: string;
+}
+
+export interface BonusScoreData {
+  total: number;
+  records: BonusScoreRecord[];
+}
+
+export interface CourseScoreData {
+  course: {
+    id: number;
+    code: string;
+    name: string;
+    year: number;
+    semester: number;
+    is_active: boolean;
+    sections: Array<{ id: number; name: string; week_number: number | null }>;
+  };
+  assignments: AssignmentScore[];
+  totalScore: number;
+  totalMaxScore: number;
+  progress: number;
+  bonusScore: BonusScoreData;
+  attendance: {
+    records: AttendanceRecordData[];
+    summary: AttendanceSummary;
+  };
+}
+
+export interface StudentScoreLookupResponse {
+  student: {
+    id: number;
+    student_id: string;
+    full_name: string;
+    email: string | null;
+  };
+  courses: CourseScoreData[];
 }
 
 class StudentService {
@@ -130,6 +219,38 @@ class StudentService {
    */
   async importStudents(students: CreateStudentDto[]) {
     return apiService.post<ImportResult>(`${API_ENDPOINTS.STUDENTS}/import`, { students });
+  }
+
+  /**
+   * Lookup student scores by student_id (public endpoint)
+   */
+  async lookupStudentScores(studentId: string) {
+    return apiService.get<StudentScoreLookupResponse>(`${API_ENDPOINTS.STUDENTS}/lookup/${studentId}`);
+  }
+
+  /**
+   * Search students by multiple student IDs within a specific course/section
+   * @param studentIds - Array of student IDs to search
+   * @param courseId - Optional course ID to filter by enrollment (string or number)
+   * @param section - Optional section to filter (use 'all' for all sections in course)
+   */
+  async searchStudentsByIds(studentIds: string[], courseId?: string | number, section?: string) {
+    return apiService.post<{
+      found: Array<{
+        input: string;
+        student: {
+          id: number;
+          student_id: string;
+          full_name: string;
+          email: string | null;
+        };
+      }>;
+      not_found: string[];
+    }>(`${API_ENDPOINTS.STUDENTS}/search-by-ids`, { 
+      student_ids: studentIds,
+      course_id: courseId,
+      section: section,
+    });
   }
 }
 
