@@ -266,6 +266,7 @@ const emitDataUpdate = (resource, action, id = null, data = null) => {
 module.exports = {
   initializeSocket,
   getIO,
+  // Attendance
   emitToAttendance,
   emitToInstructor,
   emitCourseUpdate,

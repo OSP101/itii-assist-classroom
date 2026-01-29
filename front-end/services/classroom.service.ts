@@ -19,6 +19,7 @@ export interface Classroom {
   building: string;
   floor: string;
   description?: string;
+  is_active: boolean;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
@@ -137,6 +138,13 @@ class ClassroomService {
    */
   async restoreClassroom(id: string) {
     return apiService.post<Classroom>(`/classrooms/${id}/restore`);
+  }
+
+  /**
+   * Toggle classroom active status
+   */
+  async toggleStatus(id: string) {
+    return apiService.patch<{ success: boolean; message: string; data: Classroom }>(`/classrooms/${id}/toggle-status`);
   }
 
   /**

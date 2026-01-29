@@ -61,6 +61,7 @@ interface Classroom {
     description?: string;
     desks: Desk[];
     createdAt: string;
+    isActive: boolean;
     isDeleted: boolean;
 }
 
@@ -91,6 +92,7 @@ const transformClassroomFromAPI = (classroom: APIClassroom): Classroom => ({
     description: classroom.description,
     desks: (classroom.desks || []).map(transformDeskFromAPI),
     createdAt: classroom.created_at,
+    isActive: classroom.is_active ?? true,
     isDeleted: classroom.is_deleted,
 });
 
@@ -179,7 +181,7 @@ export default function ClassroomsPage() {
                 const rect = containerRef.current.getBoundingClientRect();
                 setStageSize({
                     width: rect.width - 48,
-                    height: Math.max(500, window.innerHeight - 350),
+                    height: Math.max(800, window.innerHeight - 250),
                 });
             }
         };
@@ -315,6 +317,32 @@ export default function ClassroomsPage() {
         }
     };
 
+    // Handle toggle status (enable/disable)
+    const handleToggleStatus = async (id: string) => {
+        try {
+            const response = await classroomService.toggleStatus(id);
+            if (response.success && response.data) {
+                const updatedClassroom = transformClassroomFromAPI(response.data.data);
+                setClassrooms((prev) =>
+                    prev.map((c) => (c.id === id ? updatedClassroom : c))
+                );
+
+                addToast({
+                    title: "สำเร็จ",
+                    description: response.data.message,
+                    color: "success",
+                });
+            }
+        } catch (error: any) {
+            console.error("Failed to toggle classroom status:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: error.message || "ไม่สามารถเปลี่ยนสถานะห้องเรียนได้",
+                color: "danger",
+            });
+        }
+    };
+
     // Handle permanent delete
     const handlePermanentDelete = async (id: string) => {
         if (
@@ -380,14 +408,11 @@ export default function ClassroomsPage() {
         );
         const newDeskNumber = sameTypeDesks.length + 1;
         
-        // คำนวณตำแหน่งใหม่
-        const allDesksCount = editingClassroom.desks.length;
+        // โต๊ะใหม่จะอยู่ที่ตำแหน่งเดิมเสมอ ให้ผู้ใช้ลากจัดเรียงเอง
         const newDesk: Desk = {
             id: `desk_${Date.now()}`,
-            x: 100 + ((allDesksCount) % 8) * (DESK_WIDTH + GRID_SIZE),
-            y:
-                100 +
-                Math.floor((allDesksCount) / 8) * (DESK_HEIGHT + GRID_SIZE),
+            x: 100,
+            y: 100,
             type,
             isEnabled: true,
             number: newDeskNumber,
@@ -614,18 +639,30 @@ export default function ClassroomsPage() {
                     </div>
                 );
             case "status":
-                return classroom.isDeleted ? (
-                    <Chip size="sm" color="danger" variant="flat">
-                        ลบแล้ว
-                    </Chip>
-                ) : (
+                if (classroom.isDeleted) {
+                    return (
+                        <Chip size="sm" color="danger" variant="flat">
+                            ลบแล้ว
+                        </Chip>
+                    );
+                }
+                return classroom.isActive ? (
                     <Chip
                         size="sm"
                         color="success"
                         variant="flat"
                         startContent={<Icon icon="solar:check-circle-bold" className="text-sm" />}
                     >
-                        ใช้งาน
+                        เปิดใช้งาน
+                    </Chip>
+                ) : (
+                    <Chip
+                        size="sm"
+                        color="warning"
+                        variant="flat"
+                        startContent={<Icon icon="solar:pause-circle-bold" className="text-sm" />}
+                    >
+                        ปิดใช้งาน
                     </Chip>
                 );
             case "actions":
@@ -633,6 +670,20 @@ export default function ClassroomsPage() {
                     <div className="flex items-center gap-1 justify-center">
                         {!classroom.isDeleted ? (
                             <>
+                                <Tooltip content={classroom.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}>
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        color={classroom.isActive ? "warning" : "success"}
+                                        onPress={() => handleToggleStatus(classroom.id)}
+                                    >
+                                        <Icon 
+                                            icon={classroom.isActive ? "solar:power-bold" : "solar:power-linear"} 
+                                            className="text-lg" 
+                                        />
+                                    </Button>
+                                </Tooltip>
                                 <Tooltip content="จัดการผัง">
                                     <Button
                                         isIconOnly

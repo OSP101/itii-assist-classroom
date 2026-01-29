@@ -28,6 +28,12 @@ const Classroom = sequelize.define('Classroom', {
     allowNull: true,
     comment: 'รายละเอียดเพิ่มเติม',
   },
+  is_active: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: true,
+    comment: 'สถานะเปิด/ปิดใช้งาน',
+  },
   is_deleted: {
     type: DataTypes.BOOLEAN,
     allowNull: false,

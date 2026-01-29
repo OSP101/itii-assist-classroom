@@ -15,6 +15,11 @@ const CourseSectionStudent = sequelize.define('CourseSectionStudent', {
     type: DataTypes.BIGINT,
     allowNull: false,
   },
+  status: {
+    type: DataTypes.ENUM('enrolled', 'dropped', 'withdrawn'),
+    allowNull: false,
+    defaultValue: 'enrolled',
+  },
 }, {
   tableName: 'course_section_students',
   timestamps: true,

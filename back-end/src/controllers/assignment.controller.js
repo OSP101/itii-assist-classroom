@@ -304,27 +304,100 @@ const updateAssignment = asyncHandler(async (req, res) => {
         }
 
         // Handle sub-items update if provided
+        // IMPORTANT: We need to preserve scores when updating sub-items
         if (sub_items !== undefined) {
-            // Delete existing sub-items
-            await AssignmentSubItem.destroy({
+            // Get existing sub-items
+            const existingSubItems = await AssignmentSubItem.findAll({
                 where: { assignment_id: id },
+                order: [['order_index', 'ASC']],
                 transaction,
             });
 
-            // Create new sub-items
-            if (sub_items && sub_items.length > 0) {
-                const subItemsData = sub_items.map((item, index) => ({
-                    assignment_id: id,
-                    name: item.name,
-                    max_score: item.max_score || 10,
-                    order_index: index,
-                }));
+            // Create a map of existing sub-items by ID for quick lookup
+            const existingSubItemsMap = new Map();
+            existingSubItems.forEach(item => existingSubItemsMap.set(item.id, item));
 
-                await AssignmentSubItem.bulkCreate(subItemsData, { transaction });
+            if (sub_items && sub_items.length > 0) {
+                // Track which existing sub_item IDs are still being used
+                const usedExistingIds = new Set();
+                // Track IDs of all final sub-items (for cleanup)
+                const finalSubItemIds = new Set();
+
+                for (let index = 0; index < sub_items.length; index++) {
+                    const newItem = sub_items[index];
+                    
+                    if (newItem.id && existingSubItemsMap.has(newItem.id)) {
+                        // Case 1: Update existing sub-item by ID
+                        const existingItem = existingSubItemsMap.get(newItem.id);
+                        await existingItem.update({
+                            name: newItem.name,
+                            max_score: newItem.max_score || 10,
+                            order_index: index,
+                        }, { transaction });
+                        
+                        usedExistingIds.add(newItem.id);
+                        finalSubItemIds.add(newItem.id);
+                    } else {
+                        // Case 2: Create new sub-item (no ID or ID not found)
+                        const createdItem = await AssignmentSubItem.create({
+                            assignment_id: id,
+                            name: newItem.name,
+                            max_score: newItem.max_score || 10,
+                            order_index: index,
+                        }, { transaction });
+                        
+                        finalSubItemIds.add(createdItem.id);
+                    }
+                }
+
+                // Find sub-items to delete (those that exist but are not used in new list)
+                const subItemsToDelete = existingSubItems.filter(e => !usedExistingIds.has(e.id));
+                
+                if (subItemsToDelete.length > 0) {
+                    const idsToDelete = subItemsToDelete.map(s => s.id);
+                    
+                    // Update scores: set sub_item_id to null for orphaned scores
+                    // This preserves the score data but disassociates from deleted sub-items
+                    await Score.update(
+                        { sub_item_id: null },
+                        { 
+                            where: { 
+                                assignment_id: id,
+                                sub_item_id: { [Op.in]: idsToDelete }
+                            },
+                            transaction 
+                        }
+                    );
+
+                    // Now safe to delete the sub-items
+                    await AssignmentSubItem.destroy({
+                        where: { id: { [Op.in]: idsToDelete } },
+                        transaction,
+                    });
+                }
 
                 // Update max_score to sum of sub-items
                 const totalScore = sub_items.reduce((sum, item) => sum + (item.max_score || 10), 0);
                 await assignment.update({ max_score: totalScore }, { transaction });
+            } else {
+                // sub_items is empty array - remove all sub-items
+                // First, set all scores' sub_item_id to null to preserve scores
+                await Score.update(
+                    { sub_item_id: null },
+                    { 
+                        where: { 
+                            assignment_id: id,
+                            sub_item_id: { [Op.ne]: null }
+                        },
+                        transaction 
+                    }
+                );
+
+                // Then delete all sub-items
+                await AssignmentSubItem.destroy({
+                    where: { assignment_id: id },
+                    transaction,
+                });
             }
         }
 

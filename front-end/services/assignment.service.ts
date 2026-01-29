@@ -69,7 +69,7 @@ export interface UpdateAssignmentData {
     linked_attendance_session_ids?: number[]; // New: array of session IDs
     attendance_condition?: 'and' | 'or'; // New: 'and' = must attend all, 'or' = must attend at least one
     max_score?: number;
-    sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
+    sub_items?: Omit<AssignmentSubItem, 'assignment_id'>[]; // Include id for existing sub-items to preserve scores
     due_date?: string;
 }
 

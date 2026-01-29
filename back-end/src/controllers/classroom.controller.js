@@ -341,6 +341,30 @@ const updateLayout = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Toggle classroom active status
+ * @route PATCH /api/classrooms/:id/toggle-status
+ */
+const toggleStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const classroom = await Classroom.findByPk(id);
+  if (!classroom) {
+    res.status(404);
+    throw new Error('ไม่พบห้องเรียนที่ระบุ');
+  }
+
+  // Toggle the is_active status
+  classroom.is_active = !classroom.is_active;
+  await classroom.save();
+
+  res.json({
+    success: true,
+    message: classroom.is_active ? 'เปิดใช้งานห้องเรียนแล้ว' : 'ปิดใช้งานห้องเรียนแล้ว',
+    data: classroom,
+  });
+});
+
+/**
  * Get classroom statistics
  * @route GET /api/classrooms/stats
  */
@@ -423,5 +447,6 @@ module.exports = {
   deleteClassroom,
   restoreClassroom,
   updateLayout,
+  toggleStatus,
   getStats,
 };

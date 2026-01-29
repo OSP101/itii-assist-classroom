@@ -326,7 +326,7 @@ export default function LoginPage() {
                                         size="md"
                                         className="w-full font-medium mt-2 h-11 sm:h-12 bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-300/50 hover:shadow-blue-400/60"
                                         isLoading={isLoading}
-                                        // disabled={canSubmit || !turnstileReady || isLoading}
+                                        disabled={canSubmit || !turnstileReady || isLoading}
                                     >
                                         เข้าสู่ระบบ
                                     </Button>
