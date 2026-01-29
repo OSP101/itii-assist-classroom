@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: db:3306
--- Generation Time: Jan 17, 2026 at 11:53 AM
+-- Generation Time: Jan 29, 2026 at 04:15 PM
 -- Server version: 8.0.44
 -- PHP Version: 8.3.29
 
@@ -32,10 +32,10 @@ CREATE TABLE `assignments` (
   `course_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
-  `assignment_type` enum('individual','permanent_group','weekly_group') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'individual',
+  `assignment_type` enum('individual','permanent_group','weekly_group','assignment') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'individual' COMMENT 'ประเภท: individual=ปฏิบัติการเดี่ยว(Lab), permanent_group=กลุ่มถาวร, weekly_group=กลุ่มรายสัปดาห์, assignment=การบ้าน',
   `week_number` int DEFAULT NULL COMMENT 'สำหรับงานกลุ่มรายสัปดาห์',
   `linked_attendance_session_id` bigint DEFAULT NULL,
-  `attendance_condition` enum('and','or') COLLATE utf8mb4_unicode_ci DEFAULT 'or',
+  `attendance_condition` enum('and','or') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'or',
   `max_score` decimal(5,2) NOT NULL DEFAULT '10.00',
   `due_date` datetime DEFAULT NULL,
   `is_active` tinyint(1) DEFAULT '1',
@@ -85,14 +85,11 @@ CREATE TABLE `attendance_records` (
   `attendance_session_id` bigint NOT NULL,
   `student_id` bigint NOT NULL,
   `check_in_time` datetime DEFAULT NULL,
-  `timestamp` datetime DEFAULT CURRENT_TIMESTAMP,
   `status` enum('present','late','leave','absent') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'absent',
   `google_email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `google_id` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `pin_verified` tinyint(1) DEFAULT '0',
   `location_verified` tinyint(1) DEFAULT '0',
-  `sso_identifier` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `verified` tinyint(1) DEFAULT '0',
   `note` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   `location_lat` decimal(10,7) DEFAULT NULL,
   `location_lng` decimal(10,7) DEFAULT NULL,
@@ -116,7 +113,6 @@ CREATE TABLE `attendance_sessions` (
   `pin_code` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `session_type` enum('lecture','lab','online') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'lecture',
   `check_location` tinyint(1) DEFAULT '0',
-  `duration_minutes` int DEFAULT NULL,
   `location_lat` decimal(10,7) DEFAULT NULL,
   `location_lng` decimal(10,7) DEFAULT NULL,
   `radius_meters` int DEFAULT '50',
@@ -207,7 +203,7 @@ CREATE TABLE `courses` (
 
 CREATE TABLE `course_instructors` (
   `id` int NOT NULL,
-  `course_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `course_id` varchar(21) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `user_id` bigint NOT NULL,
   `is_primary` tinyint(1) NOT NULL DEFAULT '0',
   `assigned_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -237,7 +233,6 @@ CREATE TABLE `course_section_students` (
   `id` bigint NOT NULL,
   `course_section_id` bigint NOT NULL,
   `student_id` bigint NOT NULL,
-  `status` enum('enrolled','dropped','withdrawn') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'enrolled',
   `enrolled_at` datetime DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -535,7 +530,6 @@ CREATE TABLE `users` (
   `username` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
   `password_hash` char(60) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
   `role` enum('admin','instructor','ta') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-  `linked_student_id` bigint DEFAULT NULL,
   `full_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `email` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
@@ -587,7 +581,6 @@ ALTER TABLE `attendance_records`
   ADD UNIQUE KEY `uq_att_unique` (`attendance_session_id`,`student_id`),
   ADD KEY `fk_ar_student` (`student_id`),
   ADD KEY `fk_ar_updater` (`updated_by`),
-  ADD KEY `idx_att_timestamp` (`timestamp`),
   ADD KEY `idx_att_status` (`status`);
 
 --
@@ -658,8 +651,7 @@ ALTER TABLE `course_sections`
 ALTER TABLE `course_section_students`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `uq_enroll` (`course_section_id`,`student_id`),
-  ADD KEY `fk_css_student` (`student_id`),
-  ADD KEY `idx_css_status` (`status`);
+  ADD KEY `fk_css_student` (`student_id`);
 
 --
 -- Indexes for table `course_tas`
@@ -817,7 +809,6 @@ ALTER TABLE `system_logs`
 ALTER TABLE `users`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `username` (`username`),
-  ADD KEY `fk_users_linked_student` (`linked_student_id`),
   ADD KEY `idx_users_role` (`role`),
   ADD KEY `idx_users_is_active` (`is_active`);
 
@@ -1146,12 +1137,6 @@ ALTER TABLE `student_group_members`
 --
 ALTER TABLE `system_logs`
   ADD CONSTRAINT `fk_log_actor` FOREIGN KEY (`actor_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL;
-
---
--- Constraints for table `users`
---
-ALTER TABLE `users`
-  ADD CONSTRAINT `fk_users_linked_student` FOREIGN KEY (`linked_student_id`) REFERENCES `students` (`id`) ON DELETE SET NULL;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
