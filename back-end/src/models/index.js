@@ -23,6 +23,12 @@ const AttendanceSessionSection = require('./AttendanceSessionSection');
 const AttendanceRecord = require('./AttendanceRecord');
 const BonusScore = require('./BonusScore');
 
+// Queue System Models
+const QueueSession = require('./QueueSession');
+const QueueWorker = require('./QueueWorker');
+const QueueBooking = require('./QueueBooking');
+const QueueDeskStatus = require('./QueueDeskStatus');
+
 // ============================================
 // Define Associations
 // ============================================;

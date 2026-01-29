@@ -25,6 +25,7 @@ router.use('/users', userRoutes);
 router.use('/students', studentRoutes);
 router.use('/courses', courseRoutes);
 router.use('/courses/:id/teams', teamRoutes); // Team routes nested under courses
+router.use('/courses/:courseId/queue', queueRoutes); // Queue routes nested under courses
 router.use('/classrooms', classroomRoutes);
 router.use('/feedback', feedbackRoutes);
 router.use('/assignments', assignmentRoutes);

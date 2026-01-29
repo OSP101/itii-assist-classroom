@@ -1305,6 +1305,40 @@ CREATE TABLE `queue_desk_status` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `queue_bookings`
+--
+
+INSERT INTO `queue_bookings` (`id`, `queue_session_id`, `student_id`, `desk_id`, `desk_number`, `booking_type`, `queue_number`, `note`, `status`, `assigned_worker_id`, `assigned_at`, `started_at`, `completed_at`, `score`, `score_comment`, `worker_note`, `created_at`, `updated_at`) VALUES
+(22, '-C5wCz8c6QpXfQ6XW-NRW', 83, '_JkyEQZPBk1CGTXd9Qwm1', 1, 'grading', 1, NULL, 'completed', 17, '2026-01-05 03:14:55', '2026-01-05 03:14:55', '2026-01-05 03:15:04', NULL, NULL, NULL, '2026-01-05 03:14:55', '2026-01-05 03:15:04'),
+(23, '-C5wCz8c6QpXfQ6XW-NRW', 2, 'AlQByYXKVh8gehsc_DfU2', 2, 'grading', 2, NULL, 'completed', 17, '2026-01-05 03:15:30', '2026-01-05 03:15:30', '2026-01-05 03:15:36', NULL, NULL, NULL, '2026-01-05 03:15:30', '2026-01-05 03:15:36'),
+(24, '-C5wCz8c6QpXfQ6XW-NRW', 2, 'AlQByYXKVh8gehsc_DfU2', 2, 'grading', 3, NULL, 'completed', 17, '2026-01-05 03:15:49', '2026-01-05 03:15:49', '2026-01-05 03:16:01', NULL, NULL, NULL, '2026-01-05 03:15:49', '2026-01-05 03:16:01');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `queue_desk_status`
+--
+
+CREATE TABLE `queue_desk_status` (
+  `id` bigint NOT NULL,
+  `queue_session_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `desk_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `grading_status` enum('not_started','waiting','in_progress','completed') COLLATE utf8mb4_unicode_ci DEFAULT 'not_started' COMMENT 'not_started=ยังไม่จอง, waiting=รอตรวจ, in_progress=กำลังตรวจ, completed=ตรวจแล้ว',
+  `grading_booking_id` bigint DEFAULT NULL COMMENT 'Booking ID ปัจจุบันของ grading',
+  `help_status` enum('none','waiting','in_progress') COLLATE utf8mb4_unicode_ci DEFAULT 'none' COMMENT 'none=ไม่มี, waiting=รอช่วยเหลือ, in_progress=กำลังช่วย',
+  `help_booking_id` bigint DEFAULT NULL COMMENT 'Booking ID ปัจจุบันของ help',
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `queue_desk_status`
+--
+
+INSERT INTO `queue_desk_status` (`id`, `queue_session_id`, `desk_id`, `grading_status`, `grading_booking_id`, `help_status`, `help_booking_id`, `updated_at`) VALUES
+(21, '-C5wCz8c6QpXfQ6XW-NRW', '_JkyEQZPBk1CGTXd9Qwm1', 'completed', NULL, 'none', NULL, '2026-01-05 03:15:04'),
+(22, '-C5wCz8c6QpXfQ6XW-NRW', 'AlQByYXKVh8gehsc_DfU2', 'completed', NULL, 'none', NULL, '2026-01-05 03:16:01');
+
 -- --------------------------------------------------------
 
 --
@@ -1349,6 +1383,45 @@ CREATE TABLE `queue_workers` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `queue_sessions`
+--
+
+INSERT INTO `queue_sessions` (`id`, `course_id`, `classroom_id`, `title`, `description`, `pin_code`, `linked_assignment_id`, `require_attendance`, `linked_attendance_session_id`, `status`, `start_time`, `end_time`, `created_by`, `created_at`, `updated_at`) VALUES
+('-C5wCz8c6QpXfQ6XW-NRW', 'O8vHTuVPW8S_1xhe9aiP4', 'Gwhp-XsZTnu2jLRxgfPDM', 'Lab02', '', '270220', 2, 0, NULL, 'active', '2026-01-05 09:20:07', NULL, 17, '2026-01-05 02:20:03', '2026-01-05 02:20:07'),
+('MJ41QmkuOpCEKmmgFg0FV', 'O8vHTuVPW8S_1xhe9aiP4', 'Gwhp-XsZTnu2jLRxgfPDM', 'Lab01', '', '177046', 1, 1, 7, 'closed', '2026-01-05 07:20:23', '2026-01-05 09:19:30', 7, '2026-01-05 00:20:01', '2026-01-05 02:19:30');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `queue_workers`
+--
+
+CREATE TABLE `queue_workers` (
+  `id` bigint NOT NULL,
+  `queue_session_id` varchar(21) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `user_id` bigint NOT NULL COMMENT 'อาจารย์หรือ TA',
+  `accept_grading` tinyint(1) DEFAULT '1' COMMENT 'รับตรวจงาน',
+  `accept_help` tinyint(1) DEFAULT '1' COMMENT 'รับแก้ไขปัญหา',
+  `status` enum('online','busy','offline') COLLATE utf8mb4_unicode_ci DEFAULT 'offline' COMMENT 'online=พร้อมรับงาน, busy=กำลังทำงาน, offline=ออฟไลน์',
+  `current_booking_id` bigint DEFAULT NULL COMMENT 'งานที่กำลังทำอยู่',
+  `total_grading_completed` int DEFAULT '0' COMMENT 'จำนวนตรวจงานเสร็จ',
+  `total_help_completed` int DEFAULT '0' COMMENT 'จำนวนช่วยเหลือเสร็จ',
+  `last_active_at` timestamp NULL DEFAULT NULL COMMENT 'เวลาที่ active ล่าสุด',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `queue_workers`
+--
+
+INSERT INTO `queue_workers` (`id`, `queue_session_id`, `user_id`, `accept_grading`, `accept_help`, `status`, `current_booking_id`, `total_grading_completed`, `total_help_completed`, `last_active_at`, `created_at`, `updated_at`) VALUES
+(1, 'MJ41QmkuOpCEKmmgFg0FV', 7, 1, 1, 'offline', NULL, 0, 0, '2026-01-05 01:24:11', '2026-01-05 01:24:11', '2026-01-05 01:41:16'),
+(2, 'MJ41QmkuOpCEKmmgFg0FV', 17, 1, 1, 'offline', NULL, 2, 2, '2026-01-05 02:17:59', '2026-01-05 01:44:30', '2026-01-05 02:18:51'),
+(3, '-C5wCz8c6QpXfQ6XW-NRW', 17, 1, 0, 'online', NULL, 5, 0, '2026-01-05 03:16:01', '2026-01-05 02:21:06', '2026-01-05 03:16:01'),
+(4, '-C5wCz8c6QpXfQ6XW-NRW', 7, 0, 1, 'online', NULL, 0, 1, '2026-01-05 02:48:48', '2026-01-05 02:22:40', '2026-01-05 02:48:48');
 
 -- --------------------------------------------------------
 

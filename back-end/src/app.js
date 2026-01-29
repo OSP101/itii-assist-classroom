@@ -198,6 +198,9 @@ const server = http.createServer(app);
 // Initialize Socket.io
 const io = initializeSocket(server);
 
+// Make io accessible in routes via req.app.get('io')
+app.set('io', io);
+
 // Start server
 const startServer = async () => {
   try {
