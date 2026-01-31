@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { io, Socket } from "socket.io-client";
 
 // Resource types that can be synced
@@ -64,7 +64,16 @@ export const useRealtimeSync = (
     showToast: boolean = true
 ) => {
     const { onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, isConnected } = useSocket();
-    const resourceList = Array.isArray(resources) ? resources : [resources];
+    const resourceList = useMemo(
+        () => Array.isArray(resources) ? resources : [resources],
+        [resources]
+    );
+    const onUpdateRef = useRef(onUpdate);
+    
+    // Keep callback ref updated without causing re-subscriptions
+    useEffect(() => {
+        onUpdateRef.current = onUpdate;
+    }, [onUpdate]);
 
     useEffect(() => {
         subscribeToUpdates();
@@ -72,7 +81,7 @@ export const useRealtimeSync = (
         const unsubscribe = onDataUpdate((data) => {
             if (resourceList.includes(data.resource)) {
                 console.log(`📥 ${data.resource} updated:`, data);
-                onUpdate();
+                onUpdateRef.current();
             }
         });
 
@@ -80,7 +89,7 @@ export const useRealtimeSync = (
             unsubscribe();
             unsubscribeFromUpdates();
         };
-    }, [onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, onUpdate, resourceList]);
+    }, [onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, resourceList]);
 
     return { isConnected };
 };
