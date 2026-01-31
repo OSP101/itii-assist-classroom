@@ -21,6 +21,7 @@ const {
     Score,
     sequelize,
 } = require('../models');
+const logger = require('../utils/logger');
 
 // ============================================
 // Queue Session Management (Instructor/TA)
@@ -66,37 +67,40 @@ const getQueueSessions = async (req, res) => {
             order: [['created_at', 'DESC']],
         });
 
-        // Add statistics for each session
-        const sessionsWithStats = await Promise.all(
-            sessions.map(async (session) => {
-                const stats = await QueueBooking.findAll({
-                    where: { queue_session_id: session.id },
-                    attributes: [
-                        'status',
-                        [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
-                    ],
-                    group: ['status'],
-                    raw: true,
-                });
+        // ✅ OPTIMIZED: Get statistics for ALL sessions in a single batch query
+        const sessionIds = sessions.map(s => s.id);
+        
+        const allStats = sessionIds.length > 0 ? await QueueBooking.findAll({
+            where: { queue_session_id: { [Op.in]: sessionIds } },
+            attributes: [
+                'queue_session_id',
+                'status',
+                [sequelize.fn('COUNT', sequelize.col('id')), 'count'],
+            ],
+            group: ['queue_session_id', 'status'],
+            raw: true,
+        }) : [];
 
-                const statsObj = {
-                    total: 0,
-                    waiting: 0,
-                    in_progress: 0,
-                    completed: 0,
-                };
+        // Build stats map: session_id -> { waiting, in_progress, completed, total }
+        const statsMap = {};
+        sessionIds.forEach(id => {
+            statsMap[id] = { total: 0, waiting: 0, in_progress: 0, completed: 0 };
+        });
+        allStats.forEach(row => {
+            const sessionId = row.queue_session_id;
+            const status = row.status;
+            const count = parseInt(row.count);
+            if (statsMap[sessionId]) {
+                statsMap[sessionId][status] = count;
+                statsMap[sessionId].total += count;
+            }
+        });
 
-                stats.forEach((s) => {
-                    statsObj[s.status] = parseInt(s.count);
-                    statsObj.total += parseInt(s.count);
-                });
-
-                return {
-                    ...session.toJSON(),
-                    stats: statsObj,
-                };
-            })
-        );
+        // Map sessions with stats (no additional queries)
+        const sessionsWithStats = sessions.map(session => ({
+            ...session.toJSON(),
+            stats: statsMap[session.id] || { total: 0, waiting: 0, in_progress: 0, completed: 0 },
+        }));
 
         res.json({
             success: true,
@@ -820,11 +824,11 @@ const createBooking = async (req, res) => {
 
         await transaction.commit();
 
-        console.log(`📝 Booking created: id=${booking.id}, session=${session.id}`);
+        logger.debug(`Booking created: id=${booking.id}, session=${session.id}`);
 
         // Emit socket event for real-time updates
         const io = req.app.get('io');
-        console.log(`🔌 Socket.io instance: ${io ? 'available' : 'NOT AVAILABLE'}`);
+        logger.debug(`Socket.io instance: ${io ? 'available' : 'NOT AVAILABLE'}`);
         
         if (io) {
             io.to(`queue-${session.id}`).emit('new-booking', {
@@ -865,11 +869,11 @@ const createBooking = async (req, res) => {
  */
 const tryAssignBooking = async (sessionId, bookingId, io) => {
     try {
-        console.log(`🔍 Trying to assign booking ${bookingId} for session ${sessionId}`);
+        logger.debug(`Trying to assign booking ${bookingId} for session ${sessionId}`);
         
         const booking = await QueueBooking.findByPk(bookingId);
         if (!booking || booking.status !== 'waiting') {
-            console.log(`⚠️ Booking not found or not waiting: ${booking?.status}`);
+            logger.debug(`Booking not found or not waiting: ${booking?.status}`);
             return;
         }
 
@@ -885,7 +889,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
             workerCondition.accept_help = true;
         }
 
-        console.log(`🔍 Looking for workers with condition:`, workerCondition);
+        logger.debug(`Looking for workers with condition: ${JSON.stringify(workerCondition)}`);
 
         const availableWorker = await QueueWorker.findOne({
             where: workerCondition,
@@ -902,7 +906,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
         });
 
         if (availableWorker) {
-            console.log(`✅ Found available worker: user_id=${availableWorker.user_id}`);
+            logger.debug(`Found available worker: user_id=${availableWorker.user_id}`);
             
             // Assign booking to worker
             await booking.update({
@@ -948,16 +952,16 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                 });
 
                 // Emit to specific worker
-                console.log(`📤 Emitting new-task to worker-${availableWorker.user_id}`);
+                logger.debug(`Emitting new-task to worker-${availableWorker.user_id}`);
                 io.to(`worker-${availableWorker.user_id}`).emit('new-task', {
                     booking: fullBooking,
                 });
             }
         } else {
-            console.log(`⚠️ No available worker found for session ${sessionId}`);
+            logger.debug(`No available worker found for session ${sessionId}`);
         }
     } catch (error) {
-        console.error('Error assigning booking:', error);
+        logger.error('Error assigning booking:', error);
     }
 };
 
@@ -967,7 +971,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
  */
 const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) => {
     try {
-        console.log(`🔍 Checking for waiting bookings for new worker ${userId}`);
+        logger.debug(`Checking for waiting bookings for new worker ${userId}`);
 
         // Build booking type condition based on worker preferences
         const bookingTypes = [];
@@ -975,7 +979,7 @@ const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) =>
         if (worker.accept_help) bookingTypes.push('help');
 
         if (bookingTypes.length === 0) {
-            console.log(`⚠️ Worker ${userId} doesn't accept any booking types`);
+            logger.debug(`Worker ${userId} doesn't accept any booking types`);
             return null;
         }
 
@@ -994,11 +998,11 @@ const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) =>
         });
 
         if (!waitingBooking) {
-            console.log(`ℹ️ No waiting bookings found for session ${sessionId}`);
+            logger.debug(`No waiting bookings found for session ${sessionId}`);
             return null;
         }
 
-        console.log(`✅ Found waiting booking ${waitingBooking.id}, assigning to worker ${userId}`);
+        logger.debug(`Found waiting booking ${waitingBooking.id}, assigning to worker ${userId}`);
 
         // Assign booking to worker
         await waitingBooking.update({
@@ -1044,7 +1048,7 @@ const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) =>
         return waitingBooking;
 
     } catch (error) {
-        console.error('Error assigning waiting booking to worker:', error);
+        logger.error('Error assigning waiting booking to worker:', error);
         return null;
     }
 };
@@ -1197,7 +1201,7 @@ const completeBooking = async (req, res) => {
             // Check if all sub-items are scored
             allSubItemsScored = scoredSubItemIds.size >= assignmentSubItems.length;
             
-            console.log(`📊 Sub-items check: ${scoredSubItemIds.size}/${assignmentSubItems.length} scored, allScored: ${allSubItemsScored}`);
+            logger.debug(`Sub-items check: ${scoredSubItemIds.size}/${assignmentSubItems.length} scored, allScored: ${allSubItemsScored}`);
         }
 
         // Update desk status
@@ -1223,7 +1227,7 @@ const completeBooking = async (req, res) => {
                     { transaction }
                 );
                 
-                console.log(`🪑 Desk ${booking.desk_number} grading_status set to: ${newGradingStatus}`);
+                logger.debug(`Desk ${booking.desk_number} grading_status set to: ${newGradingStatus}`);
             } else {
                 await deskStatus.update(
                     {
