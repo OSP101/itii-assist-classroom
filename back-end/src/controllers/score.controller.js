@@ -122,12 +122,14 @@ const getScores = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'assignment_id is required');
     }
 
+    // ✅ OPTIMIZED: Only select needed attributes
     const assignment = await Assignment.findByPk(assignment_id, {
+        attributes: ['id', 'course_id', 'name', 'max_score', 'assignment_type', 'linked_attendance_session_id', 'attendance_condition'],
         include: [
             {
                 model: AssignmentSubItem,
                 as: 'subItems',
-                order: [['order_index', 'ASC']],
+                attributes: ['id', 'name', 'max_score', 'order_index'],
             },
             {
                 model: AttendanceSession,
@@ -147,30 +149,25 @@ const getScores = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
-    // Get all students in the course
-    const sections = await CourseSection.findAll({
-        where: { course_id: assignment.course_id },
-        include: [
-            {
-                model: Student,
-                as: 'students',
-                through: { attributes: [] },
-            },
-        ],
+    // ✅ OPTIMIZED: Get all students in single query with raw SQL for better performance
+    const [studentsResult] = await sequelize.query(`
+        SELECT DISTINCT s.id, s.student_id, s.full_name, s.email
+        FROM students s
+        INNER JOIN course_section_students css ON s.id = css.student_id
+        INNER JOIN course_sections cs ON css.course_section_id = cs.id
+        WHERE cs.course_id = ?
+        ORDER BY s.student_id
+    `, {
+        replacements: [assignment.course_id],
     });
+    
+    const uniqueStudents = studentsResult;
 
-    const allStudents = sections.flatMap(section => section.students);
-    const uniqueStudents = [...new Map(allStudents.map(s => [s.id, s])).values()];
-
-    // Get existing scores (including sub-item scores)
+    // ✅ OPTIMIZED: Get existing scores with minimal attributes
     const scores = await Score.findAll({
         where: { assignment_id },
+        attributes: ['id', 'student_id', 'sub_item_id', 'score', 'comment', 'status', 'graded_by', 'graded_at'],
         include: [
-            {
-                model: Student,
-                as: 'student',
-                attributes: ['id', 'student_id', 'full_name'],
-            },
             {
                 model: User,
                 as: 'grader',

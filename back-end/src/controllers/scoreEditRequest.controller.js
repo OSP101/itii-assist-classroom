@@ -10,8 +10,6 @@ const getEditRequests = asyncHandler(async (req, res) => {
     const { course_id, status } = req.query;
     const userId = req.user.id;
 
-    console.log('[ScoreEditRequest] getEditRequests - course_id:', course_id, 'status:', status, 'userId:', userId);
-
     if (!course_id) {
         throw new ApiError(400, 'course_id is required');
     }
@@ -21,8 +19,6 @@ const getEditRequests = asyncHandler(async (req, res) => {
     if (!course) {
         throw new ApiError(404, 'Course not found');
     }
-
-    console.log('[ScoreEditRequest] course.instructor_id:', course.instructor_id, 'userId:', userId);
 
     if (String(course.instructor_id) !== String(userId)) {
         throw new ApiError(403, 'Only instructor can view edit requests');

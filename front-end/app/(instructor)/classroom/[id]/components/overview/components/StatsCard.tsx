@@ -18,6 +18,7 @@ function StatsCardComponent({
     value,
     suffix = "",
 }: StatsCardProps) {
+
     return (
         <div className="relative bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-shadow overflow-hidden group">
             {/* Background decoration */}

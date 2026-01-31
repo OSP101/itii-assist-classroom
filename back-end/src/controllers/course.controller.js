@@ -15,10 +15,19 @@ const {
   Score,
   AttendanceSession,
   AttendanceRecord,
+  sequelize,
 } = require('../models');
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { cache, CACHE_TTL } = require('../utils/cache');
+const { 
+  batchCount, 
+  batchCountByStatus,
+  getStudentCountsByCourse,
+  getAttendanceStatsBatch,
+  getScoreStatsBatch,
+} = require('../utils/queryHelpers');
 
 /**
  * Check if user has access to course (is admin, instructor, or TA of course)
@@ -133,25 +142,21 @@ const getCourses = asyncHandler(async (req, res) => {
     ],
   });
 
-  // Get TA count for each course
-  const coursesWithCounts = await Promise.all(
-    courses.map(async (course) => {
-      const taCount = await CourseTA.count({ where: { course_id: course.id } });
-      const studentCount = await CourseSectionStudent.count({
-        include: [{
-          model: CourseSection,
-          as: 'section',
-          where: { course_id: course.id },
-          attributes: [],
-        }],
-      });
-      return {
-        ...course.toJSON(),
-        taCount,
-        studentCount,
-      };
-    })
-  );
+  // ✅ OPTIMIZED: Batch count instead of N+1 queries
+  const courseIds = courses.map(c => c.id);
+  
+  // Get TA counts in single query
+  const taCounts = await batchCount(CourseTA, 'course_id', courseIds);
+  
+  // Get student counts in single query (optimized with raw SQL)
+  const studentCounts = await getStudentCountsByCourse(courseIds);
+
+  // Map counts to courses (no additional queries needed)
+  const coursesWithCounts = courses.map(course => ({
+    ...course.toJSON(),
+    taCount: taCounts[course.id] || 0,
+    studentCount: studentCounts[course.id] || 0,
+  }));
 
   // Calculate pagination info
   const totalPages = Math.ceil(count / parseInt(limit));
@@ -1715,70 +1720,77 @@ const getCourseOverview = asyncHandler(async (req, res) => {
     : 0;
 
   // ========================================
-  // Calculate TA activity
+  // ✅ OPTIMIZED: Calculate TA activity with batch queries
   // ========================================
-  const taActivity = await Promise.all((course.tas || []).map(async (ta) => {
-    // Count scores graded by this TA
-    const gradedCount = assignmentIds.length > 0 ? await Score.count({
-      where: {
-        assignment_id: { [Op.in]: assignmentIds },
-        graded_by: ta.id,
-        score: { [Op.not]: null },
-      },
-    }) : 0;
-
-    // Get last grading time
-    const lastGrade = assignmentIds.length > 0 ? await Score.findOne({
-      where: {
-        assignment_id: { [Op.in]: assignmentIds },
-        graded_by: ta.id,
-        score: { [Op.not]: null },
-      },
-      order: [['graded_at', 'DESC']],
-      attributes: ['graded_at'],
-    }) : null;
-
-    return {
+  let taActivity = [];
+  if ((course.tas || []).length > 0 && assignmentIds.length > 0) {
+    const taIds = course.tas.map(ta => ta.id);
+    
+    // Single query for all TA grading counts
+    const [taGradingStats] = await sequelize.query(`
+      SELECT 
+        graded_by,
+        COUNT(*) as graded_count,
+        MAX(graded_at) as last_graded_at
+      FROM scores
+      WHERE assignment_id IN (?)
+        AND graded_by IN (?)
+        AND score IS NOT NULL
+      GROUP BY graded_by
+    `, {
+      replacements: [assignmentIds, taIds],
+    });
+    
+    const taStatsMap = {};
+    taGradingStats.forEach(row => {
+      taStatsMap[row.graded_by] = {
+        gradedCount: parseInt(row.graded_count),
+        lastActive: row.last_graded_at,
+      };
+    });
+    
+    taActivity = course.tas.map(ta => ({
       id: ta.id,
       full_name: ta.full_name,
       email: ta.email,
       avatar: ta.avatar,
       assignedAt: ta.CourseTA?.assigned_at,
-      gradedCount,
-      lastActive: lastGrade?.graded_at || null,
-    };
-  }));
-
-  // Sort TA by graded count
-  taActivity.sort((a, b) => b.gradedCount - a.gradedCount);
+      gradedCount: taStatsMap[ta.id]?.gradedCount || 0,
+      lastActive: taStatsMap[ta.id]?.lastActive || null,
+    }));
+    
+    // Sort TA by graded count
+    taActivity.sort((a, b) => b.gradedCount - a.gradedCount);
+  }
 
   // ========================================
-  // Get attendance statistics
+  // ✅ OPTIMIZED: Get attendance statistics with single query
   // ========================================
   let attendanceRate = 0;
   let totalAttendanceSessions = 0;
   
-  const attendanceSessions = await AttendanceSession.findAll({
-    where: { course_id: id },
-    attributes: ['id'],
+  // Single query for both session count and attendance stats
+  const [attendanceStats] = await sequelize.query(`
+    SELECT 
+      COUNT(DISTINCT ats.id) as total_sessions,
+      SUM(CASE WHEN ar.status IN ('present', 'late') THEN 1 ELSE 0 END) as present_count,
+      COUNT(ar.id) as total_records
+    FROM attendance_sessions ats
+    LEFT JOIN attendance_records ar ON ats.id = ar.attendance_session_id
+    WHERE ats.course_id = ?
+  `, {
+    replacements: [id],
   });
   
-  totalAttendanceSessions = attendanceSessions.length;
-
-  if (totalAttendanceSessions > 0 && totalStudents > 0) {
-    const sessionIds = attendanceSessions.map(s => s.id);
-    const presentCount = await AttendanceRecord.count({
-      where: {
-        attendance_session_id: { [Op.in]: sessionIds },
-        status: ['present', 'late'],
-      },
-    });
+  if (attendanceStats && attendanceStats[0]) {
+    totalAttendanceSessions = parseInt(attendanceStats[0].total_sessions) || 0;
+    const presentCount = parseInt(attendanceStats[0].present_count) || 0;
     const totalExpected = totalAttendanceSessions * totalStudents;
-    attendanceRate = Math.round((presentCount / totalExpected) * 100);
+    attendanceRate = totalExpected > 0 ? Math.round((presentCount / totalExpected) * 100) : 0;
   }
 
   // ========================================
-  // Get recent activities (last 10)
+  // ✅ OPTIMIZED: Get recent activities with limit (last 10)
   // ========================================
   const recentScores = assignmentIds.length > 0 ? await Score.findAll({
     where: {
@@ -1839,13 +1851,13 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   });
 
   // ========================================
-  // Assignment statistics for table
+  // ✅ OPTIMIZED: Assignment statistics for table - no additional queries
   // ========================================
-  const assignmentStats = await Promise.all(assignments.slice(0, 10).map(async (assignment) => {
+  const assignmentStats = assignments.slice(0, 10).map(assignment => {
     // individual and assignment types are both individual work
     const isGroupAssignment = assignment.assignment_type !== 'individual' && assignment.assignment_type !== 'assignment';
     
-    // Get scores for this assignment
+    // Get scores for this assignment from already-fetched data
     const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
     
     // Calculate average score
@@ -1896,7 +1908,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
       hasSubItems: assignment.subItems && assignment.subItems.length > 0,
       subItemsCount: assignment.subItems ? assignment.subItems.length : 0,
     };
-  }));
+  });  // ✅ Changed from async Promise.all to sync map
 
   // ========================================
   // Assignment statistics by type (NEW)

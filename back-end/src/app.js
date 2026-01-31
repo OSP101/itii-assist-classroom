@@ -123,6 +123,22 @@ if (config.nodeEnv === 'development') {
   }));
 }
 
+// Performance middleware
+const { 
+  requestTimeout, 
+  slowQueryLogger, 
+  requestId 
+} = require('./middlewares/performance.middleware');
+
+// Add request ID for tracing
+app.use(requestId());
+
+// Add request timeout (30 seconds)
+app.use(requestTimeout(30000));
+
+// Log slow requests (> 2 seconds)
+app.use(slowQueryLogger(2000));
+
 // Initialize Passport
 app.use(passport.initialize());
 
