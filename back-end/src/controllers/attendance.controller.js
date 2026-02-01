@@ -134,45 +134,51 @@ const getAttendanceSessions = asyncHandler(async (req, res) => {
     order: [['created_at', 'DESC']],
   });
 
-  // Get statistics for each session and add computed status
-  const sessionsWithStats = await Promise.all(
-    sessions.map(async (session) => {
-      const stats = await AttendanceRecord.findAll({
-        where: { attendance_session_id: session.id },
-        attributes: [
-          'status',
-          [sequelize.fn('COUNT', sequelize.col('status')), 'count'],
-        ],
-        group: ['status'],
-      });
+  // ✅ OPTIMIZED: Get statistics for ALL sessions in a single query
+  const sessionIds = sessions.map(s => s.id);
+  
+  // Single batch query for all session stats
+  const allStats = sessionIds.length > 0 ? await AttendanceRecord.findAll({
+    where: { attendance_session_id: { [Op.in]: sessionIds } },
+    attributes: [
+      'attendance_session_id',
+      'status',
+      [sequelize.fn('COUNT', sequelize.col('status')), 'count'],
+    ],
+    group: ['attendance_session_id', 'status'],
+    raw: true,
+  }) : [];
 
-      const statusCounts = {
-        present: 0,
-        late: 0,
-        leave: 0,
-        absent: 0,
-        total: 0,
-      };
+  // Build stats map: session_id -> { present, late, leave, absent, total }
+  const statsMap = {};
+  sessionIds.forEach(id => {
+    statsMap[id] = { present: 0, late: 0, leave: 0, absent: 0, total: 0 };
+  });
+  allStats.forEach(row => {
+    const sessionId = row.attendance_session_id;
+    const status = row.status;
+    const count = parseInt(row.count);
+    if (statsMap[sessionId]) {
+      statsMap[sessionId][status] = count;
+      statsMap[sessionId].total += count;
+    }
+  });
 
-      stats.forEach((s) => {
-        statusCounts[s.status] = parseInt(s.get('count'));
-        statusCounts.total += parseInt(s.get('count'));
-      });
-
-      // Add computed status based on time
-      const sessionData = addComputedStatus(session);
-      
-      // Add course_section_ids for frontend compatibility
-      const sectionIds = session.sections?.map(s => s.id) || 
-        (session.course_section_id ? [session.course_section_id] : []);
-      
-      return {
-        ...sessionData,
-        course_section_ids: sectionIds,
-        stats: statusCounts,
-      };
-    })
-  );
+  // Map sessions with stats (no additional queries)
+  const sessionsWithStats = sessions.map(session => {
+    // Add computed status based on time
+    const sessionData = addComputedStatus(session);
+    
+    // Add course_section_ids for frontend compatibility
+    const sectionIds = session.sections?.map(s => s.id) || 
+      (session.course_section_id ? [session.course_section_id] : []);
+    
+    return {
+      ...sessionData,
+      course_section_ids: sectionIds,
+      stats: statsMap[session.id] || { present: 0, late: 0, leave: 0, absent: 0, total: 0 },
+    };
+  });
 
   res.json({
     success: true,

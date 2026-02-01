@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
@@ -19,23 +19,24 @@ import {
 import { Select, SelectItem } from "@heroui/select";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
-import { courseService } from "@/services/course.service";
-import { studentService } from "@/services/student.service";
-import { authService } from "@/services/auth.service";
-import assignmentService from "@/services/assignment.service";
-import scoreService from "@/services/score.service";
-import attendanceService, { type AttendanceSession } from "@/services/attendance.service";
+import Link from "next/link";
+// Import custom hooks
+import { 
+    useClassroomData, 
+    useClassroomActions, 
+    useScores, 
+    useModalStates,
+    type TeamMember,
+    type PermanentTeam,
+    type WeeklyTeam,
+} from "./hooks";
+
+// Import service types
 import type { Assignment as AssignmentType, AssignmentSubItem } from "@/services/assignment.service";
-import type { Course, TA, SectionStudent, CourseOverview, Team, TeamMember as ServiceTeamMember, Instructor } from "@/services/course.service";
-import type { Student } from "@/services/student.service";
-import type { StudentScore, ScoresData, Group } from "@/services/score.service";
-import scoreEditRequestService from "@/services/scoreEditRequest.service";
-import { FaCheckCircle } from "react-icons/fa";
-import { useSocket } from "@/contexts/SocketContext";
+import type { SectionStudent } from "@/services/course.service";
 
 // Import Skeletons directly (they're small and used for loading states)
 import { OverviewSkeleton, TeamsGridSkeleton } from "./components/Skeletons";
-import { stat } from "fs";
 
 // Lazy load heavy Tab components with custom loading states
 const OverviewTab = dynamic(() => import("./components/OverviewTab"), {
@@ -79,7 +80,7 @@ const AttendanceTab = dynamic(() => import("./components/AttendanceTab"), {
     ssr: false,
 });
 
-const ScoresTab = dynamic(() => import("./components/ScoresTab"), {
+const ScoresTab = dynamic(() => import("./components/ScoreSummaryTab"), {
     loading: () => (
         <div className="flex items-center justify-center py-12">
             <Spinner size="lg" color="primary" />
@@ -88,7 +89,7 @@ const ScoresTab = dynamic(() => import("./components/ScoresTab"), {
     ssr: false,
 });
 
-const ScoreSummaryTab = dynamic(() => import("./components/ScoreSummaryTab"), {
+const QueueTab = dynamic(() => import("./components/QueueTab"), {
     loading: () => (
         <div className="flex items-center justify-center py-12">
             <Spinner size="lg" color="primary" />
@@ -126,1457 +127,187 @@ const SettingsTab = dynamic(() => import("./components/SettingsTab"), {
     ssr: false,
 });
 
-
-// Team/Group Types (local extension of service types)
-interface TeamMember {
-    id: number;
-    student_id: string;
-    full_name: string;
-}
-interface PermanentTeam {
-    id: number;
-    name: string;
-    members: TeamMember[];
-    createdAt: string;
-}
-interface WeeklyTeam {
-    id: number;
-    name: string;
-    members: TeamMember[];
-    weekNumber: number;
-}
-
 export default function ClassroomDetailPage() {
     const params = useParams();
     const courseId = params.id as string;
+
+    // ============================================
+    // Custom Hooks - Data & Business Logic
+    // ============================================
     
-    // Real-time sync
-    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, isConnected } = useSocket();
-    const isUpdatingRef = useRef(false);
+    const classroomData = useClassroomData(courseId);
+    const {
+        course,
+        setCourse,
+        overview,
+        assignments,
+        setAssignments,
+        attendanceSessions,
+        permanentTeams,
+        setPermanentTeams,
+        weeklyTeams,
+        setWeeklyTeams,
+        tasList,
+        studentsList,
+        instructorsList,
+        sectionStudents,
+        setSectionStudents,
+        userRole,
+        currentUserId,
+        pendingApprovalCount,
+        setPendingApprovalCount,
+        isConnected,
+        isLoading,
+        isOverviewLoading,
+        isAssignmentsLoading,
+        isTeamsLoading,
+        isPeopleLoading,
+        isStudentsLoading,
+        fetchCourse,
+        fetchOverview,
+        fetchAssignments,
+        fetchAttendanceSessions,
+        fetchTeams,
+        fetchSectionStudents,
+        fetchAllSectionStudents,
+        refreshForTab,
+        initializeData,
+        emitUpdate,
+        naturalSort,
+    } = classroomData;
 
-    const [course, setCourse] = useState<Course | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [tasList, setTasList] = useState<TA[]>([]);
-    const [studentsList, setStudentsList] = useState<Student[]>([]);
+    const classroomActions = useClassroomActions({
+        courseId,
+        course,
+        setCourse,
+        sectionStudents,
+        setSectionStudents,
+        permanentTeams,
+        setPermanentTeams,
+        weeklyTeams,
+        setWeeklyTeams,
+        studentsList,
+        fetchCourse,
+        fetchOverview,
+        fetchTeams,
+        fetchAllSectionStudents,
+        emitUpdate,
+    });
+
+    const scores = useScores({
+        onOverviewRefresh: () => fetchOverview(true),
+        emitUpdate,
+    });
+
+    const modals = useModalStates();
+
+    // ============================================
+    // UI-Only States (local to this component)
+    // ============================================
+    
     const [activeTab, setActiveTab] = useState("overview");
-    const [userRole, setUserRole] = useState<string>("");
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [overview, setOverview] = useState<CourseOverview | null>(null);
-    const [isOverviewLoading, setIsOverviewLoading] = useState(true);
-
-    // Score approval pending count (for instructor badge)
-    const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
-
-    // Progressive loading states - แยก loading state แต่ละส่วน
-    const [isTeamsLoading, setIsTeamsLoading] = useState(true);
-    const [isPeopleLoading, setIsPeopleLoading] = useState(true); // สำหรับ TAs list
-    const [isStudentsLoading, setIsStudentsLoading] = useState(true); // สำหรับ students list
-
-    // Section states
-    const [isAddSectionModalOpen, setIsAddSectionModalOpen] = useState(false);
-    const [newSectionNo, setNewSectionNo] = useState("");
-    const [newSectionNote, setNewSectionNote] = useState("");
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [expandedSections, setExpandedSections] = useState<number[]>([]);
+    
+    // Section UI states
     const [sectionSubTab, setSectionSubTab] = useState<"students" | "permanent" | "weekly">("students");
     const [sectionSearchQuery, setSectionSearchQuery] = useState("");
-
-    // Mobile sidebar state
-    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-
-    // Group/Team states
-    const [permanentTeams, setPermanentTeams] = useState<PermanentTeam[]>([]);
-    const [weeklyTeams, setWeeklyTeams] = useState<Record<number, WeeklyTeam[]>>({});
-    const [selectedWeek, setSelectedWeek] = useState(1);
-    const [totalWeeks] = useState(15); // Total weeks in semester
-    const [isCreateTeamModalOpen, setIsCreateTeamModalOpen] = useState(false);
-    const [teamCreationType, setTeamCreationType] = useState<"permanent" | "weekly">("permanent");
-    const [newTeamName, setNewTeamName] = useState("");
-    const [selectedTeamMembers, setSelectedTeamMembers] = useState<number[]>([]);
-    const [teamFormationMethod, setTeamFormationMethod] = useState<"manual" | "random">("manual");
-    const [teamSize, setTeamSize] = useState(3);
-    const [selectedSectionForTeam, setSelectedSectionForTeam] = useState<number | "all">("all");
-
-    // Team member selection mode (select from list or paste from Excel)
-    const [teamMemberMode, setTeamMemberMode] = useState<"select" | "paste">("select");
-    const [teamExcelPasteData, setTeamExcelPasteData] = useState("");
-    const [parsedTeamMembers, setParsedTeamMembers] = useState<Array<{
-        inputValue: string;
-        matchedStudent: TeamMember | null;
-        status: "matched" | "not_found" | "already_in_team";
-    }>>([]);
-    const [isParsingTeamMembers, setIsParsingTeamMembers] = useState(false);
-
-    // TA states
-    const [isAddTAModalOpen, setIsAddTAModalOpen] = useState(false);
-    const [selectedTAIds, setSelectedTAIds] = useState<number[]>([]);
-    const [taSearchQuery, setTASearchQuery] = useState("");
-
-    // Instructor states (for adding instructors to course)
-    const [isAddInstructorModalOpen, setIsAddInstructorModalOpen] = useState(false);
-    const [selectedInstructorIds, setSelectedInstructorIds] = useState<number[]>([]);
-    const [instructorSearchQuery, setInstructorSearchQuery] = useState("");
-    const [instructorsList, setInstructorsList] = useState<Instructor[]>([]);
-
-    // Student states
-    const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
-    const [selectedSectionId, setSelectedSectionId] = useState<number | null>(null);
-    const [selectedStudentId, setSelectedStudentId] = useState<string>("");
-    const [studentSearchQuery, setStudentSearchQuery] = useState("");
-    const [sectionStudents, setSectionStudents] = useState<Record<number, SectionStudent[]>>({});
-    const [expandedSections, setExpandedSections] = useState<number[]>([]);
-
-    // Delete confirmation modal states
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [deleteType, setDeleteType] = useState<"student" | "team" | "section" | "ta" | "instructor" | null>(null);
-    const [deleteTarget, setDeleteTarget] = useState<{
-        // For student deletion
-        studentId?: number;
-        studentName?: string;
-        studentCode?: string;
-        sectionId?: number;
-        sectionNo?: string;
-        // For section deletion
-        sectionStudentCount?: number;
-        // For team deletion
-        teamId?: number;
-        teamName?: string;
-        teamType?: "permanent" | "weekly";
-        weekNumber?: number;
-        teamMembers?: TeamMember[];
-        // For TA deletion
-        taId?: number;
-        taName?: string;
-        taEmail?: string;
-        taAvatar?: string;
-        // For instructor deletion
-        instructorId?: number;
-        instructorName?: string;
-        instructorEmail?: string;
-        instructorAvatar?: string;
-    } | null>(null);
-
-    // Bulk delete teams modal state
-    const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
-
-    // Edit Team Modal states
-    const [isEditTeamModalOpen, setIsEditTeamModalOpen] = useState(false);
-    const [editingTeam, setEditingTeam] = useState<{
-        id: number;
-        name: string;
-        type: "permanent" | "weekly";
-        weekNumber?: number;
-        members: TeamMember[];
-    } | null>(null);
-    const [editTeamName, setEditTeamName] = useState("");
-    const [editTeamMembers, setEditTeamMembers] = useState<number[]>([]);
-    const [editMemberMode, setEditMemberMode] = useState<"select" | "paste">("select");
-    const [editExcelPasteData, setEditExcelPasteData] = useState("");
-    const [editParsedMembers, setEditParsedMembers] = useState<Array<{
-        inputValue: string;
-        matchedStudent: TeamMember | null;
-        status: "matched" | "not_found" | "already_in_team";
-    }>>([]);
-    const [isParsingEditMembers, setIsParsingEditMembers] = useState(false);
-
-    // Bulk add students (Excel paste) states
-    const [addStudentMode, setAddStudentMode] = useState<"select" | "paste">("select");
-    const [excelPasteData, setExcelPasteData] = useState("");
-    const [parsedStudents, setParsedStudents] = useState<Array<{
-        inputValue: string;
-        matchedStudent: typeof studentsList[0] | null;
-        status: "matched" | "not_found" | "already_enrolled";
-    }>>([]);
-
-    // Assignment states - using API types
-    interface LocalSubItem {
-        id?: number;
-        name: string;
-        max_score: number;
-    }
-    const [assignments, setAssignments] = useState<AssignmentType[]>([]);
-    const [isAssignmentsLoading, setIsAssignmentsLoading] = useState(false);
-    const [isAddAssignmentModalOpen, setIsAddAssignmentModalOpen] = useState(false);
-    const [newAssignment, setNewAssignment] = useState<{
-        name: string;
-        assignment_type: "individual" | "permanent_group" | "weekly_group" | "assignment";
-        week_number?: number;
-        linked_attendance_session_id?: number | null;
-        linked_attendance_session_ids: number[]; // New: array of session IDs
-        attendance_condition: "and" | "or"; // New: condition for multi-session
-        hasSubItems: boolean;
-        subItems: LocalSubItem[];
-        maxScore: number;
-        dueDate: string;
-        description: string;
-    }>({
-        name: "",
-        assignment_type: "individual",
-        linked_attendance_session_id: null,
-        linked_attendance_session_ids: [], // New: empty array
-        attendance_condition: "or", // New: default to 'or'
-        hasSubItems: false,
-        subItems: [],
-        maxScore: 10,
-        dueDate: "",
-        description: "",
-    });
-    const [expandedAssignments, setExpandedAssignments] = useState<number[]>([]);
-    const [editingAssignment, setEditingAssignment] = useState<AssignmentType | null>(null);
-
-    // Attendance sessions for assignment linking
-    const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
-
-    // Scores Tab States
-    const [selectedAssignmentForScore, setSelectedAssignmentForScore] = useState<AssignmentType | null>(null);
-    const [scoresData, setScoresData] = useState<ScoresData | null>(null);
-    const [isScoresLoading, setIsScoresLoading] = useState(false);
-    const [scoreSearchQuery, setScoreSearchQuery] = useState("");
-    const [scoreEntries, setScoreEntries] = useState<Record<string, number | "">>({});
-    const [isSavingScores, setIsSavingScores] = useState(false);
-    const [groupsForScore, setGroupsForScore] = useState<Group[]>([]);
-    const [selectedGroupForScore, setSelectedGroupForScore] = useState<Group | null>(null);
-    const [isGroupScoreModalOpen, setIsGroupScoreModalOpen] = useState(false);
-    const [groupScoreValue, setGroupScoreValue] = useState<number>(0);
-    const [groupSubItemScores, setGroupSubItemScores] = useState<Record<number, number>>({});
     
-    // New Score Modal State
-    const [isScoreModalOpen, setIsScoreModalOpen] = useState(false);
+    // Team UI states
+    const [selectedWeek, setSelectedWeek] = useState(1);
+    const [totalWeeks] = useState(15);
+    const [selectedSectionForTeam, setSelectedSectionForTeam] = useState<number | "all">("all");
+    
+    // Score modal specific state
     const [scoreModalAssignment, setScoreModalAssignment] = useState<AssignmentType | null>(null);
-
-    // Bonus Score Modal State
-    const [isBonusScoreModalOpen, setIsBonusScoreModalOpen] = useState(false);
-
-    const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Calculate total students
-    const totalStudents = course?.sections?.reduce((acc, section) => acc + (section.studentCount || 0), 0) || 0;
-
-    // Fetch course details
-    const fetchCourse = useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const response = await courseService.getCourseById(courseId);
-            if (response.success && response.data) {
-                setCourse(response.data);
-            }
-        } catch (error) {
-            console.error("Error fetching course:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถโหลดข้อมูลรายวิชาได้",
-                color: "danger",
-            });
-        } finally {
-            setIsLoading(false);
-        }
-    }, [courseId]);
-
-    // Fetch course overview dashboard data
-    const fetchOverview = useCallback(async () => {
-        console.log("📊 fetchOverview called");
-        setIsOverviewLoading(true);
-        try {
-            const response = await courseService.getCourseOverview(courseId);
-            console.log("📊 Overview response:", response);
-            if (response.success && response.data) {
-                console.log("📊 Setting overview data, totalAssignments:", response.data.summary?.totalAssignments);
-                setOverview(response.data);
-            }
-        } catch (error) {
-            console.error("Error fetching overview:", error);
-        } finally {
-            setIsOverviewLoading(false);
-        }
-    }, [courseId]);
-
-    // Fetch TAs list for dropdown
-    const fetchTAsList = useCallback(async () => {
-        setIsPeopleLoading(true);
-        try {
-            const response = await courseService.getTAsList();
-            if (response.success && response.data) {
-                setTasList(response.data);
-                console.log("Fetched TAs:", response.data);
-            }
-        } catch (error) {
-            console.error("Error fetching TAs:", error);
-        } finally {
-            setIsPeopleLoading(false);
-        }
-    }, []);
-
-    // Fetch instructors list for dropdown (for adding instructors to course)
-    const fetchInstructorsList = useCallback(async () => {
-        try {
-            const response = await courseService.getInstructors();
-            if (response.success && response.data) {
-                setInstructorsList(response.data);
-            }
-        } catch (error) {
-            console.error("Error fetching instructors:", error);
-        }
-    }, []);
-
-    // Fetch students list for dropdown
-    const fetchStudentsList = useCallback(async () => {
-        setIsStudentsLoading(true);
-        try {
-            const response = await studentService.getStudents({ limit: 1000, status: "active" });
-            if (response.success && response.data) {
-                setStudentsList(response.data.students);
-            }
-        } catch (error) {
-            console.error("Error fetching students:", error);
-        } finally {
-            setIsStudentsLoading(false);
-        }
-    }, []);
-
-    // Fetch students in section
-    const fetchSectionStudents = async (sectionId: number) => {
-        try {
-            const response = await courseService.getSectionStudents(courseId, sectionId);
-            if (response.success && response.data) {
-                setSectionStudents(prev => ({ ...prev, [sectionId]: response.data! }));
-            }
-        } catch (error) {
-            console.error("Error fetching section students:", error);
-        }
-    };
-
-    // Fetch all section students (for knowing who is already enrolled)
-    const fetchAllSectionStudents = useCallback(async () => {
-        if (!course?.sections) return;
-        for (const section of course.sections) {
-            try {
-                const response = await courseService.getSectionStudents(courseId, section.id);
-                if (response.success && response.data) {
-                    setSectionStudents(prev => ({ ...prev, [section.id]: response.data! }));
-                }
-            } catch (error) {
-                console.error(`Error fetching section ${section.id} students:`, error);
-            }
-        }
-    }, [course?.sections, courseId]);
-
-    // Fetch teams from backend
-    const fetchTeams = useCallback(async () => {
-        setIsTeamsLoading(true);
-        try {
-            // Natural sort function for team names (กลุ่ม 1, กลุ่ม 2, ..., กลุ่ม 10)
-            const naturalSort = (a: { name: string; id: number }, b: { name: string; id: number }) => {
-                // Extract number from name if exists
-                const numA = parseInt(a.name.match(/\d+/)?.[0] || '0');
-                const numB = parseInt(b.name.match(/\d+/)?.[0] || '0');
-                
-                // If both have numbers, sort by number
-                if (numA && numB) {
-                    return numA - numB;
-                }
-                // Otherwise sort by id (creation order)
-                return a.id - b.id;
-            };
-
-            // Fetch permanent teams
-            const permanentResponse = await courseService.getTeams(courseId, 'permanent');
-            if (permanentResponse.success && permanentResponse.data) {
-                const transformedPermanent: PermanentTeam[] = permanentResponse.data.map(t => ({
-                    id: t.id,
-                    name: t.name,
-                    members: t.members.map(m => ({
-                        id: m.id,
-                        student_id: m.student_id,
-                        full_name: m.full_name,
-                    })),
-                    createdAt: t.created_at,
-                }));
-                // Sort teams by name (natural sort)
-                transformedPermanent.sort(naturalSort);
-                setPermanentTeams(transformedPermanent);
-            }
-
-            // Fetch weekly teams
-            const weeklyResponse = await courseService.getTeams(courseId, 'temporary');
-            if (weeklyResponse.success && weeklyResponse.data) {
-                const groupedByWeek: Record<number, WeeklyTeam[]> = {};
-                weeklyResponse.data.forEach(t => {
-                    const weekNum = t.week_number || 1;
-                    if (!groupedByWeek[weekNum]) {
-                        groupedByWeek[weekNum] = [];
-                    }
-                    groupedByWeek[weekNum].push({
-                        id: t.id,
-                        name: t.name,
-                        members: t.members.map(m => ({
-                            id: m.id,
-                            student_id: m.student_id,
-                            full_name: m.full_name,
-                        })),
-                        weekNumber: weekNum,
-                    });
-                });
-                // Sort teams in each week by name (natural sort)
-                Object.keys(groupedByWeek).forEach(week => {
-                    groupedByWeek[parseInt(week)].sort(naturalSort);
-                });
-                setWeeklyTeams(groupedByWeek);
-            }
-        } catch (error) {
-            console.error("Error fetching teams:", error);
-        } finally {
-            setIsTeamsLoading(false);
-        }
-    }, [courseId]);
-
-    // Fetch assignments from API
-    const fetchAssignments = useCallback(async () => {
-        if (!courseId) return;
-        
-        setIsAssignmentsLoading(true);
-        try {
-            // courseId is already a string (nanoid format)
-            const data = await assignmentService.getAssignments(courseId);
-            setAssignments(data);
-        } catch (error) {
-            console.error("Error fetching assignments:", error);
-        } finally {
-            setIsAssignmentsLoading(false);
-        }
-    }, [courseId]);
-
-        const fetchAssignmentsNew = useCallback(async () => {
-        if (!courseId) return;
-        
-        // setIsAssignmentsLoading(true);
-        try {
-            // courseId is already a string (nanoid format)
-            const data = await assignmentService.getAssignments(courseId);
-            setAssignments(data);
-        } catch (error) {
-            console.error("Error fetching assignments:", error);
-        }
-    }, [courseId]);
-
-    // Fetch attendance sessions for assignment linking
-    const fetchAttendanceSessions = useCallback(async () => {
-        if (!courseId) return;
-        try {
-            const data = await attendanceService.getSessions(courseId);
-            setAttendanceSessions(data);
-        } catch (error) {
-            console.error("Error fetching attendance sessions:", error);
-        }
-    }, [courseId]);
-
-    // Fetch scores for selected assignment
-    const fetchScoresForAssignment = useCallback(async (assignment: AssignmentType) => {
-        setIsScoresLoading(true);
-        try {
-            const data = await scoreService.getScores(assignment.id);
-            setScoresData(data);
-            // Initialize score entries from existing scores
-            const entries: Record<string, number | ""> = {};
-            if (data && data.student_scores) {
-                data.student_scores.forEach(studentScore => {
-                    const key = `${studentScore.student.id}`;
-                    entries[key] = studentScore.score !== null && studentScore.score !== undefined ? studentScore.score : "";
-                });
-            }
-            setScoreEntries(entries);
-
-            // Fetch groups if this is a group assignment
-            if (assignment.assignment_type !== "individual") {
-                const groups = await scoreService.getGroupsForAssignment(assignment.id);
-                setGroupsForScore(groups);
-            } else {
-                setGroupsForScore([]);
-            }
-        } catch (error) {
-            console.error("Error fetching scores:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถโหลดข้อมูลคะแนนได้",
-                color: "danger",
-            });
-        } finally {
-            setIsScoresLoading(false);
-        }
-    }, []);
-
-    // Save individual score
-    const saveScore = async (studentId: number, score: number) => {
-        if (!selectedAssignmentForScore) return;
-        try {
-            await scoreService.submitScore({
-                assignment_id: selectedAssignmentForScore.id,
-                student_id: studentId,
-                score,
-            });
-            addToast({
-                title: "บันทึกแล้ว",
-                description: "บันทึกคะแนนเรียบร้อย",
-                color: "success",
-            });
-            
-            // Refresh overview data
-            fetchOverview();
-            
-            // Emit real-time update
-            isUpdatingRef.current = true;
-            emitDataUpdate("score", "update", selectedAssignmentForScore.id);
-            setTimeout(() => { isUpdatingRef.current = false; }, 500);
-        } catch (error) {
-            console.error("Error saving score:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถบันทึกคะแนนได้",
-                color: "danger",
-            });
-        }
-    };
-
-    // Save all scores
-    const saveAllScores = async () => {
-        if (!selectedAssignmentForScore || !scoresData) return;
-        setIsSavingScores(true);
-        try {
-            const scores: { student_id: number; score: number; comment?: string }[] = [];
-            
-            scoresData.student_scores.forEach(studentScore => {
-                const student = studentScore.student;
-                const key = `${student.id}`;
-                const scoreValue = scoreEntries[key];
-                if (scoreValue !== "" && scoreValue !== undefined) {
-                    scores.push({
-                        student_id: student.id,
-                        score: Number(scoreValue),
-                    });
-                }
-            });
-
-            if (scores.length > 0) {
-                await scoreService.submitBulkScores({
-                    assignment_id: selectedAssignmentForScore.id,
-                    scores,
-                });
-                addToast({
-                    title: "บันทึกแล้ว",
-                    description: `บันทึกคะแนนทั้งหมด ${scores.length} รายการเรียบร้อย`,
-                    color: "success",
-                });
-                
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("score", "bulk", selectedAssignmentForScore.id);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                
-                // Refresh scores and overview
-                fetchScoresForAssignment(selectedAssignmentForScore);
-                fetchOverview();
-            }
-        } catch (error) {
-            console.error("Error saving all scores:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถบันทึกคะแนนได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSavingScores(false);
-        }
-    };
-
-    // Save group score
-    const saveGroupScore = async () => {
-        if (!selectedAssignmentForScore || !selectedGroupForScore) return;
-        setIsSavingScores(true);
-        try {
-            await scoreService.submitGroupScore({
-                assignment_id: selectedAssignmentForScore.id,
-                group_id: selectedGroupForScore.id,
-                score: groupScoreValue,
-            });
-            addToast({
-                title: "บันทึกแล้ว",
-                description: `บันทึกคะแนนกลุ่ม ${selectedGroupForScore.name} เรียบร้อย`,
-                color: "success",
-            });
-            
-            // Emit real-time update
-            isUpdatingRef.current = true;
-            emitDataUpdate("score", "update", selectedAssignmentForScore.id);
-            setTimeout(() => { isUpdatingRef.current = false; }, 500);
-            
-            setIsGroupScoreModalOpen(false);
-            fetchScoresForAssignment(selectedAssignmentForScore);
-            fetchOverview(); // Refresh overview data
-        } catch (error) {
-            console.error("Error saving group score:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถบันทึกคะแนนกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSavingScores(false);
-        }
-    };
-
-    // Initial data loading - fetch all data in parallel (run only once on mount)
-    useEffect(() => {
-        // เรียกทุก API พร้อมกัน แต่ละตัวจัดการ loading state ของตัวเอง
-        fetchCourse();
-        fetchOverview();
-        fetchTAsList();
-        fetchInstructorsList();
-        fetchStudentsList();
-        fetchTeams(); // เรียกเลยไม่ต้องรอ course
-        fetchAssignments(); // เรียก assignments
-        fetchAttendanceSessions(); // เรียก attendance sessions สำหรับลิงก์งาน
-
-        // Fetch user role and pending approval count
-        const fetchUserRole = async () => {
-            const user = await authService.getCurrentUser();
-            if (user) {
-                setUserRole(user.role);
-                setCurrentUserId(user.id);
-                // Fetch pending count only for instructor
-                if (user.role === 'instructor') {
-                    try {
-                        const count = await scoreEditRequestService.getPendingCount(courseId);
-                        setPendingApprovalCount(count);
-                    } catch (error) {
-                        console.error('Failed to fetch pending approval count:', error);
-                    }
-                }
-            }
-        };
-        fetchUserRole();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [courseId]); // Only re-run when courseId changes
-
-    // Real-time sync - Subscribe to updates
-    useEffect(() => {
-        subscribeToUpdates();
-        return () => unsubscribeFromUpdates();
-    }, [subscribeToUpdates, unsubscribeFromUpdates]);
-
-    // Handle real-time updates from other tabs/users
-    useEffect(() => {
-        const unsubscribe = onDataUpdate((data) => {
-            if (isUpdatingRef.current) return;
-            
-            // Refetch based on resource type
-            switch (data.resource) {
-                case "assignment":
-                    console.log("📥 Assignment updated from another source");
-                    fetchAssignmentsNew();
-                    fetchOverview(); // Update overview when assignments change
-                    break;
-                case "score":
-                    console.log("📥 Score updated from another source");
-                    if (selectedAssignmentForScore) {
-                        fetchScoresForAssignment(selectedAssignmentForScore);
-                    }
-                    fetchOverview(); // Update overview when scores change
-                    break;
-                case "attendance":
-                    console.log("📥 Attendance updated from another source");
-                    fetchAttendanceSessions();
-                    fetchOverview(); // Update overview when attendance changes
-                    break;
-                case "section":
-                case "group":
-                    console.log("📥 Section/Group updated from another source");
-                    fetchCourse();
-                    fetchTeams();
-                    fetchAllSectionStudents();
-                    fetchOverview(); // Update overview when sections/groups change
-                    break;
-                case "student":
-                    console.log("📥 Student updated from another source");
-                    fetchAllSectionStudents();
-                    fetchOverview(); // Update overview when students change
-                    break;
-            }
-        });
-        return unsubscribe;
-    }, [onDataUpdate, fetchAssignmentsNew, fetchAttendanceSessions, fetchCourse, fetchTeams, fetchAllSectionStudents, selectedAssignmentForScore, fetchScoresForAssignment, fetchOverview]);
-
-    // Refetch data when changing tabs (to get fresh data)
-    useEffect(() => {
-        switch (activeTab) {
-            case "assignments":
-                fetchAssignmentsNew();
-                break;
-            case "attendance":
-                fetchAttendanceSessions();
-                break;
-            case "sections":
-                fetchCourse();
-                fetchAllSectionStudents();
-                break;
-            case "scores":
-            case "score-summary":
-                fetchAssignmentsNew();
-                break;
-            case "overview":
-                fetchOverview();
-                break;
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab]);
-
-    // Fetch all section students after course is loaded
-    useEffect(() => {
-        if (course?.sections && course.sections.length > 0) {
-            fetchAllSectionStudents();
-        }
-    }, [course?.sections, fetchAllSectionStudents]);
-
-    // Toggle section expansion
-    const toggleSection = (sectionId: number) => {
-        if (expandedSections.includes(sectionId)) {
-            setExpandedSections(expandedSections.filter(id => id !== sectionId));
-        } else {
-            setExpandedSections([...expandedSections, sectionId]);
-            if (!sectionStudents[sectionId]) {
-                fetchSectionStudents(sectionId);
-            }
-        }
-    };
-
-    // Add section
-    const handleAddSection = async () => {
-        if (!newSectionNo.trim()) {
-            addToast({
-                title: "ข้อมูลไม่ครบ",
-                description: "กรุณากรอกหมายเลขกลุ่มเรียน",
-                color: "warning",
-            });
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.addSection(courseId, {
-                section_no: newSectionNo,
-                note: newSectionNote || undefined,
-            });
-            if (response.success && response.data) {
-                // อัปเดต local state แทนการรีโหลดทั้งหน้า
-                const newSection = response.data;
-                setCourse(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        sections: [...(prev.sections || []), {
-                            id: newSection.id,
-                            course_id: courseId,
-                            section_no: newSection.section_no,
-                            note: newSection.note,
-                            created_at: newSection.created_at,
-                            studentCount: 0
-                        }]
-                    };
-                });
-                addToast({
-                    title: "สำเร็จ",
-                    description: "เพิ่มกลุ่มเรียนสำเร็จ",
-                    color: "success",
-                });
-                
-                // Refresh overview data
-                fetchOverview();
-                
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("section", "create", newSection.id);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                
-                setIsAddSectionModalOpen(false);
-                setNewSectionNo("");
-                setNewSectionNote("");
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถเพิ่มกลุ่มเรียนได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Open delete section modal
-    const handleRemoveSection = (sectionId: number) => {
-        const section = course?.sections?.find(s => s.id === sectionId);
-        if (!section) return;
-
-        setDeleteType("section");
-        setDeleteTarget({
-            sectionId: sectionId,
-            sectionNo: section.section_no,
-            sectionStudentCount: section.studentCount || 0
-        });
-        setIsDeleteModalOpen(true);
-    };
-
-    // Actually remove section (called after confirmation)
-    const confirmRemoveSection = async () => {
-        if (!deleteTarget?.sectionId) return;
-
-        const sectionId = deleteTarget.sectionId;
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.removeSection(courseId, sectionId);
-            if (response.success) {
-                // อัปเดต local state แทนการรีโหลดทั้งหน้า
-                setCourse(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        sections: prev.sections?.filter(s => s.id !== sectionId) || []
-                    };
-                });
-                // ลบ students ของ section นี้ออกจาก state ด้วย
-                setSectionStudents(prev => {
-                    const updated = { ...prev };
-                    delete updated[sectionId];
-                    return updated;
-                });
-                // ลบออกจาก expanded sections
-                setExpandedSections(prev => prev.filter(id => id !== sectionId));
-                addToast({
-                    title: "สำเร็จ",
-                    description: `ลบกลุ่มเรียน ${deleteTarget.sectionNo} สำเร็จ`,
-                    color: "success",
-                });
-                
-                // Refresh overview data
-                fetchOverview();
-                
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("section", "delete", sectionId);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                
-                setIsDeleteModalOpen(false);
-                setDeleteTarget(null);
-                setDeleteType(null);
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถลบกลุ่มเรียนได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Add TA (supports multiple)
-    const handleAddTA = async () => {
-        if (selectedTAIds.length === 0) {
-            addToast({
-                title: "ข้อมูลไม่ครบ",
-                description: "กรุณาเลือกผู้ช่วยสอนอย่างน้อย 1 คน",
-                color: "warning",
-            });
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.bulkAddTAs(courseId, selectedTAIds);
-            if (response.success && response.data) {
-                // อัปเดต local state ด้วย TAs ที่เพิ่มสำเร็จ
-                const addedTAs = response.data.added;
-                if (addedTAs && addedTAs.length > 0) {
-                    setCourse(prev => {
-                        if (!prev) return prev;
-                        const newTAs = addedTAs.map(ta => ({
-                            id: ta.id,
-                            full_name: ta.full_name,
-                            email: ta.email,
-                            username: ta.username,
-                            avatar: ta.avatar,
-                            CourseTA: { assigned_at: new Date().toISOString() }
-                        }));
-                        return {
-                            ...prev,
-                            tas: [...(prev.tas || []), ...newTAs]
-                        };
-                    });
-                }
-                addToast({
-                    title: "สำเร็จ",
-                    description: `เพิ่มผู้ช่วยสอน ${addedTAs.length} คนสำเร็จ`,
-                    color: "success",
-                });
-                setIsAddTAModalOpen(false);
-                setSelectedTAIds([]);
-                setTASearchQuery("");
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถเพิ่มผู้ช่วยสอนได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Toggle TA selection
-    const toggleTASelection = (taId: number) => {
-        setSelectedTAIds(prev => 
-            prev.includes(taId) 
-                ? prev.filter(id => id !== taId)
-                : [...prev, taId]
-        );
-    };
-
-    // Select all available TAs
-    const selectAllAvailableTAs = () => {
-        const existingTAIds = course?.tas?.map(ta => ta.id) || [];
-        const availableTAIds = tasList
-            .filter(ta => !existingTAIds.includes(ta.id))
-            .map(ta => ta.id);
-        setSelectedTAIds(availableTAIds);
-    };
-
-    // Clear TA selection
-    const clearTASelection = () => {
-        setSelectedTAIds([]);
-    };
-
-    // Open delete TA modal
-    const handleRemoveTA = (userId: number) => {
-        const ta = course?.tas?.find(t => t.id === userId);
-        if (!ta) return;
-
-        setDeleteType("ta");
-        setDeleteTarget({
-            taId: userId,
-            taName: ta.full_name,
-            taEmail: ta.email || ta.username,
-            taAvatar: ta.avatar || undefined,
-        });
-        setIsDeleteModalOpen(true);
-    };
-
-    // Actually remove TA (called after confirmation)
-    const confirmRemoveTA = async () => {
-        if (!deleteTarget?.taId) return;
-
-        const userId = deleteTarget.taId;
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.removeTA(courseId, userId);
-            if (response.success) {
-                // อัปเดต local state แทนการรีโหลดทั้งหน้า
-                setCourse(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        tas: prev.tas?.filter(ta => ta.id !== userId) || []
-                    };
-                });
-                addToast({
-                    title: "สำเร็จ",
-                    description: `นำ ${deleteTarget.taName} ออกจากรายวิชาแล้ว`,
-                    color: "success",
-                });
-                setIsDeleteModalOpen(false);
-                setDeleteTarget(null);
-                setDeleteType(null);
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถนำผู้ช่วยสอนออกได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+    const [scoreSearchQuery, setScoreSearchQuery] = useState("");
 
     // ============================================
-    // Instructor Management Handlers
+    // Computed Values (Memoized)
     // ============================================
+    
+    const totalStudents = useMemo(() => {
+        return course?.sections?.reduce((acc, section) => acc + (section.studentCount || 0), 0) || 0;
+    }, [course?.sections]);
 
-    // Add instructors to course
-    const handleAddInstructors = async () => {
-        if (selectedInstructorIds.length === 0) {
-            addToast({
-                title: "กรุณาเลือกอาจารย์",
-                description: "เลือกอาจารย์อย่างน้อย 1 คน",
-                color: "warning",
-            });
-            return;
-        }
+    const availableTAs = useMemo(() => {
+        return tasList.filter(ta => !course?.tas?.some(courseTa => courseTa.id === ta.id));
+    }, [tasList, course?.tas]);
 
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.bulkAddCourseInstructors(courseId, selectedInstructorIds);
-            if (response.success) {
-                addToast({
-                    title: "สำเร็จ",
-                    description: `เพิ่มอาจารย์ ${response.data?.added?.length || selectedInstructorIds.length} คนสำเร็จ`,
-                    color: "success",
-                });
-                // Refresh course data
-                fetchCourse();
-                setIsAddInstructorModalOpen(false);
-                setSelectedInstructorIds([]);
-                setInstructorSearchQuery("");
-            } else {
-                const errorMessage = typeof response.error === 'object' && response.error !== null
-                    ? (response.error as { message?: string }).message
-                    : response.error || "ไม่สามารถเพิ่มอาจารย์ได้";
-                addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: errorMessage,
-                    color: "danger",
-                });
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถเพิ่มอาจารย์ได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Remove instructor from course
-    const handleRemoveInstructor = (userId: number) => {
-        const instructor = course?.instructors?.find(i => i.id === userId);
-        if (!instructor) return;
-
-        setDeleteType("instructor" as any);
-        setDeleteTarget({
-            instructorId: userId,
-            instructorName: instructor.full_name,
-            instructorEmail: instructor.email || undefined,
-        } as any);
-        setIsDeleteModalOpen(true);
-    };
-
-    // Actually remove instructor (called after confirmation)
-    const confirmRemoveInstructor = async () => {
-        if (!(deleteTarget as any)?.instructorId) return;
-
-        const userId = (deleteTarget as any).instructorId;
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.removeCourseInstructor(courseId, userId);
-            if (response.success) {
-                // อัปเดต local state
-                setCourse(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        instructors: prev.instructors?.filter(inst => inst.id !== userId) || []
-                    };
-                });
-                addToast({
-                    title: "สำเร็จ",
-                    description: `นำ ${(deleteTarget as any).instructorName} ออกจากรายวิชาแล้ว`,
-                    color: "success",
-                });
-                setIsDeleteModalOpen(false);
-                setDeleteTarget(null);
-                setDeleteType(null);
-            } else {
-                const errorMessage = typeof response.error === 'object' && response.error !== null
-                    ? (response.error as { message?: string }).message
-                    : response.error || "ไม่สามารถนำอาจารย์ออกได้";
-                addToast({
-                    title: "เกิดข้อผิดพลาด",
-                    description: errorMessage,
-                    color: "danger",
-                });
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถนำอาจารย์ออกได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Filter instructors (exclude those already in course)
-    const filteredInstructors = instructorsList.filter(instructor => {
-        // Exclude instructors already in this course
+    const filteredInstructors = useMemo(() => {
         const existingIds = course?.instructors?.map(i => i.id) || [];
-        if (existingIds.includes(instructor.id)) return false;
-        
-        // Search filter
-        if (instructorSearchQuery) {
-            const query = instructorSearchQuery.toLowerCase();
-            return instructor.full_name.toLowerCase().includes(query) ||
-                   instructor.email?.toLowerCase().includes(query);
-        }
-        return true;
-    });
-
-    // Select all instructors
-    const selectAllInstructors = () => {
-        const existingIds = course?.instructors?.map(i => i.id) || [];
-        const availableIds = instructorsList
-            .filter(inst => !existingIds.includes(inst.id))
-            .map(inst => inst.id);
-        setSelectedInstructorIds(availableIds);
-    };
-
-    // Clear instructor selection
-    const clearInstructorSelection = () => {
-        setSelectedInstructorIds([]);
-    };
-
-    // Open add student modal
-    const openAddStudentModal = (sectionId: number) => {
-        setSelectedSectionId(sectionId);
-        setSelectedStudentId("");
-        setStudentSearchQuery("");
-        setIsAddStudentModalOpen(true);
-    };
-
-    // Add student to section
-    const handleAddStudent = async () => {
-        if (!selectedSectionId || !selectedStudentId) {
-            addToast({
-                title: "ข้อมูลไม่ครบ",
-                description: "กรุณาเลือกนักศึกษา",
-                color: "warning",
-            });
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.addStudentToSection(
-                courseId,
-                selectedSectionId,
-                parseInt(selectedStudentId)
-            );
-            if (response.success) {
-                // Find the student info from studentsList
-                const addedStudent = studentsList.find(s => s.id === parseInt(selectedStudentId));
-                if (addedStudent) {
-                    // Update sectionStudents state locally
-                    setSectionStudents(prev => ({
-                        ...prev,
-                        [selectedSectionId]: [
-                            ...(prev[selectedSectionId] || []),
-                            {
-                                id: addedStudent.id,
-                                student_id: addedStudent.student_id,
-                                full_name: addedStudent.full_name,
-                                email: addedStudent.email,
-                                is_active: addedStudent.is_active,
-                                enrolled_at: new Date().toISOString()
-                            }
-                        ]
-                    }));
-                    // Update course sections studentCount
-                    setCourse(prev => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            sections: prev.sections?.map(section =>
-                                section.id === selectedSectionId
-                                    ? { ...section, studentCount: (section.studentCount || 0) + 1 }
-                                    : section
-                            )
-                        };
-                    });
-                }
-                addToast({
-                    title: "สำเร็จ",
-                    description: "เพิ่มนักศึกษาสำเร็จ",
-                    color: "success",
-                });
-                setIsAddStudentModalOpen(false);
-                setSelectedStudentId("");
-                setStudentSearchQuery("");
+        return instructorsList.filter(instructor => {
+            if (existingIds.includes(instructor.id)) return false;
+            if (modals.instructorModal.searchQuery) {
+                const query = modals.instructorModal.searchQuery.toLowerCase();
+                return instructor.full_name.toLowerCase().includes(query) ||
+                       instructor.email?.toLowerCase().includes(query);
             }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถเพิ่มนักศึกษาได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    // Parse Excel paste data to find matching students
-    const parseExcelData = useCallback((pasteData: string) => {
-        if (!pasteData.trim() || !selectedSectionId) {
-            setParsedStudents([]);
-            return;
-        }
-
-        // Split by newlines, tabs, or commas to handle different Excel formats
-        const lines = pasteData
-            .split(/[\n\r]+/)
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
-
-        const enrolledStudentIds = new Set(
-            (sectionStudents[selectedSectionId] || []).map(s => s.student_id)
-        );
-
-        const results = lines.map(inputValue => {
-            // Try to find matching student by student_id or full_name
-            const matchedStudent = studentsList.find(student =>
-                student.student_id.toLowerCase() === inputValue.toLowerCase() ||
-                student.full_name.toLowerCase().includes(inputValue.toLowerCase()) ||
-                inputValue.toLowerCase().includes(student.student_id.toLowerCase())
-            );
-
-            if (!matchedStudent) {
-                return { inputValue, matchedStudent: null, status: "not_found" as const };
-            }
-
-            if (enrolledStudentIds.has(matchedStudent.student_id)) {
-                return { inputValue, matchedStudent, status: "already_enrolled" as const };
-            }
-
-            return { inputValue, matchedStudent, status: "matched" as const };
+            return true;
         });
+    }, [instructorsList, course?.instructors, modals.instructorModal.searchQuery]);
 
-        setParsedStudents(results);
-    }, [studentsList, selectedSectionId, sectionStudents]);
-
-    // Bulk add students from parsed Excel data
-    const handleBulkAddStudents = async () => {
-        const studentsToAdd = parsedStudents
-            .filter(p => p.status === "matched" && p.matchedStudent)
-            .map(p => p.matchedStudent!);
-
-        if (studentsToAdd.length === 0) {
-            addToast({
-                title: "ไม่มีนักศึกษาที่สามารถเพิ่มได้",
-                description: "กรุณาตรวจสอบรายชื่อที่วางอีกครั้ง",
-                color: "warning",
-            });
-            return;
-        }
-
-        if (!selectedSectionId) return;
-
-        setIsSubmitting(true);
-
-        try {
-            // ใช้ bulk API แทนการ loop
-            const studentIds = studentsToAdd.map(s => s.id);
-            const response = await courseService.bulkAddStudentsToSection(
-                courseId,
-                selectedSectionId,
-                studentIds
-            );
-
-            if (response.success) {
-                // อัพเดท local state
-                const addedIds = response.data?.addedStudentIds || studentIds;
-                const addedStudents = studentsToAdd.filter(s => addedIds.includes(s.id));
-
-                if (addedStudents.length > 0) {
-                    setSectionStudents(prev => ({
-                        ...prev,
-                        [selectedSectionId]: [
-                            ...(prev[selectedSectionId] || []),
-                            ...addedStudents.map(student => ({
-                                id: student.id,
-                                student_id: student.student_id,
-                                full_name: student.full_name,
-                                email: student.email,
-                                is_active: student.is_active,
-                                enrolled_at: new Date().toISOString()
-                            }))
-                        ]
-                    }));
-
-                    setCourse(prev => {
-                        if (!prev) return prev;
-                        return {
-                            ...prev,
-                            sections: prev.sections?.map(section =>
-                                section.id === selectedSectionId
-                                    ? { ...section, studentCount: (section.studentCount || 0) + addedStudents.length }
-                                    : section
-                            )
-                        };
+    // Get all enrolled students (for team management)
+    const getAllEnrolledStudents = useCallback((): TeamMember[] => {
+        const students: TeamMember[] = [];
+        Object.values(sectionStudents).forEach(sectionList => {
+            sectionList.forEach(s => {
+                if (!students.some(existing => existing.id === s.id)) {
+                    students.push({
+                        id: s.id,
+                        student_id: s.student_id,
+                        full_name: s.full_name
                     });
-                }
-
-                const addedCount = response.data?.addedCount || addedStudents.length;
-                const skippedCount = response.data?.skippedCount || 0;
-
-                addToast({
-                    title: "เพิ่มนักศึกษาสำเร็จ",
-                    description: `เพิ่มนักศึกษาได้ ${addedCount} คน${skippedCount > 0 ? ` (ข้าม ${skippedCount} คน)` : ""}`,
-                    color: skippedCount === 0 ? "success" : "warning",
-                });
-                
-                // Refresh overview data
-                fetchOverview();
-                
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("section", "update", selectedSectionId);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-            }
-        } catch (error: unknown) {
-            const errorMessage = error instanceof Error ? error.message : 'ไม่สามารถเพิ่มนักศึกษาได้';
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: errorMessage,
-                color: "danger",
-            });
-        }
-
-        // Reset states
-        setIsAddStudentModalOpen(false);
-        setExcelPasteData("");
-        setParsedStudents([]);
-        setAddStudentMode("select");
-        setIsSubmitting(false);
-    };
-
-    // Reset modal state when closing
-    const resetAddStudentModal = () => {
-        setIsAddStudentModalOpen(false);
-        setSelectedStudentId("");
-        setStudentSearchQuery("");
-        setExcelPasteData("");
-        setParsedStudents([]);
-        setAddStudentMode("select");
-    };
-
-    // Open delete student confirmation modal
-    const openDeleteStudentModal = (sectionId: number, student: SectionStudent) => {
-        const section = course?.sections?.find(s => s.id === sectionId);
-
-        // Find all teams this student belongs to
-        const permanentTeam = permanentTeams.find(t => t.members.some(m => m.id === student.id));
-        const weeklyTeamsWithStudent: { weekNumber: number; teamName: string }[] = [];
-        Object.entries(weeklyTeams).forEach(([weekNum, teams]) => {
-            teams.forEach(team => {
-                if (team.members.some(m => m.id === student.id)) {
-                    weeklyTeamsWithStudent.push({ weekNumber: parseInt(weekNum), teamName: team.name });
                 }
             });
         });
+        return students;
+    }, [sectionStudents]);
 
-        setDeleteType("student");
-        setDeleteTarget({
-            studentId: student.id,
-            studentName: student.full_name,
-            studentCode: student.student_id,
-            sectionId: sectionId,
-            sectionNo: section?.section_no
+    // Get students in a specific section
+    const getStudentsInSection = useCallback((sectionId: number): TeamMember[] => {
+        return (sectionStudents[sectionId] || []).map(s => ({
+            id: s.id,
+            student_id: s.student_id,
+            full_name: s.full_name
+        }));
+    }, [sectionStudents]);
+
+    // Get all enrolled student IDs
+    const getAllEnrolledStudentIds = useCallback(() => {
+        const enrolledIds = new Set<number>();
+        Object.values(sectionStudents).forEach(students => {
+            students.forEach(s => enrolledIds.add(s.id));
         });
-        setIsDeleteModalOpen(true);
-    };
+        return enrolledIds;
+    }, [sectionStudents]);
 
-    // Actually remove student from section (called after confirmation)
-    const confirmRemoveStudent = async () => {
-        if (!deleteTarget?.sectionId || !deleteTarget?.studentId) return;
+    // Get available students (not enrolled)
+    const getAvailableStudents = useCallback(() => {
+        const enrolledIds = getAllEnrolledStudentIds();
+        return studentsList.filter(student => !enrolledIds.has(student.id));
+    }, [studentsList, getAllEnrolledStudentIds]);
 
-        const sectionId = deleteTarget.sectionId;
-        const studentId = deleteTarget.studentId;
+    // Get unassigned students (not in any team)
+    const getUnassignedStudents = useCallback((teamType: "permanent" | "weekly", weekNumber?: number): TeamMember[] => {
+        const allStudents = selectedSectionForTeam === "all"
+            ? getAllEnrolledStudents()
+            : getStudentsInSection(selectedSectionForTeam as number);
 
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.removeStudentFromSection(courseId, sectionId, studentId);
-            if (response.success) {
-                // Update sectionStudents state locally
-                setSectionStudents(prev => ({
-                    ...prev,
-                    [sectionId]: (prev[sectionId] || []).filter(s => s.id !== studentId)
-                }));
-                // Update course sections studentCount
-                setCourse(prev => {
-                    if (!prev) return prev;
-                    return {
-                        ...prev,
-                        sections: prev.sections?.map(section =>
-                            section.id === sectionId
-                                ? { ...section, studentCount: Math.max((section.studentCount || 0) - 1, 0) }
-                                : section
-                        )
-                    };
-                });
-
-                // Remove student from all teams (permanent and weekly)
-                setPermanentTeams(prev => prev.map(team => ({
-                    ...team,
-                    members: team.members.filter(m => m.id !== studentId)
-                })).filter(team => team.members.length > 0)); // Remove empty teams
-
-                setWeeklyTeams(prev => {
-                    const updated: Record<number, WeeklyTeam[]> = {};
-                    Object.entries(prev).forEach(([weekNum, teams]) => {
-                        updated[parseInt(weekNum)] = teams.map(team => ({
-                            ...team,
-                            members: team.members.filter(m => m.id !== studentId)
-                        })).filter(team => team.members.length > 0);
-                    });
-                    return updated;
-                });
-
-                addToast({
-                    title: "นำนักศึกษาออกสำเร็จ",
-                    description: `นำ ${deleteTarget.studentName} ออกจากกลุ่มเรียน ${deleteTarget.sectionNo} แล้ว (คะแนนที่เคยลงยังคงอยู่ในระบบ)`,
-                    color: "success",
-                });
-                
-                // Refresh overview data
-                fetchOverview();
-                
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("section", "update", deleteTarget.sectionId);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                
-                setIsDeleteModalOpen(false);
-                setDeleteTarget(null);
-                setDeleteType(null);
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถนำนักศึกษาออกได้",
-                color: "danger",
+        const assignedIds = new Set<number>();
+        if (teamType === "permanent") {
+            permanentTeams.forEach(team => {
+                team.members.forEach(m => assignedIds.add(m.id));
             });
-        } finally {
-            setIsSubmitting(false);
+        } else if (weekNumber !== undefined && weeklyTeams[weekNumber]) {
+            weeklyTeams[weekNumber].forEach(team => {
+                team.members.forEach(m => assignedIds.add(m.id));
+            });
         }
-    };
+        return allStudents.filter(s => !assignedIds.has(s.id));
+    }, [getAllEnrolledStudents, getStudentsInSection, permanentTeams, weeklyTeams, selectedSectionForTeam]);
 
-    // Get student's team info for display
+    // Get student's team info
     const getStudentTeamInfo = useCallback((studentId: number) => {
         const permanentTeam = permanentTeams.find(t => t.members.some(m => m.id === studentId));
         const weeklyTeamsInfo: { weekNumber: number; teamName: string }[] = [];
@@ -1595,217 +326,6 @@ export default function ClassroomDetailPage() {
         };
     }, [permanentTeams, weeklyTeams]);
 
-    // Get available TAs (not already in course)
-    const availableTAs = tasList.filter(
-        ta => !course?.tas?.some(courseTa => courseTa.id === ta.id)
-    );
-
-    // Get all enrolled students across all sections
-    const getAllEnrolledStudentIds = useCallback(() => {
-        const enrolledIds = new Set<number>();
-        Object.values(sectionStudents).forEach(students => {
-            students.forEach(s => enrolledIds.add(s.id));
-        });
-        return enrolledIds;
-    }, [sectionStudents]);
-
-    // Get available students (not already enrolled in ANY section)
-    const getAvailableStudents = useCallback(() => {
-        const enrolledIds = getAllEnrolledStudentIds();
-        return studentsList.filter(student => !enrolledIds.has(student.id));
-    }, [studentsList, getAllEnrolledStudentIds]);
-
-    // Filter students by search query
-    const filteredStudents = useCallback(() => {
-        const available = getAvailableStudents();
-        if (!studentSearchQuery.trim()) return available;
-        const query = studentSearchQuery.toLowerCase();
-        return available.filter(s =>
-            s.student_id.toLowerCase().includes(query) ||
-            s.full_name.toLowerCase().includes(query)
-        );
-    }, [getAvailableStudents, studentSearchQuery]);
-
-    // Get all enrolled students (for team management)
-    const getAllEnrolledStudents = useCallback(() => {
-        const students: TeamMember[] = [];
-        Object.values(sectionStudents).forEach(sectionList => {
-            sectionList.forEach(s => {
-                if (!students.some(existing => existing.id === s.id)) {
-                    students.push({
-                        id: s.id,
-                        student_id: s.student_id,
-                        full_name: s.full_name
-                    });
-                }
-            });
-        });
-        return students;
-    }, [sectionStudents]);
-
-    // Get students in a specific section (for team management)
-    const getStudentsInSection = useCallback((sectionId: number) => {
-        return (sectionStudents[sectionId] || []).map(s => ({
-            id: s.id,
-            student_id: s.student_id,
-            full_name: s.full_name
-        }));
-    }, [sectionStudents]);
-
-    // Get students not in any team
-    const getUnassignedStudents = useCallback((teamType: "permanent" | "weekly", weekNumber?: number) => {
-        const allStudents = selectedSectionForTeam === "all"
-            ? getAllEnrolledStudents()
-            : getStudentsInSection(selectedSectionForTeam as number);
-
-        const assignedIds = new Set<number>();
-        if (teamType === "permanent") {
-            permanentTeams.forEach(team => {
-                team.members.forEach(m => assignedIds.add(m.id));
-            });
-        } else if (weekNumber !== undefined && weeklyTeams[weekNumber]) {
-            weeklyTeams[weekNumber].forEach(team => {
-                team.members.forEach(m => assignedIds.add(m.id));
-            });
-        }
-        return allStudents.filter(s => !assignedIds.has(s.id));
-    }, [getAllEnrolledStudents, getStudentsInSection, permanentTeams, weeklyTeams, selectedSectionForTeam]);
-
-    // Parse Excel paste data for team members - calls API for fresh data
-    const parseTeamExcelData = useCallback(async (pasteData: string) => {
-        if (!pasteData.trim()) {
-            setParsedTeamMembers([]);
-            return;
-        }
-
-        // Split by newlines to handle Excel paste
-        const lines = pasteData
-            .split(/[\n\r]+/)
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
-
-        if (lines.length === 0) {
-            setParsedTeamMembers([]);
-            return;
-        }
-
-        setIsParsingTeamMembers(true);
-
-        try {
-            // Determine section filter based on selectedSectionForTeam
-            const sectionFilter = selectedSectionForTeam === "all" 
-                ? "all" 
-                : course?.sections?.find(s => s.id === selectedSectionForTeam)?.section_no;
-            
-            // Call API to search students by IDs - filtered by course and section
-            const response = await studentService.searchStudentsByIds(
-                lines,
-                course?.id,  // Pass course ID for filtering (string)
-                sectionFilter  // Pass section for filtering
-            );
-            
-            if (!response.success || !response.data) {
-                throw new Error('Failed to search students');
-            }
-
-            // Get unassigned students based on current team type (still need local state for team membership)
-            const unassignedStudents = getUnassignedStudents(
-                teamCreationType,
-                teamCreationType === "weekly" ? selectedWeek : undefined
-            );
-            const unassignedIds = new Set(unassignedStudents.map(s => s.id));
-
-            // Build results from API response
-            const results: Array<{
-                inputValue: string;
-                matchedStudent: TeamMember | null;
-                status: "matched" | "not_found" | "already_in_team";
-            }> = [];
-
-            // Process found students
-            response.data.found.forEach(item => {
-                const student: TeamMember = {
-                    id: item.student.id,
-                    student_id: item.student.student_id,
-                    full_name: item.student.full_name,
-                };
-                
-                // Check if student is already in a team
-                if (!unassignedIds.has(student.id)) {
-                    // Student exists but already in a team - need to check if enrolled
-                    const allEnrolled = getAllEnrolledStudents();
-                    const isEnrolled = allEnrolled.some(s => s.id === student.id);
-                    if (isEnrolled) {
-                        results.push({
-                            inputValue: item.input,
-                            matchedStudent: student,
-                            status: "already_in_team",
-                        });
-                    } else {
-                        // Student exists in system but not enrolled in this course
-                        results.push({
-                            inputValue: item.input,
-                            matchedStudent: student,
-                            status: "not_found", // Treat as not found since not in course
-                        });
-                    }
-                } else {
-                    results.push({
-                        inputValue: item.input,
-                        matchedStudent: student,
-                        status: "matched",
-                    });
-                }
-            });
-
-            // Process not found students
-            response.data.not_found.forEach(inputValue => {
-                results.push({
-                    inputValue,
-                    matchedStudent: null,
-                    status: "not_found",
-                });
-            });
-
-            // Sort results to maintain original order
-            const orderMap = new Map(lines.map((line, idx) => [line.toLowerCase(), idx]));
-            results.sort((a, b) => {
-                const orderA = orderMap.get(a.inputValue.toLowerCase()) ?? Infinity;
-                const orderB = orderMap.get(b.inputValue.toLowerCase()) ?? Infinity;
-                return orderA - orderB;
-            });
-
-            setParsedTeamMembers(results);
-
-            // Auto-select matched students
-            const matchedIds = results
-                .filter(r => r.status === "matched" && r.matchedStudent)
-                .map(r => r.matchedStudent!.id);
-            setSelectedTeamMembers(matchedIds);
-
-        } catch (error) {
-            console.error("Error parsing team members:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถค้นหานักศึกษาได้",
-                color: "danger",
-            });
-            setParsedTeamMembers([]);
-        } finally {
-            setIsParsingTeamMembers(false);
-        }
-    }, [teamCreationType, selectedWeek, getUnassignedStudents, getAllEnrolledStudents, course, selectedSectionForTeam]);
-
-    // Reset team modal state
-    const resetTeamModal = useCallback(() => {
-        setIsCreateTeamModalOpen(false);
-        setNewTeamName("");
-        setSelectedTeamMembers([]);
-        setTeamMemberMode("select");
-        setTeamExcelPasteData("");
-        setParsedTeamMembers([]);
-    }, []);
-
     // Find which team a student belongs to
     const findStudentTeam = useCallback((studentId: number, teamType: "permanent" | "weekly", weekNumber?: number): string | null => {
         if (teamType === "permanent") {
@@ -1818,463 +338,36 @@ export default function ClassroomDetailPage() {
         return null;
     }, [permanentTeams, weeklyTeams]);
 
-    // Create random teams
-    const createRandomTeams = useCallback((students: TeamMember[], size: number): TeamMember[][] => {
-        const shuffled = [...students].sort(() => Math.random() - 0.5);
-        const teams: TeamMember[][] = [];
-        for (let i = 0; i < shuffled.length; i += size) {
-            teams.push(shuffled.slice(i, i + size));
-        }
-        return teams;
-    }, []);
-
-    // Handle create teams (permanent or weekly)
-    const handleCreateTeam = useCallback(async () => {
-        setIsSubmitting(true);
-
-        try {
-            if (teamFormationMethod === "manual") {
-                if (!newTeamName.trim() || selectedTeamMembers.length === 0) {
-                    addToast({
-                        title: "ข้อมูลไม่ครบ",
-                        description: "กรุณากรอกชื่อกลุ่มและเลือกสมาชิก",
-                        color: "warning",
-                    });
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                // Call API to create single team
-                const response = await courseService.createTeam(courseId, {
-                    name: newTeamName,
-                    group_type: teamCreationType === "permanent" ? "permanent" : "temporary",
-                    week_number: teamCreationType === "weekly" ? selectedWeek : undefined,
-                    member_ids: selectedTeamMembers,
-                });
-
-                if (response.success) {
-                    addToast({
-                        title: "สำเร็จ",
-                        description: "สร้างกลุ่มสำเร็จ",
-                        color: "success",
-                    });
-                    // Emit real-time update
-                    isUpdatingRef.current = true;
-                    emitDataUpdate("group", "create");
-                    setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                    // Refresh teams from backend
-                    fetchTeams();
-                }
-            } else {
-                // Random team formation
-                const unassigned = getUnassignedStudents(
-                    teamCreationType,
-                    teamCreationType === "weekly" ? selectedWeek : undefined
-                );
-                if (unassigned.length === 0) {
-                    addToast({
-                        title: "ไม่มีนักศึกษา",
-                        description: "นักศึกษาทั้งหมดอยู่ในกลุ่มแล้ว",
-                        color: "warning",
-                    });
-                    setIsSubmitting(false);
-                    return;
-                }
-
-                const randomTeams = createRandomTeams(unassigned, teamSize);
-                const existingCount = teamCreationType === "permanent"
-                    ? permanentTeams.length
-                    : (weeklyTeams[selectedWeek]?.length || 0);
-
-                // Call API to bulk create teams
-                const teamsData = randomTeams.map((members, idx) => ({
-                    name: `กลุ่ม ${existingCount + idx + 1}`,
-                    member_ids: members.map(m => m.id),
-                }));
-
-                const response = await courseService.bulkCreateTeams(courseId, {
-                    teams: teamsData,
-                    group_type: teamCreationType === "permanent" ? "permanent" : "temporary",
-                    week_number: teamCreationType === "weekly" ? selectedWeek : undefined,
-                });
-
-                if (response.success) {
-                    addToast({
-                        title: "สำเร็จ",
-                        description: `สุ่มกลุ่มสำเร็จ ${response.data?.createdCount || teamsData.length} กลุ่ม`,
-                        color: "success",
-                    });
-                    // Emit real-time update
-                    isUpdatingRef.current = true;
-                    emitDataUpdate("group", "bulk");
-                    setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                    // Refresh teams from backend
-                    fetchTeams();
-                }
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถสร้างกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-            setIsCreateTeamModalOpen(false);
-            setNewTeamName("");
-            setSelectedTeamMembers([]);
-        }
-    }, [teamFormationMethod, newTeamName, selectedTeamMembers, teamCreationType, selectedWeek, teamSize,
-        permanentTeams, weeklyTeams, courseId, fetchTeams, getUnassignedStudents, createRandomTeams]);
-
-    // Open delete team confirmation modal
-    const openDeleteTeamModal = useCallback((teamId: number, teamType: "permanent" | "weekly", weekNumber?: number) => {
-        let team: PermanentTeam | WeeklyTeam | undefined;
-
-        if (teamType === "permanent") {
-            team = permanentTeams.find(t => t.id === teamId);
-        } else if (weekNumber !== undefined) {
-            team = weeklyTeams[weekNumber]?.find(t => t.id === teamId);
-        }
-
-        if (team) {
-            setDeleteType("team");
-            setDeleteTarget({
-                teamId: team.id,
-                teamName: team.name,
-                teamType: teamType,
-                weekNumber: weekNumber,
-                teamMembers: team.members
-            });
-            setIsDeleteModalOpen(true);
-        }
-    }, [permanentTeams, weeklyTeams]);
-
-    // Open edit team modal
-    const openEditTeamModal = useCallback((teamId: number, teamType: "permanent" | "weekly", weekNumber?: number) => {
-        let team: PermanentTeam | WeeklyTeam | undefined;
-
-        if (teamType === "permanent") {
-            team = permanentTeams.find(t => t.id === teamId);
-        } else if (weekNumber !== undefined) {
-            team = weeklyTeams[weekNumber]?.find(t => t.id === teamId);
-        }
-
-        if (team) {
-            setEditingTeam({
-                id: team.id,
-                name: team.name,
-                type: teamType,
-                weekNumber: weekNumber,
-                members: team.members,
-            });
-            setEditTeamName(team.name);
-            setEditTeamMembers(team.members.map(m => m.id));
-            setEditMemberMode("select");
-            setEditExcelPasteData("");
-            setEditParsedMembers([]);
-            setIsEditTeamModalOpen(true);
-        }
-    }, [permanentTeams, weeklyTeams]);
-
-    // Get available students for editing team (not in other teams of same type)
+    // Get available students for editing team
     const getAvailableStudentsForEdit = useCallback(() => {
-        if (!editingTeam) return [];
+        const editTeam = modals.editTeamModal.team;
+        if (!editTeam) return [];
         
         const allStudents = getAllEnrolledStudents();
-        const currentMemberIds = new Set(editTeamMembers);
-        
-        // Get IDs of students in OTHER teams (not the current one being edited)
+        const currentMemberIds = new Set(modals.editTeamModal.members);
         const otherTeamMemberIds = new Set<number>();
         
-        if (editingTeam.type === "permanent") {
+        if (editTeam.type === "permanent") {
             permanentTeams.forEach(team => {
-                if (team.id !== editingTeam.id) {
+                if (team.id !== editTeam.id) {
                     team.members.forEach(m => otherTeamMemberIds.add(m.id));
                 }
             });
-        } else if (editingTeam.weekNumber !== undefined) {
-            const weekTeams = weeklyTeams[editingTeam.weekNumber] || [];
+        } else if (editTeam.weekNumber !== undefined) {
+            const weekTeams = weeklyTeams[editTeam.weekNumber] || [];
             weekTeams.forEach(team => {
-                if (team.id !== editingTeam.id) {
+                if (team.id !== editTeam.id) {
                     team.members.forEach(m => otherTeamMemberIds.add(m.id));
                 }
             });
         }
         
-        // Return students who are either currently in this team OR not in any team
         return allStudents.filter(s => 
             currentMemberIds.has(s.id) || !otherTeamMemberIds.has(s.id)
         );
-    }, [editingTeam, editTeamMembers, getAllEnrolledStudents, permanentTeams, weeklyTeams]);
+    }, [modals.editTeamModal.team, modals.editTeamModal.members, getAllEnrolledStudents, permanentTeams, weeklyTeams]);
 
-    // Parse Excel data for edit team modal
-    const parseEditTeamExcelData = useCallback(async (pasteData: string) => {
-        if (!pasteData.trim() || !editingTeam) {
-            setEditParsedMembers([]);
-            return;
-        }
-
-        const lines = pasteData
-            .split(/[\n\r]+/)
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
-
-        if (lines.length === 0) {
-            setEditParsedMembers([]);
-            return;
-        }
-
-        setIsParsingEditMembers(true);
-
-        try {
-            const sectionFilter = "all";
-            const response = await studentService.searchStudentsByIds(lines, course?.id ? parseInt(course.id) : undefined, sectionFilter);
-            
-            if (!response.success || !response.data) {
-                throw new Error('Failed to search students');
-            }
-
-            const availableStudents = getAvailableStudentsForEdit();
-            const availableIds = new Set(availableStudents.map(s => s.id));
-
-            const results: Array<{
-                inputValue: string;
-                matchedStudent: TeamMember | null;
-                status: "matched" | "not_found" | "already_in_team";
-            }> = [];
-
-            response.data.found.forEach(item => {
-                const student: TeamMember = {
-                    id: item.student.id,
-                    student_id: item.student.student_id,
-                    full_name: item.student.full_name,
-                };
-                
-                if (availableIds.has(student.id)) {
-                    results.push({
-                        inputValue: item.input,
-                        matchedStudent: student,
-                        status: "matched",
-                    });
-                } else {
-                    results.push({
-                        inputValue: item.input,
-                        matchedStudent: student,
-                        status: "already_in_team",
-                    });
-                }
-            });
-
-            response.data.not_found.forEach(inputValue => {
-                results.push({
-                    inputValue,
-                    matchedStudent: null,
-                    status: "not_found",
-                });
-            });
-
-            setEditParsedMembers(results);
-
-            // Auto-add matched students to editTeamMembers
-            const matchedIds = results
-                .filter(r => r.status === "matched" && r.matchedStudent)
-                .map(r => r.matchedStudent!.id);
-            
-            setEditTeamMembers(prev => {
-                const newIds = matchedIds.filter(id => !prev.includes(id));
-                return [...prev, ...newIds];
-            });
-
-        } catch (error) {
-            console.error("Error parsing edit team members:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถค้นหานักศึกษาได้",
-                color: "danger",
-            });
-            setEditParsedMembers([]);
-        } finally {
-            setIsParsingEditMembers(false);
-        }
-    }, [editingTeam, course, getAvailableStudentsForEdit]);
-
-    // Save edited team
-    const saveEditedTeam = useCallback(async () => {
-        if (!editingTeam || !editTeamName.trim()) return;
-
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.updateTeam(courseId, editingTeam.id, {
-                name: editTeamName.trim(),
-                member_ids: editTeamMembers,
-            });
-
-            if (response.success) {
-                addToast({
-                    title: "อัพเดทกลุ่มสำเร็จ",
-                    description: `อัพเดท "${editTeamName}" เรียบร้อยแล้ว`,
-                    color: "success",
-                });
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("group", "update", editingTeam.id);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                // Refresh teams
-                fetchTeams();
-                // Close modal
-                setIsEditTeamModalOpen(false);
-                setEditingTeam(null);
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถอัพเดทกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [editingTeam, editTeamName, editTeamMembers, courseId, fetchTeams, emitDataUpdate]);
-
-    // Remove single member from team being edited
-    const removeEditTeamMember = useCallback((studentId: number) => {
-        setEditTeamMembers(prev => prev.filter(id => id !== studentId));
-    }, []);
-
-    // Actually delete team (called after confirmation)
-    const confirmDeleteTeam = useCallback(async () => {
-        if (!deleteTarget?.teamId || !deleteTarget?.teamType) return;
-
-        const { teamId, teamType } = deleteTarget;
-
-        setIsSubmitting(true);
-        try {
-            const response = await courseService.deleteTeam(courseId, teamId);
-
-            if (response.success) {
-                addToast({
-                    title: "ลบกลุ่มสำเร็จ",
-                    description: `ลบ "${deleteTarget.teamName}" เรียบร้อยแล้ว`,
-                    color: "success",
-                });
-                // Emit real-time update
-                isUpdatingRef.current = true;
-                emitDataUpdate("group", "delete", teamId);
-                setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                // Refresh teams from backend
-                fetchTeams();
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถลบกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-            setIsDeleteModalOpen(false);
-            setDeleteTarget(null);
-            setDeleteType(null);
-        }
-    }, [deleteTarget, courseId, fetchTeams]);
-
-    // Copy teams from specific week
-    const copyTeamsFromWeek = useCallback(async (sourceWeek: number) => {
-        const sourceWeekTeams = weeklyTeams[sourceWeek];
-        if (!sourceWeekTeams || sourceWeekTeams.length === 0) {
-            addToast({
-                title: "ไม่มีกลุ่ม",
-                description: `สัปดาห์ที่ ${sourceWeek} ยังไม่มีกลุ่ม`,
-                color: "warning",
-            });
-            return;
-        }
-
-        setIsSubmitting(true);
-        try {
-            // Copy teams to new week via API
-            const teamsData = sourceWeekTeams.map((team) => ({
-                name: team.name,
-                member_ids: team.members.map(m => m.id),
-            }));
-
-            const response = await courseService.bulkCreateTeams(courseId, {
-                teams: teamsData,
-                group_type: 'temporary',
-                week_number: selectedWeek,
-            });
-
-            if (response.success) {
-                addToast({
-                    title: "สำเร็จ",
-                    description: `คัดลอกกลุ่มจากสัปดาห์ที่ ${sourceWeek} สำเร็จ`,
-                    color: "success",
-                });
-                fetchTeams();
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถคัดลอกกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-        }
-    }, [selectedWeek, weeklyTeams, courseId, fetchTeams]);
-
-    // Open bulk delete modal
-    const openBulkDeleteModal = useCallback(() => {
-        const teamsToDelete = weeklyTeams[selectedWeek];
-        if (!teamsToDelete || teamsToDelete.length === 0) {
-            addToast({
-                title: "ไม่มีกลุ่ม",
-                description: "ไม่มีกลุ่มในสัปดาห์นี้",
-                color: "warning",
-            });
-            return;
-        }
-        setIsBulkDeleteModalOpen(true);
-    }, [selectedWeek, weeklyTeams]);
-
-    // Clear all teams in current week (called after confirmation)
-    const confirmBulkDeleteTeams = useCallback(async () => {
-        const teamsToDelete = weeklyTeams[selectedWeek];
-        if (!teamsToDelete || teamsToDelete.length === 0) return;
-
-        setIsSubmitting(true);
-        try {
-            // Use bulk delete API instead of deleting one by one
-            const teamIds = teamsToDelete.map(team => team.id);
-            const response = await courseService.bulkDeleteTeams(courseId, teamIds);
-            
-            if (response.success) {
-                addToast({
-                    title: "สำเร็จ",
-                    description: `ล้างกลุ่มสำเร็จ ${response.data?.deletedCount || teamsToDelete.length} กลุ่ม`,
-                    color: "success",
-                });
-                fetchTeams();
-            }
-        } catch (error: unknown) {
-            const err = error as { message?: string };
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: err.message || "ไม่สามารถล้างกลุ่มได้",
-                color: "danger",
-            });
-        } finally {
-            setIsSubmitting(false);
-            setIsBulkDeleteModalOpen(false);
-        }
-    }, [selectedWeek, weeklyTeams, courseId, fetchTeams]);
-
-    // Filter section students by search query
+    // Filter section students by search
     const getFilteredSectionStudents = useCallback((sectionId: number) => {
         const students = sectionStudents[sectionId] || [];
         if (!sectionSearchQuery.trim()) return students;
@@ -2285,15 +378,497 @@ export default function ClassroomDetailPage() {
         );
     }, [sectionStudents, sectionSearchQuery]);
 
+    // Filter available students by search
+    const filteredStudents = useCallback(() => {
+        const available = getAvailableStudents();
+        if (!modals.studentModal.searchQuery.trim()) return available;
+        const query = modals.studentModal.searchQuery.toLowerCase();
+        return available.filter(s =>
+            s.student_id.toLowerCase().includes(query) ||
+            s.full_name.toLowerCase().includes(query)
+        );
+    }, [getAvailableStudents, modals.studentModal.searchQuery]);
 
-    const menuItems = [
+    // ============================================
+    // Effects
+    // ============================================
+
+    // Initialize data on mount
+    useEffect(() => {
+        initializeData();
+    }, [courseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Fetch section students when course sections load
+    useEffect(() => {
+        if (course?.sections && course.sections.length > 0) {
+            fetchAllSectionStudents();
+        }
+    }, [course?.sections, fetchAllSectionStudents]);
+
+    // Refresh data when changing tabs
+    useEffect(() => {
+        refreshForTab(activeTab);
+    }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ============================================
+    // UI Handlers
+    // ============================================
+
+    const toggleSection = useCallback((sectionId: number) => {
+        if (expandedSections.includes(sectionId)) {
+            setExpandedSections(expandedSections.filter(id => id !== sectionId));
+        } else {
+            setExpandedSections([...expandedSections, sectionId]);
+            if (!sectionStudents[sectionId]) {
+                fetchSectionStudents(sectionId);
+            }
+        }
+    }, [expandedSections, sectionStudents, fetchSectionStudents]);
+
+    // ============================================
+    // Action Handlers (Bridge to hooks)
+    // ============================================
+
+    const handleAddSection = async () => {
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.addSection(
+            modals.sectionModal.sectionNo,
+            modals.sectionModal.note
+        );
+        modals.setIsSubmitting(false);
+        if (success) modals.sectionModal.reset();
+    };
+
+    const confirmRemoveSection = async () => {
+        if (!modals.deleteModal.target?.sectionId) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.removeSection(modals.deleteModal.target.sectionId);
+        modals.setIsSubmitting(false);
+        if (success) modals.deleteModal.reset();
+    };
+
+    const handleAddTA = async () => {
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.addTAs(modals.taModal.selectedIds);
+        modals.setIsSubmitting(false);
+        if (success) modals.taModal.reset();
+    };
+
+    const confirmRemoveTA = async () => {
+        if (!modals.deleteModal.target?.taId) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.removeTA(modals.deleteModal.target.taId);
+        modals.setIsSubmitting(false);
+        if (success) modals.deleteModal.reset();
+    };
+
+    const handleAddInstructors = async () => {
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.addInstructors(modals.instructorModal.selectedIds);
+        modals.setIsSubmitting(false);
+        if (success) modals.instructorModal.reset();
+    };
+
+    const confirmRemoveInstructor = async () => {
+        if (!(modals.deleteModal.target as any)?.instructorId) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.removeInstructor((modals.deleteModal.target as any).instructorId);
+        modals.setIsSubmitting(false);
+        if (success) modals.deleteModal.reset();
+    };
+
+    const handleAddStudent = async () => {
+        if (!modals.studentModal.sectionId || !modals.studentModal.studentId) {
+            addToast({
+                title: "ข้อมูลไม่ครบ",
+                description: "กรุณาเลือกนักศึกษา",
+                color: "warning",
+            });
+            return;
+        }
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.addStudentToSection(
+            modals.studentModal.sectionId,
+            parseInt(modals.studentModal.studentId)
+        );
+        modals.setIsSubmitting(false);
+        if (success) modals.studentModal.reset();
+    };
+
+    const handleBulkAddStudents = async () => {
+        const studentsToAdd = modals.studentModal.parsedStudents
+            .filter(p => p.status === "matched" && p.matchedStudent)
+            .map(p => p.matchedStudent!.id);
+        
+        if (studentsToAdd.length === 0 || !modals.studentModal.sectionId) return;
+        
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.bulkAddStudentsToSection(
+            modals.studentModal.sectionId,
+            studentsToAdd
+        );
+        modals.setIsSubmitting(false);
+        if (success) modals.studentModal.reset();
+    };
+
+    const confirmRemoveStudent = async () => {
+        if (!modals.deleteModal.target?.sectionId || !modals.deleteModal.target?.studentId) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.removeStudentFromSection(
+            modals.deleteModal.target.sectionId,
+            modals.deleteModal.target.studentId
+        );
+        modals.setIsSubmitting(false);
+        if (success) modals.deleteModal.reset();
+    };
+
+    const handleCreateTeam = async () => {
+        modals.setIsSubmitting(true);
+        
+        if (modals.teamModal.formationMethod === "manual") {
+            const success = await classroomActions.createTeam(
+                modals.teamModal.type,
+                modals.teamModal.name,
+                modals.teamModal.members,
+                modals.teamModal.type === "weekly" ? selectedWeek : undefined
+            );
+            if (success) modals.teamModal.reset();
+        } else {
+            // Random team creation
+            const unassigned = getUnassignedStudents(
+                modals.teamModal.type,
+                modals.teamModal.type === "weekly" ? selectedWeek : undefined
+            );
+            const baseName = modals.teamModal.type === "permanent" ? "กลุ่มถาวร" : `กลุ่มสัปดาห์ ${selectedWeek}`;
+            await classroomActions.createRandomTeams(
+                modals.teamModal.type,
+                unassigned,
+                modals.teamModal.size,
+                baseName,
+                modals.teamModal.type === "weekly" ? selectedWeek : undefined
+            );
+            modals.teamModal.reset();
+        }
+        
+        modals.setIsSubmitting(false);
+    };
+
+    const saveEditedTeam = async () => {
+        if (!modals.editTeamModal.team) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.updateTeam(
+            modals.editTeamModal.team.id,
+            modals.editTeamModal.name,
+            modals.editTeamModal.members
+        );
+        modals.setIsSubmitting(false);
+        if (success) modals.editTeamModal.reset();
+    };
+
+    const confirmDeleteTeam = async () => {
+        if (!modals.deleteModal.target?.teamId) return;
+        modals.setIsSubmitting(true);
+        const success = await classroomActions.deleteTeam(modals.deleteModal.target.teamId);
+        modals.setIsSubmitting(false);
+        if (success) modals.deleteModal.reset();
+    };
+
+    const confirmBulkDeleteTeams = async () => {
+        const teamsToDelete = weeklyTeams[selectedWeek] || [];
+        if (teamsToDelete.length === 0) return;
+        
+        modals.setIsSubmitting(true);
+        await classroomActions.bulkDeleteTeams(teamsToDelete.map(t => t.id));
+        modals.setIsSubmitting(false);
+        modals.bulkDeleteModal.setIsOpen(false);
+    };
+
+    const handleCopyTeamsFromWeek = async (sourceWeek: number) => {
+        modals.setIsSubmitting(true);
+        await classroomActions.copyTeamsFromWeek(sourceWeek, selectedWeek);
+        modals.setIsSubmitting(false);
+    };
+
+    // Parse Excel data for students
+    const parseExcelData = useCallback((pasteData: string) => {
+        if (!pasteData.trim() || !modals.studentModal.sectionId) {
+            modals.studentModal.setParsedStudents([]);
+            return;
+        }
+
+        const lines = pasteData
+            .split(/[\n\r]+/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        const enrolledStudentIds = new Set(
+            (sectionStudents[modals.studentModal.sectionId] || []).map(s => s.student_id)
+        );
+
+        const results = lines.map(inputValue => {
+            const matchedStudent = studentsList.find(student =>
+                student.student_id.toLowerCase() === inputValue.toLowerCase() ||
+                student.full_name.toLowerCase().includes(inputValue.toLowerCase()) ||
+                inputValue.toLowerCase().includes(student.student_id.toLowerCase())
+            );
+
+            if (!matchedStudent) {
+                return { inputValue, matchedStudent: null, status: "not_found" as const };
+            }
+
+            if (enrolledStudentIds.has(matchedStudent.student_id)) {
+                return { inputValue, matchedStudent, status: "already_enrolled" as const };
+            }
+
+            return { inputValue, matchedStudent, status: "matched" as const };
+        });
+
+        modals.studentModal.setParsedStudents(results);
+    }, [studentsList, sectionStudents, modals.studentModal]);
+
+    // Parse Excel data for team members
+    const parseTeamExcelData = useCallback(async (pasteData: string) => {
+        if (!pasteData.trim()) {
+            modals.teamModal.setParsedMembers([]);
+            return;
+        }
+
+        const lines = pasteData
+            .split(/[\n\r]+/)
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        if (lines.length === 0) {
+            modals.teamModal.setParsedMembers([]);
+            return;
+        }
+
+        modals.teamModal.setIsParsing(true);
+
+        try {
+            const sectionFilter = selectedSectionForTeam === "all" 
+                ? "all" 
+                : course?.sections?.find(s => s.id === selectedSectionForTeam)?.section_no;
+            
+            const response = await classroomActions.searchStudentsByIds(lines, sectionFilter);
+            
+            if (!response.success || !response.data) {
+                modals.teamModal.setIsParsing(false);
+                return;
+            }
+
+            const unassignedStudents = getUnassignedStudents(
+                modals.teamModal.type,
+                modals.teamModal.type === "weekly" ? selectedWeek : undefined
+            );
+            const unassignedIds = new Set(unassignedStudents.map(s => s.id));
+
+            const results: Array<{
+                inputValue: string;
+                matchedStudent: TeamMember | null;
+                status: "matched" | "not_found" | "already_in_team";
+            }> = [];
+
+            response.data.found.forEach((item: any) => {
+                const student = item.student;
+                const teamMember: TeamMember = {
+                    id: student.id,
+                    student_id: student.student_id,
+                    full_name: student.full_name,
+                };
+
+                if (unassignedIds.has(student.id)) {
+                    results.push({
+                        inputValue: item.query,
+                        matchedStudent: teamMember,
+                        status: "matched",
+                    });
+                } else {
+                    const existingTeam = findStudentTeam(
+                        student.id,
+                        modals.teamModal.type,
+                        modals.teamModal.type === "weekly" ? selectedWeek : undefined
+                    );
+                    results.push({
+                        inputValue: item.query,
+                        matchedStudent: teamMember,
+                        status: existingTeam ? "already_in_team" : "matched",
+                    });
+                }
+            });
+
+            response.data.not_found.forEach((inputValue: string) => {
+                results.push({
+                    inputValue,
+                    matchedStudent: null,
+                    status: "not_found",
+                });
+            });
+
+            modals.teamModal.setParsedMembers(results);
+
+            const matchedIds = results
+                .filter(r => r.status === "matched" && r.matchedStudent)
+                .map(r => r.matchedStudent!.id);
+            modals.teamModal.setMembers(matchedIds);
+
+        } catch (error) {
+            console.error("Error parsing team members:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: "ไม่สามารถค้นหานักศึกษาได้",
+                color: "danger",
+            });
+            modals.teamModal.setParsedMembers([]);
+        } finally {
+            modals.teamModal.setIsParsing(false);
+        }
+    }, [course?.sections, selectedSectionForTeam, selectedWeek, getUnassignedStudents, findStudentTeam, classroomActions, modals.teamModal]);
+
+    // Open modals helpers
+    const openAddStudentModal = useCallback((sectionId: number) => {
+        modals.studentModal.setSectionId(sectionId);
+        modals.studentModal.setStudentId("");
+        modals.studentModal.setSearchQuery("");
+        modals.studentModal.setIsOpen(true);
+    }, [modals.studentModal]);
+
+    const handleRemoveSection = useCallback((sectionId: number) => {
+        const section = course?.sections?.find(s => s.id === sectionId);
+        if (!section) return;
+        modals.deleteModal.open("section", {
+            sectionId: sectionId,
+            sectionNo: section.section_no,
+            sectionStudentCount: section.studentCount || 0
+        });
+    }, [course?.sections, modals.deleteModal]);
+
+    const handleRemoveTA = useCallback((userId: number) => {
+        const ta = course?.tas?.find(t => t.id === userId);
+        if (!ta) return;
+        modals.deleteModal.open("ta", {
+            taId: userId,
+            taName: ta.full_name,
+            taEmail: ta.email || ta.username,
+            taAvatar: ta.avatar || undefined,
+        });
+    }, [course?.tas, modals.deleteModal]);
+
+    const handleRemoveInstructor = useCallback((userId: number) => {
+        const instructor = course?.instructors?.find(i => i.id === userId);
+        if (!instructor) return;
+        modals.deleteModal.open("instructor" as any, {
+            instructorId: userId,
+            instructorName: instructor.full_name,
+            instructorEmail: instructor.email || undefined,
+        } as any);
+    }, [course?.instructors, modals.deleteModal]);
+
+    const openDeleteStudentModal = useCallback((sectionId: number, student: SectionStudent) => {
+        const section = course?.sections?.find(s => s.id === sectionId);
+        modals.deleteModal.open("student", {
+            studentId: student.id,
+            studentName: student.full_name,
+            studentCode: student.student_id,
+            sectionId: sectionId,
+            sectionNo: section?.section_no
+        });
+    }, [course?.sections, modals.deleteModal]);
+
+    const openDeleteTeamModal = useCallback((teamId: number, teamType: "permanent" | "weekly", weekNumber?: number) => {
+        let team: PermanentTeam | WeeklyTeam | undefined;
+        if (teamType === "permanent") {
+            team = permanentTeams.find(t => t.id === teamId);
+        } else if (weekNumber !== undefined) {
+            team = weeklyTeams[weekNumber]?.find(t => t.id === teamId);
+        }
+        if (team) {
+            modals.deleteModal.open("team", {
+                teamId: team.id,
+                teamName: team.name,
+                teamType: teamType,
+                weekNumber: weekNumber,
+                teamMembers: team.members
+            });
+        }
+    }, [permanentTeams, weeklyTeams, modals.deleteModal]);
+
+    const openEditTeamModal = useCallback((teamId: number, teamType: "permanent" | "weekly", weekNumber?: number) => {
+        let team: PermanentTeam | WeeklyTeam | undefined;
+        if (teamType === "permanent") {
+            team = permanentTeams.find(t => t.id === teamId);
+        } else if (weekNumber !== undefined) {
+            team = weeklyTeams[weekNumber]?.find(t => t.id === teamId);
+        }
+        if (team) {
+            modals.editTeamModal.open({
+                id: team.id,
+                name: team.name,
+                type: teamType,
+                weekNumber: weekNumber,
+                members: team.members,
+            });
+        }
+    }, [permanentTeams, weeklyTeams, modals.editTeamModal]);
+
+    const openBulkDeleteModal = useCallback(() => {
+        const teamsToDelete = weeklyTeams[selectedWeek];
+        if (!teamsToDelete || teamsToDelete.length === 0) {
+            addToast({
+                title: "ไม่มีกลุ่มที่จะลบ",
+                description: "ไม่พบกลุ่มในสัปดาห์ที่เลือก",
+                color: "warning",
+            });
+            return;
+        }
+        modals.bulkDeleteModal.setIsOpen(true);
+    }, [selectedWeek, weeklyTeams, modals.bulkDeleteModal]);
+
+    // TA selection helpers
+    const toggleTASelection = useCallback((taId: number) => {
+        const current = modals.taModal.selectedIds;
+        if (current.includes(taId)) {
+            modals.taModal.setSelectedIds(current.filter(id => id !== taId));
+        } else {
+            modals.taModal.setSelectedIds([...current, taId]);
+        }
+    }, [modals.taModal]);
+
+    const selectAllAvailableTAs = useCallback(() => {
+        const existingTAIds = course?.tas?.map(ta => ta.id) || [];
+        const availableTAIds = tasList
+            .filter(ta => !existingTAIds.includes(ta.id))
+            .map(ta => ta.id);
+        modals.taModal.setSelectedIds(availableTAIds);
+    }, [course?.tas, tasList, modals.taModal]);
+
+    const clearTASelection = useCallback(() => {
+        modals.taModal.setSelectedIds([]);
+    }, [modals.taModal]);
+
+    // Instructor selection helpers
+    const selectAllInstructors = useCallback(() => {
+        const existingIds = course?.instructors?.map(i => i.id) || [];
+        const availableIds = instructorsList
+            .filter(inst => !existingIds.includes(inst.id))
+            .map(inst => inst.id);
+        modals.instructorModal.setSelectedIds(availableIds);
+    }, [course?.instructors, instructorsList, modals.instructorModal]);
+
+    const clearInstructorSelection = useCallback(() => {
+        modals.instructorModal.setSelectedIds([]);
+    }, [modals.instructorModal]);
+
+    // ============================================
+    // Menu Items
+    // ============================================
+
+    const menuItems = useMemo(() => [
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        
-        // ถ้าไม่ใช่อาจารย์ ไม่แสดง
         ...(userRole === 'instructor' ? [{
             key: "approval",
             label: "อนุมัติคะแนน",
@@ -2301,22 +876,18 @@ export default function ClassroomDetailPage() {
             badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
             badgeColor: "warning" as const,
         }] : []),
-
-
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', status: "coming_soon", badgeColor: "warning" as const },
-
-
-        // ตั้งค่ารายวิชา - แสดงเฉพาะอาจารย์
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', badgeColor: "warning" as const },
         ...(userRole === 'instructor' ? [{
             key: "settings",
             label: "ตั้งค่ารายวิชา",
             icon: "solar:settings-bold",
         }] : []),
-    ];
+    ], [assignments.length, userRole, pendingApprovalCount]);
 
-    // console.log("Course data:", course);
+    // ============================================
+    // Render
+    // ============================================
 
     return (
         <div className="min-h-[calc(100vh-3.2rem)] bg-slate-100">
@@ -2413,13 +984,16 @@ export default function ClassroomDetailPage() {
                                 <button
                                     key={item.key}
                                     onClick={() => {
-                                        setActiveTab(item.key);
-                                        setIsMobileSidebarOpen(false);
+                                        if ((item as any).status !== "coming_soon") {
+                                            setActiveTab(item.key);
+                                            setIsMobileSidebarOpen(false);
+                                        }
                                     }}
+                                    disabled={(item as any).status === "coming_soon"}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all ${activeTab === item.key
                                             ? "bg-blue-50 text-blue-600"
-                                            : "text-slate-600 hover:bg-slate-50 "
-                                        } ${item.status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
+                                            : "text-slate-600 hover:bg-slate-50"
+                                        } ${(item as any).status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
@@ -2427,7 +1001,7 @@ export default function ClassroomDetailPage() {
                                         <Chip 
                                             size="sm" 
                                             variant="flat" 
-                                            color={'badgeColor' in item ? item.badgeColor : "primary"}
+                                            color={(item as any).badgeColor || "primary"}
                                             className="h-5 min-w-5 px-1 ml-auto"
                                         >
                                             {item.badge}
@@ -2443,47 +1017,21 @@ export default function ClassroomDetailPage() {
             <div className="flex">
                 {/* Desktop Sidebar - Fixed position */}
                 <aside className="hidden lg:flex flex-col w-64 h-[calc(100vh)] bg-white border-r border-slate-200 fixed top-12 left-0 overflow-y-auto z-40">
-                    {/* Sidebar Header - Course Info */}
-                    {/* <div className="p-4 border-b border-slate-100">
-                        <div className="flex items-center gap-3">
-                            {course.image ? (
-                                <img 
-                                    src={course.image} 
-                                    alt={course.name}
-                                    className="w-12 h-12 object-cover rounded-xl"
-                                />
-                            ) : (
-                                <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl flex items-center justify-center">
-                                    <Icon icon="solar:book-2-bold-duotone" className="text-xl text-white" />
-                                </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                                <h2 className="font-bold text-slate-800 text-sm leading-tight truncate">{course.name}</h2>
-                                <p className="text-slate-500 text-xs">{course.code}</p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
-                                {course.year}/{course.semester === 3 ? "ฤดูร้อน" : course.semester}
-                            </Chip>
-                            <Chip size="sm" variant="flat" color={course.is_active ? "success" : "default"}>
-                                {course.is_active ? "เปิดใช้งาน" : "ปิด"}
-                            </Chip>
-                        </div>
-                    </div> */}
-
                     {/* Navigation Menu */}
                     <nav className="flex-1 p-3">
-                        {/* <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider px-3 mb-2">เมนู</p> */}
                         {menuItems.map((item) => (
                             <button
                                 key={item.key}
-                                disabled={item.status === "coming_soon"}
-                                onClick={() => setActiveTab(item.key)}
+                                disabled={(item as any).status === "coming_soon"}
+                                onClick={() => {
+                                    if ((item as any).status !== "coming_soon") {
+                                        setActiveTab(item.key);
+                                    }
+                                }}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${activeTab === item.key
                                         ? "bg-blue-50 text-blue-600 font-medium"
                                         : "text-slate-600 hover:bg-slate-50"
-                                    } ${item.status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
+                                    } ${(item as any).status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
@@ -2491,7 +1039,7 @@ export default function ClassroomDetailPage() {
                                     <Chip 
                                         size="sm" 
                                         variant="flat" 
-                                        color={'badgeColor' in item ? item.badgeColor : "primary"}
+                                        color={(item as any).badgeColor || "primary"}
                                         className="h-5 min-w-5 px-1 ml-auto text-xs"
                                     >
                                         {item.badge}
@@ -2500,71 +1048,11 @@ export default function ClassroomDetailPage() {
                             </button>
                         ))}
                     </nav>
-
-                    {/* Sidebar Footer - Quick Stats */}
-                    {/* <div className="p-4 border-t border-slate-100 bg-slate-50">
-                        <div className="grid grid-cols-3 gap-2 text-center">
-                            <div>
-                                <p className="text-lg font-bold text-blue-600">{overview?.summary.totalStudents || course.studentCount || 0}</p>
-                                <p className="text-xs text-slate-500">นักศึกษา</p>
-                            </div>
-                            <div>
-                                <p className="text-lg font-bold text-amber-600">{course.sections?.length || 0}</p>
-                                <p className="text-xs text-slate-500">กลุ่ม</p>
-                            </div>
-                            <div>
-                                <p className="text-lg font-bold text-emerald-600">{course.tas?.length || 0}</p>
-                                <p className="text-xs text-slate-500">TA</p>
-                            </div>
-                        </div>
-                    </div> */}
                 </aside>
 
                 {/* Main Content Area - Add left margin for fixed sidebar */}
-                
-                    {/* Page Title Header - Desktop only */}
-                    {/* <div className="hidden lg:block bg-white border-b border-slate-200 px-6 py-4">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                    activeTab === "overview" ? "bg-blue-100" :
-                                    activeTab === "sections" ? "bg-amber-100" :
-                                    activeTab === "people" ? "bg-emerald-100" :
-                                    activeTab === "assignments" ? "bg-purple-100" :
-                                    "bg-rose-100"
-                                }`}>
-                                    <Icon 
-                                        icon={menuItems.find(m => m.key === activeTab)?.icon || "solar:chart-2-bold"} 
-                                        className={`text-xl ${
-                                            activeTab === "overview" ? "text-blue-600" :
-                                            activeTab === "sections" ? "text-amber-600" :
-                                            activeTab === "people" ? "text-emerald-600" :
-                                            activeTab === "assignments" ? "text-purple-600" :
-                                            "text-rose-600"
-                                        }`}
-                                    />
-                                </div>
-                                <div>
-                                    <h1 className="text-xl font-bold text-slate-800">
-                                        {menuItems.find(m => m.key === activeTab)?.label || "ภาพรวม"}
-                                    </h1>
-                                    <p className="text-sm text-slate-500">{course.code} - {course.name}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div> */}
-
-                {/* Main Content */}
                 <main className="flex-1 lg:ml-64 overflow-x-hidden">
                     <div className="p-4 lg:p-6">
-                        {/* Loading State */}
-                        {/* {isLoading && (
-                            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                                <Spinner size="lg" color="primary" />
-                                <p className="text-slate-500 mt-4">กำลังโหลดข้อมูลรายวิชา...</p>
-                            </div>
-                        )} */}
-
                         {/* Error State - Course Not Found */}
                         {!isLoading && !course && (
                             <div className="flex items-center justify-center min-h-[60vh]">
@@ -2598,374 +1086,115 @@ export default function ClassroomDetailPage() {
                         {/* Content - Only show when course is loaded */}
                         {course && (
                             <>
-                                {/* Overview Tab */}
-                                {activeTab === "overview" && (
-                                    <OverviewTab
-                                        course={course}
-                                        overview={overview}
-                                        isLoading={isOverviewLoading}
-                                        userRole={userRole}
-                                        assignments={assignments}
-                                        onNavigateToAssignments={() => setActiveTab("assignments")}
-                                    />
-                        )}
+                    {activeTab === "overview" && (
+                                <OverviewTab
+                                    course={course}
+                                    overview={overview}
+                                    isLoading={isOverviewLoading}
+                                    userRole={userRole}
+                                    assignments={assignments}
+                                    onNavigateToAssignments={() => setActiveTab("assignments")}
+                                />
+                            )}
 
-                        {/* Sections Tab */}
-                        {activeTab === "sections" && (
-                            <SectionsTab
-                                course={course}
-                                sectionSubTab={sectionSubTab}
-                                setSectionSubTab={setSectionSubTab}
-                                sectionSearchQuery={sectionSearchQuery}
-                                setSectionSearchQuery={setSectionSearchQuery}
-                                totalStudents={totalStudents}
-                                permanentTeams={permanentTeams}
-                                weeklyTeams={weeklyTeams}
-                                selectedWeek={selectedWeek}
-                                setSelectedWeek={setSelectedWeek}
-                                totalWeeks={totalWeeks}
-                                expandedSections={expandedSections}
-                                isTeamsLoading={isTeamsLoading}
-                                sectionStudents={sectionStudents}
-                                onToggleSection={toggleSection}
-                                onOpenAddSectionModal={() => setIsAddSectionModalOpen(true)}
-                                onOpenAddStudentModal={openAddStudentModal}
-                                onRemoveSection={handleRemoveSection}
-                                onOpenDeleteStudentModal={openDeleteStudentModal}
-                                onOpenCreateTeamModal={(type, method) => {
-                                    setTeamCreationType(type);
-                                    setTeamFormationMethod(method);
-                                    setNewTeamName("");
-                                    setSelectedTeamMembers([]);
-                                    setTeamExcelPasteData("");
-                                    setParsedTeamMembers([]);
-                                    setSelectedSectionForTeam("all");
-                                    setTeamMemberMode("select");
-                                    setIsCreateTeamModalOpen(true);
-                                }}
-                                onOpenDeleteTeamModal={openDeleteTeamModal}
-                                onOpenEditTeamModal={openEditTeamModal}
-                                onCopyTeamsFromWeek={copyTeamsFromWeek}
-                                onOpenBulkDeleteModal={openBulkDeleteModal}
-                                getFilteredSectionStudents={getFilteredSectionStudents}
-                                findStudentTeam={findStudentTeam}
-                            />
-                        )}
+                            {activeTab === "sections" && (
+                                <SectionsTab courseId={courseId} />
+                            )}
 
-                        {/* People Tab */}
-                        {activeTab === "people" && (
-                            <PeopleTab
-                                course={course}
-                                isLoading={isLoading}
-                                userRole={userRole}
-                                currentUserId={currentUserId}
-                                isPeopleLoading={isPeopleLoading}
-                                onOpenAddTAModal={() => setIsAddTAModalOpen(true)}
-                                onOpenAddInstructorModal={() => setIsAddInstructorModalOpen(true)}
-                                onRemoveTA={handleRemoveTA}
-                                onRemoveInstructor={handleRemoveInstructor}
-                            />
-                        )}
+                            {activeTab === "people" && (
+                                <PeopleTab
+                                    course={course}
+                                    isLoading={isPeopleLoading}
+                                    isPeopleLoading={isPeopleLoading}
+                                    onOpenAddTAModal={() => modals.taModal.setIsOpen(true)}
+                                    onOpenAddInstructorModal={() => modals.instructorModal.setIsOpen(true)}
+                                    onRemoveTA={handleRemoveTA}
+                                    onRemoveInstructor={handleRemoveInstructor}
+                                    userRole={userRole}
+                                    currentUserId={currentUserId}
+                                />
+                            )}
 
-                        {/* Assignments Tab */}
-                        {activeTab === "assignments" && (
-                            <>
+                            {activeTab === "assignments" && (
                                 <AssignmentsTab
                                     assignments={assignments}
                                     setAssignments={setAssignments}
                                     isLoading={isAssignmentsLoading}
-                                    expandedAssignments={expandedAssignments}
-                                    setExpandedAssignments={setExpandedAssignments}
-                                    onOpenCreateModal={() => {
-                                        setNewAssignment({
-                                            name: "",
-                                            assignment_type: "individual",
-                                            hasSubItems: false,
-                                            subItems: [],
-                                            maxScore: 10,
-                                            dueDate: "",
-                                            description: "",
-                                            linked_attendance_session_id: null,
-                                            linked_attendance_session_ids: [],
-                                            attendance_condition: "or",
-                                        });
-                                        setEditingAssignment(null);
-                                        setIsAddAssignmentModalOpen(true);
-                                    }}
-                                    onOpenEditModal={(assignment) => {
-                                        setEditingAssignment(assignment);
-                                        // Get linked session IDs from linkedAttendanceSessions array if available
-                                        const linkedSessionIds = assignment.linkedAttendanceSessions?.map(s => s.id) || 
-                                            (assignment.linked_attendance_session_id ? [assignment.linked_attendance_session_id] : []);
-                                        setNewAssignment({
-                                            name: assignment.name,
-                                            assignment_type: assignment.assignment_type,
-                                            week_number: assignment.week_number,
-                                            hasSubItems: !!(assignment.subItems && assignment.subItems.length > 0),
-                                            subItems: assignment.subItems?.map(s => ({
-                                                id: s.id,
-                                                name: s.name,
-                                                max_score: Number(s.max_score)
-                                            })) || [],
-                                            maxScore: Number(assignment.max_score),
-                                            dueDate: assignment.due_date || "",
-                                            description: assignment.description || "",
-                                            linked_attendance_session_id: assignment.linked_attendance_session_id || null,
-                                            linked_attendance_session_ids: linkedSessionIds,
-                                            attendance_condition: assignment.attendance_condition || "or",
-                                        });
-                                        setIsAddAssignmentModalOpen(true);
-                                    }}
+                                    courseId={courseId}
+                                    weeklyTeams={weeklyTeams}
                                     onOpenScoreModal={(assignment) => {
                                         setScoreModalAssignment(assignment);
-                                        setIsScoreModalOpen(true);
+                                        modals.scoreModals.setIsScoreModalOpen(true);
                                     }}
-                                    onOpenBonusScoreModal={() => setIsBonusScoreModalOpen(true)}
-                                    onAssignmentDeleted={() => fetchOverview()}
+                                    onOpenBonusScoreModal={() => modals.scoreModals.setIsBonusScoreModalOpen(true)}
+                                    onAssignmentChanged={() => {
+                                        fetchAssignments(true);
+                                        fetchOverview(true);
+                                    }}
                                 />
-                                
-                                {/* Bonus Score Modal */}
-                                <BonusScoreModal
-                                    isOpen={isBonusScoreModalOpen}
-                                    onClose={() => setIsBonusScoreModalOpen(false)}
+                            )}
+
+                            {activeTab === "scores" && (
+                                <ScoresTab courseId={courseId} />
+                            )}
+
+                            {activeTab === "approval" && userRole === "instructor" && (
+                                <ScoreApprovalTab
                                     courseId={courseId}
+                                    onPendingCountChange={setPendingApprovalCount}
                                 />
-                            </>
-                        )}
+                            )}
 
-                        {/* Attendance Tab */}
-                        {activeTab === "attendance" && (
-                            <AttendanceTab
-                                course={course}
-                                isLoading={isLoading}
-                                onAttendanceChanged={() => fetchOverview()}
-                            />
-                        )}
+                            {activeTab === "attendance" && (
+                                <AttendanceTab
+                                    course={course}
+                                    isLoading={isOverviewLoading}
+                                    onAttendanceChanged={() => fetchOverview(true)}
+                                />
+                            )}
 
-                        {/* Scores Tab - Summary View */}
-                        {activeTab === "scores" && (
-                            <ScoreSummaryTab courseId={courseId} />
-                        )}
+                            {activeTab === "settings" && userRole === "instructor" && (
+                                <SettingsTab
+                                    course={course}
+                                    onCourseUpdate={(updatedCourse) => setCourse(updatedCourse)}
+                                />
+                            )}
 
-                        {/* Score Approval Tab - Instructor Only */}
-                        {activeTab === "approval" && userRole === "instructor" && (
-                            <ScoreApprovalTab 
-                                courseId={courseId} 
-                                onPendingCountChange={(count) => setPendingApprovalCount(count)}
-                            />
-                        )}
-
-                        {/* Settings Tab - Instructor Only */}
-                        {activeTab === "settings" && userRole === "instructor" && (
-                            <SettingsTab 
-                                course={course}
-                                onCourseUpdate={(updatedCourse) => {
-                                    setCourse(updatedCourse);
-                                    fetchCourse(); // Refresh full course data
-                                }}
-                            />
-                        )}
+                            {activeTab === "queue" && (
+                                <QueueTab course={course} isLoading={isOverviewLoading} />
+                            )}
                             </>
                         )}
                     </div>
                 </main>
             </div>
 
-            {/* Score Modal (New) */}
+            {/* Score Modal */}
             <ScoreModal
-                isOpen={isScoreModalOpen}
+                isOpen={modals.scoreModals.isScoreModalOpen}
                 onClose={() => {
-                    setIsScoreModalOpen(false);
+                    modals.scoreModals.setIsScoreModalOpen(false);
                     setScoreModalAssignment(null);
                 }}
                 assignment={scoreModalAssignment}
                 courseId={courseId}
                 onScoreSubmitted={() => {
-                    // Refresh scores if needed
-                    if (selectedAssignmentForScore) {
-                        fetchScoresForAssignment(selectedAssignmentForScore);
-                    }
-                    // Refresh overview data
-                    fetchOverview();
-                    // Emit real-time update
-                    if (scoreModalAssignment) {
-                        emitDataUpdate("score", "update", scoreModalAssignment.id);
+                    fetchOverview(true);
+                    if (scores.selectedAssignment) {
+                        scores.fetchScores(scores.selectedAssignment);
                     }
                 }}
             />
 
-            {/* Group Score Modal */}
-            <Modal 
-                isOpen={isGroupScoreModalOpen} 
-                onClose={() => setIsGroupScoreModalOpen(false)} 
-                size="lg"
-            >
-                <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl shadow-lg">
-                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">ให้คะแนนรายกลุ่ม</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {selectedAssignmentForScore?.name}
-                                </p>
-                            </div>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-4">
-                        <div className="space-y-4">
-                            <Select
-                                label="เลือกกลุ่ม"
-                                placeholder="เลือกกลุ่มที่ต้องการให้คะแนน"
-                                variant="bordered"
-                                size="lg"
-                                selectedKeys={selectedGroupForScore ? [String(selectedGroupForScore.id)] : []}
-                                onSelectionChange={(keys) => {
-                                    const selectedId = Array.from(keys)[0];
-                                    const group = groupsForScore.find(g => g.id === Number(selectedId));
-                                    setSelectedGroupForScore(group || null);
-                                    if (group) {
-                                        // Initialize sub-item scores for the group
-                                        if (selectedAssignmentForScore?.subItems && selectedAssignmentForScore.subItems.length > 0) {
-                                            const scores: Record<number, number> = {};
-                                            selectedAssignmentForScore.subItems.forEach(subItem => {
-                                                if (subItem.id !== undefined) {
-                                                    // Check if any member already has a score
-                                                    const memberScore = group.members.find(m => {
-                                                        const entry = scoreEntries[`${m.id}-${subItem.id}`];
-                                                        return entry !== undefined && entry !== "";
-                                                    });
-                                                    const key = `${group.members[0]?.id}-${subItem.id}`;
-                                                    scores[subItem.id] = memberScore ? Number(scoreEntries[key] || 0) : 0;
-                                                }
-                                            });
-                                            setGroupSubItemScores(scores);
-                                        } else {
-                                            // Check if any member already has a score
-                                            const key = `${group.members[0]?.id}`;
-                                            const existingScore = scoreEntries[key];
-                                            setGroupScoreValue(existingScore !== undefined && existingScore !== "" ? Number(existingScore) : 0);
-                                        }
-                                    }
-                                }}
-                            >
-                                {groupsForScore.map((group) => (
-                                    <SelectItem key={String(group.id)} textValue={group.name}>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Icon icon="solar:users-group-rounded-bold" className="text-purple-500" />
-                                                <span>{group.name}</span>
-                                            </div>
-                                            <Chip size="sm" variant="flat" color="secondary">
-                                                {group.members.length} คน
-                                            </Chip>
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                            </Select>
-
-                            {/* Selected Group Info */}
-                            {selectedGroupForScore && (
-                                <Card className="bg-purple-50 border border-purple-100">
-                                    <CardBody className="p-4">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h4 className="font-semibold text-purple-800">{selectedGroupForScore.name}</h4>
-                                                <p className="text-sm text-purple-600 mt-1">
-                                                    สมาชิก: {selectedGroupForScore.members.map(m => `${m.full_name}`).join(", ")}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-                            )}
-
-                            {/* Score Input */}
-                            {selectedGroupForScore && (
-                                <>
-                                    {selectedAssignmentForScore?.subItems && selectedAssignmentForScore.subItems.length > 0 ? (
-                                        <div className="space-y-3">
-                                            <p className="text-sm font-medium text-slate-700">คะแนนตามหัวข้อย่อย</p>
-                                            {selectedAssignmentForScore.subItems.filter(s => s.id !== undefined).map((subItem) => (
-                                                <div key={subItem.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                                    <div>
-                                                        <span className="font-medium text-slate-700">{subItem.name}</span>
-                                                        <span className="text-sm text-slate-500 ml-2">(เต็ม {subItem.max_score})</span>
-                                                    </div>
-                                                    <Input
-                                                        type="number"
-                                                        size="sm"
-                                                        variant="bordered"
-                                                        min={0}
-                                                        max={Number(subItem.max_score)}
-                                                        value={String(groupSubItemScores[subItem.id!] ?? 0)}
-                                                        onValueChange={(val) => {
-                                                            const numVal = Math.min(Number(val || 0), Number(subItem.max_score));
-                                                            setGroupSubItemScores(prev => ({
-                                                                ...prev,
-                                                                [subItem.id!]: numVal
-                                                            }));
-                                                        }}
-                                                        className="w-24"
-                                                        classNames={{
-                                                            inputWrapper: "h-10 bg-white",
-                                                            input: "text-center",
-                                                        }}
-                                                    />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                                            <span className="font-medium text-slate-700">คะแนน (เต็ม {selectedAssignmentForScore?.max_score})</span>
-                                            <Input
-                                                type="number"
-                                                size="sm"
-                                                variant="bordered"
-                                                min={0}
-                                                max={Number(selectedAssignmentForScore?.max_score || 0)}
-                                                value={String(groupScoreValue)}
-                                                onValueChange={(val) => {
-                                                    const numVal = Math.min(Number(val || 0), Number(selectedAssignmentForScore?.max_score || 0));
-                                                    setGroupScoreValue(numVal);
-                                                }}
-                                                className="w-24"
-                                                classNames={{
-                                                    inputWrapper: "h-10 bg-white",
-                                                    input: "text-center",
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 pb-6 pt-2">
-                        <Button
-                            color="default"
-                            variant="light"
-                            onPress={() => setIsGroupScoreModalOpen(false)}
-                        >
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="primary"
-                            isDisabled={!selectedGroupForScore}
-                            isLoading={isSavingScores}
-                            onPress={saveGroupScore}
-                            className="bg-gradient-to-r from-purple-500 to-violet-600"
-                        >
-                            บันทึกคะแนน
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
+            {/* Bonus Score Modal */}
+            <BonusScoreModal
+                isOpen={modals.scoreModals.isBonusScoreModalOpen}
+                onClose={() => modals.scoreModals.setIsBonusScoreModalOpen(false)}
+                courseId={courseId}
+            />
 
             {/* Add Section Modal */}
-            <Modal isOpen={isAddSectionModalOpen} onClose={() => setIsAddSectionModalOpen(false)} size="md">
+            <Modal isOpen={modals.sectionModal.isOpen} onClose={modals.sectionModal.reset} size="md">
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
@@ -2986,8 +1215,8 @@ export default function ClassroomDetailPage() {
                                 placeholder="เช่น 1, 2, 101, A"
                                 variant="bordered"
                                 size="lg"
-                                value={newSectionNo}
-                                onValueChange={setNewSectionNo}
+                                value={modals.sectionModal.sectionNo}
+                                onValueChange={modals.sectionModal.setSectionNo}
                                 isRequired
                                 classNames={{
                                     inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
@@ -3000,8 +1229,8 @@ export default function ClassroomDetailPage() {
                                 placeholder="เช่น เรียนวันจันทร์, กลุ่มพิเศษ"
                                 variant="bordered"
                                 size="lg"
-                                value={newSectionNote}
-                                onValueChange={setNewSectionNote}
+                                value={modals.sectionModal.note}
+                                onValueChange={modals.sectionModal.setNote}
                                 className="pt-2"
                                 classNames={{
                                     inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
@@ -3011,20 +1240,16 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-slate-100">
-                        <Button variant="light" onPress={() => {
-                            setIsAddSectionModalOpen(false);
-                            setNewSectionNo("");
-                            setNewSectionNote("");
-                        }}>
+                        <Button variant="light" onPress={modals.sectionModal.reset}>
                             ยกเลิก
                         </Button>
                         <Button
                             color="primary"
                             onPress={handleAddSection}
-                            isLoading={isSubmitting}
-                            isDisabled={!newSectionNo.trim()}
+                            isLoading={modals.isSubmitting}
+                            isDisabled={!modals.sectionModal.sectionNo.trim()}
                             className="bg-gradient-to-r from-blue-400 to-indigo-500"
-                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
                         >
                             เพิ่มกลุ่มเรียน
                         </Button>
@@ -3034,12 +1259,8 @@ export default function ClassroomDetailPage() {
 
             {/* Add TA Modal */}
             <Modal 
-                isOpen={isAddTAModalOpen} 
-                onClose={() => {
-                    setIsAddTAModalOpen(false);
-                    setSelectedTAIds([]);
-                    setTASearchQuery("");
-                }} 
+                isOpen={modals.taModal.isOpen} 
+                onClose={modals.taModal.reset} 
                 size="2xl"
                 scrollBehavior="inside"
             >
@@ -3067,9 +1288,9 @@ export default function ClassroomDetailPage() {
                                     </span>
                                 )}
                             </div>
-                            {selectedTAIds.length > 0 && (
+                            {modals.taModal.selectedIds.length > 0 && (
                                 <Chip size="sm" color="primary" variant="flat">
-                                    เลือกแล้ว {selectedTAIds.length} คน
+                                    เลือกแล้ว {modals.taModal.selectedIds.length} คน
                                 </Chip>
                             )}
                         </div>
@@ -3079,16 +1300,16 @@ export default function ClassroomDetailPage() {
                             placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
                             variant="bordered"
                             size="lg"
-                            value={taSearchQuery}
-                            onValueChange={setTASearchQuery}
+                            value={modals.taModal.searchQuery}
+                            onValueChange={modals.taModal.setSearchQuery}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                             endContent={
-                                taSearchQuery && (
+                                modals.taModal.searchQuery && (
                                     <Button
                                         isIconOnly
                                         size="sm"
                                         variant="light"
-                                        onPress={() => setTASearchQuery("")}
+                                        onPress={() => modals.taModal.setSearchQuery("")}
                                     >
                                         <Icon icon="solar:close-circle-bold" className="text-slate-400" />
                                     </Button>
@@ -3110,7 +1331,7 @@ export default function ClassroomDetailPage() {
                             >
                                 เลือกทั้งหมด
                             </Button>
-                            {selectedTAIds.length > 0 && (
+                            {modals.taModal.selectedIds.length > 0 && (
                                 <Button
                                     size="sm"
                                     variant="flat"
@@ -3132,8 +1353,8 @@ export default function ClassroomDetailPage() {
                                         // ไม่แสดง TA ที่อยู่ในวิชาแล้ว
                                         if (existingTAIds.includes(ta.id)) return false;
                                         
-                                        const searchLower = taSearchQuery.toLowerCase();
-                                        const matchesSearch = !taSearchQuery || 
+                                        const searchLower = modals.taModal.searchQuery.toLowerCase();
+                                        const matchesSearch = !modals.taModal.searchQuery || 
                                             ta.full_name.toLowerCase().includes(searchLower) ||
                                             (ta.email && ta.email.toLowerCase().includes(searchLower)) ||
                                             (ta.username && ta.username.toLowerCase().includes(searchLower));
@@ -3144,13 +1365,13 @@ export default function ClassroomDetailPage() {
                                         return (
                                             <div className="p-8 text-center text-slate-500">
                                                 <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
-                                                <p>{taSearchQuery ? "ไม่พบผู้ช่วยสอนที่ค้นหา" : "ผู้ช่วยสอนทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
+                                                <p>{modals.taModal.searchQuery ? "ไม่พบผู้ช่วยสอนที่ค้นหา" : "ผู้ช่วยสอนทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
                                             </div>
                                         );
                                     }
 
                                     return filteredTAs.map((ta) => {
-                                        const isSelected = selectedTAIds.includes(ta.id);
+                                        const isSelected = modals.taModal.selectedIds.includes(ta.id);
 
                                         return (
                                             <div
@@ -3165,7 +1386,7 @@ export default function ClassroomDetailPage() {
                                                 {/* Checkbox */}
                                                 <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 `}>
                                                     {isSelected && (
-                                                        <FaCheckCircle className="text-lg text-blue-500" />
+                                                        <Icon icon="solar:check-circle-bold" className="text-lg text-blue-500" />
                                                     )}
                                                 </div>
 
@@ -3191,11 +1412,11 @@ export default function ClassroomDetailPage() {
                         </div>
                         
                         {/* Selected TAs Preview */}
-                        {selectedTAIds.length > 0 && (
+                        {modals.taModal.selectedIds.length > 0 && (
                             <div className="mt-4">
-                                <p className="text-sm font-medium text-slate-600 mb-2">ผู้ช่วยสอนที่เลือก ({selectedTAIds.length} คน)</p>
+                                <p className="text-sm font-medium text-slate-600 mb-2">ผู้ช่วยสอนที่เลือก ({modals.taModal.selectedIds.length} คน)</p>
                                 <div className="flex flex-wrap gap-2">
-                                    {selectedTAIds.map(taId => {
+                                    {modals.taModal.selectedIds.map(taId => {
                                         const ta = tasList.find(t => t.id === taId);
                                         if (!ta) return null;
                                         return (
@@ -3217,23 +1438,19 @@ export default function ClassroomDetailPage() {
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button 
                             variant="light" 
-                            onPress={() => {
-                                setIsAddTAModalOpen(false);
-                                setSelectedTAIds([]);
-                                setTASearchQuery("");
-                            }}
+                            onPress={modals.taModal.reset}
                         >
                             ยกเลิก
                         </Button>
                         <Button
                             color="primary"
                             onPress={handleAddTA}
-                            isLoading={isSubmitting}
-                            isDisabled={selectedTAIds.length === 0}
-                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            isLoading={modals.isSubmitting}
+                            isDisabled={modals.taModal.selectedIds.length === 0}
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
                             className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
-                            เพิ่มผู้ช่วยสอน {selectedTAIds.length > 0 ? `(${selectedTAIds.length} คน)` : ""}
+                            เพิ่มผู้ช่วยสอน {modals.taModal.selectedIds.length > 0 ? `(${modals.taModal.selectedIds.length} คน)` : ""}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -3241,24 +1458,20 @@ export default function ClassroomDetailPage() {
 
             {/* Add Instructor Modal */}
             <Modal 
-                isOpen={isAddInstructorModalOpen} 
-                onClose={() => {
-                    setIsAddInstructorModalOpen(false);
-                    setSelectedInstructorIds([]);
-                    setInstructorSearchQuery("");
-                }} 
+                isOpen={modals.instructorModal.isOpen} 
+                onClose={modals.instructorModal.reset}
                 size="2xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg">
-                                <Icon icon="solar:user-circle-bold" className="text-2xl text-white" />
+                            <div className="p-3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-rounded-bold" className="text-2xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">เพิ่มอาจารย์ผู้สอน</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกอาจารย์ที่ต้องการเพิ่มเป็นผู้สอนร่วม (เลือกได้หลายคน)</p>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกอาจารย์ที่ต้องการเพิ่ม (เลือกได้หลายคน)</p>
                             </div>
                         </div>
                     </ModalHeader>
@@ -3268,15 +1481,10 @@ export default function ClassroomDetailPage() {
                             <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
                                 <span>อาจารย์ในระบบ <span className="font-semibold text-indigo-600">{instructorsList.length}</span> คน</span>
-                                {course?.instructors && course.instructors.length > 0 && (
-                                    <span className="text-slate-400">
-                                        (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.instructors.length}</span> คน)
-                                    </span>
-                                )}
                             </div>
-                            {selectedInstructorIds.length > 0 && (
+                            {modals.instructorModal.selectedIds.length > 0 && (
                                 <Chip size="sm" color="secondary" variant="flat">
-                                    เลือกแล้ว {selectedInstructorIds.length} คน
+                                    เลือกแล้ว {modals.instructorModal.selectedIds.length} คน
                                 </Chip>
                             )}
                         </div>
@@ -3286,16 +1494,16 @@ export default function ClassroomDetailPage() {
                             placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
                             variant="bordered"
                             size="lg"
-                            value={instructorSearchQuery}
-                            onValueChange={setInstructorSearchQuery}
+                            value={modals.instructorModal.searchQuery}
+                            onValueChange={modals.instructorModal.setSearchQuery}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                             endContent={
-                                instructorSearchQuery && (
+                                modals.instructorModal.searchQuery && (
                                     <Button
                                         isIconOnly
                                         size="sm"
                                         variant="light"
-                                        onPress={() => setInstructorSearchQuery("")}
+                                        onPress={() => modals.instructorModal.setSearchQuery("")}
                                     >
                                         <Icon icon="solar:close-circle-bold" className="text-slate-400" />
                                     </Button>
@@ -3317,7 +1525,7 @@ export default function ClassroomDetailPage() {
                             >
                                 เลือกทั้งหมด
                             </Button>
-                            {selectedInstructorIds.length > 0 && (
+                            {modals.instructorModal.selectedIds.length > 0 && (
                                 <Button
                                     size="sm"
                                     variant="flat"
@@ -3336,36 +1544,33 @@ export default function ClassroomDetailPage() {
                                 {filteredInstructors.length === 0 ? (
                                     <div className="p-8 text-center text-slate-500">
                                         <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
-                                        <p>{instructorSearchQuery ? "ไม่พบอาจารย์ที่ค้นหา" : "อาจารย์ทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
+                                        <p>{modals.instructorModal.searchQuery ? "ไม่พบอาจารย์ที่ค้นหา" : "อาจารย์ทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
                                     </div>
                                 ) : (
                                     filteredInstructors.map((instructor) => {
-                                        const isSelected = selectedInstructorIds.includes(instructor.id);
-                                        const isSelf = instructor.id === currentUserId;
+                                        const isSelected = modals.instructorModal.selectedIds.includes(instructor.id);
 
                                         return (
                                             <div
                                                 key={instructor.id}
                                                 onClick={() => {
-                                                    if (isSelf) return; // ไม่ให้เลือกตัวเอง (เพราะอยู่ในวิชาอยู่แล้ว)
-                                                    if (isSelected) {
-                                                        setSelectedInstructorIds(prev => prev.filter(id => id !== instructor.id));
+                                                    const current = modals.instructorModal.selectedIds;
+                                                    if (current.includes(instructor.id)) {
+                                                        modals.instructorModal.setSelectedIds(current.filter(id => id !== instructor.id));
                                                     } else {
-                                                        setSelectedInstructorIds(prev => [...prev, instructor.id]);
+                                                        modals.instructorModal.setSelectedIds([...current, instructor.id]);
                                                     }
                                                 }}
                                                 className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
-                                                    isSelf 
-                                                        ? "bg-slate-100 cursor-not-allowed opacity-60"
-                                                        : isSelected
-                                                            ? "bg-indigo-50 cursor-pointer"
-                                                            : "hover:bg-slate-50 cursor-pointer"
+                                                    isSelected
+                                                        ? "bg-indigo-50 cursor-pointer"
+                                                        : "hover:bg-slate-50 cursor-pointer"
                                                 }`}
                                             >
                                                 {/* Checkbox */}
-                                                <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0">
+                                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0`}>
                                                     {isSelected && (
-                                                        <FaCheckCircle className="text-lg text-indigo-500" />
+                                                        <Icon icon="solar:check-circle-bold" className="text-lg text-indigo-500" />
                                                     )}
                                                 </div>
 
@@ -3373,12 +1578,11 @@ export default function ClassroomDetailPage() {
                                                     name={instructor.full_name}
                                                     src={instructor.avatar || undefined}
                                                     size="sm"
-                                                    className="flex-shrink-0 bg-gradient-to-br from-indigo-500 to-purple-600"
+                                                    className={`flex-shrink-0 bg-gradient-to-br from-indigo-400 to-purple-500`}
                                                 />
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-medium truncate text-slate-800">
                                                         {instructor.full_name}
-                                                        {isSelf && <span className="text-xs text-slate-400 ml-2">(คุณ)</span>}
                                                     </p>
                                                     <p className="text-xs truncate text-slate-500">
                                                         {instructor.email}
@@ -3392,21 +1596,25 @@ export default function ClassroomDetailPage() {
                         </div>
                         
                         {/* Selected Instructors Preview */}
-                        {selectedInstructorIds.length > 0 && (
+                        {modals.instructorModal.selectedIds.length > 0 && (
                             <div className="mt-4">
-                                <p className="text-sm font-medium text-slate-600 mb-2">อาจารย์ที่เลือก ({selectedInstructorIds.length} คน)</p>
+                                <p className="text-sm font-medium text-slate-600 mb-2">อาจารย์ที่เลือก ({modals.instructorModal.selectedIds.length} คน)</p>
                                 <div className="flex flex-wrap gap-2">
-                                    {selectedInstructorIds.map(instId => {
-                                        const inst = instructorsList.find(i => i.id === instId);
-                                        if (!inst) return null;
+                                    {modals.instructorModal.selectedIds.map(instructorId => {
+                                        const instructor = instructorsList.find(i => i.id === instructorId);
+                                        if (!instructor) return null;
                                         return (
                                             <Chip
-                                                key={instId}
+                                                key={instructorId}
                                                 variant="flat"
                                                 color="secondary"
-                                                onClose={() => setSelectedInstructorIds(prev => prev.filter(id => id !== instId))}
+                                                onClose={() => {
+                                                    modals.instructorModal.setSelectedIds(
+                                                        modals.instructorModal.selectedIds.filter(id => id !== instructorId)
+                                                    );
+                                                }}
                                             >
-                                                {inst.full_name}
+                                                {instructor.full_name}
                                             </Chip>
                                         );
                                     })}
@@ -3417,970 +1625,611 @@ export default function ClassroomDetailPage() {
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button 
                             variant="light" 
-                            onPress={() => {
-                                setIsAddInstructorModalOpen(false);
-                                setSelectedInstructorIds([]);
-                                setInstructorSearchQuery("");
-                            }}
+                            onPress={modals.instructorModal.reset}
                         >
                             ยกเลิก
                         </Button>
                         <Button
                             color="secondary"
                             onPress={handleAddInstructors}
-                            isLoading={isSubmitting}
-                            isDisabled={selectedInstructorIds.length === 0}
-                            startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
-                            className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-400/25"
+                            isLoading={modals.isSubmitting}
+                            isDisabled={modals.instructorModal.selectedIds.length === 0}
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
                         >
-                            เพิ่มอาจารย์ {selectedInstructorIds.length > 0 ? `(${selectedInstructorIds.length} คน)` : ""}
+                            เพิ่มอาจารย์ {modals.instructorModal.selectedIds.length > 0 ? `(${modals.instructorModal.selectedIds.length} คน)` : ""}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
             </Modal>
 
             {/* Add Student Modal */}
-            <Modal isOpen={isAddStudentModalOpen} onClose={resetAddStudentModal} size="2xl">
-                <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
-                                <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">เพิ่มนักศึกษา</h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {addStudentMode === "select"
-                                        ? "ค้นหานักศึกษาที่ต้องการเพิ่มในกลุ่มเรียน"
-                                        : "วางรายชื่อจาก Excel เพื่อเพิ่มหลายคนพร้อมกัน"
-                                    }
-                                </p>
-                            </div>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-4">
-                        <div className="space-y-4">
-                            {/* Mode Toggle */}
-                            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-                                <button
-                                    onClick={() => setAddStudentMode("select")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${addStudentMode === "select"
-                                            ? "bg-white text-blue-600 shadow-sm"
-                                            : "text-slate-600 hover:bg-slate-200"
-                                        }`}
-                                >
-                                    <Icon icon="solar:magnifer-linear" />
-                                    เลือกจากรายชื่อ
-                                </button>
-                                <button
-                                    onClick={() => setAddStudentMode("paste")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${addStudentMode === "paste"
-                                            ? "bg-white text-blue-600 shadow-sm"
-                                            : "text-slate-600 hover:bg-slate-200"
-                                        }`}
-                                >
-                                    <Icon icon="solar:clipboard-list-linear" />
-                                    วางจาก Excel
-                                </button>
-                            </div>
-
-                            {/* Select Mode */}
-                            {addStudentMode === "select" && (
-                                <>
-                                    <Input
-                                        label="ค้นหานักศึกษา"
-                                        labelPlacement="outside"
-                                        placeholder="พิมพ์รหัสนักศึกษาหรือชื่อนักศึกษา..."
-                                        variant="bordered"
-                                        size="lg"
-                                        value={studentSearchQuery}
-                                        onValueChange={setStudentSearchQuery}
-                                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
-                                        classNames={{
-                                            inputWrapper: "h-12 bg-white border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                            label: "text-slate-600 font-medium text-sm",
-                                        }}
-                                    />
-
-                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                                            <p className="text-sm text-slate-600">
-                                                {studentSearchQuery.trim()
-                                                    ? `พบ ${filteredStudents().length} รายการ`
-                                                    : `นักศึกษาที่สามารถเพิ่มได้ ${getAvailableStudents().length} คน`
-                                                }
-                                            </p>
-                                        </div>
-                                        <div className="max-h-72 overflow-y-auto">
-                                            {filteredStudents().length > 0 ? (
-                                                filteredStudents().slice(0, 50).map((student) => (
-                                                    <div
-                                                        key={student.id}
-                                                        onClick={() => setSelectedStudentId(student.id.toString())}
-                                                        className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${selectedStudentId === student.id.toString()
-                                                                ? "bg-blue-50 border-l-4 border-l-blue-500"
-                                                                : "hover:bg-slate-50"
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <Avatar name={student.full_name} size="sm" className="bg-blue-500" />
-                                                            <div>
-                                                                <p className="font-medium text-slate-800">{student.full_name}</p>
-                                                                <p className="text-sm text-slate-500">{student.student_id}</p>
-                                                            </div>
-                                                        </div>
-                                                        {selectedStudentId === student.id.toString() && (
-                                                            <Icon icon="solar:check-circle-bold" className="text-xl text-blue-500" />
-                                                        )}
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="text-center py-8">
-                                                    <Icon icon="solar:user-cross-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                                    <p className="text-slate-400">
-                                                        {studentSearchQuery.trim()
-                                                            ? "ไม่พบนักศึกษาที่ค้นหา"
-                                                            : "ไม่มีนักศึกษาที่สามารถเพิ่มได้"
-                                                        }
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
-
-                            {/* Paste Mode */}
-                            {addStudentMode === "paste" && (
-                                <>
-                                    <div>
-                                        <label className="text-slate-600 font-medium text-sm mb-2 block">
-                                            วางรหัสนักศึกษาจาก Excel
-                                        </label>
-                                        <p className="text-xs text-slate-400 mb-2">
-                                            คัดลอกคอลัมน์รหัสนักศึกษาจาก Excel แล้ววางที่นี่ (หนึ่งรหัสต่อหนึ่งบรรทัด)
-                                        </p>
-                                        <textarea
-                                            value={excelPasteData}
-                                            onChange={(e) => {
-                                                setExcelPasteData(e.target.value);
-                                                parseExcelData(e.target.value);
-                                            }}
-                                            placeholder={"63302000-1\n63302000-2\n63302000-3\n..."}
-                                            className="w-full h-32 px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none bg-white"
-                                        />
-                                    </div>
-
-                                    {/* Parse Results */}
-                                    {parsedStudents.length > 0 && (
-                                        <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                                                <p className="text-sm text-slate-600">
-                                                    ผลการตรวจสอบ ({parsedStudents.length} รายการ)
-                                                </p>
-                                                <div className="flex gap-2 text-xs">
-                                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                                                        พบ {parsedStudents.filter(p => p.status === "matched").length}
-                                                    </span>
-                                                    <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
-                                                        มีอยู่แล้ว {parsedStudents.filter(p => p.status === "already_enrolled").length}
-                                                    </span>
-                                                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">
-                                                        ไม่พบ {parsedStudents.filter(p => p.status === "not_found").length}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="max-h-60 overflow-y-auto">
-                                                {parsedStudents.map((result, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${result.status === "matched" ? "bg-green-50" :
-                                                                result.status === "already_enrolled" ? "bg-amber-50" : "bg-red-50"
-                                                            }`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            {result.matchedStudent ? (
-                                                                <>
-                                                                    <Avatar name={result.matchedStudent.full_name} size="sm" className={
-                                                                        result.status === "matched" ? "bg-green-500" : "bg-amber-500"
-                                                                    } />
-                                                                    <div>
-                                                                        <p className="font-medium text-slate-800">{result.matchedStudent.full_name}</p>
-                                                                        <p className="text-sm text-slate-500">{result.matchedStudent.student_id}</p>
-                                                                    </div>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center">
-                                                                        <Icon icon="solar:question-circle-linear" className="text-red-600" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-medium text-slate-800">{result.inputValue}</p>
-                                                                        <p className="text-sm text-red-500">ไม่พบในระบบ</p>
-                                                                    </div>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                        <div>
-                                                            {result.status === "matched" && (
-                                                                <span className="text-xs px-2 py-1 bg-green-200 text-green-700 rounded-full flex items-center gap-1">
-                                                                    <Icon icon="solar:check-circle-bold" className="text-sm" />
-                                                                    พร้อมเพิ่ม
-                                                                </span>
-                                                            )}
-                                                            {result.status === "already_enrolled" && (
-                                                                <span className="text-xs px-2 py-1 bg-amber-200 text-amber-700 rounded-full flex items-center gap-1">
-                                                                    <Icon icon="solar:info-circle-bold" className="text-sm" />
-                                                                    มีอยู่แล้ว
-                                                                </span>
-                                                            )}
-                                                            {result.status === "not_found" && (
-                                                                <span className="text-xs px-2 py-1 bg-red-200 text-red-700 rounded-full flex items-center gap-1">
-                                                                    <Icon icon="solar:close-circle-bold" className="text-sm" />
-                                                                    ไม่พบ
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4">
-                        <Button variant="light" onPress={resetAddStudentModal}>
-                            ยกเลิก
-                        </Button>
-                        {addStudentMode === "select" ? (
-                            <Button
-                                color="primary"
-                                onPress={handleAddStudent}
-                                isLoading={isSubmitting}
-                                isDisabled={!selectedStudentId}
-                                className="bg-gradient-to-r from-blue-400 to-indigo-500"
-                                startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
-                            >
-                                เพิ่มนักศึกษา
-                            </Button>
-                        ) : (
-                            <Button
-                                color="primary"
-                                onPress={handleBulkAddStudents}
-                                isLoading={isSubmitting}
-                                isDisabled={parsedStudents.filter(p => p.status === "matched").length === 0}
-                                className="bg-gradient-to-r from-blue-400 to-indigo-500"
-                                startContent={!isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
-                            >
-                                เพิ่ม {parsedStudents.filter(p => p.status === "matched").length} คน
-                            </Button>
-                        )}
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
-            {/* Add/Edit Assignment Modal */}
-            <Modal
-                isOpen={isAddAssignmentModalOpen}
-                onClose={() => {
-                    setIsAddAssignmentModalOpen(false);
-                    setEditingAssignment(null);
-                }}
+            <Modal 
+                isOpen={modals.studentModal.isOpen} 
+                onClose={modals.studentModal.reset}
                 size="2xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg">
-                                <Icon icon="solar:clipboard-list-bold" className="text-2xl text-white" />
+                            <div className="p-3 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">
-                                    {editingAssignment ? "แก้ไขงาน" : "สร้างงานใหม่"}
-                                </h3>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มนักศึกษา</h3>
                                 <p className="text-sm text-slate-500 font-normal mt-1">
-                                    กำหนดหัวข้องานสำหรับการลงคะแนน
+                                    กลุ่มเรียน {course?.sections?.find(s => s.id === modals.studentModal.sectionId)?.section_no}
                                 </p>
                             </div>
                         </div>
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
-                        <div className="space-y-5">
-                            {/* Assignment Name */}
-                            <Input
-                                label="ชื่องาน"
-                                labelPlacement="outside"
-                                placeholder="เช่น งานที่ 1, Quiz 1, โปรเจคกลุ่ม"
-                                variant="bordered"
-                                size="md"
-                                value={newAssignment.name}
-                                onValueChange={(val) => setNewAssignment(prev => ({ ...prev, name: val }))}
-                                isRequired
-                                classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                    label: "text-slate-600 font-medium text-sm",
-                                }}
-                            />
-
-                            {/* Assignment Type */}
-                            <div>
-                                <label className="text-slate-600 font-medium text-sm mb-2 block">ประเภทงาน</label>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "individual", week_number: undefined }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "individual"
-                                                ? "border-indigo-500 bg-indigo-50"
-                                                : "border-slate-200 hover:border-slate-300"
-                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
-                                        disabled={!!editingAssignment}
-                                    >
-                                        <Icon icon="solar:test-tube-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "individual" ? "text-indigo-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold text-sm ${newAssignment.assignment_type === "individual" ? "text-indigo-600" : "text-slate-600"
-                                            }`}>Lab</p>
-                                        <p className="text-xs text-slate-500 mt-1">งานในคาบ</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "assignment", week_number: undefined }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "assignment"
-                                                ? "border-amber-500 bg-amber-50"
-                                                : "border-slate-200 hover:border-slate-300"
-                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
-                                        disabled={!!editingAssignment}
-                                    >
-                                        <Icon icon="solar:document-text-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "assignment" ? "text-amber-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold text-sm ${newAssignment.assignment_type === "assignment" ? "text-amber-600" : "text-slate-600"
-                                            }`}>Assignment</p>
-                                        <p className="text-xs text-slate-500 mt-1">การบ้าน</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "permanent_group", week_number: undefined }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "permanent_group"
-                                                ? "border-purple-500 bg-purple-50"
-                                                : "border-slate-200 hover:border-slate-300"
-                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
-                                        disabled={!!editingAssignment}
-                                    >
-                                        <Icon icon="solar:users-group-rounded-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "permanent_group" ? "text-purple-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold text-sm ${newAssignment.assignment_type === "permanent_group" ? "text-purple-600" : "text-slate-600"
-                                            }`}>กลุ่มโปรเจกต์</p>
-                                        <p className="text-xs text-slate-500 mt-1">กลุ่มถาวร</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setNewAssignment(prev => ({ ...prev, assignment_type: "weekly_group", week_number: selectedWeek }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.assignment_type === "weekly_group"
-                                                ? "border-emerald-500 bg-emerald-50"
-                                                : "border-slate-200 hover:border-slate-300"
-                                            } ${editingAssignment ? "opacity-60 cursor-not-allowed" : ""}`}
-                                        disabled={!!editingAssignment}
-                                    >
-                                        <Icon icon="solar:calendar-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.assignment_type === "weekly_group" ? "text-emerald-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold text-sm ${newAssignment.assignment_type === "weekly_group" ? "text-emerald-600" : "text-slate-600"
-                                            }`}>กลุ่มสัปดาห์</p>
-                                        <p className="text-xs text-slate-500 mt-1">กลุ่มรายสัปดาห์</p>
-                                    </button>
-                                </div>
+                        <div className="space-y-4">
+                            {/* Mode Tabs */}
+                            <div className="flex gap-2">
+                                <Button
+                                    size="sm"
+                                    variant={modals.studentModal.mode === "select" ? "solid" : "flat"}
+                                    color={modals.studentModal.mode === "select" ? "primary" : "default"}
+                                    onPress={() => modals.studentModal.setMode("select")}
+                                    className={modals.studentModal.mode === "select" ? "bg-gradient-to-r from-cyan-400 to-blue-500" : ""}
+                                    startContent={<Icon icon="solar:user-check-bold" />}
+                                >
+                                    เลือกจากรายชื่อ
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={modals.studentModal.mode === "paste" ? "solid" : "flat"}
+                                    color={modals.studentModal.mode === "paste" ? "primary" : "default"}
+                                    onPress={() => modals.studentModal.setMode("paste")}
+                                    className={modals.studentModal.mode === "paste" ? "bg-gradient-to-r from-emerald-400 to-teal-500" : ""}
+                                    startContent={<Icon icon="solar:clipboard-text-bold" />}
+                                >
+                                    วางจาก Excel
+                                </Button>
                             </div>
 
-                            {/* Week Number - Only show for weekly group */}
-                            {newAssignment.assignment_type === "weekly_group" && (
-                                <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                                    <label className="text-slate-600 font-medium text-sm mb-2 block">สัปดาห์ที่</label>
-                                    {Object.keys(weeklyTeams).length > 0 ? (
-                                        <Select
-                                            placeholder="เลือกสัปดาห์"
-                                            selectedKeys={newAssignment.week_number ? [newAssignment.week_number.toString()] : []}
-                                            size="md"
-                                            onSelectionChange={(keys) => {
-                                                const val = Array.from(keys)[0] as string;
-                                                if (val) {
-                                                    setNewAssignment(prev => ({ ...prev, week_number: parseInt(val) }));
-                                                }
-                                            }}
-                                            variant="bordered"
-                                            classNames={{
-                                                trigger: "bg-white border-slate-200",
-                                                value: "text-slate-800",
-                                            }}
-                                        >
-                                            {Object.keys(weeklyTeams)
-                                                .map(Number)
-                                                .sort((a, b) => a - b)
-                                                .map((weekNum) => (
-                                                    <SelectItem key={weekNum.toString()} textValue={`สัปดาห์ที่ ${weekNum}`}>
-                                                        <div className="flex items-center justify-between w-full">
-                                                            <span>สัปดาห์ที่ {weekNum}</span>
-                                                            <span className="text-xs text-slate-500">
-                                                                ({weeklyTeams[weekNum]?.length || 0} กลุ่ม)
-                                                            </span>
-                                                        </div>
-                                                    </SelectItem>
-                                                ))}
-                                        </Select>
-                                    ) : (
-                                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-200 text-center">
-                                            <Icon icon="solar:info-circle-bold" className="text-amber-500 text-xl mb-1" />
-                                            <p className="text-sm text-amber-700">ยังไม่มีกลุ่มประจำสัปดาห์</p>
-                                            <p className="text-xs text-amber-600 mt-1">กรุณาสร้างกลุ่มประจำสัปดาห์ก่อน</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* Link to Attendance Session - Multi-select */}
-                            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-100 rounded-lg">
-                                            <Icon icon="solar:clipboard-check-bold" className="text-lg text-blue-600" />
-                                        </div>
-                                        <div>
-                                            <span className="font-semibold text-slate-700">ลิงก์กับการเช็คชื่อ</span>
-                                            <p className="text-xs text-slate-500">สามารถเลือกหลายรอบเช็คชื่อได้</p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant={newAssignment.linked_attendance_session_ids.length > 0 ? "solid" : "bordered"}
-                                        color={newAssignment.linked_attendance_session_ids.length > 0 ? "primary" : "default"}
-                                        onPress={() => {
-                                            if (newAssignment.linked_attendance_session_ids.length > 0) {
-                                                setNewAssignment(prev => ({ 
-                                                    ...prev, 
-                                                    linked_attendance_session_ids: [],
-                                                    linked_attendance_session_id: null 
-                                                }));
-                                            }
-                                        }}
-                                        startContent={
-                                            <Icon 
-                                                icon={newAssignment.linked_attendance_session_ids.length > 0 ? "solar:link-bold" : "solar:link-broken-bold"} 
-                                                className="text-lg" 
-                                            />
-                                        }
-                                    >
-                                        {newAssignment.linked_attendance_session_ids.length > 0 
-                                            ? `ลิงก์ ${newAssignment.linked_attendance_session_ids.length} รอบ` 
-                                            : "ไม่ลิงก์"}
-                                    </Button>
-                                </div>
-                                
-                                {attendanceSessions.length > 0 ? (
-                                    <Select
-                                        placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์ (เลือกได้หลายรอบ)"
-                                        selectionMode="multiple"
-                                        size="md"
-                                        selectedKeys={new Set(newAssignment.linked_attendance_session_ids.map(String))}
-                                        onSelectionChange={(keys) => {
-                                            const selectedIds = Array.from(keys).map(k => parseInt(k as string));
-                                            setNewAssignment(prev => ({ 
-                                                ...prev, 
-                                                linked_attendance_session_ids: selectedIds,
-                                                linked_attendance_session_id: selectedIds.length === 1 ? selectedIds[0] : null
-                                            }));
-                                        }}
+                            {modals.studentModal.mode === "select" ? (
+                                <>
+                                    <Input
+                                        placeholder="ค้นหานักศึกษา..."
                                         variant="bordered"
+                                        size="lg"
+                                        value={modals.studentModal.searchQuery}
+                                        onValueChange={modals.studentModal.setSearchQuery}
+                                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                         classNames={{
-                                            trigger: "bg-white border-slate-200",
-                                            value: "text-slate-800",
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-cyan-300 focus-within:!border-cyan-400",
+                                        }}
+                                    />
+                                    <Select
+                                        label="เลือกนักศึกษา"
+                                        labelPlacement="outside"
+                                        placeholder="เลือกนักศึกษาที่ต้องการเพิ่ม"
+                                        variant="bordered"
+                                        size="lg"
+                                        selectedKeys={modals.studentModal.studentId ? [modals.studentModal.studentId] : []}
+                                        onSelectionChange={(keys) => {
+                                            const selected = Array.from(keys)[0] as string;
+                                            modals.studentModal.setStudentId(selected || "");
+                                        }}
+                                        classNames={{
+                                            trigger: "h-12 bg-white border-slate-200 hover:border-cyan-300 data-[open=true]:border-cyan-400",
+                                            label: "text-slate-600 font-medium text-sm",
                                         }}
                                     >
-                                        {attendanceSessions.map((session) => (
-                                            <SelectItem key={String(session.id)} textValue={session.title}>
+                                        {filteredStudents().map(student => (
+                                            <SelectItem key={String(student.id)} textValue={`${student.student_id} - ${student.full_name}`}>
                                                 <div className="flex items-center gap-3">
-                                                    {/* <Icon 
-                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
-                                                              session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
-                                                        className={session.session_type === "lecture" ? "text-blue-500" : 
-                                                                   session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
-                                                    /> */}
+                                                    <Avatar size="sm" name={student.full_name} className="bg-gradient-to-br from-cyan-400 to-blue-500 text-white" />
                                                     <div>
-                                                        <span className="font-medium">{session.title}</span>
-                                                        <span className="text-xs text-slate-500 ml-2">
-                                                            {new Date(session.start_time).toLocaleDateString("th-TH", { 
-                                                                day: "numeric", 
-                                                                month: "short",
-                                                                year: "2-digit"
-                                                            })}
-                                                        </span>
+                                                        <p className="font-medium text-slate-800">{student.student_id}</p>
+                                                        <p className="text-xs text-slate-500">{student.full_name}</p>
                                                     </div>
                                                 </div>
                                             </SelectItem>
                                         ))}
                                     </Select>
-                                ) : (
-                                    <div className="p-3 bg-slate-100 rounded-lg text-center">
-                                        <Icon icon="solar:clipboard-list-linear" className="text-slate-400 text-xl mb-1" />
-                                        <p className="text-sm text-slate-500">ยังไม่มีรอบเช็คชื่อ</p>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                        <p className="text-sm text-slate-600">
+                                            <Icon icon="solar:info-circle-bold" className="text-cyan-500 inline mr-1" />
+                                            วางรหัสนักศึกษา หรือชื่อ-นามสกุล หนึ่งรายการต่อบรรทัด
+                                        </p>
                                     </div>
-                                )}
-                                
-                                {/* Attendance Condition (AND/OR) - Only show when multiple sessions selected */}
-                                {newAssignment.linked_attendance_session_ids.length > 1 && (
-                                    <div className="mt-4 p-3 bg-white rounded-lg border border-slate-200">
-                                        <label className="text-slate-600 font-medium text-sm mb-3 block">
-                                            เงื่อนไขการเช็คชื่อ
-                                        </label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <button
-                                                type="button"
-                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "or" }))}
-                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
-                                                    newAssignment.attendance_condition === "or"
-                                                        ? "border-blue-500 bg-blue-50"
-                                                        : "border-slate-200 hover:border-slate-300"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <Icon 
-                                                        icon="solar:alt-arrow-right-bold" 
-                                                        className={newAssignment.attendance_condition === "or" ? "text-blue-600" : "text-slate-400"} 
-                                                    />
-                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "or" ? "text-blue-700" : "text-slate-600"}`}>
-                                                        อย่างน้อย 1 รอบ
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-500">มาเรียนอย่างน้อย 1 รอบถึงจะลงคะแนนได้</p>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setNewAssignment(prev => ({ ...prev, attendance_condition: "and" }))}
-                                                className={`p-3 rounded-lg border-2 transition-all text-left ${
-                                                    newAssignment.attendance_condition === "and"
-                                                        ? "border-amber-500 bg-amber-50"
-                                                        : "border-slate-200 hover:border-slate-300"
-                                                }`}
-                                            >
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <Icon 
-                                                        icon="solar:check-circle-bold" 
-                                                        className={newAssignment.attendance_condition === "and" ? "text-amber-600" : "text-slate-400"} 
-                                                    />
-                                                    <span className={`font-semibold ${newAssignment.attendance_condition === "and" ? "text-amber-700" : "text-slate-600"}`}>
-                                                        ทุกรอบ
-                                                    </span>
-                                                </div>
-                                                <p className="text-xs text-slate-500">ต้องมาเรียนครบทุกรอบถึงจะลงคะแนนได้</p>
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                {newAssignment.linked_attendance_session_ids.length > 0 && (
-                                    <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                                        <div className="flex items-start gap-2 text-blue-700">
-                                            <Icon icon="solar:info-circle-bold" className="mt-0.5" />
-                                            <div className="text-sm">
-                                                <span className="font-medium">
-                                                    {newAssignment.linked_attendance_session_ids.length === 1 
-                                                        ? "นักศึกษาที่ขาดเรียนในรอบเช็คชื่อนี้ จะไม่สามารถลงคะแนนได้"
-                                                        : newAssignment.attendance_condition === "or"
-                                                            ? `นักศึกษาที่ขาดเรียนทั้ง ${newAssignment.linked_attendance_session_ids.length} รอบ จะไม่สามารถลงคะแนนได้`
-                                                            : `นักศึกษาต้องมาเรียนครบทุกรอบ (${newAssignment.linked_attendance_session_ids.length} รอบ) จึงจะลงคะแนนได้`
-                                                    }
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Has Sub Items Toggle */}
-                            <div>
-                                <label className="text-slate-600 font-medium text-sm mb-2 block">รูปแบบคะแนน</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button
-                                        type="button"
-                                        disabled={!!editingAssignment}
-                                        onClick={() => setNewAssignment(prev => ({
-                                            ...prev,
-                                            hasSubItems: false,
-                                            subItems: []
-                                        }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${!newAssignment.hasSubItems
-                                                ? "border-blue-500 bg-blue-50"
-                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
-                                            }`}
-                                    >
-                                        <Icon icon="solar:document-bold" className={`text-3xl mx-auto mb-2 ${!newAssignment.hasSubItems ? "text-blue-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold ${!newAssignment.hasSubItems ? "text-blue-600" : "text-slate-600"
-                                            }`}>คะแนนเดียว</p>
-                                        <p className="text-xs text-slate-500 mt-1">ให้คะแนนรวมทั้งงาน</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={!!editingAssignment}
-                                        onClick={() => setNewAssignment(prev => ({
-                                            ...prev,
-                                            hasSubItems: true,
-                                            subItems: prev.subItems.length > 0 ? prev.subItems : [
-                                                { name: "ข้อ 1", max_score: 5 }
-                                            ]
-                                        }))}
-                                        className={`p-4 rounded-xl border-2 transition-all ${newAssignment.hasSubItems
-                                                ? "border-amber-500 bg-amber-50"
-                                                : "border-slate-200 hover:border-slate-300 opacity-60 cursor-not-allowed"
-                                            }`}
-                                    >
-                                        <Icon icon="solar:checklist-bold" className={`text-3xl mx-auto mb-2 ${newAssignment.hasSubItems ? "text-amber-500" : "text-slate-400"
-                                            }`} />
-                                        <p className={`font-semibold ${newAssignment.hasSubItems ? "text-amber-600" : "text-slate-600"
-                                            }`}>มีข้อย่อย</p>
-                                        <p className="text-xs text-slate-500 mt-1">แบ่งเป็นหลายข้อย่อย</p>
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Single Score Input */}
-                            {!newAssignment.hasSubItems && (
-                                <Input
-                                    type="number"
-                                    label="คะแนนเต็ม"
-                                    labelPlacement="outside"
-                                    placeholder="เช่น 10, 20, 100"
-                                    variant="bordered"
-                                    size="md"
-                                    min={0}
-                                    step="any"
-                                    value={newAssignment.maxScore.toString()}
-                                    onValueChange={(val) => setNewAssignment(prev => ({ ...prev, maxScore: parseFloat(val) || 0 }))}
-                                    isRequired
-                                    endContent={<span className="text-slate-400 text-sm">คะแนน</span>}
-                                    className="pt-6"
-                                    classNames={{
-                                        inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                        label: "text-slate-600 font-medium text-sm",
-                                    }}
-                                />
-                            )}
-
-                            {/* Sub Items Editor */}
-                            {newAssignment.hasSubItems && (
-                                <div>
-                                    <div className="flex items-center justify-between mb-3">
-                                        <label className="text-slate-600 font-medium text-sm">
-                                            ข้อย่อย ({newAssignment.subItems.length} ข้อ)
-                                        </label>
-                                        <div className="flex items-center gap-2">
-                                            <Chip size="sm" variant="flat" className="bg-amber-100 text-amber-600">
-                                                รวม {(() => {
-                                                    const total = newAssignment.subItems.reduce((acc, sub) => acc + sub.max_score, 0);
-                                                    return Number.isInteger(total) ? total : total.toFixed(2);
-                                                })()} คะแนน
-                                            </Chip>
-                                            <Button
-                                                size="sm"
-                                                color="primary"
-                                                variant="flat"
-                                                startContent={<Icon icon="solar:add-circle-linear" />}
-                                                onPress={() => {
-                                                    setNewAssignment(prev => ({
-                                                        ...prev,
-                                                        subItems: [
-                                                            ...prev.subItems,
-                                                            {
-                                                                name: `ข้อ ${prev.subItems.length + 1}`,
-                                                                max_score: 10
-                                                            }
-                                                        ]
-                                                    }));
-                                                }}
-                                            >
-                                                เพิ่มข้อ
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                                        {newAssignment.subItems.map((subItem, idx) => (
-                                            <div
-                                                key={subItem.id || idx}
-                                                className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl"
-                                            >
-                                                <span className="w-8 h-8 flex items-center justify-center bg-blue-100 text-blue-600 text-sm font-bold rounded-full flex-shrink-0">
-                                                    {idx + 1}
-                                                </span>
-                                                <Input
-                                                    size="sm"
-                                                    variant="bordered"
-                                                    placeholder="ชื่อข้อย่อย"
-                                                    value={subItem.name}
-                                                    onValueChange={(val) => {
-                                                        setNewAssignment(prev => ({
-                                                            ...prev,
-                                                            subItems: prev.subItems.map((s, i) =>
-                                                                i === idx ? { ...s, name: val } : s
-                                                            )
-                                                        }));
-                                                    }}
-                                                    classNames={{
-                                                        inputWrapper: "h-10 bg-white border-slate-200",
-                                                    }}
-                                                />
-                                                <Input
-                                                    type="number"
-                                                    size="sm"
-                                                    variant="bordered"
-                                                    placeholder="คะแนน"
-                                                    min={0}
-                                                    step="any"
-                                                    value={subItem.max_score.toString()}
-                                                    onValueChange={(val) => {
-                                                        setNewAssignment(prev => ({
-                                                            ...prev,
-                                                            subItems: prev.subItems.map((s, i) =>
-                                                                i === idx ? { ...s, max_score: parseFloat(val) || 0 } : s
-                                                            )
-                                                        }));
-                                                    }}
-                                                    className="w-36"
-                                                    endContent={<span className="text-slate-400 text-xs">คะแนน</span>}
-                                                    classNames={{
-                                                        inputWrapper: "h-10 bg-white border-slate-200",
-                                                    }}
-                                                />
-                                                <Button
-                                                    isIconOnly
-                                                    size="sm"
-                                                    variant="light"
-                                                    color="danger"
-                                                    isDisabled={newAssignment.subItems.length <= 1}
-                                                    onPress={() => {
-                                                        setNewAssignment(prev => ({
-                                                            ...prev,
-                                                            subItems: prev.subItems.filter((_, i) => i !== idx)
-                                                        }));
-                                                    }}
+                                    <Input
+                                        label="วางรายชื่อจาก Excel"
+                                        labelPlacement="outside"
+                                        placeholder="วางรหัสนักศึกษา (แต่ละบรรทัด)"
+                                        variant="bordered"
+                                        size="lg"
+                                        value={modals.studentModal.excelData}
+                                        onValueChange={(value) => {
+                                            modals.studentModal.setExcelData(value);
+                                            parseExcelData(value);
+                                        }}
+                                        startContent={<Icon icon="solar:document-text-linear" className="text-slate-400" />}
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
+                                    {modals.studentModal.parsedStudents.length > 0 && (
+                                        <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
+                                            {modals.studentModal.parsedStudents.map((item, index) => (
+                                                <div 
+                                                    key={index}
+                                                    className={`p-3 rounded-lg border transition-all ${
+                                                        item.status === "matched" ? "border-emerald-200 bg-emerald-50" :
+                                                        item.status === "already_enrolled" ? "border-amber-200 bg-amber-50" :
+                                                        "border-red-200 bg-red-50"
+                                                    }`}
                                                 >
-                                                    <Icon icon="solar:trash-bin-trash-linear" />
-                                                </Button>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon 
+                                                                icon={
+                                                                    item.status === "matched" ? "solar:check-circle-bold" :
+                                                                    item.status === "already_enrolled" ? "solar:info-circle-bold" :
+                                                                    "solar:close-circle-bold"
+                                                                }
+                                                                className={`text-lg ${
+                                                                    item.status === "matched" ? "text-emerald-500" :
+                                                                    item.status === "already_enrolled" ? "text-amber-500" :
+                                                                    "text-red-500"
+                                                                }`}
+                                                            />
+                                                            <span className="text-sm font-medium">{item.inputValue}</span>
+                                                        </div>
+                                                        {item.status === "matched" && item.matchedStudent && (
+                                                            <span className="text-xs text-emerald-600 font-medium">
+                                                                → {item.matchedStudent.student_id} {item.matchedStudent.full_name}
+                                                            </span>
+                                                        )}
+                                                        {item.status === "already_enrolled" && (
+                                                            <span className="text-xs text-amber-600 font-medium">ลงทะเบียนแล้ว</span>
+                                                        )}
+                                                        {item.status === "not_found" && (
+                                                            <span className="text-xs text-red-600 font-medium">ไม่พบ</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
+                                                <Chip size="sm" color="success" variant="flat">
+                                                    <Icon icon="solar:check-circle-bold" className="mr-1" />
+                                                    พบ {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length}
+                                                </Chip>
+                                                <Chip size="sm" color="warning" variant="flat">
+                                                    <Icon icon="solar:info-circle-bold" className="mr-1" />
+                                                    ซ้ำ {modals.studentModal.parsedStudents.filter(p => p.status === "already_enrolled").length}
+                                                </Chip>
+                                                <Chip size="sm" color="danger" variant="flat">
+                                                    <Icon icon="solar:close-circle-bold" className="mr-1" />
+                                                    ไม่พบ {modals.studentModal.parsedStudents.filter(p => p.status === "not_found").length}
+                                                </Chip>
                                             </div>
-                                        ))}
-                                    </div>
-                                </div>
+                                        </div>
+                                    )}
+                                </>
                             )}
-
-                            {/* Due Date */}
-                            {/* <Input
-                                type="date"
-                                label="กำหนดส่ง (ถ้ามี)"
-                                labelPlacement="outside"
-                                variant="bordered"
-                                size="lg"
-                                value={newAssignment.dueDate}
-                                onValueChange={(val) => setNewAssignment(prev => ({ ...prev, dueDate: val }))}
-
-                                className="pt-4"
-                                classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                    label: "text-slate-600 font-medium text-sm",
-
-                                }}
-                            /> */}
-
-                            {/* Description */}
-                            <Input
-                                label="รายละเอียดเพิ่มเติม"
-                                labelPlacement="outside"
-                                placeholder="คำอธิบายเกี่ยวกับงาน (ถ้ามี)"
-                                variant="bordered"
-                                size="md"
-                                value={newAssignment.description}
-                                onValueChange={(val) => setNewAssignment(prev => ({ ...prev, description: val }))}
-                                className="pt-4"
-                                classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                    label: "text-slate-600 font-medium text-sm",
-                                }}
-                            />
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <div className="flex items-center justify-between w-full">
-                            <div className="text-sm text-slate-500">
-                                {newAssignment.hasSubItems
-                                    ? `คะแนนรวม: ${newAssignment.subItems.reduce((acc, sub) => acc + sub.max_score, 0)} คะแนน`
-                                    : `คะแนนเต็ม: ${newAssignment.maxScore} คะแนน`
-                                }
-                            </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="light"
-                                    onPress={() => {
-                                        setIsAddAssignmentModalOpen(false);
-                                        setEditingAssignment(null);
-                                    }}
-                                >
-                                    ยกเลิก
-                                </Button>
-                                <Button
-                                    color="primary"
-                                    onPress={async () => {
-                                        if (!newAssignment.name.trim()) {
-                                            addToast({
-                                                title: "ข้อมูลไม่ครบ",
-                                                description: "กรุณากรอกชื่องาน",
-                                                color: "warning",
-                                            });
-                                            return;
-                                        }
-                                        if (newAssignment.hasSubItems && newAssignment.subItems.length === 0) {
-                                            addToast({
-                                                title: "ข้อมูลไม่ครบ",
-                                                description: "กรุณาเพิ่มข้อย่อยอย่างน้อย 1 ข้อ",
-                                                color: "warning",
-                                            });
-                                            return;
-                                        }
-                                        if (newAssignment.assignment_type === "weekly_group" && !newAssignment.week_number) {
-                                            addToast({
-                                                title: "ข้อมูลไม่ครบ",
-                                                description: "กรุณาเลือกสัปดาห์",
-                                                color: "warning",
-                                            });
-                                            return;
-                                        }
+                        <Button 
+                            variant="light" 
+                            onPress={modals.studentModal.reset}
+                        >
+                            ยกเลิก
+                        </Button>
+                        {modals.studentModal.mode === "select" ? (
+                            <Button 
+                                color="primary" 
+                                onPress={handleAddStudent}
+                                isLoading={modals.isSubmitting}
+                                isDisabled={!modals.studentModal.studentId}
+                                startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                                className="bg-gradient-to-r from-cyan-400 to-blue-500 shadow-lg shadow-cyan-400/25"
+                            >
+                                เพิ่มนักศึกษา
+                            </Button>
+                        ) : (
+                            <Button 
+                                color="success" 
+                                onPress={handleBulkAddStudents}
+                                isLoading={modals.isSubmitting}
+                                isDisabled={modals.studentModal.parsedStudents.filter(p => p.status === "matched").length === 0}
+                                startContent={!modals.isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
+                                className="bg-gradient-to-r from-emerald-400 to-teal-500 shadow-lg shadow-emerald-400/25"
+                            >
+                                เพิ่ม {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length} คน
+                            </Button>
+                        )}
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
 
-                                        setIsSubmitting(true);
-                                        try {
-                                            if (editingAssignment) {
-                                                // Update existing via API
-                                                const result = await assignmentService.updateAssignment(editingAssignment.id, {
-                                                    name: newAssignment.name,
-                                                    description: newAssignment.description || undefined,
-                                                    assignment_type: newAssignment.assignment_type,
-                                                    week_number: newAssignment.week_number,
-                                                    max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
-                                                    sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
-                                                    due_date: newAssignment.dueDate || undefined,
-                                                    // Use new multi-session format
-                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
-                                                        ? newAssignment.linked_attendance_session_ids 
-                                                        : [],
-                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
-                                                        ? newAssignment.attendance_condition 
-                                                        : undefined,
-                                                });
-                                                if (result) {
-                                                    await fetchAssignmentsNew();
-                                                    fetchOverview(); // Refresh overview data
-                                                    addToast({
-                                                        title: "สำเร็จ",
-                                                        description: "แก้ไขงานเรียบร้อยแล้ว",
-                                                        color: "success",
-                                                    });
-                                                    
-                                                    // Emit real-time update
-                                                    isUpdatingRef.current = true;
-                                                    emitDataUpdate("assignment", "update", editingAssignment.id);
-                                                    setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                                                }
-                                            } else {
-                                                // Create new via API
-                                                // courseId is already a string (nanoid format)
-                                                if (!courseId) {
-                                                    addToast({
-                                                        title: "เกิดข้อผิดพลาด",
-                                                        description: "ไม่พบรหัสรายวิชา",
-                                                        color: "danger",
-                                                    });
-                                                    setIsSubmitting(false);
-                                                    return;
-                                                }
-                                                const result = await assignmentService.createAssignment({
-                                                    course_id: courseId,
-                                                    name: newAssignment.name,
-                                                    description: newAssignment.description || undefined,
-                                                    assignment_type: newAssignment.assignment_type,
-                                                    week_number: newAssignment.week_number,
-                                                    max_score: newAssignment.hasSubItems ? undefined : newAssignment.maxScore,
-                                                    sub_items: newAssignment.hasSubItems ? newAssignment.subItems : undefined,
-                                                    due_date: newAssignment.dueDate || undefined,
-                                                    // Use new multi-session format
-                                                    linked_attendance_session_ids: newAssignment.linked_attendance_session_ids.length > 0 
-                                                        ? newAssignment.linked_attendance_session_ids 
-                                                        : undefined,
-                                                    attendance_condition: newAssignment.linked_attendance_session_ids.length > 1 
-                                                        ? newAssignment.attendance_condition 
-                                                        : undefined,
-                                                });
-                                                if (result) {
-                                                    await fetchAssignmentsNew();
-                                                    fetchOverview(); // Refresh overview data
-                                                    addToast({
-                                                        title: "สำเร็จ",
-                                                        description: "สร้างงานใหม่เรียบร้อยแล้ว",
-                                                        color: "success",
-                                                    });
-                                                    
-                                                    // Emit real-time update
-                                                    isUpdatingRef.current = true;
-                                                    emitDataUpdate("assignment", "create", result.id);
-                                                    setTimeout(() => { isUpdatingRef.current = false; }, 500);
-                                                }
-                                            }
-                                            setIsAddAssignmentModalOpen(false);
-                                            setEditingAssignment(null);
-                                        } catch (error) {
-                                            console.error("Error saving assignment:", error);
-                                            addToast({
-                                                title: "เกิดข้อผิดพลาด",
-                                                description: "ไม่สามารถบันทึกงานได้",
-                                                color: "danger",
-                                            });
-                                        } finally {
-                                            setIsSubmitting(false);
-                                        }
-                                    }}
-                                    isLoading={isSubmitting}
-                                    className="bg-blue-500"
-                                    startContent={!isSubmitting && <Icon icon={editingAssignment ? "solar:pen-bold" : "solar:add-circle-bold"} />}
-                                >
-                                    {editingAssignment ? "บันทึกการแก้ไข" : "สร้างงาน"}
-                                </Button>
+            {/* Delete Confirmation Modal */}
+            <Modal 
+                isOpen={modals.deleteModal.isOpen} 
+                onClose={modals.deleteModal.reset}
+                size="lg"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">
+                                    {modals.deleteModal.type === "student" && "นำนักศึกษาออก"}
+                                    {modals.deleteModal.type === "section" && "ลบกลุ่มเรียน"}
+                                    {modals.deleteModal.type === "team" && "ลบกลุ่ม"}
+                                    {modals.deleteModal.type === "ta" && "นำผู้ช่วยสอนออก"}
+                                    {modals.deleteModal.type === "instructor" && "นำอาจารย์ออก"}
+                                </h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                                </p>
                             </div>
                         </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        {modals.deleteModal.target && (
+                            <div className="space-y-4">
+                                {/* Info Card */}
+                                <Card className="border border-red-100 bg-red-50/50">
+                                    <CardBody className="py-4 px-4">
+                                        <div className="flex items-center gap-4">
+                                            {/* Student Delete */}
+                                            {modals.deleteModal.type === "student" && (
+                                                <>
+                                                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                                                        <Icon icon="solar:user-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.studentName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                {modals.deleteModal.target.studentCode}
+                                                            </Chip>
+                                                            <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600">
+                                                                Section {modals.deleteModal.target.sectionNo}
+                                                            </Chip>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* Section Delete */}
+                                            {modals.deleteModal.type === "section" && (
+                                                <>
+                                                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                                                        <Icon icon="solar:notebook-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">กลุ่มเรียน {modals.deleteModal.target.sectionNo}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                <Icon icon="solar:users-group-rounded-linear" className="mr-1" />
+                                                                {modals.deleteModal.target.sectionStudentCount || 0} นักศึกษา
+                                                            </Chip>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* Team Delete */}
+                                            {modals.deleteModal.type === "team" && (
+                                                <>
+                                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${
+                                                        modals.deleteModal.target.teamType === "permanent"
+                                                            ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                                                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                                                    }`}>
+                                                        <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.teamName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className={
+                                                                modals.deleteModal.target.teamType === "permanent"
+                                                                    ? "bg-purple-100 text-purple-700"
+                                                                    : "bg-emerald-100 text-emerald-700"
+                                                            }>
+                                                                {modals.deleteModal.target.teamType === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มสัปดาห์"}
+                                                            </Chip>
+                                                            {modals.deleteModal.target.weekNumber && (
+                                                                <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                                    W{modals.deleteModal.target.weekNumber}
+                                                                </Chip>
+                                                            )}
+                                                        </div>
+                                                        {modals.deleteModal.target.teamMembers && modals.deleteModal.target.teamMembers.length > 0 && (
+                                                            <div className="flex items-center gap-1 mt-2 text-sm text-slate-500">
+                                                                <Icon icon="solar:users-group-rounded-linear" className="text-slate-400" />
+                                                                {modals.deleteModal.target.teamMembers.length} สมาชิก
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* TA Delete */}
+                                            {modals.deleteModal.type === "ta" && (
+                                                <>
+                                                    <Avatar
+                                                        src={modals.deleteModal.target.taAvatar}
+                                                        name={modals.deleteModal.target.taName}
+                                                        className="w-14 h-14 text-xl"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.taName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                ผู้ช่วยสอน
+                                                            </Chip>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 mt-1">{modals.deleteModal.target.taEmail}</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* Instructor Delete */}
+                                            {modals.deleteModal.type === "instructor" && (
+                                                <>
+                                                    <Avatar
+                                                        src={(modals.deleteModal.target as any).instructorAvatar}
+                                                        name={(modals.deleteModal.target as any).instructorName}
+                                                        className="w-14 h-14 text-xl"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{(modals.deleteModal.target as any).instructorName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-indigo-100 text-indigo-700">
+                                                                อาจารย์
+                                                            </Chip>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 mt-1">{(modals.deleteModal.target as any).instructorEmail}</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Additional Info Card */}
+                                {modals.deleteModal.type === "section" && (modals.deleteModal.target.sectionStudentCount || 0) > 0 && (
+                                    <Card className="border border-amber-200 bg-amber-50">
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:users-group-rounded-bold" className="text-xl text-amber-600 mt-0.5" />
+                                                <div>
+                                                    <p className="font-medium text-amber-800">เกี่ยวกับนักศึกษา</p>
+                                                    <p className="text-sm text-amber-700 mt-1">
+                                                        นักศึกษาทั้งหมด {modals.deleteModal.target.sectionStudentCount} คนในกลุ่มเรียนนี้จะถูกนำออกด้วย
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                )}
+
+                                {modals.deleteModal.type === "team" && modals.deleteModal.target.teamMembers && modals.deleteModal.target.teamMembers.length > 0 && (
+                                    <Card className="border border-amber-200 bg-amber-50">
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:users-group-rounded-bold" className="text-xl text-amber-600 mt-0.5" />
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-amber-800">สมาชิกในกลุ่ม ({modals.deleteModal.target.teamMembers.length} คน)</p>
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {modals.deleteModal.target.teamMembers.slice(0, 5).map(m => (
+                                                            <Chip key={m.id} size="sm" variant="flat" className="bg-amber-100 text-amber-700">
+                                                                {m.full_name}
+                                                            </Chip>
+                                                        ))}
+                                                        {modals.deleteModal.target.teamMembers.length > 5 && (
+                                                            <Chip size="sm" variant="flat" className="bg-amber-200 text-amber-800">
+                                                                +{modals.deleteModal.target.teamMembers.length - 5} คน
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                )}
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                {modals.deleteModal.type === "student" && "คุณต้องการนำนักศึกษานี้ออกใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "section" && "คุณต้องการลบกลุ่มเรียนนี้ใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "team" && "คุณต้องการลบกลุ่มนี้ใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "ta" && "คุณต้องการนำผู้ช่วยสอนออกใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "instructor" && "คุณต้องการนำอาจารย์ออกใช่หรือไม่?"}
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={modals.deleteModal.reset}
+                            isDisabled={modals.isSubmitting}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={() => {
+                                switch (modals.deleteModal.type) {
+                                    case "student": confirmRemoveStudent(); break;
+                                    case "section": confirmRemoveSection(); break;
+                                    case "team": confirmDeleteTeam(); break;
+                                    case "ta": confirmRemoveTA(); break;
+                                    case "instructor": confirmRemoveInstructor(); break;
+                                }
+                            }}
+                            isLoading={modals.isSubmitting}
+                            className="bg-red-500"
+                        >
+                            {modals.deleteModal.type === "student" && "นำออก"}
+                            {modals.deleteModal.type === "section" && "ลบกลุ่มเรียน"}
+                            {modals.deleteModal.type === "team" && "ลบกลุ่ม"}
+                            {modals.deleteModal.type === "ta" && "นำออก"}
+                            {modals.deleteModal.type === "instructor" && "นำออก"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Bulk Delete Teams Modal */}
+            <Modal 
+                isOpen={modals.bulkDeleteModal.isOpen} 
+                onClose={() => modals.bulkDeleteModal.setIsOpen(false)}
+                size="lg"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ลบกลุ่มทั้งหมด</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                                </p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            {/* Info Card */}
+                            <Card className="border border-red-100 bg-red-50/50">
+                                <CardBody className="py-4 px-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                                            <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-lg text-slate-800">
+                                                กลุ่มสัปดาห์ที่ {selectedWeek}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-700">
+                                                    <Icon icon="solar:users-group-rounded-linear" className="mr-1" />
+                                                    {(weeklyTeams[selectedWeek] || []).length} กลุ่ม
+                                                </Chip>
+                                                <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                    W{selectedWeek}
+                                                </Chip>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+
+                            {/* Teams List */}
+                            {(weeklyTeams[selectedWeek] || []).length > 0 && (
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:list-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="font-medium text-amber-800">รายชื่อกลุ่มที่จะถูกลบ</p>
+                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                    {(weeklyTeams[selectedWeek] || []).slice(0, 8).map(team => (
+                                                        <Chip key={team.id} size="sm" variant="flat" className="bg-amber-100 text-amber-700">
+                                                            {team.name}
+                                                        </Chip>
+                                                    ))}
+                                                    {(weeklyTeams[selectedWeek] || []).length > 8 && (
+                                                        <Chip size="sm" variant="flat" className="bg-amber-200 text-amber-800">
+                                                            +{(weeklyTeams[selectedWeek] || []).length - 8} กลุ่ม
+                                                        </Chip>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+                            )}
+
+                            {/* Warning */}
+                            <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                <div className="flex items-center gap-3">
+                                    <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                    <div>
+                                        <p className="font-semibold text-red-800">
+                                            คุณต้องการลบกลุ่มทั้งหมดใช่หรือไม่?
+                                        </p>
+                                        <p className="text-sm text-red-600">
+                                            การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light"
+                            onPress={() => modals.bulkDeleteModal.setIsOpen(false)}
+                            isDisabled={modals.isSubmitting}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={confirmBulkDeleteTeams}
+                            isLoading={modals.isSubmitting}
+                            className="bg-red-500"
+                        >
+                            ลบทั้งหมด
+                        </Button>
                     </ModalFooter>
                 </ModalContent>
             </Modal>
 
             {/* Create Team Modal */}
-            <Modal
-                isOpen={isCreateTeamModalOpen}
-                onClose={resetTeamModal}
+            <Modal 
+                isOpen={modals.teamModal.isOpen} 
+                onClose={modals.teamModal.reset}
                 size="xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${teamCreationType === "permanent"
+                            <div className={`p-3 rounded-xl shadow-lg ${
+                                modals.teamModal.type === "permanent" 
                                     ? "bg-gradient-to-br from-purple-500 to-indigo-600"
                                     : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                }`}>
+                            }`}>
                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">
-                                    {teamFormationMethod === "random"
+                                    {modals.teamModal.formationMethod === "random"
                                         ? "สุ่มกลุ่มอัตโนมัติ"
-                                        : `สร้าง${teamCreationType === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มโปรเจกต์รายสัปดาห์"}ใหม่`
+                                        : `สร้าง${modals.teamModal.type === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มโปรเจกต์รายสัปดาห์"}ใหม่`
                                     }
                                 </h3>
                                 <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {teamFormationMethod === "random"
-                                        ? `สุ่มจับกลุ่ม${teamCreationType === "permanent" ? "โปรเจกต์" : `สัปดาห์ที่ ${selectedWeek}`}`
-                                        : teamCreationType === "permanent"
+                                    {modals.teamModal.formationMethod === "random"
+                                        ? `สุ่มจับกลุ่ม${modals.teamModal.type === "permanent" ? "โปรเจกต์" : `สัปดาห์ที่ ${selectedWeek}`}`
+                                        : modals.teamModal.type === "permanent"
                                             ? "กลุ่มที่ใช้ตลอดทั้งเทอม"
                                             : `กลุ่มสำหรับสัปดาห์ที่ ${selectedWeek}`
                                     }
@@ -4390,32 +2239,33 @@ export default function ClassroomDetailPage() {
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
                         <div className="space-y-5">
-                            {/* Section Filter */}
-                            <div>
-                                <label className="text-slate-600 font-medium text-sm mb-2 block">จากกลุ่มเรียน</label>
-                                <Select
-                                    selectedKeys={[selectedSectionForTeam.toString()]}
-                                    onSelectionChange={(keys) => {
-                                        const val = Array.from(keys)[0];
-                                        if (val) {
-                                            setSelectedSectionForTeam(val === "all" ? "all" : parseInt(val.toString()));
-                                            setSelectedTeamMembers([]);
-                                        }
-                                    }}
-                                    variant="bordered"
-                                    items={[
-                                        { key: "all", label: "ทุกกลุ่มเรียน" },
-                                        ...(course?.sections || []).map((section) => ({
-                                            key: section.id.toString(),
-                                            label: `กลุ่มเรียน ${section.section_no} (${section.studentCount || 0} คน)`
-                                        }))
-                                    ]}
+                            {/* Formation Method Toggle */}
+                            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                                <button
+                                    onClick={() => modals.teamModal.setFormationMethod("manual")}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                        modals.teamModal.formationMethod === "manual"
+                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            : "text-slate-600 hover:bg-slate-200"
+                                    }`}
                                 >
-                                    {(item) => <SelectItem key={item.key}>{item.label}</SelectItem>}
-                                </Select>
+                                    <Icon icon="solar:checklist-linear" />
+                                    เลือกด้วยตนเอง
+                                </button>
+                                <button
+                                    onClick={() => modals.teamModal.setFormationMethod("random")}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                        modals.teamModal.formationMethod === "random"
+                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            : "text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                >
+                                    <Icon icon="solar:shuffle-bold" />
+                                    สุ่มอัตโนมัติ
+                                </button>
                             </div>
 
-                            {teamFormationMethod === "manual" ? (
+                            {modals.teamModal.formationMethod === "manual" ? (
                                 <>
                                     {/* Team Name */}
                                     <Input
@@ -4424,8 +2274,8 @@ export default function ClassroomDetailPage() {
                                         placeholder="เช่น กลุ่ม 1, กลุ่ม A, ทีม Alpha"
                                         variant="bordered"
                                         size="md"
-                                        value={newTeamName}
-                                        onValueChange={setNewTeamName}
+                                        value={modals.teamModal.name}
+                                        onValueChange={modals.teamModal.setName}
                                         isRequired
                                         className="pt-3"
                                         classNames={{
@@ -4438,27 +2288,29 @@ export default function ClassroomDetailPage() {
                                     <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                                         <button
                                             onClick={() => {
-                                                setTeamMemberMode("select");
-                                                setTeamExcelPasteData("");
-                                                setParsedTeamMembers([]);
+                                                modals.teamModal.setMemberMode("select");
+                                                modals.teamModal.setExcelData("");
+                                                modals.teamModal.setParsedMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${teamMemberMode === "select"
-                                                    ? `bg-white shadow-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                                modals.teamModal.memberMode === "select"
+                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
                                                     : "text-slate-600 hover:bg-slate-200"
-                                                }`}
+                                            }`}
                                         >
                                             <Icon icon="solar:checklist-linear" />
                                             เลือกจากรายชื่อ
                                         </button>
                                         <button
                                             onClick={() => {
-                                                setTeamMemberMode("paste");
-                                                setSelectedTeamMembers([]);
+                                                modals.teamModal.setMemberMode("paste");
+                                                modals.teamModal.setMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${teamMemberMode === "paste"
-                                                    ? `bg-white shadow-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                                modals.teamModal.memberMode === "paste"
+                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
                                                     : "text-slate-600 hover:bg-slate-200"
-                                                }`}
+                                            }`}
                                         >
                                             <Icon icon="solar:clipboard-list-linear" />
                                             วางจาก Excel
@@ -4466,18 +2318,18 @@ export default function ClassroomDetailPage() {
                                     </div>
 
                                     {/* Select Mode - Member Selection */}
-                                    {teamMemberMode === "select" && (
+                                    {modals.teamModal.memberMode === "select" && (
                                         <div>
                                             <div className="flex items-center justify-between mb-2">
                                                 <label className="text-slate-600 font-medium text-sm">
-                                                    เลือกสมาชิก ({selectedTeamMembers.length} คน)
+                                                    เลือกสมาชิก ({modals.teamModal.members.length} คน)
                                                 </label>
-                                                {selectedTeamMembers.length > 0 && (
+                                                {modals.teamModal.members.length > 0 && (
                                                     <Button
                                                         size="sm"
                                                         variant="light"
                                                         color="danger"
-                                                        onPress={() => setSelectedTeamMembers([])}
+                                                        onPress={() => modals.teamModal.setMembers([])}
                                                     >
                                                         ล้างทั้งหมด
                                                     </Button>
@@ -4486,40 +2338,42 @@ export default function ClassroomDetailPage() {
                                             <div className="border border-slate-200 rounded-xl overflow-hidden">
                                                 <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
                                                     <p className="text-sm text-slate-600">
-                                                        นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getUnassignedStudents(teamCreationType, teamCreationType === "weekly" ? selectedWeek : undefined).length} คน
+                                                        นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).length} คน
                                                     </p>
                                                 </div>
                                                 <div className="max-h-60 overflow-y-auto">
-                                                    {getUnassignedStudents(teamCreationType, teamCreationType === "weekly" ? selectedWeek : undefined).length > 0 ? (
-                                                        getUnassignedStudents(teamCreationType, teamCreationType === "weekly" ? selectedWeek : undefined).map((student) => (
+                                                    {getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).length > 0 ? (
+                                                        getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).map((student) => (
                                                             <div
                                                                 key={student.id}
                                                                 onClick={() => {
-                                                                    if (selectedTeamMembers.includes(student.id)) {
-                                                                        setSelectedTeamMembers(prev => prev.filter(id => id !== student.id));
+                                                                    if (modals.teamModal.members.includes(student.id)) {
+                                                                        modals.teamModal.setMembers(modals.teamModal.members.filter(id => id !== student.id));
                                                                     } else {
-                                                                        setSelectedTeamMembers(prev => [...prev, student.id]);
+                                                                        modals.teamModal.setMembers([...modals.teamModal.members, student.id]);
                                                                     }
                                                                 }}
-                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${selectedTeamMembers.includes(student.id)
-                                                                        ? teamCreationType === "permanent"
+                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${
+                                                                    modals.teamModal.members.includes(student.id)
+                                                                        ? modals.teamModal.type === "permanent"
                                                                             ? "bg-purple-50 border-l-4 border-l-purple-500"
                                                                             : "bg-emerald-50 border-l-4 border-l-emerald-500"
                                                                         : "hover:bg-slate-50"
-                                                                    }`}
+                                                                }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     <Avatar name={student.full_name} size="sm" className={
-                                                                        teamCreationType === "permanent" ? "bg-purple-500" : "bg-emerald-500"
+                                                                        modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
                                                                     } />
                                                                     <div>
                                                                         <p className="font-medium text-slate-800">{student.full_name}</p>
                                                                         <p className="text-sm text-slate-500">{student.student_id}</p>
                                                                     </div>
                                                                 </div>
-                                                                {selectedTeamMembers.includes(student.id) && (
-                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                                        }`} />
+                                                                {modals.teamModal.members.includes(student.id) && (
+                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${
+                                                                        modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                                    }`} />
                                                                 )}
                                                             </div>
                                                         ))
@@ -4535,7 +2389,7 @@ export default function ClassroomDetailPage() {
                                     )}
 
                                     {/* Paste Mode - Excel Paste */}
-                                    {teamMemberMode === "paste" && (
+                                    {modals.teamModal.memberMode === "paste" && (
                                         <>
                                             <div>
                                                 <label className="text-slate-600 font-medium text-sm mb-2 block">
@@ -4545,60 +2399,55 @@ export default function ClassroomDetailPage() {
                                                     คัดลอกคอลัมน์รหัสนักศึกษาจาก Excel แล้ววางที่นี่ (หนึ่งรหัสต่อหนึ่งบรรทัด)
                                                 </p>
                                                 <textarea
-                                                    value={teamExcelPasteData}
+                                                    value={modals.teamModal.excelData}
                                                     onChange={(e) => {
                                                         const value = e.target.value;
-                                                        setTeamExcelPasteData(value);
-                                                        // Debounce API call
+                                                        modals.teamModal.setExcelData(value);
                                                         if (value.trim()) {
-                                                            setIsParsingTeamMembers(true);
+                                                            modals.teamModal.setIsParsing(true);
                                                         } else {
-                                                            setParsedTeamMembers([]);
+                                                            modals.teamModal.setParsedMembers([]);
                                                         }
                                                     }}
                                                     onBlur={() => {
-                                                        // Trigger search when user finishes typing
-                                                        if (teamExcelPasteData.trim()) {
-                                                            parseTeamExcelData(teamExcelPasteData);
+                                                        if (modals.teamModal.excelData.trim()) {
+                                                            parseTeamExcelData(modals.teamModal.excelData);
                                                         }
                                                     }}
                                                     onKeyDown={(e) => {
-                                                        // Also trigger on Enter or Ctrl+V paste complete
                                                         if (e.key === 'Enter' && !e.shiftKey) {
                                                             e.preventDefault();
-                                                            if (teamExcelPasteData.trim()) {
-                                                                parseTeamExcelData(teamExcelPasteData);
+                                                            if (modals.teamModal.excelData.trim()) {
+                                                                parseTeamExcelData(modals.teamModal.excelData);
                                                             }
                                                         }
                                                     }}
                                                     onPaste={(e) => {
-                                                        // Get pasted text and trigger search
                                                         const pastedText = e.clipboardData.getData('text');
                                                         if (pastedText.trim()) {
-                                                            setIsParsingTeamMembers(true);
-                                                            // Use setTimeout to allow state to update first
+                                                            modals.teamModal.setIsParsing(true);
                                                             setTimeout(() => {
-                                                                const combinedText = teamExcelPasteData + pastedText;
+                                                                const combinedText = modals.teamModal.excelData + pastedText;
                                                                 parseTeamExcelData(combinedText);
                                                             }, 50);
                                                         }
                                                     }}
                                                     placeholder={"64070001\n64070002\n64070003\n..."}
-                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${teamCreationType === "permanent"
+                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${
+                                                        modals.teamModal.type === "permanent"
                                                             ? "border-purple-200 focus:ring-purple-400"
                                                             : "border-emerald-200 focus:ring-emerald-400"
-                                                        }`}
+                                                    }`}
                                                 />
-                                                {/* Search Button */}
                                                 <div className="mt-2 flex justify-end">
                                                     <Button
                                                         size="sm"
-                                                        color={teamCreationType === "permanent" ? "secondary" : "success"}
+                                                        color={modals.teamModal.type === "permanent" ? "secondary" : "success"}
                                                         variant="flat"
-                                                        onPress={() => parseTeamExcelData(teamExcelPasteData)}
-                                                        isLoading={isParsingTeamMembers}
-                                                        isDisabled={!teamExcelPasteData.trim()}
-                                                        startContent={!isParsingTeamMembers && <Icon icon="solar:magnifer-linear" />}
+                                                        onPress={() => parseTeamExcelData(modals.teamModal.excelData)}
+                                                        isLoading={modals.teamModal.isParsing}
+                                                        isDisabled={!modals.teamModal.excelData.trim()}
+                                                        startContent={!modals.teamModal.isParsing && <Icon icon="solar:magnifer-linear" />}
                                                     >
                                                         ค้นหานักศึกษา
                                                     </Button>
@@ -4606,50 +2455,52 @@ export default function ClassroomDetailPage() {
                                             </div>
 
                                             {/* Loading State */}
-                                            {isParsingTeamMembers && parsedTeamMembers.length === 0 && (
+                                            {modals.teamModal.isParsing && modals.teamModal.parsedMembers.length === 0 && (
                                                 <div className="flex items-center justify-center py-8">
-                                                    <Spinner size="sm" color={teamCreationType === "permanent" ? "secondary" : "success"} />
+                                                    <Spinner size="sm" color={modals.teamModal.type === "permanent" ? "secondary" : "success"} />
                                                     <span className="ml-2 text-slate-500">กำลังค้นหานักศึกษา...</span>
                                                 </div>
                                             )}
 
                                             {/* Parse Results */}
-                                            {parsedTeamMembers.length > 0 && (
+                                            {modals.teamModal.parsedMembers.length > 0 && (
                                                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                                                     <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
                                                         <p className="text-sm text-slate-600">
-                                                            ผลการตรวจสอบ ({parsedTeamMembers.length} รายการ)
+                                                            ผลการตรวจสอบ ({modals.teamModal.parsedMembers.length} รายการ)
                                                         </p>
                                                         <div className="flex gap-2 text-xs">
-                                                            <span className={`px-2 py-1 rounded-full ${teamCreationType === "permanent"
+                                                            <span className={`px-2 py-1 rounded-full ${
+                                                                modals.teamModal.type === "permanent"
                                                                     ? "bg-purple-100 text-purple-700"
                                                                     : "bg-emerald-100 text-emerald-700"
-                                                                }`}>
-                                                                พบ {parsedTeamMembers.filter(p => p.status === "matched").length}
+                                                            }`}>
+                                                                พบ {modals.teamModal.parsedMembers.filter(p => p.status === "matched").length}
                                                             </span>
                                                             <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
-                                                                มีกลุ่มแล้ว {parsedTeamMembers.filter(p => p.status === "already_in_team").length}
+                                                                มีกลุ่มแล้ว {modals.teamModal.parsedMembers.filter(p => p.status === "already_in_team").length}
                                                             </span>
                                                             <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">
-                                                                ไม่พบ {parsedTeamMembers.filter(p => p.status === "not_found").length}
+                                                                ไม่พบ {modals.teamModal.parsedMembers.filter(p => p.status === "not_found").length}
                                                             </span>
                                                         </div>
                                                     </div>
                                                     <div className="max-h-48 overflow-y-auto">
-                                                        {parsedTeamMembers.map((result, idx) => (
+                                                        {modals.teamModal.parsedMembers.map((result, idx) => (
                                                             <div
                                                                 key={idx}
-                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${result.status === "matched"
-                                                                        ? teamCreationType === "permanent" ? "bg-purple-50" : "bg-emerald-50"
+                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
+                                                                    result.status === "matched"
+                                                                        ? modals.teamModal.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
                                                                         : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
-                                                                    }`}
+                                                                }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     {result.matchedStudent ? (
                                                                         <>
                                                                             <Avatar name={result.matchedStudent.full_name} size="sm" className={
                                                                                 result.status === "matched"
-                                                                                    ? teamCreationType === "permanent" ? "bg-purple-500" : "bg-emerald-500"
+                                                                                    ? modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
                                                                                     : "bg-amber-500"
                                                                             } />
                                                                             <div>
@@ -4671,10 +2522,11 @@ export default function ClassroomDetailPage() {
                                                                 </div>
                                                                 <div>
                                                                     {result.status === "matched" && (
-                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${teamCreationType === "permanent"
+                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
+                                                                            modals.teamModal.type === "permanent"
                                                                                 ? "bg-purple-200 text-purple-700"
                                                                                 : "bg-emerald-200 text-emerald-700"
-                                                                            }`}>
+                                                                        }`}>
                                                                             <Icon icon="solar:check-circle-bold" className="text-sm" />
                                                                             พร้อมเพิ่ม
                                                                         </span>
@@ -4710,25 +2562,26 @@ export default function ClassroomDetailPage() {
                                                 isIconOnly
                                                 size="sm"
                                                 variant="flat"
-                                                onPress={() => setTeamSize(prev => Math.max(2, prev - 1))}
+                                                onPress={() => modals.teamModal.setSize(Math.max(2, modals.teamModal.size - 1))}
                                             >
                                                 <Icon icon="solar:minus-circle-linear" />
                                             </Button>
-                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${teamCreationType === "permanent"
+                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                                                modals.teamModal.type === "permanent"
                                                     ? "bg-purple-50 border-purple-200"
                                                     : "bg-emerald-50 border-emerald-200"
-                                                }`}>
+                                            }`}>
                                                 <Icon icon="solar:users-group-rounded-linear" className={
-                                                    teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                    modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
                                                 } />
-                                                <span className="font-bold text-lg text-slate-800">{teamSize}</span>
+                                                <span className="font-bold text-lg text-slate-800">{modals.teamModal.size}</span>
                                                 <span className="text-slate-500 text-sm">คน</span>
                                             </div>
                                             <Button
                                                 isIconOnly
                                                 size="sm"
                                                 variant="flat"
-                                                onPress={() => setTeamSize(prev => Math.min(10, prev + 1))}
+                                                onPress={() => modals.teamModal.setSize(Math.min(10, modals.teamModal.size + 1))}
                                             >
                                                 <Icon icon="solar:add-circle-linear" />
                                             </Button>
@@ -4736,28 +2589,33 @@ export default function ClassroomDetailPage() {
                                     </div>
 
                                     {/* Preview */}
-                                    <Card className={`shadow-sm border ${teamCreationType === "permanent"
+                                    <Card className={`shadow-sm border ${
+                                        modals.teamModal.type === "permanent"
                                             ? "border-purple-100 bg-purple-50/50"
                                             : "border-emerald-100 bg-emerald-50/50"
-                                        }`}>
+                                    }`}>
                                         <CardBody className="py-3 px-4">
                                             <div className="flex items-start gap-3">
-                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${teamCreationType === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                    }`} />
+                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${
+                                                    modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                }`} />
                                                 <div>
-                                                    <p className={`font-medium ${teamCreationType === "permanent" ? "text-purple-800" : "text-emerald-800"
-                                                        }`}>ตัวอย่างการจับกลุ่ม</p>
-                                                    <p className={`text-sm ${teamCreationType === "permanent" ? "text-purple-600" : "text-emerald-600"
-                                                        }`}>
+                                                    <p className={`font-medium ${
+                                                        modals.teamModal.type === "permanent" ? "text-purple-800" : "text-emerald-800"
+                                                    }`}>ตัวอย่างการจับกลุ่ม</p>
+                                                    <p className={`text-sm ${
+                                                        modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"
+                                                    }`}>
                                                         {(() => {
-                                                            const unassigned = getUnassignedStudents(teamCreationType, teamCreationType === "weekly" ? selectedWeek : undefined);
-                                                            const numTeams = Math.ceil(unassigned.length / teamSize);
-                                                            const remainder = unassigned.length % teamSize;
+                                                            const unassigned = getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined);
+                                                            const numTeams = Math.ceil(unassigned.length / modals.teamModal.size);
+                                                            const remainder = unassigned.length % modals.teamModal.size;
                                                             if (unassigned.length === 0) {
                                                                 return "ไม่มีนักศึกษาที่ยังไม่อยู่ในกลุ่ม";
                                                             }
-                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${remainder > 0 ? `(${numTeams - 1} กลุ่ม ${teamSize} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${teamSize} คน)`
-                                                                }`;
+                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${
+                                                                remainder > 0 ? `(${numTeams - 1} กลุ่ม ${modals.teamModal.size} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${modals.teamModal.size} คน)`
+                                                            }`;
                                                         })()}
                                                     </p>
                                                 </div>
@@ -4771,20 +2629,20 @@ export default function ClassroomDetailPage() {
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
                             variant="light"
-                            onPress={resetTeamModal}
+                            onPress={modals.teamModal.reset}
                         >
                             ยกเลิก
                         </Button>
                         <Button
-                            color={teamCreationType === "permanent" ? "secondary" : "success"}
+                            color={modals.teamModal.type === "permanent" ? "secondary" : "success"}
                             onPress={handleCreateTeam}
-                            isLoading={isSubmitting}
-                            className={teamCreationType === "permanent" ? "bg-purple-500" : "bg-emerald-500"}
-                            startContent={!isSubmitting && <Icon icon={teamFormationMethod === "random" ? "solar:shuffle-bold" : "solar:add-circle-bold"} />}
+                            isLoading={modals.isSubmitting}
+                            className={modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"}
+                            startContent={!modals.isSubmitting && <Icon icon={modals.teamModal.formationMethod === "random" ? "solar:shuffle-bold" : "solar:add-circle-bold"} />}
                         >
-                            {teamFormationMethod === "random"
+                            {modals.teamModal.formationMethod === "random"
                                 ? "สุ่มกลุ่ม"
-                                : `สร้างกลุ่ม${selectedTeamMembers.length > 0 ? ` (${selectedTeamMembers.length} คน)` : ""}`
+                                : `สร้างกลุ่ม${modals.teamModal.members.length > 0 ? ` (${modals.teamModal.members.length} คน)` : ""}`
                             }
                         </Button>
                     </ModalFooter>
@@ -4792,39 +2650,21 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Edit Team Modal */}
-            <Modal
-                isOpen={isEditTeamModalOpen}
-                onClose={() => {
-                    setIsEditTeamModalOpen(false);
-                    setEditingTeam(null);
-                    setEditTeamName("");
-                    setEditTeamMembers([]);
-                    setEditMemberMode("select");
-                    setEditExcelPasteData("");
-                    setEditParsedMembers([]);
-                }}
+            <Modal 
+                isOpen={modals.editTeamModal.isOpen} 
+                onClose={modals.editTeamModal.reset}
                 size="xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${editingTeam?.type === "permanent"
-                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                    : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                }`}>
-                                <Icon icon="solar:pen-2-bold" className="text-2xl text-white" />
+                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">
-                                    แก้ไข{editingTeam?.type === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มประจำสัปดาห์"}
-                                </h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {editingTeam?.type === "permanent" 
-                                        ? "แก้ไขชื่อกลุ่มและสมาชิกในกลุ่ม"
-                                        : `แก้ไขกลุ่มสำหรับสัปดาห์ที่ ${editingTeam?.weekNumber}`
-                                    }
-                                </p>
+                                <h3 className="text-xl font-bold text-slate-800">แก้ไขกลุ่ม</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">แก้ไขชื่อและสมาชิกในกลุ่ม</p>
                             </div>
                         </div>
                     </ModalHeader>
@@ -4837,48 +2677,36 @@ export default function ClassroomDetailPage() {
                                 placeholder="เช่น กลุ่ม 1, กลุ่ม A, ทีม Alpha"
                                 variant="bordered"
                                 size="md"
-                                value={editTeamName}
-                                onValueChange={setEditTeamName}
+                                value={modals.editTeamModal.name}
+                                onValueChange={modals.editTeamModal.setName}
                                 isRequired
+                                className="pt-3"
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
 
-                            {/* Current Members Display */}
-                            {editTeamMembers.length > 0 && (
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="text-slate-600 font-medium text-sm">
-                                            สมาชิกปัจจุบัน ({editTeamMembers.length} คน)
-                                        </label>
-                                        {editTeamMembers.length > 0 && (
-                                            <Button
-                                                size="sm"
-                                                variant="light"
-                                                color="danger"
-                                                onPress={() => setEditTeamMembers([])}
-                                            >
-                                                ล้างทั้งหมด
-                                            </Button>
-                                        )}
-                                    </div>
-                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                        <div className="max-h-40 overflow-y-auto">
-                                            {editTeamMembers.map((memberId, idx) => {
-                                                const allStudents = getAllEnrolledStudents();
-                                                const student = allStudents.find(s => s.id === memberId);
+                            {/* Current Members */}
+                            <div>
+                                <label className="text-slate-600 font-medium text-sm mb-2 block">
+                                    สมาชิกปัจจุบัน ({modals.editTeamModal.members.length} คน)
+                                </label>
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="max-h-40 overflow-y-auto">
+                                        {modals.editTeamModal.members.length > 0 ? (
+                                            modals.editTeamModal.members.map((memberId) => {
+                                                const student = getAllEnrolledStudents().find(
+                                                    (s) => s.id === memberId
+                                                );
                                                 if (!student) return null;
                                                 return (
                                                     <div
                                                         key={memberId}
-                                                        className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0`}
+                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-amber-50"
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <Avatar name={student.full_name} size="sm" className={
-                                                                editingTeam?.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
-                                                            } />
+                                                            <Avatar name={student.full_name} size="sm" className="bg-amber-500" />
                                                             <div>
                                                                 <p className="font-medium text-slate-800">{student.full_name}</p>
                                                                 <p className="text-sm text-slate-500">{student.student_id}</p>
@@ -4889,893 +2717,185 @@ export default function ClassroomDetailPage() {
                                                             size="sm"
                                                             variant="light"
                                                             color="danger"
-                                                            onPress={() => removeEditTeamMember(memberId)}
+                                                            onPress={() => {
+                                                                modals.editTeamModal.setMembers(
+                                                                    modals.editTeamModal.members.filter(id => id !== memberId)
+                                                                );
+                                                            }}
                                                         >
                                                             <Icon icon="solar:close-circle-bold" className="text-lg" />
                                                         </Button>
                                                     </div>
                                                 );
-                                            })}
-                                        </div>
+                                            })
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:users-group-rounded-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-slate-400 text-sm">ยังไม่มีสมาชิกในกลุ่ม</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
-                            )}
-
-                            {/* Member Selection Mode Toggle */}
-                            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
-                                <button
-                                    onClick={() => {
-                                        setEditMemberMode("select");
-                                        setEditExcelPasteData("");
-                                        setEditParsedMembers([]);
-                                    }}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${editMemberMode === "select"
-                                            ? `bg-white shadow-sm ${editingTeam?.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                            : "text-slate-600 hover:bg-slate-200"
-                                        }`}
-                                >
-                                    <Icon icon="solar:checklist-linear" />
-                                    เพิ่มจากรายชื่อ
-                                </button>
-                                <button
-                                    onClick={() => setEditMemberMode("paste")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${editMemberMode === "paste"
-                                            ? `bg-white shadow-sm ${editingTeam?.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                            : "text-slate-600 hover:bg-slate-200"
-                                        }`}
-                                >
-                                    <Icon icon="solar:clipboard-list-linear" />
-                                    วางจาก Excel
-                                </button>
                             </div>
 
-                            {/* Select Mode - Add Members */}
-                            {editMemberMode === "select" && (
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <label className="text-slate-600 font-medium text-sm">
-                                            เพิ่มสมาชิก
-                                        </label>
-                                    </div>
-                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                                            <p className="text-sm text-slate-600">
-                                                นักศึกษาที่สามารถเพิ่มได้: {getAvailableStudentsForEdit().filter(s => !editTeamMembers.includes(s.id)).length} คน
-                                            </p>
-                                        </div>
-                                        <div className="max-h-60 overflow-y-auto">
-                                            {getAvailableStudentsForEdit()
-                                                .filter(s => !editTeamMembers.includes(s.id))
-                                                .length > 0 ? (
-                                                getAvailableStudentsForEdit()
-                                                    .filter(s => !editTeamMembers.includes(s.id))
-                                                    .map((student) => (
-                                                        <div
-                                                            key={student.id}
-                                                            onClick={() => setEditTeamMembers(prev => [...prev, student.id])}
-                                                            className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 hover:${
-                                                                editingTeam?.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
-                                                            }`}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <Avatar name={student.full_name} size="sm" className={
-                                                                    editingTeam?.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
-                                                                } />
-                                                                <div>
-                                                                    <p className="font-medium text-slate-800">{student.full_name}</p>
-                                                                    <p className="text-sm text-slate-500">{student.student_id}</p>
-                                                                </div>
-                                                            </div>
-                                                            <Icon icon="solar:add-circle-linear" className={`text-xl ${
-                                                                editingTeam?.type === "permanent" ? "text-purple-400" : "text-emerald-400"
-                                                            }`} />
-                                                        </div>
-                                                    ))
-                                            ) : (
-                                                <div className="text-center py-8">
-                                                    <Icon icon="solar:users-group-rounded-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
-                                                    <p className="text-slate-400">ไม่มีนักศึกษาที่สามารถเพิ่มได้</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Paste Mode - Excel Paste */}
-                            {editMemberMode === "paste" && (
-                                <>
-                                    <div>
-                                        <label className="text-slate-600 font-medium text-sm mb-2 block">
-                                            วางรหัสนักศึกษาจาก Excel
-                                        </label>
-                                        <p className="text-xs text-slate-400 mb-2">
-                                            คัดลอกคอลัมน์รหัสนักศึกษาจาก Excel แล้ววางที่นี่ (หนึ่งรหัสต่อหนึ่งบรรทัด)
+                            {/* Add Members */}
+                            <div>
+                                <label className="text-slate-600 font-medium text-sm mb-2 block">
+                                    เพิ่มสมาชิก
+                                </label>
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                                        <p className="text-sm text-slate-600">
+                                            นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getAvailableStudentsForEdit().filter(s => !modals.editTeamModal.members.includes(s.id)).length} คน
                                         </p>
-                                        <textarea
-                                            value={editExcelPasteData}
-                                            onChange={(e) => {
-                                                const value = e.target.value;
-                                                setEditExcelPasteData(value);
-                                                if (value.trim()) {
-                                                    setIsParsingEditMembers(true);
-                                                } else {
-                                                    setEditParsedMembers([]);
-                                                }
-                                            }}
-                                            onBlur={() => {
-                                                if (editExcelPasteData.trim()) {
-                                                    parseEditTeamExcelData(editExcelPasteData);
-                                                }
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' && !e.shiftKey) {
-                                                    e.preventDefault();
-                                                    if (editExcelPasteData.trim()) {
-                                                        parseEditTeamExcelData(editExcelPasteData);
-                                                    }
-                                                }
-                                            }}
-                                            onPaste={(e) => {
-                                                const pastedText = e.clipboardData.getData('text');
-                                                if (pastedText.trim()) {
-                                                    setIsParsingEditMembers(true);
-                                                    setTimeout(() => {
-                                                        const combinedText = editExcelPasteData + pastedText;
-                                                        parseEditTeamExcelData(combinedText);
-                                                    }, 50);
-                                                }
-                                            }}
-                                            placeholder={"64070001\n64070002\n64070003\n..."}
-                                            className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${
-                                                editingTeam?.type === "permanent"
-                                                    ? "border-purple-200 focus:ring-purple-400"
-                                                    : "border-emerald-200 focus:ring-emerald-400"
-                                            }`}
-                                        />
-                                        <div className="mt-2 flex justify-end">
-                                            <Button
-                                                size="sm"
-                                                color={editingTeam?.type === "permanent" ? "secondary" : "success"}
-                                                variant="flat"
-                                                onPress={() => parseEditTeamExcelData(editExcelPasteData)}
-                                                isLoading={isParsingEditMembers}
-                                                isDisabled={!editExcelPasteData.trim()}
-                                                startContent={!isParsingEditMembers && <Icon icon="solar:magnifer-linear" />}
-                                            >
-                                                ค้นหานักศึกษา
-                                            </Button>
-                                        </div>
                                     </div>
-
-                                    {/* Loading State */}
-                                    {isParsingEditMembers && editParsedMembers.length === 0 && (
-                                        <div className="flex items-center justify-center py-8">
-                                            <Spinner size="sm" color={editingTeam?.type === "permanent" ? "secondary" : "success"} />
-                                            <span className="ml-2 text-slate-500">กำลังค้นหานักศึกษา...</span>
-                                        </div>
-                                    )}
-
-                                    {/* Parse Results */}
-                                    {editParsedMembers.length > 0 && (
-                                        <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-                                                <p className="text-sm text-slate-600">
-                                                    ผลการตรวจสอบ ({editParsedMembers.length} รายการ)
-                                                </p>
-                                                <div className="flex gap-2 text-xs">
-                                                    <span className={`px-2 py-1 rounded-full ${
-                                                        editingTeam?.type === "permanent"
-                                                            ? "bg-purple-100 text-purple-700"
-                                                            : "bg-emerald-100 text-emerald-700"
-                                                    }`}>
-                                                        เพิ่มแล้ว {editParsedMembers.filter(p => p.status === "matched").length}
-                                                    </span>
-                                                    <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
-                                                        มีกลุ่มแล้ว {editParsedMembers.filter(p => p.status === "already_in_team").length}
-                                                    </span>
-                                                    <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">
-                                                        ไม่พบ {editParsedMembers.filter(p => p.status === "not_found").length}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="max-h-48 overflow-y-auto">
-                                                {editParsedMembers.map((result, idx) => (
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {getAvailableStudentsForEdit().filter(s => !modals.editTeamModal.members.includes(s.id)).length > 0 ? (
+                                            getAvailableStudentsForEdit()
+                                                .filter(s => !modals.editTeamModal.members.includes(s.id))
+                                                .map((student) => (
                                                     <div
-                                                        key={idx}
-                                                        className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
-                                                            result.status === "matched"
-                                                                ? editingTeam?.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
-                                                                : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
-                                                        }`}
+                                                        key={student.id}
+                                                        onClick={() => {
+                                                            modals.editTeamModal.setMembers([...modals.editTeamModal.members, student.id]);
+                                                        }}
+                                                        className="flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 hover:bg-slate-50"
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            {result.matchedStudent ? (
-                                                                <>
-                                                                    <Avatar name={result.matchedStudent.full_name} size="sm" className={
-                                                                        result.status === "matched"
-                                                                            ? editingTeam?.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
-                                                                            : "bg-amber-500"
-                                                                    } />
-                                                                    <div>
-                                                                        <p className="font-medium text-slate-800">{result.matchedStudent.full_name}</p>
-                                                                        <p className="text-sm text-slate-500">{result.matchedStudent.student_id}</p>
-                                                                    </div>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center">
-                                                                        <Icon icon="solar:question-circle-linear" className="text-red-600" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <p className="font-medium text-slate-800">{result.inputValue}</p>
-                                                                        <p className="text-sm text-red-500">ไม่พบในระบบ</p>
-                                                                    </div>
-                                                                </>
-                                                            )}
+                                                            <Avatar name={student.full_name} size="sm" className="bg-slate-400" />
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{student.full_name}</p>
+                                                                <p className="text-sm text-slate-500">{student.student_id}</p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            {result.status === "matched" && (
-                                                                <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                                                                    editingTeam?.type === "permanent"
-                                                                        ? "bg-purple-200 text-purple-700"
-                                                                        : "bg-emerald-200 text-emerald-700"
-                                                                }`}>
-                                                                    <Icon icon="solar:check-circle-bold" className="text-sm" />
-                                                                    เพิ่มแล้ว
-                                                                </span>
-                                                            )}
-                                                            {result.status === "already_in_team" && (
-                                                                <span className="text-xs px-2 py-1 bg-amber-200 text-amber-700 rounded-full flex items-center gap-1">
-                                                                    <Icon icon="solar:info-circle-bold" className="text-sm" />
-                                                                    มีกลุ่มแล้ว
-                                                                </span>
-                                                            )}
-                                                            {result.status === "not_found" && (
-                                                                <span className="text-xs px-2 py-1 bg-red-200 text-red-700 rounded-full flex items-center gap-1">
-                                                                    <Icon icon="solar:close-circle-bold" className="text-sm" />
-                                                                    ไม่พบ
-                                                                </span>
-                                                            )}
-                                                        </div>
+                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-amber-500" />
                                                     </div>
-                                                ))}
+                                                ))
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:users-group-rounded-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-slate-400 text-sm">นักศึกษาทั้งหมดอยู่ในกลุ่มแล้ว</p>
                                             </div>
-                                        </div>
-                                    )}
-                                </>
-                            )}
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
                             variant="light"
-                            onPress={() => {
-                                setIsEditTeamModalOpen(false);
-                                setEditingTeam(null);
-                            }}
+                            onPress={modals.editTeamModal.reset}
                         >
                             ยกเลิก
                         </Button>
                         <Button
-                            color={editingTeam?.type === "permanent" ? "secondary" : "success"}
                             onPress={saveEditedTeam}
-                            isLoading={isSubmitting}
-                            isDisabled={!editTeamName.trim() || editTeamMembers.length === 0}
-                            className={editingTeam?.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"}
-                            startContent={!isSubmitting && <Icon icon="solar:diskette-bold" />}
+                            isLoading={modals.isSubmitting}
+                            isDisabled={!modals.editTeamModal.name.trim()}
+                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-400/25"
+                            startContent={!modals.isSubmitting && <Icon icon="solar:diskette-bold" />}
                         >
-                            บันทึกการเปลี่ยนแปลง ({editTeamMembers.length} คน)
+                            บันทึก
                         </Button>
                     </ModalFooter>
                 </ModalContent>
             </Modal>
 
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={isDeleteModalOpen}
-                onClose={() => {
-                    setIsDeleteModalOpen(false);
-                    setDeleteTarget(null);
-                    setDeleteType(null);
-                }}
-                size="lg"
+            {/* Group Score Modal */}
+            <Modal 
+                isOpen={modals.scoreModals.isGroupScoreModalOpen} 
+                onClose={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}
+                size="md"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
-                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            <div className="p-3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:chart-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-bold text-slate-800">
-                                    {deleteType === "student" ? "นำนักศึกษาออกจากวิชา" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : deleteType === "instructor" ? "นำอาจารย์ออก" : "ลบกลุ่ม"}
-                                </h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">
-                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
-                                </p>
-                            </div>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-4">
-                        {deleteType === "student" && deleteTarget && (
-                            <div className="space-y-4">
-                                {/* Student Info */}
-                                <Card className="border border-red-100 bg-red-50/50">
-                                    <CardBody className="py-4 px-4">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar
-                                                name={deleteTarget.studentName}
-                                                size="lg"
-                                                className="bg-red-500"
-                                            />
-                                            <div>
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    {deleteTarget.studentName}
-                                                </p>
-                                                <p className="text-sm text-slate-500 font-mono">
-                                                    {deleteTarget.studentCode}
-                                                </p>
-                                                <p className="text-xs text-slate-400 mt-1">
-                                                    กลุ่มเรียน {deleteTarget.sectionNo}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Team Info */}
-                                {(() => {
-                                    const teamInfo = getStudentTeamInfo(deleteTarget.studentId!);
-                                    const hasTeams = teamInfo.permanentTeam || teamInfo.weeklyTeams.length > 0;
-
-                                    if (hasTeams) {
-                                        return (
-                                            <Card className="border border-amber-200 bg-amber-50">
-                                                <CardBody className="py-3 px-4">
-                                                    <div className="flex items-start gap-3">
-                                                        <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
-                                                        <div className="flex-1">
-                                                            <p className="font-medium text-amber-800">นักศึกษาอยู่ในกลุ่มต่อไปนี้</p>
-                                                            <div className="mt-2 space-y-1">
-                                                                {teamInfo.permanentTeam && (
-                                                                    <div className="flex items-center gap-2 text-sm">
-                                                                        <Chip size="sm" className="bg-purple-100 text-purple-700">
-                                                                            กลุ่มโปรเจกต์
-                                                                        </Chip>
-                                                                        <span className="text-slate-700">{teamInfo.permanentTeam}</span>
-                                                                    </div>
-                                                                )}
-                                                                {teamInfo.weeklyTeams.map((wt, idx) => (
-                                                                    <div key={idx} className="flex items-center gap-2 text-sm">
-                                                                        <Chip size="sm" className="bg-emerald-100 text-emerald-700">
-                                                                            สัปดาห์ที่ {wt.weekNumber}
-                                                                        </Chip>
-                                                                        <span className="text-slate-700">{wt.teamName}</span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            <p className="text-xs text-amber-600 mt-2">
-                                                                * หากลบนักศึกษา จะถูกนำออกจากกลุ่มเหล่านี้ด้วย
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                </CardBody>
-                                            </Card>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-
-                                {/* Score Info */}
-                                <Card className="border border-blue-200 bg-blue-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:diploma-verified-bold" className="text-xl text-blue-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-blue-800">เกี่ยวกับคะแนน</p>
-                                                <p className="text-sm text-blue-600 mt-1">
-                                                    คะแนนที่เคยลงให้นักศึกษาคนนี้จะยังคงอยู่ในระบบ และจะแสดงเป็น
-                                                    <span className="font-medium"> &quot;นักศึกษาที่ถูกนำออก&quot; </span>
-                                                    ในหน้าคะแนน
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning */}
-                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                    <div className="flex items-center gap-3">
-                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                        <div>
-                                            <p className="font-semibold text-red-800">
-                                                คุณต้องการนำนักศึกษาออกใช่หรือไม่?
-                                            </p>
-                                            <p className="text-sm text-red-600">
-                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {deleteType === "team" && deleteTarget && (
-                            <div className="space-y-4">
-                                {/* Team Info */}
-                                <Card className={`border ${deleteTarget.teamType === "permanent"
-                                        ? "border-purple-200 bg-purple-50"
-                                        : "border-emerald-200 bg-emerald-50"
-                                    }`}>
-                                    <CardBody className="py-4 px-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${deleteTarget.teamType === "permanent"
-                                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                                    : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                                }`}>
-                                                <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    {deleteTarget.teamName}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {deleteTarget.teamType === "permanent"
-                                                        ? "กลุ่มโปรเจกต์"
-                                                        : `กลุ่มโปรเจกต์รายสัปดาห์ (สัปดาห์ที่ ${deleteTarget.weekNumber})`
-                                                    }
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Members */}
-                                {/* {deleteTarget.teamMembers && deleteTarget.teamMembers.length > 0 && (
-                                    <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                        <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                                            <p className="text-sm font-medium text-slate-600">
-                                                สมาชิกในกลุ่ม ({deleteTarget.teamMembers.length} คน)
-                                            </p>
-                                        </div>
-                                        <div className="max-h-40 overflow-y-auto">
-                                            {deleteTarget.teamMembers.map((member) => (
-                                                <div key={member.id} className="flex items-center gap-3 p-3 border-b border-slate-100 last:border-0">
-                                                    <Avatar name={member.full_name} size="sm" className={
-                                                        deleteTarget.teamType === "permanent" ? "bg-purple-500" : "bg-emerald-500"
-                                                    } />
-                                                    <div>
-                                                        <p className="text-sm font-medium text-slate-800">{member.full_name}</p>
-                                                        <p className="text-xs text-slate-400">{member.student_id}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )} */}
-
-                                {/* Info */}
-                                <Card className="border border-blue-200 bg-blue-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:info-circle-bold" className="text-xl text-blue-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-blue-800">สิ่งที่จะเกิดขึ้น</p>
-                                                <p className="text-sm text-blue-600 mt-1">
-                                                    สมาชิกทุกคนในกลุ่มจะกลับไปเป็นนักศึกษาที่ยังไม่มีกลุ่ม
-                                                    และสามารถจัดกลุ่มใหม่ได้
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Score Warning */}
-                                <Card className="border border-amber-200 bg-amber-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:document-text-bold" className="text-xl text-amber-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-amber-800">เกี่ยวกับคะแนน</p>
-                                                <p className="text-sm text-amber-700 mt-1">
-                                                    หากมีการลงคะแนนให้กลุ่มนี้ไว้แล้ว คะแนนจะยังคงอยู่ในระบบ
-                                                    โดยผูกกับนักศึกษาแต่ละคน ไม่ได้ถูกลบไปด้วย
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning */}
-                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                    <div className="flex items-center gap-3">
-                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                        <div>
-                                            <p className="font-semibold text-red-800">
-                                                คุณต้องการลบกลุ่มนี้ใช่หรือไม่?
-                                            </p>
-                                            <p className="text-sm text-red-600">
-                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {deleteType === "section" && deleteTarget && (
-                            <div className="space-y-4">
-                                {/* Section Info */}
-                                <Card className="border border-red-100 bg-red-50/50">
-                                    <CardBody className="py-4 px-4">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shadow-lg">
-                                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-white" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    กลุ่มเรียน {deleteTarget.sectionNo}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {deleteTarget.sectionStudentCount || 0} นักศึกษา
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning about students */}
-                                {(deleteTarget.sectionStudentCount || 0) > 0 && (
-                                    <Card className="border border-amber-200 bg-amber-50">
-                                        <CardBody className="py-3 px-4">
-                                            <div className="flex items-start gap-3">
-                                                <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
-                                                <div>
-                                                    <p className="font-medium text-amber-800">มีนักศึกษาในกลุ่มเรียน</p>
-                                                    <p className="text-sm text-amber-700 mt-1">
-                                                        นักศึกษาทั้งหมด {deleteTarget.sectionStudentCount} คน จะถูกนำออกจากกลุ่มเรียนนี้
-                                                        และไม่สามารถเข้าถึงรายวิชานี้ได้อีก
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </CardBody>
-                                    </Card>
-                                )}
-
-                                {/* Score Info */}
-                                <Card className="border border-blue-200 bg-blue-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:diploma-verified-bold" className="text-xl text-blue-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-blue-800">เกี่ยวกับคะแนน</p>
-                                                <p className="text-sm text-blue-600 mt-1">
-                                                    คะแนนที่เคยลงให้นักศึกษาในกลุ่มเรียนนี้จะยังคงอยู่ในระบบ
-                                                    และจะแสดงเป็น <span className="font-medium">&quot;นักศึกษาที่ถูกนำออก&quot;</span> ในหน้าคะแนน
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning */}
-                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                    <div className="flex items-center gap-3">
-                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                        <div>
-                                            <p className="font-semibold text-red-800">
-                                                คุณต้องการลบกลุ่มเรียนนี้ใช่หรือไม่?
-                                            </p>
-                                            <p className="text-sm text-red-600">
-                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TA Delete Content */}
-                        {deleteType === "ta" && deleteTarget && (
-                            <div className="space-y-4">
-                                {/* TA Info Card */}
-                                <Card className="border border-slate-200 bg-gradient-to-r from-slate-50 to-emerald-50">
-                                    <CardBody className="py-4">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar
-                                                src={deleteTarget.taAvatar || undefined}
-                                                name={deleteTarget.taName}
-                                                size="lg"
-                                                className="w-16 h-16"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    {deleteTarget.taName}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {deleteTarget.taEmail}
-                                                </p>
-                                                <Chip 
-                                                    size="sm" 
-                                                    color="success" 
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:star-bold" className="text-xs" />}
-                                                    className="mt-1"
-                                                >
-                                                    ผู้ช่วยสอน
-                                                </Chip>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* What happens info */}
-                                <Card className="border border-amber-200 bg-amber-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-amber-800">สิ่งที่จะเกิดขึ้น</p>
-                                                <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
-                                                    <li>ผู้ช่วยสอนจะไม่สามารถเข้าถึงรายวิชานี้ได้อีก</li>
-                                                    <li>ไม่สามารถจัดการคะแนนหรือตรวจงานในรายวิชานี้ได้</li>
-                                                    <li>ประวัติการตรวจงานที่ผ่านมาจะยังคงอยู่ในระบบ</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning */}
-                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                    <div className="flex items-center gap-3">
-                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                        <div>
-                                            <p className="font-semibold text-red-800">
-                                                คุณต้องการนำผู้ช่วยสอนคนนี้ออกจากรายวิชาใช่หรือไม่?
-                                            </p>
-                                            <p className="text-sm text-red-600">
-                                                สามารถเพิ่มกลับได้ภายหลัง
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Instructor Delete Content */}
-                        {deleteType === "instructor" && deleteTarget && (
-                            <div className="space-y-4">
-                                {/* Instructor Info Card */}
-                                <Card className="border border-slate-200 bg-gradient-to-r from-slate-50 to-indigo-50">
-                                    <CardBody className="py-4">
-                                        <div className="flex items-center gap-4">
-                                            <Avatar
-                                                src={deleteTarget.instructorAvatar || undefined}
-                                                name={deleteTarget.instructorName}
-                                                size="lg"
-                                                className="w-16 h-16"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    {deleteTarget.instructorName}
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    {deleteTarget.instructorEmail}
-                                                </p>
-                                                <Chip 
-                                                    size="sm" 
-                                                    color="secondary" 
-                                                    variant="flat"
-                                                    startContent={<Icon icon="solar:user-speak-bold" className="text-xs" />}
-                                                    className="mt-1"
-                                                >
-                                                    อาจารย์ผู้สอน
-                                                </Chip>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* What happens info */}
-                                <Card className="border border-amber-200 bg-amber-50">
-                                    <CardBody className="py-3 px-4">
-                                        <div className="flex items-start gap-3">
-                                            <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium text-amber-800">สิ่งที่จะเกิดขึ้น</p>
-                                                <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
-                                                    <li>อาจารย์จะไม่สามารถเข้าถึงรายวิชานี้ได้อีก</li>
-                                                    <li>ไม่สามารถจัดการงานมอบหมายหรือคะแนนในรายวิชานี้ได้</li>
-                                                    <li>ประวัติการทำงานที่ผ่านมาจะยังคงอยู่ในระบบ</li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </CardBody>
-                                </Card>
-
-                                {/* Warning */}
-                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                    <div className="flex items-center gap-3">
-                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                        <div>
-                                            <p className="font-semibold text-red-800">
-                                                คุณต้องการนำอาจารย์ท่านนี้ออกจากรายวิชาใช่หรือไม่?
-                                            </p>
-                                            <p className="text-sm text-red-600">
-                                                สามารถเพิ่มกลับได้ภายหลัง
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button
-                            variant="light"
-                            onPress={() => {
-                                setIsDeleteModalOpen(false);
-                                setDeleteTarget(null);
-                                setDeleteType(null);
-                            }}
-                        >
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="danger"
-                            onPress={
-                                deleteType === "student" 
-                                    ? confirmRemoveStudent 
-                                    : deleteType === "section" 
-                                        ? confirmRemoveSection 
-                                        : deleteType === "ta"
-                                            ? confirmRemoveTA
-                                            : deleteType === "instructor"
-                                                ? confirmRemoveInstructor
-                                                : confirmDeleteTeam
-                            }
-                            isLoading={isSubmitting}
-                            className="bg-red-500"
-                            startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
-                        >
-                            {deleteType === "student" ? "นำนักศึกษาออก" : deleteType === "section" ? "ลบกลุ่มเรียน" : deleteType === "ta" ? "นำผู้ช่วยสอนออก" : deleteType === "instructor" ? "นำอาจารย์ออก" : "ลบกลุ่ม"}
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
-            {/* Bulk Delete Teams Modal */}
-            <Modal
-                isOpen={isBulkDeleteModalOpen}
-                onClose={() => setIsBulkDeleteModalOpen(false)}
-                size="lg"
-            >
-                <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
-                                <Icon icon="solar:trash-bin-2-bold" className="text-2xl text-red-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">ล้างกลุ่มทั้งหมด</h3>
-                                <p className="text-sm text-slate-500">สัปดาห์ที่ {selectedWeek}</p>
+                                <h3 className="text-xl font-bold text-slate-800">ให้คะแนนกลุ่ม</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกกลุ่มและใส่คะแนน</p>
                             </div>
                         </div>
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
                         <div className="space-y-4">
-                            {/* Teams Summary */}
-                            <Card className="border border-emerald-200 bg-emerald-50">
-                                <CardBody className="py-4 px-4">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                                                <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-lg text-slate-800">
-                                                    {weeklyTeams[selectedWeek]?.length || 0} กลุ่ม
-                                                </p>
-                                                <p className="text-sm text-slate-500">
-                                                    จำนวนสมาชิกทั้งหมด {weeklyTeams[selectedWeek]?.reduce((acc, t) => acc + t.members.length, 0) || 0} คน
-                                                </p>
-                                            </div>
+                            <Select
+                                label="เลือกกลุ่ม"
+                                labelPlacement="outside"
+                                placeholder="เลือกกลุ่มที่ต้องการให้คะแนน"
+                                variant="bordered"
+                                size="lg"
+                                selectedKeys={scores.selectedGroup ? [String(scores.selectedGroup.id)] : []}
+                                onSelectionChange={(keys) => {
+                                    const selectedId = Array.from(keys)[0];
+                                    const group = scores.groupsForScore.find(g => g.id === Number(selectedId));
+                                    scores.setSelectedGroup(group || null);
+                                }}
+                                classNames={{
+                                    trigger: "h-12 bg-white border-slate-200 hover:border-indigo-300 data-[open=true]:border-indigo-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            >
+                                {scores.groupsForScore.map(group => (
+                                    <SelectItem key={String(group.id)} textValue={group.name}>
+                                        <div className="flex items-center gap-2">
+                                            <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
+                                            <span>{group.name}</span>
+                                            <Chip size="sm" variant="flat" color="primary">
+                                                {group.members?.length || 0} คน
+                                            </Chip>
                                         </div>
-                                    </div>
-                                </CardBody>
-                            </Card>
-
-                            {/* Teams List Preview */}
-                            {/* {weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 && (
-                                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
-                                        <p className="text-sm font-medium text-slate-600">
-                                            กลุ่มที่จะถูกลบ
-                                        </p>
-                                    </div>
-                                    <div className="max-h-48 overflow-y-auto">
-                                        {weeklyTeams[selectedWeek].map((team, idx) => (
-                                            <div key={team.id} className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700 font-medium text-sm">
-                                                        {idx + 1}
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-medium text-slate-800">{team.name}</p>
-                                                        <p className="text-xs text-slate-400">{team.members.length} สมาชิก</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )} */}
-
-                            {/* Info */}
-                            <Card className="border border-blue-200 bg-blue-50">
-                                <CardBody className="py-3 px-4">
-                                    <div className="flex items-start gap-3">
-                                        <Icon icon="solar:info-circle-bold" className="text-xl text-blue-600 mt-0.5" />
-                                        <div>
-                                            <p className="font-medium text-blue-800">สิ่งที่จะเกิดขึ้น</p>
-                                            <p className="text-sm text-blue-600 mt-1">
-                                                สมาชิกทุกคนในทุกกลุ่มของสัปดาห์นี้จะกลับไปเป็นนักศึกษาที่ยังไม่มีกลุ่ม
-                                                และสามารถจัดกลุ่มใหม่ได้
-                                            </p>
-                                        </div>
-                                    </div>
-                                </CardBody>
-                            </Card>
-
-                            {/* Score Warning */}
-                            <Card className="border border-amber-200 bg-amber-50">
-                                <CardBody className="py-3 px-4">
-                                    <div className="flex items-start gap-3">
-                                        <Icon icon="solar:document-text-bold" className="text-xl text-amber-600 mt-0.5" />
-                                        <div>
-                                            <p className="font-medium text-amber-800">เกี่ยวกับคะแนน</p>
-                                            <p className="text-sm text-amber-700 mt-1">
-                                                หากมีการลงคะแนนให้กลุ่มเหล่านี้ไว้แล้ว คะแนนจะยังคงอยู่ในระบบ
-                                                โดยผูกกับนักศึกษาแต่ละคน ไม่ได้ถูกลบไปด้วย
-                                            </p>
-                                        </div>
-                                    </div>
-                                </CardBody>
-                            </Card>
-
-                            {/* Warning */}
-                            <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                <div className="flex items-center gap-3">
-                                    <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                    <div>
-                                        <p className="font-semibold text-red-800">
-                                            คุณต้องการล้างกลุ่มทั้งหมดใช่หรือไม่?
-                                        </p>
-                                        <p className="text-sm text-red-600">
-                                            การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
+                                    </SelectItem>
+                                ))}
+                            </Select>
+                            {scores.selectedGroup && (
+                                <Input
+                                    type="number"
+                                    label="คะแนน"
+                                    labelPlacement="outside"
+                                    placeholder="ใส่คะแนน"
+                                    variant="bordered"
+                                    size="lg"
+                                    value={String(scores.groupScoreValue)}
+                                    onValueChange={(v) => scores.setGroupScoreValue(parseFloat(v) || 0)}
+                                    max={scores.selectedAssignment?.max_score || 100}
+                                    min={0}
+                                    startContent={<Icon icon="solar:star-linear" className="text-slate-400" />}
+                                    endContent={
+                                        <span className="text-sm text-slate-400">
+                                            / {scores.selectedAssignment?.max_score || 100}
+                                        </span>
+                                    }
+                                    classNames={{
+                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
+                                        label: "text-slate-600 font-medium text-sm",
+                                    }}
+                                />
+                            )}
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button
+                        <Button 
                             variant="light"
-                            onPress={() => setIsBulkDeleteModalOpen(false)}
+                            onPress={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}
                         >
                             ยกเลิก
                         </Button>
-                        <Button
-                            color="danger"
-                            onPress={confirmBulkDeleteTeams}
-                            isLoading={isSubmitting}
-                            className="bg-red-500"
-                            startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" />}
+                        <Button 
+                            color="secondary" 
+                            onPress={async () => {
+                                const success = await scores.saveGroupScore();
+                                if (success) modals.scoreModals.setIsGroupScoreModalOpen(false);
+                            }}
+                            isLoading={scores.isSaving}
+                            isDisabled={!scores.selectedGroup}
+                            startContent={!scores.isSaving && <Icon icon="solar:diskette-bold" />}
+                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
                         >
-                            ล้างทั้งหมด ({weeklyTeams[selectedWeek]?.length || 0} กลุ่ม)
+                            บันทึกคะแนน
                         </Button>
                     </ModalFooter>
                 </ModalContent>
