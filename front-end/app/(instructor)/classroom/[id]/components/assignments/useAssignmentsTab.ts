@@ -10,7 +10,8 @@ import type { AssignmentTabType, ViewMode } from "./config";
 interface UseAssignmentsTabProps {
     assignments: AssignmentType[];
     setAssignments: React.Dispatch<React.SetStateAction<AssignmentType[]>>;
-    onAssignmentDeleted?: () => void;
+    courseId: string;
+    onAssignmentChanged?: () => void;
 }
 
 export interface UseAssignmentsTabReturn {
@@ -21,11 +22,15 @@ export interface UseAssignmentsTabReturn {
     isDeleteModalOpen: boolean;
     deleteTarget: AssignmentType | null;
     isDeleting: boolean;
+    // Create/Edit Modal State
+    isAssignmentModalOpen: boolean;
+    editingAssignment: AssignmentType | null;
     // Computed
     labAssignments: AssignmentType[];
     homeworkAssignments: AssignmentType[];
     groupAssignments: AssignmentType[];
     currentAssignments: AssignmentType[];
+    courseId: string;
     // Actions
     setSearchQuery: (query: string) => void;
     setActiveTab: (tab: AssignmentTabType) => void;
@@ -35,16 +40,22 @@ export interface UseAssignmentsTabReturn {
     confirmDeleteAssignment: () => Promise<void>;
     handleDeleteAssignment: (assignment: AssignmentType) => void;
     clearSearch: () => void;
+    // Create/Edit Modal Actions
+    openCreateModal: () => void;
+    openEditModal: (assignment: AssignmentType) => void;
+    closeAssignmentModal: () => void;
+    onAssignmentSaved: () => void;
 }
 
 /**
  * Custom hook for AssignmentsTab state and logic
- * Handles search, filtering, tab switching, view mode, and delete operations
+ * Handles search, filtering, tab switching, view mode, delete, and create/edit modal operations
  */
 export function useAssignmentsTab({
     assignments,
     setAssignments,
-    onAssignmentDeleted,
+    courseId,
+    onAssignmentChanged,
 }: UseAssignmentsTabProps): UseAssignmentsTabReturn {
     const { emitDataUpdate } = useSocket();
     
@@ -57,6 +68,10 @@ export function useAssignmentsTab({
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState<AssignmentType | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+
+    // Create/Edit modal states
+    const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+    const [editingAssignment, setEditingAssignment] = useState<AssignmentType | null>(null);
 
     // Separate assignments by type
     const labAssignments = useMemo(() => 
@@ -115,8 +130,8 @@ export function useAssignmentsTab({
             emitDataUpdate("assignment", "delete", deleteTarget.id);
             
             // Callback to refresh overview data
-            console.log("📊 Calling onAssignmentDeleted callback");
-            onAssignmentDeleted?.();
+            console.log("📊 Calling onAssignmentChanged callback");
+            onAssignmentChanged?.();
             
             closeDeleteModal();
         } catch (error) {
@@ -128,7 +143,7 @@ export function useAssignmentsTab({
         } finally {
             setIsDeleting(false);
         }
-    }, [deleteTarget, setAssignments, emitDataUpdate, onAssignmentDeleted, closeDeleteModal]);
+    }, [deleteTarget, setAssignments, emitDataUpdate, onAssignmentChanged, closeDeleteModal]);
 
     const handleDeleteAssignment = useCallback((assignment: AssignmentType) => {
         openDeleteModal(assignment);
@@ -138,6 +153,33 @@ export function useAssignmentsTab({
         setSearchQuery("");
     }, []);
 
+    // Create/Edit modal actions
+    const openCreateModal = useCallback(() => {
+        setEditingAssignment(null);
+        setIsAssignmentModalOpen(true);
+    }, []);
+
+    const openEditModal = useCallback((assignment: AssignmentType) => {
+        setEditingAssignment(assignment);
+        setIsAssignmentModalOpen(true);
+    }, []);
+
+    const closeAssignmentModal = useCallback(() => {
+        setIsAssignmentModalOpen(false);
+        setEditingAssignment(null);
+    }, []);
+
+    const onAssignmentSaved = useCallback(() => {
+        // Refresh assignments and overview
+        onAssignmentChanged?.();
+        // Emit real-time update
+        if (editingAssignment) {
+            emitDataUpdate("assignment", "update", editingAssignment.id);
+        } else {
+            emitDataUpdate("assignment", "create", undefined);
+        }
+    }, [onAssignmentChanged, emitDataUpdate, editingAssignment]);
+
     return {
         // State
         searchQuery,
@@ -146,11 +188,15 @@ export function useAssignmentsTab({
         isDeleteModalOpen,
         deleteTarget,
         isDeleting,
+        // Create/Edit Modal State
+        isAssignmentModalOpen,
+        editingAssignment,
         // Computed
         labAssignments,
         homeworkAssignments,
         groupAssignments,
         currentAssignments,
+        courseId,
         // Actions
         setSearchQuery,
         setActiveTab,
@@ -160,5 +206,10 @@ export function useAssignmentsTab({
         confirmDeleteAssignment,
         handleDeleteAssignment,
         clearSearch,
+        // Create/Edit Modal Actions
+        openCreateModal,
+        openEditModal,
+        closeAssignmentModal,
+        onAssignmentSaved,
     };
 }

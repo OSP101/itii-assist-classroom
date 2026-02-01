@@ -20,8 +20,6 @@ import { Select, SelectItem } from "@heroui/select";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
-import { FaCheckCircle } from "react-icons/fa";
-
 // Import custom hooks
 import { 
     useClassroomData, 
@@ -91,8 +89,14 @@ const ScoresTab = dynamic(() => import("./components/ScoreSummaryTab"), {
     ssr: false,
 });
 
-// ScoreSummaryTab is now the same as ScoresTab (unified)
-const ScoreSummaryTab = ScoresTab;
+const QueueTab = dynamic(() => import("./components/QueueTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
 
 const ScoreApprovalTab = dynamic(() => import("./components/ScoreApprovalTab"), {
     loading: () => (
@@ -204,7 +208,6 @@ export default function ClassroomDetailPage() {
     const [activeTab, setActiveTab] = useState("overview");
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<number[]>([]);
-    const [expandedAssignments, setExpandedAssignments] = useState<number[]>([]);
     
     // Section UI states
     const [sectionSubTab, setSectionSubTab] = useState<"students" | "permanent" | "weekly">("students");
@@ -214,38 +217,6 @@ export default function ClassroomDetailPage() {
     const [selectedWeek, setSelectedWeek] = useState(1);
     const [totalWeeks] = useState(15);
     const [selectedSectionForTeam, setSelectedSectionForTeam] = useState<number | "all">("all");
-    
-    // Assignment form state (for new assignment modal)
-    interface LocalSubItem {
-        id?: number;
-        name: string;
-        max_score: number;
-    }
-    const [newAssignment, setNewAssignment] = useState<{
-        name: string;
-        assignment_type: "individual" | "permanent_group" | "weekly_group" | "assignment";
-        week_number?: number;
-        linked_attendance_session_id?: number | null;
-        linked_attendance_session_ids: number[];
-        attendance_condition: "and" | "or";
-        hasSubItems: boolean;
-        subItems: LocalSubItem[];
-        maxScore: number;
-        dueDate: string;
-        description: string;
-    }>({
-        name: "",
-        assignment_type: "individual",
-        linked_attendance_session_id: null,
-        linked_attendance_session_ids: [],
-        attendance_condition: "or",
-        hasSubItems: false,
-        subItems: [],
-        maxScore: 10,
-        dueDate: "",
-        description: "",
-    });
-    const [editingAssignment, setEditingAssignment] = useState<AssignmentType | null>(null);
     
     // Score modal specific state
     const [scoreModalAssignment, setScoreModalAssignment] = useState<AssignmentType | null>(null);
@@ -453,14 +424,6 @@ export default function ClassroomDetailPage() {
             }
         }
     }, [expandedSections, sectionStudents, fetchSectionStudents]);
-
-    const toggleAssignment = useCallback((assignmentId: number) => {
-        if (expandedAssignments.includes(assignmentId)) {
-            setExpandedAssignments(expandedAssignments.filter(id => id !== assignmentId));
-        } else {
-            setExpandedAssignments([...expandedAssignments, assignmentId]);
-        }
-    }, [expandedAssignments]);
 
     // ============================================
     // Action Handlers (Bridge to hooks)
@@ -914,7 +877,7 @@ export default function ClassroomDetailPage() {
             badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', status: "coming_soon", badgeColor: "warning" as const },
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', badgeColor: "warning" as const },
         ...(userRole === 'instructor' ? [{
             key: "settings",
             label: "ตั้งค่ารายวิชา",
@@ -1157,16 +1120,14 @@ export default function ClassroomDetailPage() {
                                     assignments={assignments}
                                     setAssignments={setAssignments}
                                     isLoading={isAssignmentsLoading}
-                                    expandedAssignments={expandedAssignments}
-                                    setExpandedAssignments={setExpandedAssignments}
-                                    onOpenCreateModal={() => setEditingAssignment(null)}
-                                    onOpenEditModal={(assignment) => setEditingAssignment(assignment)}
+                                    courseId={courseId}
+                                    weeklyTeams={weeklyTeams}
                                     onOpenScoreModal={(assignment) => {
                                         setScoreModalAssignment(assignment);
                                         modals.scoreModals.setIsScoreModalOpen(true);
                                     }}
                                     onOpenBonusScoreModal={() => modals.scoreModals.setIsBonusScoreModalOpen(true)}
-                                    onAssignmentDeleted={() => {
+                                    onAssignmentChanged={() => {
                                         fetchAssignments(true);
                                         fetchOverview(true);
                                     }}
@@ -1197,6 +1158,10 @@ export default function ClassroomDetailPage() {
                                     course={course}
                                     onCourseUpdate={(updatedCourse) => setCourse(updatedCourse)}
                                 />
+                            )}
+
+                            {activeTab === "queue" && (
+                                <QueueTab course={course} isLoading={isOverviewLoading} />
                             )}
                             </>
                         )}
@@ -1229,36 +1194,62 @@ export default function ClassroomDetailPage() {
             />
 
             {/* Add Section Modal */}
-            <Modal 
-                isOpen={modals.sectionModal.isOpen} 
-                onClose={modals.sectionModal.reset}
-                size="md"
-            >
+            <Modal isOpen={modals.sectionModal.isOpen} onClose={modals.sectionModal.reset} size="md">
                 <ModalContent>
-                    <ModalHeader>เพิ่มกลุ่มเรียน</ModalHeader>
-                    <ModalBody>
-                        <Input
-                            label="หมายเลขกลุ่มเรียน"
-                            placeholder="เช่น 1, 2, 801"
-                            value={modals.sectionModal.sectionNo}
-                            onValueChange={modals.sectionModal.setSectionNo}
-                            isRequired
-                        />
-                        <Input
-                            label="หมายเหตุ (ถ้ามี)"
-                            placeholder="เช่น กลุ่มพิเศษ"
-                            value={modals.sectionModal.note}
-                            onValueChange={modals.sectionModal.setNote}
-                        />
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มกลุ่มเรียน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">สร้างกลุ่มเรียนใหม่สำหรับรายวิชานี้</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            <Input
+                                label="หมายเลขกลุ่มเรียน"
+                                labelPlacement="outside"
+                                placeholder="เช่น 1, 2, 101, A"
+                                variant="bordered"
+                                size="lg"
+                                value={modals.sectionModal.sectionNo}
+                                onValueChange={modals.sectionModal.setSectionNo}
+                                isRequired
+                                classNames={{
+                                    inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                            <Input
+                                label="หมายเหตุ (ถ้ามี)"
+                                labelPlacement="outside"
+                                placeholder="เช่น เรียนวันจันทร์, กลุ่มพิเศษ"
+                                variant="bordered"
+                                size="lg"
+                                value={modals.sectionModal.note}
+                                onValueChange={modals.sectionModal.setNote}
+                                className="pt-2"
+                                classNames={{
+                                    inputWrapper: "h-11 sm:h-12 border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
+                    <ModalFooter className="px-6 py-4 border-slate-100">
                         <Button variant="light" onPress={modals.sectionModal.reset}>
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
+                        <Button
+                            color="primary"
                             onPress={handleAddSection}
                             isLoading={modals.isSubmitting}
+                            isDisabled={!modals.sectionModal.sectionNo.trim()}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
                         >
                             เพิ่มกลุ่มเรียน
                         </Button>
@@ -1269,77 +1260,197 @@ export default function ClassroomDetailPage() {
             {/* Add TA Modal */}
             <Modal 
                 isOpen={modals.taModal.isOpen} 
-                onClose={modals.taModal.reset}
+                onClose={modals.taModal.reset} 
                 size="2xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader>เพิ่มผู้ช่วยสอน</ModalHeader>
-                    <ModalBody>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-hands-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มผู้ช่วยสอน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกผู้ช่วยสอนที่ต้องการเพิ่ม (เลือกได้หลายคน)</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        {/* Stats */}
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-blue-500" />
+                                <span>ผู้ช่วยสอนในระบบ <span className="font-semibold text-blue-600">{tasList.length}</span> คน</span>
+                                {course?.tas && course.tas.length > 0 && (
+                                    <span className="text-slate-400">
+                                        (อยู่ในวิชานี้แล้ว <span className="font-semibold text-emerald-600">{course.tas.length}</span> คน)
+                                    </span>
+                                )}
+                            </div>
+                            {modals.taModal.selectedIds.length > 0 && (
+                                <Chip size="sm" color="primary" variant="flat">
+                                    เลือกแล้ว {modals.taModal.selectedIds.length} คน
+                                </Chip>
+                            )}
+                        </div>
+
+                        {/* Search */}
                         <Input
-                            placeholder="ค้นหาผู้ช่วยสอน..."
+                            placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
+                            variant="bordered"
+                            size="lg"
                             value={modals.taModal.searchQuery}
                             onValueChange={modals.taModal.setSearchQuery}
-                            startContent={<Icon icon="solar:magnifer-linear" />}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                            endContent={
+                                modals.taModal.searchQuery && (
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => modals.taModal.setSearchQuery("")}
+                                    >
+                                        <Icon icon="solar:close-circle-bold" className="text-slate-400" />
+                                    </Button>
+                                )
+                            }
+                            classNames={{
+                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                            }}
                         />
-                        <div className="flex gap-2 mb-2">
-                            <Button size="sm" variant="flat" onPress={selectAllAvailableTAs}>
+
+                        {/* Quick Actions */}
+                        <div className="flex items-center gap-2 mt-3">
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                color="primary"
+                                onPress={selectAllAvailableTAs}
+                                startContent={<Icon icon="solar:checklist-bold" />}
+                            >
                                 เลือกทั้งหมด
                             </Button>
-                            <Button size="sm" variant="flat" onPress={clearTASelection}>
-                                ล้างการเลือก
-                            </Button>
-                            <Chip size="sm" variant="flat" color="primary">
-                                เลือกแล้ว {modals.taModal.selectedIds.length} คน
-                            </Chip>
+                            {modals.taModal.selectedIds.length > 0 && (
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="danger"
+                                    onPress={clearTASelection}
+                                    startContent={<Icon icon="solar:close-circle-bold" />}
+                                >
+                                    ล้างการเลือก
+                                </Button>
+                            )}
                         </div>
-                        <div className="max-h-80 overflow-y-auto space-y-2">
-                            {availableTAs
-                                .filter(ta => {
-                                    if (!modals.taModal.searchQuery) return true;
-                                    const query = modals.taModal.searchQuery.toLowerCase();
-                                    return ta.full_name.toLowerCase().includes(query) ||
-                                           ta.email?.toLowerCase().includes(query) ||
-                                           ta.username.toLowerCase().includes(query);
-                                })
-                                .map(ta => (
-                                    <Card
-                                        key={ta.id}
-                                        isPressable
-                                        onPress={() => toggleTASelection(ta.id)}
-                                        className={`${modals.taModal.selectedIds.includes(ta.id) ? "border-primary bg-primary-50" : ""}`}
-                                    >
-                                        <CardBody className="p-3">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar
-                                                    src={ta.avatar || undefined}
-                                                    name={ta.full_name}
-                                                    size="sm"
-                                                />
-                                                <div className="flex-1">
-                                                    <p className="font-medium">{ta.full_name}</p>
-                                                    <p className="text-xs text-slate-500">{ta.email || ta.username}</p>
-                                                </div>
-                                                {modals.taModal.selectedIds.includes(ta.id) && (
-                                                    <FaCheckCircle className="text-primary" />
-                                                )}
+                        
+                        {/* TA List */}
+                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {(() => {
+                                    const existingTAIds = course?.tas?.map(ta => ta.id) || [];
+                                    const filteredTAs = tasList.filter(ta => {
+                                        // ไม่แสดง TA ที่อยู่ในวิชาแล้ว
+                                        if (existingTAIds.includes(ta.id)) return false;
+                                        
+                                        const searchLower = modals.taModal.searchQuery.toLowerCase();
+                                        const matchesSearch = !modals.taModal.searchQuery || 
+                                            ta.full_name.toLowerCase().includes(searchLower) ||
+                                            (ta.email && ta.email.toLowerCase().includes(searchLower)) ||
+                                            (ta.username && ta.username.toLowerCase().includes(searchLower));
+                                        return matchesSearch;
+                                    });
+
+                                    if (filteredTAs.length === 0) {
+                                        return (
+                                            <div className="p-8 text-center text-slate-500">
+                                                <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
+                                                <p>{modals.taModal.searchQuery ? "ไม่พบผู้ช่วยสอนที่ค้นหา" : "ผู้ช่วยสอนทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
                                             </div>
-                                        </CardBody>
-                                    </Card>
-                                ))}
+                                        );
+                                    }
+
+                                    return filteredTAs.map((ta) => {
+                                        const isSelected = modals.taModal.selectedIds.includes(ta.id);
+
+                                        return (
+                                            <div
+                                                key={ta.id}
+                                                onClick={() => toggleTASelection(ta.id)}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
+                                                    isSelected
+                                                        ? "bg-blue-50 cursor-pointer"
+                                                        : "hover:bg-slate-50 cursor-pointer"
+                                                }`}
+                                            >
+                                                {/* Checkbox */}
+                                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 `}>
+                                                    {isSelected && (
+                                                        <Icon icon="solar:check-circle-bold" className="text-lg text-blue-500" />
+                                                    )}
+                                                </div>
+
+                                                <Avatar
+                                                    name={ta.full_name}
+                                                    src={ta.avatar || undefined}
+                                                    size="sm"
+                                                    className={`flex-shrink-0 bg-gradient-to-br from-blue-400 to-indigo-500`}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium truncate text-slate-800">
+                                                        {ta.full_name}
+                                                    </p>
+                                                    <p className="text-xs truncate text-slate-500">
+                                                        {ta.email || ta.username}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
                         </div>
+                        
+                        {/* Selected TAs Preview */}
+                        {modals.taModal.selectedIds.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-sm font-medium text-slate-600 mb-2">ผู้ช่วยสอนที่เลือก ({modals.taModal.selectedIds.length} คน)</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {modals.taModal.selectedIds.map(taId => {
+                                        const ta = tasList.find(t => t.id === taId);
+                                        if (!ta) return null;
+                                        return (
+                                            <Chip
+                                                key={taId}
+                                                variant="flat"
+                                                color="primary"
+                                                onClose={() => toggleTASelection(taId)}
+                                                
+                                            >
+                                                {ta.full_name}
+                                            </Chip>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.taModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={modals.taModal.reset}
+                        >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
+                        <Button
+                            color="primary"
                             onPress={handleAddTA}
                             isLoading={modals.isSubmitting}
                             isDisabled={modals.taModal.selectedIds.length === 0}
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
-                            เพิ่มผู้ช่วยสอน ({modals.taModal.selectedIds.length})
+                            เพิ่มผู้ช่วยสอน {modals.taModal.selectedIds.length > 0 ? `(${modals.taModal.selectedIds.length} คน)` : ""}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -1353,71 +1464,180 @@ export default function ClassroomDetailPage() {
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader>เพิ่มอาจารย์ผู้สอน</ModalHeader>
-                    <ModalBody>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-rounded-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มอาจารย์ผู้สอน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกอาจารย์ที่ต้องการเพิ่ม (เลือกได้หลายคน)</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        {/* Stats */}
+                        <div className="mb-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-sm text-slate-600">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
+                                <span>อาจารย์ในระบบ <span className="font-semibold text-indigo-600">{instructorsList.length}</span> คน</span>
+                            </div>
+                            {modals.instructorModal.selectedIds.length > 0 && (
+                                <Chip size="sm" color="secondary" variant="flat">
+                                    เลือกแล้ว {modals.instructorModal.selectedIds.length} คน
+                                </Chip>
+                            )}
+                        </div>
+
+                        {/* Search */}
                         <Input
-                            placeholder="ค้นหาอาจารย์..."
+                            placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
+                            variant="bordered"
+                            size="lg"
                             value={modals.instructorModal.searchQuery}
                             onValueChange={modals.instructorModal.setSearchQuery}
-                            startContent={<Icon icon="solar:magnifer-linear" />}
+                            startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                            endContent={
+                                modals.instructorModal.searchQuery && (
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => modals.instructorModal.setSearchQuery("")}
+                                    >
+                                        <Icon icon="solar:close-circle-bold" className="text-slate-400" />
+                                    </Button>
+                                )
+                            }
+                            classNames={{
+                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
+                            }}
                         />
-                        <div className="flex gap-2 mb-2">
-                            <Button size="sm" variant="flat" onPress={selectAllInstructors}>
+
+                        {/* Quick Actions */}
+                        <div className="flex items-center gap-2 mt-3">
+                            <Button
+                                size="sm"
+                                variant="flat"
+                                color="secondary"
+                                onPress={selectAllInstructors}
+                                startContent={<Icon icon="solar:checklist-bold" />}
+                            >
                                 เลือกทั้งหมด
                             </Button>
-                            <Button size="sm" variant="flat" onPress={clearInstructorSelection}>
-                                ล้างการเลือก
-                            </Button>
-                            <Chip size="sm" variant="flat" color="primary">
-                                เลือกแล้ว {modals.instructorModal.selectedIds.length} คน
-                            </Chip>
-                        </div>
-                        <div className="max-h-80 overflow-y-auto space-y-2">
-                            {filteredInstructors.map(instructor => (
-                                <Card
-                                    key={instructor.id}
-                                    isPressable
-                                    onPress={() => {
-                                        const current = modals.instructorModal.selectedIds;
-                                        if (current.includes(instructor.id)) {
-                                            modals.instructorModal.setSelectedIds(current.filter(id => id !== instructor.id));
-                                        } else {
-                                            modals.instructorModal.setSelectedIds([...current, instructor.id]);
-                                        }
-                                    }}
-                                    className={`${modals.instructorModal.selectedIds.includes(instructor.id) ? "border-primary bg-primary-50" : ""}`}
+                            {modals.instructorModal.selectedIds.length > 0 && (
+                                <Button
+                                    size="sm"
+                                    variant="flat"
+                                    color="danger"
+                                    onPress={clearInstructorSelection}
+                                    startContent={<Icon icon="solar:close-circle-bold" />}
                                 >
-                                    <CardBody className="p-3">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar
-                                                src={instructor.avatar || undefined}
-                                                name={instructor.full_name}
-                                                size="sm"
-                                            />
-                                            <div className="flex-1">
-                                                <p className="font-medium">{instructor.full_name}</p>
-                                                <p className="text-xs text-slate-500">{instructor.email}</p>
-                                            </div>
-                                            {modals.instructorModal.selectedIds.includes(instructor.id) && (
-                                                <FaCheckCircle className="text-primary" />
-                                            )}
-                                        </div>
-                                    </CardBody>
-                                </Card>
-                            ))}
+                                    ล้างการเลือก
+                                </Button>
+                            )}
                         </div>
+                        
+                        {/* Instructor List */}
+                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="max-h-[300px] overflow-y-auto">
+                                {filteredInstructors.length === 0 ? (
+                                    <div className="p-8 text-center text-slate-500">
+                                        <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
+                                        <p>{modals.instructorModal.searchQuery ? "ไม่พบอาจารย์ที่ค้นหา" : "อาจารย์ทั้งหมดอยู่ในวิชานี้แล้ว"}</p>
+                                    </div>
+                                ) : (
+                                    filteredInstructors.map((instructor) => {
+                                        const isSelected = modals.instructorModal.selectedIds.includes(instructor.id);
+
+                                        return (
+                                            <div
+                                                key={instructor.id}
+                                                onClick={() => {
+                                                    const current = modals.instructorModal.selectedIds;
+                                                    if (current.includes(instructor.id)) {
+                                                        modals.instructorModal.setSelectedIds(current.filter(id => id !== instructor.id));
+                                                    } else {
+                                                        modals.instructorModal.setSelectedIds([...current, instructor.id]);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
+                                                    isSelected
+                                                        ? "bg-indigo-50 cursor-pointer"
+                                                        : "hover:bg-slate-50 cursor-pointer"
+                                                }`}
+                                            >
+                                                {/* Checkbox */}
+                                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0`}>
+                                                    {isSelected && (
+                                                        <Icon icon="solar:check-circle-bold" className="text-lg text-indigo-500" />
+                                                    )}
+                                                </div>
+
+                                                <Avatar
+                                                    name={instructor.full_name}
+                                                    src={instructor.avatar || undefined}
+                                                    size="sm"
+                                                    className={`flex-shrink-0 bg-gradient-to-br from-indigo-400 to-purple-500`}
+                                                />
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-medium truncate text-slate-800">
+                                                        {instructor.full_name}
+                                                    </p>
+                                                    <p className="text-xs truncate text-slate-500">
+                                                        {instructor.email}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Selected Instructors Preview */}
+                        {modals.instructorModal.selectedIds.length > 0 && (
+                            <div className="mt-4">
+                                <p className="text-sm font-medium text-slate-600 mb-2">อาจารย์ที่เลือก ({modals.instructorModal.selectedIds.length} คน)</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {modals.instructorModal.selectedIds.map(instructorId => {
+                                        const instructor = instructorsList.find(i => i.id === instructorId);
+                                        if (!instructor) return null;
+                                        return (
+                                            <Chip
+                                                key={instructorId}
+                                                variant="flat"
+                                                color="secondary"
+                                                onClose={() => {
+                                                    modals.instructorModal.setSelectedIds(
+                                                        modals.instructorModal.selectedIds.filter(id => id !== instructorId)
+                                                    );
+                                                }}
+                                            >
+                                                {instructor.full_name}
+                                            </Chip>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.instructorModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={modals.instructorModal.reset}
+                        >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
+                        <Button
+                            color="secondary"
                             onPress={handleAddInstructors}
                             isLoading={modals.isSubmitting}
                             isDisabled={modals.instructorModal.selectedIds.length === 0}
+                            startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
                         >
-                            เพิ่มอาจารย์ ({modals.instructorModal.selectedIds.length})
+                            เพิ่มอาจารย์ {modals.instructorModal.selectedIds.length > 0 ? `(${modals.instructorModal.selectedIds.length} คน)` : ""}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -1431,116 +1651,178 @@ export default function ClassroomDetailPage() {
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader>
-                        เพิ่มนักศึกษา - กลุ่มเรียน {course?.sections?.find(s => s.id === modals.studentModal.sectionId)?.section_no}
-                    </ModalHeader>
-                    <ModalBody>
-                        <div className="flex gap-2 mb-4">
-                            <Button
-                                size="sm"
-                                variant={modals.studentModal.mode === "select" ? "solid" : "flat"}
-                                color={modals.studentModal.mode === "select" ? "primary" : "default"}
-                                onPress={() => modals.studentModal.setMode("select")}
-                            >
-                                เลือกจากรายชื่อ
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={modals.studentModal.mode === "paste" ? "solid" : "flat"}
-                                color={modals.studentModal.mode === "paste" ? "primary" : "default"}
-                                onPress={() => modals.studentModal.setMode("paste")}
-                            >
-                                วางจาก Excel
-                            </Button>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:user-plus-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">เพิ่มนักศึกษา</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กลุ่มเรียน {course?.sections?.find(s => s.id === modals.studentModal.sectionId)?.section_no}
+                                </p>
+                            </div>
                         </div>
-
-                        {modals.studentModal.mode === "select" ? (
-                            <>
-                                <Input
-                                    placeholder="ค้นหานักศึกษา..."
-                                    value={modals.studentModal.searchQuery}
-                                    onValueChange={modals.studentModal.setSearchQuery}
-                                    startContent={<Icon icon="solar:magnifer-linear" />}
-                                />
-                                <Select
-                                    label="เลือกนักศึกษา"
-                                    placeholder="เลือกนักศึกษา"
-                                    selectedKeys={modals.studentModal.studentId ? [modals.studentModal.studentId] : []}
-                                    onSelectionChange={(keys) => {
-                                        const selected = Array.from(keys)[0] as string;
-                                        modals.studentModal.setStudentId(selected || "");
-                                    }}
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            {/* Mode Tabs */}
+                            <div className="flex gap-2">
+                                <Button
+                                    size="sm"
+                                    variant={modals.studentModal.mode === "select" ? "solid" : "flat"}
+                                    color={modals.studentModal.mode === "select" ? "primary" : "default"}
+                                    onPress={() => modals.studentModal.setMode("select")}
+                                    className={modals.studentModal.mode === "select" ? "bg-gradient-to-r from-cyan-400 to-blue-500" : ""}
+                                    startContent={<Icon icon="solar:user-check-bold" />}
                                 >
-                                    {filteredStudents().map(student => (
-                                        <SelectItem key={String(student.id)} textValue={`${student.student_id} - ${student.full_name}`}>
-                                            <div className="flex items-center gap-2">
-                                                <Avatar size="sm" name={student.full_name} />
-                                                <div>
-                                                    <p className="font-medium">{student.student_id}</p>
-                                                    <p className="text-xs text-slate-500">{student.full_name}</p>
+                                    เลือกจากรายชื่อ
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={modals.studentModal.mode === "paste" ? "solid" : "flat"}
+                                    color={modals.studentModal.mode === "paste" ? "primary" : "default"}
+                                    onPress={() => modals.studentModal.setMode("paste")}
+                                    className={modals.studentModal.mode === "paste" ? "bg-gradient-to-r from-emerald-400 to-teal-500" : ""}
+                                    startContent={<Icon icon="solar:clipboard-text-bold" />}
+                                >
+                                    วางจาก Excel
+                                </Button>
+                            </div>
+
+                            {modals.studentModal.mode === "select" ? (
+                                <>
+                                    <Input
+                                        placeholder="ค้นหานักศึกษา..."
+                                        variant="bordered"
+                                        size="lg"
+                                        value={modals.studentModal.searchQuery}
+                                        onValueChange={modals.studentModal.setSearchQuery}
+                                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-cyan-300 focus-within:!border-cyan-400",
+                                        }}
+                                    />
+                                    <Select
+                                        label="เลือกนักศึกษา"
+                                        labelPlacement="outside"
+                                        placeholder="เลือกนักศึกษาที่ต้องการเพิ่ม"
+                                        variant="bordered"
+                                        size="lg"
+                                        selectedKeys={modals.studentModal.studentId ? [modals.studentModal.studentId] : []}
+                                        onSelectionChange={(keys) => {
+                                            const selected = Array.from(keys)[0] as string;
+                                            modals.studentModal.setStudentId(selected || "");
+                                        }}
+                                        classNames={{
+                                            trigger: "h-12 bg-white border-slate-200 hover:border-cyan-300 data-[open=true]:border-cyan-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    >
+                                        {filteredStudents().map(student => (
+                                            <SelectItem key={String(student.id)} textValue={`${student.student_id} - ${student.full_name}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar size="sm" name={student.full_name} className="bg-gradient-to-br from-cyan-400 to-blue-500 text-white" />
+                                                    <div>
+                                                        <p className="font-medium text-slate-800">{student.student_id}</p>
+                                                        <p className="text-xs text-slate-500">{student.full_name}</p>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                </Select>
-                            </>
-                        ) : (
-                            <>
-                                <Input
-                                    label="วางรายชื่อจาก Excel"
-                                    placeholder="วางรหัสนักศึกษา (แต่ละบรรทัด)"
-                                    value={modals.studentModal.excelData}
-                                    onValueChange={(value) => {
-                                        modals.studentModal.setExcelData(value);
-                                        parseExcelData(value);
-                                    }}
-                                    description="วางรหัสนักศึกษา หรือชื่อ-นามสกุล หนึ่งรายการต่อบรรทัด"
-                                />
-                                {modals.studentModal.parsedStudents.length > 0 && (
-                                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-                                        {modals.studentModal.parsedStudents.map((item, index) => (
-                                            <div 
-                                                key={index}
-                                                className={`p-2 rounded-lg border ${
-                                                    item.status === "matched" ? "border-green-200 bg-green-50" :
-                                                    item.status === "already_enrolled" ? "border-amber-200 bg-amber-50" :
-                                                    "border-red-200 bg-red-50"
-                                                }`}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-sm">{item.inputValue}</span>
-                                                    {item.status === "matched" && item.matchedStudent && (
-                                                        <span className="text-xs text-green-600">
-                                                            → {item.matchedStudent.student_id} {item.matchedStudent.full_name}
-                                                        </span>
-                                                    )}
-                                                    {item.status === "already_enrolled" && (
-                                                        <span className="text-xs text-amber-600">ลงทะเบียนแล้ว</span>
-                                                    )}
-                                                    {item.status === "not_found" && (
-                                                        <span className="text-xs text-red-600">ไม่พบ</span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            </SelectItem>
                                         ))}
-                                        <div className="flex gap-2 mt-2">
-                                            <Chip size="sm" color="success" variant="flat">
-                                                พบ {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length}
-                                            </Chip>
-                                            <Chip size="sm" color="warning" variant="flat">
-                                                ซ้ำ {modals.studentModal.parsedStudents.filter(p => p.status === "already_enrolled").length}
-                                            </Chip>
-                                            <Chip size="sm" color="danger" variant="flat">
-                                                ไม่พบ {modals.studentModal.parsedStudents.filter(p => p.status === "not_found").length}
-                                            </Chip>
-                                        </div>
+                                    </Select>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                        <p className="text-sm text-slate-600">
+                                            <Icon icon="solar:info-circle-bold" className="text-cyan-500 inline mr-1" />
+                                            วางรหัสนักศึกษา หรือชื่อ-นามสกุล หนึ่งรายการต่อบรรทัด
+                                        </p>
                                     </div>
-                                )}
-                            </>
-                        )}
+                                    <Input
+                                        label="วางรายชื่อจาก Excel"
+                                        labelPlacement="outside"
+                                        placeholder="วางรหัสนักศึกษา (แต่ละบรรทัด)"
+                                        variant="bordered"
+                                        size="lg"
+                                        value={modals.studentModal.excelData}
+                                        onValueChange={(value) => {
+                                            modals.studentModal.setExcelData(value);
+                                            parseExcelData(value);
+                                        }}
+                                        startContent={<Icon icon="solar:document-text-linear" className="text-slate-400" />}
+                                        classNames={{
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
+                                    {modals.studentModal.parsedStudents.length > 0 && (
+                                        <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
+                                            {modals.studentModal.parsedStudents.map((item, index) => (
+                                                <div 
+                                                    key={index}
+                                                    className={`p-3 rounded-lg border transition-all ${
+                                                        item.status === "matched" ? "border-emerald-200 bg-emerald-50" :
+                                                        item.status === "already_enrolled" ? "border-amber-200 bg-amber-50" :
+                                                        "border-red-200 bg-red-50"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-2">
+                                                            <Icon 
+                                                                icon={
+                                                                    item.status === "matched" ? "solar:check-circle-bold" :
+                                                                    item.status === "already_enrolled" ? "solar:info-circle-bold" :
+                                                                    "solar:close-circle-bold"
+                                                                }
+                                                                className={`text-lg ${
+                                                                    item.status === "matched" ? "text-emerald-500" :
+                                                                    item.status === "already_enrolled" ? "text-amber-500" :
+                                                                    "text-red-500"
+                                                                }`}
+                                                            />
+                                                            <span className="text-sm font-medium">{item.inputValue}</span>
+                                                        </div>
+                                                        {item.status === "matched" && item.matchedStudent && (
+                                                            <span className="text-xs text-emerald-600 font-medium">
+                                                                → {item.matchedStudent.student_id} {item.matchedStudent.full_name}
+                                                            </span>
+                                                        )}
+                                                        {item.status === "already_enrolled" && (
+                                                            <span className="text-xs text-amber-600 font-medium">ลงทะเบียนแล้ว</span>
+                                                        )}
+                                                        {item.status === "not_found" && (
+                                                            <span className="text-xs text-red-600 font-medium">ไม่พบ</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div className="flex gap-2 mt-3 pt-3 border-t border-slate-200">
+                                                <Chip size="sm" color="success" variant="flat">
+                                                    <Icon icon="solar:check-circle-bold" className="mr-1" />
+                                                    พบ {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length}
+                                                </Chip>
+                                                <Chip size="sm" color="warning" variant="flat">
+                                                    <Icon icon="solar:info-circle-bold" className="mr-1" />
+                                                    ซ้ำ {modals.studentModal.parsedStudents.filter(p => p.status === "already_enrolled").length}
+                                                </Chip>
+                                                <Chip size="sm" color="danger" variant="flat">
+                                                    <Icon icon="solar:close-circle-bold" className="mr-1" />
+                                                    ไม่พบ {modals.studentModal.parsedStudents.filter(p => p.status === "not_found").length}
+                                                </Chip>
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.studentModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={modals.studentModal.reset}
+                        >
                             ยกเลิก
                         </Button>
                         {modals.studentModal.mode === "select" ? (
@@ -1549,15 +1831,19 @@ export default function ClassroomDetailPage() {
                                 onPress={handleAddStudent}
                                 isLoading={modals.isSubmitting}
                                 isDisabled={!modals.studentModal.studentId}
+                                startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
+                                className="bg-gradient-to-r from-cyan-400 to-blue-500 shadow-lg shadow-cyan-400/25"
                             >
                                 เพิ่มนักศึกษา
                             </Button>
                         ) : (
                             <Button 
-                                color="primary" 
+                                color="success" 
                                 onPress={handleBulkAddStudents}
                                 isLoading={modals.isSubmitting}
                                 isDisabled={modals.studentModal.parsedStudents.filter(p => p.status === "matched").length === 0}
+                                startContent={!modals.isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
+                                className="bg-gradient-to-r from-emerald-400 to-teal-500 shadow-lg shadow-emerald-400/25"
                             >
                                 เพิ่ม {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length} คน
                             </Button>
@@ -1570,80 +1856,217 @@ export default function ClassroomDetailPage() {
             <Modal 
                 isOpen={modals.deleteModal.isOpen} 
                 onClose={modals.deleteModal.reset}
-                size="md"
+                size="lg"
             >
                 <ModalContent>
-                    <ModalHeader className="text-danger">
-                        {modals.deleteModal.type === "student" && "ยืนยันการนำนักศึกษาออก"}
-                        {modals.deleteModal.type === "section" && "ยืนยันการลบกลุ่มเรียน"}
-                        {modals.deleteModal.type === "team" && "ยืนยันการลบกลุ่ม"}
-                        {modals.deleteModal.type === "ta" && "ยืนยันการนำผู้ช่วยสอนออก"}
-                        {modals.deleteModal.type === "instructor" && "ยืนยันการนำอาจารย์ออก"}
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">
+                                    {modals.deleteModal.type === "student" && "นำนักศึกษาออก"}
+                                    {modals.deleteModal.type === "section" && "ลบกลุ่มเรียน"}
+                                    {modals.deleteModal.type === "team" && "ลบกลุ่ม"}
+                                    {modals.deleteModal.type === "ta" && "นำผู้ช่วยสอนออก"}
+                                    {modals.deleteModal.type === "instructor" && "นำอาจารย์ออก"}
+                                </h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                                </p>
+                            </div>
+                        </div>
                     </ModalHeader>
-                    <ModalBody>
-                        {modals.deleteModal.type === "student" && modals.deleteModal.target && (
-                            <p>
-                                ต้องการนำ <strong>{modals.deleteModal.target.studentName}</strong> ({modals.deleteModal.target.studentCode}) 
-                                ออกจากกลุ่มเรียน {modals.deleteModal.target.sectionNo} หรือไม่?
-                            </p>
-                        )}
-                        {modals.deleteModal.type === "section" && modals.deleteModal.target && (
-                            <div>
-                                <p>ต้องการลบกลุ่มเรียน <strong>{modals.deleteModal.target.sectionNo}</strong> หรือไม่?</p>
-                                {(modals.deleteModal.target.sectionStudentCount || 0) > 0 && (
-                                    <p className="text-danger mt-2">
-                                        ⚠️ กลุ่มนี้มีนักศึกษา {modals.deleteModal.target.sectionStudentCount} คน จะถูกนำออกด้วย
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                        {modals.deleteModal.type === "team" && modals.deleteModal.target && (
-                            <div>
-                                <p>ต้องการลบกลุ่ม <strong>{modals.deleteModal.target.teamName}</strong> หรือไม่?</p>
-                                {modals.deleteModal.target.teamMembers && modals.deleteModal.target.teamMembers.length > 0 && (
-                                    <div className="mt-2 text-sm text-slate-500">
-                                        <p>สมาชิก ({modals.deleteModal.target.teamMembers.length} คน):</p>
-                                        <ul className="list-disc list-inside">
-                                            {modals.deleteModal.target.teamMembers.slice(0, 5).map(m => (
-                                                <li key={m.id}>{m.full_name}</li>
-                                            ))}
-                                            {modals.deleteModal.target.teamMembers.length > 5 && (
-                                                <li>และอีก {modals.deleteModal.target.teamMembers.length - 5} คน</li>
+                    <ModalBody className="px-6 py-4">
+                        {modals.deleteModal.target && (
+                            <div className="space-y-4">
+                                {/* Info Card */}
+                                <Card className="border border-red-100 bg-red-50/50">
+                                    <CardBody className="py-4 px-4">
+                                        <div className="flex items-center gap-4">
+                                            {/* Student Delete */}
+                                            {modals.deleteModal.type === "student" && (
+                                                <>
+                                                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                                                        <Icon icon="solar:user-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.studentName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                {modals.deleteModal.target.studentCode}
+                                                            </Chip>
+                                                            <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600">
+                                                                Section {modals.deleteModal.target.sectionNo}
+                                                            </Chip>
+                                                        </div>
+                                                    </div>
+                                                </>
                                             )}
-                                        </ul>
-                                    </div>
+                                            {/* Section Delete */}
+                                            {modals.deleteModal.type === "section" && (
+                                                <>
+                                                    <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                                                        <Icon icon="solar:notebook-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">กลุ่มเรียน {modals.deleteModal.target.sectionNo}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                <Icon icon="solar:users-group-rounded-linear" className="mr-1" />
+                                                                {modals.deleteModal.target.sectionStudentCount || 0} นักศึกษา
+                                                            </Chip>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* Team Delete */}
+                                            {modals.deleteModal.type === "team" && (
+                                                <>
+                                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${
+                                                        modals.deleteModal.target.teamType === "permanent"
+                                                            ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                                                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                                                    }`}>
+                                                        <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.teamName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className={
+                                                                modals.deleteModal.target.teamType === "permanent"
+                                                                    ? "bg-purple-100 text-purple-700"
+                                                                    : "bg-emerald-100 text-emerald-700"
+                                                            }>
+                                                                {modals.deleteModal.target.teamType === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มสัปดาห์"}
+                                                            </Chip>
+                                                            {modals.deleteModal.target.weekNumber && (
+                                                                <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                                    W{modals.deleteModal.target.weekNumber}
+                                                                </Chip>
+                                                            )}
+                                                        </div>
+                                                        {modals.deleteModal.target.teamMembers && modals.deleteModal.target.teamMembers.length > 0 && (
+                                                            <div className="flex items-center gap-1 mt-2 text-sm text-slate-500">
+                                                                <Icon icon="solar:users-group-rounded-linear" className="text-slate-400" />
+                                                                {modals.deleteModal.target.teamMembers.length} สมาชิก
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* TA Delete */}
+                                            {modals.deleteModal.type === "ta" && (
+                                                <>
+                                                    <Avatar
+                                                        src={modals.deleteModal.target.taAvatar}
+                                                        name={modals.deleteModal.target.taName}
+                                                        className="w-14 h-14 text-xl"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{modals.deleteModal.target.taName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">
+                                                                ผู้ช่วยสอน
+                                                            </Chip>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 mt-1">{modals.deleteModal.target.taEmail}</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                            {/* Instructor Delete */}
+                                            {modals.deleteModal.type === "instructor" && (
+                                                <>
+                                                    <Avatar
+                                                        src={(modals.deleteModal.target as any).instructorAvatar}
+                                                        name={(modals.deleteModal.target as any).instructorName}
+                                                        className="w-14 h-14 text-xl"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <p className="font-semibold text-lg text-slate-800">{(modals.deleteModal.target as any).instructorName}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <Chip size="sm" variant="flat" className="bg-indigo-100 text-indigo-700">
+                                                                อาจารย์
+                                                            </Chip>
+                                                        </div>
+                                                        <p className="text-sm text-slate-500 mt-1">{(modals.deleteModal.target as any).instructorEmail}</p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </CardBody>
+                                </Card>
+
+                                {/* Additional Info Card */}
+                                {modals.deleteModal.type === "section" && (modals.deleteModal.target.sectionStudentCount || 0) > 0 && (
+                                    <Card className="border border-amber-200 bg-amber-50">
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:users-group-rounded-bold" className="text-xl text-amber-600 mt-0.5" />
+                                                <div>
+                                                    <p className="font-medium text-amber-800">เกี่ยวกับนักศึกษา</p>
+                                                    <p className="text-sm text-amber-700 mt-1">
+                                                        นักศึกษาทั้งหมด {modals.deleteModal.target.sectionStudentCount} คนในกลุ่มเรียนนี้จะถูกนำออกด้วย
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </CardBody>
+                                    </Card>
                                 )}
-                            </div>
-                        )}
-                        {modals.deleteModal.type === "ta" && modals.deleteModal.target && (
-                            <div className="flex items-center gap-3">
-                                <Avatar
-                                    src={modals.deleteModal.target.taAvatar}
-                                    name={modals.deleteModal.target.taName}
-                                    size="lg"
-                                />
-                                <div>
-                                    <p>ต้องการนำ <strong>{modals.deleteModal.target.taName}</strong> ออกจากรายวิชานี้หรือไม่?</p>
-                                    <p className="text-sm text-slate-500">{modals.deleteModal.target.taEmail}</p>
-                                </div>
-                            </div>
-                        )}
-                        {modals.deleteModal.type === "instructor" && modals.deleteModal.target && (
-                            <div className="flex items-center gap-3">
-                                <Avatar
-                                    src={(modals.deleteModal.target as any).instructorAvatar}
-                                    name={(modals.deleteModal.target as any).instructorName}
-                                    size="lg"
-                                />
-                                <div>
-                                    <p>ต้องการนำ <strong>{(modals.deleteModal.target as any).instructorName}</strong> ออกจากรายวิชานี้หรือไม่?</p>
-                                    <p className="text-sm text-slate-500">{(modals.deleteModal.target as any).instructorEmail}</p>
+
+                                {modals.deleteModal.type === "team" && modals.deleteModal.target.teamMembers && modals.deleteModal.target.teamMembers.length > 0 && (
+                                    <Card className="border border-amber-200 bg-amber-50">
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:users-group-rounded-bold" className="text-xl text-amber-600 mt-0.5" />
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-amber-800">สมาชิกในกลุ่ม ({modals.deleteModal.target.teamMembers.length} คน)</p>
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {modals.deleteModal.target.teamMembers.slice(0, 5).map(m => (
+                                                            <Chip key={m.id} size="sm" variant="flat" className="bg-amber-100 text-amber-700">
+                                                                {m.full_name}
+                                                            </Chip>
+                                                        ))}
+                                                        {modals.deleteModal.target.teamMembers.length > 5 && (
+                                                            <Chip size="sm" variant="flat" className="bg-amber-200 text-amber-800">
+                                                                +{modals.deleteModal.target.teamMembers.length - 5} คน
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </CardBody>
+                                    </Card>
+                                )}
+
+                                {/* Warning */}
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                {modals.deleteModal.type === "student" && "คุณต้องการนำนักศึกษานี้ออกใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "section" && "คุณต้องการลบกลุ่มเรียนนี้ใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "team" && "คุณต้องการลบกลุ่มนี้ใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "ta" && "คุณต้องการนำผู้ช่วยสอนออกใช่หรือไม่?"}
+                                                {modals.deleteModal.type === "instructor" && "คุณต้องการนำอาจารย์ออกใช่หรือไม่?"}
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.deleteModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light" 
+                            onPress={modals.deleteModal.reset}
+                            isDisabled={modals.isSubmitting}
+                        >
                             ยกเลิก
                         </Button>
                         <Button 
@@ -1658,9 +2081,13 @@ export default function ClassroomDetailPage() {
                                 }
                             }}
                             isLoading={modals.isSubmitting}
+                            className="bg-red-500"
                         >
-                            {modals.deleteModal.type === "section" ? "ลบกลุ่มเรียน" : 
-                             modals.deleteModal.type === "team" ? "ลบกลุ่ม" : "นำออก"}
+                            {modals.deleteModal.type === "student" && "นำออก"}
+                            {modals.deleteModal.type === "section" && "ลบกลุ่มเรียน"}
+                            {modals.deleteModal.type === "team" && "ลบกลุ่ม"}
+                            {modals.deleteModal.type === "ta" && "นำออก"}
+                            {modals.deleteModal.type === "instructor" && "นำออก"}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -1670,27 +2097,104 @@ export default function ClassroomDetailPage() {
             <Modal 
                 isOpen={modals.bulkDeleteModal.isOpen} 
                 onClose={() => modals.bulkDeleteModal.setIsOpen(false)}
-                size="md"
+                size="lg"
             >
                 <ModalContent>
-                    <ModalHeader className="text-danger">ยืนยันการลบกลุ่มทั้งหมด</ModalHeader>
-                    <ModalBody>
-                        <p>
-                            ต้องการลบกลุ่มทั้งหมด {(weeklyTeams[selectedWeek] || []).length} กลุ่ม 
-                            ในสัปดาห์ที่ {selectedWeek} หรือไม่?
-                        </p>
-                        <p className="text-sm text-slate-500 mt-2">
-                            การกระทำนี้ไม่สามารถย้อนกลับได้
-                        </p>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ลบกลุ่มทั้งหมด</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กรุณาตรวจสอบข้อมูลก่อนดำเนินการ
+                                </p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            {/* Info Card */}
+                            <Card className="border border-red-100 bg-red-50/50">
+                                <CardBody className="py-4 px-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 rounded-xl flex items-center justify-center shadow-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                                            <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-semibold text-lg text-slate-800">
+                                                กลุ่มสัปดาห์ที่ {selectedWeek}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-700">
+                                                    <Icon icon="solar:users-group-rounded-linear" className="mr-1" />
+                                                    {(weeklyTeams[selectedWeek] || []).length} กลุ่ม
+                                                </Chip>
+                                                <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">
+                                                    W{selectedWeek}
+                                                </Chip>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardBody>
+                            </Card>
+
+                            {/* Teams List */}
+                            {(weeklyTeams[selectedWeek] || []).length > 0 && (
+                                <Card className="border border-amber-200 bg-amber-50">
+                                    <CardBody className="py-3 px-4">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:list-bold" className="text-xl text-amber-600 mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="font-medium text-amber-800">รายชื่อกลุ่มที่จะถูกลบ</p>
+                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                    {(weeklyTeams[selectedWeek] || []).slice(0, 8).map(team => (
+                                                        <Chip key={team.id} size="sm" variant="flat" className="bg-amber-100 text-amber-700">
+                                                            {team.name}
+                                                        </Chip>
+                                                    ))}
+                                                    {(weeklyTeams[selectedWeek] || []).length > 8 && (
+                                                        <Chip size="sm" variant="flat" className="bg-amber-200 text-amber-800">
+                                                            +{(weeklyTeams[selectedWeek] || []).length - 8} กลุ่ม
+                                                        </Chip>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardBody>
+                                </Card>
+                            )}
+
+                            {/* Warning */}
+                            <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                <div className="flex items-center gap-3">
+                                    <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                    <div>
+                                        <p className="font-semibold text-red-800">
+                                            คุณต้องการลบกลุ่มทั้งหมดใช่หรือไม่?
+                                        </p>
+                                        <p className="text-sm text-red-600">
+                                            การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={() => modals.bulkDeleteModal.setIsOpen(false)}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light"
+                            onPress={() => modals.bulkDeleteModal.setIsOpen(false)}
+                            isDisabled={modals.isSubmitting}
+                        >
                             ยกเลิก
                         </Button>
                         <Button 
                             color="danger" 
                             onPress={confirmBulkDeleteTeams}
                             isLoading={modals.isSubmitting}
+                            className="bg-red-500"
                         >
                             ลบทั้งหมด
                         </Button>
@@ -1702,179 +2206,444 @@ export default function ClassroomDetailPage() {
             <Modal 
                 isOpen={modals.teamModal.isOpen} 
                 onClose={modals.teamModal.reset}
-                size="2xl"
+                size="xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader>
-                        สร้าง{modals.teamModal.type === "permanent" ? "กลุ่มถาวร" : `กลุ่มสัปดาห์ ${selectedWeek}`}
-                    </ModalHeader>
-                    <ModalBody>
-                        <div className="flex gap-2 mb-4">
-                            <Button
-                                size="sm"
-                                variant={modals.teamModal.formationMethod === "manual" ? "solid" : "flat"}
-                                color={modals.teamModal.formationMethod === "manual" ? "primary" : "default"}
-                                onPress={() => modals.teamModal.setFormationMethod("manual")}
-                            >
-                                เลือกด้วยตนเอง
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={modals.teamModal.formationMethod === "random" ? "solid" : "flat"}
-                                color={modals.teamModal.formationMethod === "random" ? "primary" : "default"}
-                                onPress={() => modals.teamModal.setFormationMethod("random")}
-                            >
-                                สุ่มอัตโนมัติ
-                            </Button>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg ${
+                                modals.teamModal.type === "permanent" 
+                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                                    : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                            }`}>
+                                <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">
+                                    {modals.teamModal.formationMethod === "random"
+                                        ? "สุ่มกลุ่มอัตโนมัติ"
+                                        : `สร้าง${modals.teamModal.type === "permanent" ? "กลุ่มโปรเจกต์" : "กลุ่มโปรเจกต์รายสัปดาห์"}ใหม่`
+                                    }
+                                </h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    {modals.teamModal.formationMethod === "random"
+                                        ? `สุ่มจับกลุ่ม${modals.teamModal.type === "permanent" ? "โปรเจกต์" : `สัปดาห์ที่ ${selectedWeek}`}`
+                                        : modals.teamModal.type === "permanent"
+                                            ? "กลุ่มที่ใช้ตลอดทั้งเทอม"
+                                            : `กลุ่มสำหรับสัปดาห์ที่ ${selectedWeek}`
+                                    }
+                                </p>
+                            </div>
                         </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-5">
+                            {/* Formation Method Toggle */}
+                            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                                <button
+                                    onClick={() => modals.teamModal.setFormationMethod("manual")}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                        modals.teamModal.formationMethod === "manual"
+                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            : "text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                >
+                                    <Icon icon="solar:checklist-linear" />
+                                    เลือกด้วยตนเอง
+                                </button>
+                                <button
+                                    onClick={() => modals.teamModal.setFormationMethod("random")}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                        modals.teamModal.formationMethod === "random"
+                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                            : "text-slate-600 hover:bg-slate-200"
+                                    }`}
+                                >
+                                    <Icon icon="solar:shuffle-bold" />
+                                    สุ่มอัตโนมัติ
+                                </button>
+                            </div>
 
-                        {modals.teamModal.formationMethod === "manual" ? (
-                            <>
-                                <Input
-                                    label="ชื่อกลุ่ม"
-                                    placeholder="เช่น กลุ่ม 1"
-                                    value={modals.teamModal.name}
-                                    onValueChange={modals.teamModal.setName}
-                                    isRequired
-                                />
-                                <div className="flex gap-2 mt-4">
-                                    <Button
-                                        size="sm"
-                                        variant={modals.teamModal.memberMode === "select" ? "solid" : "flat"}
-                                        color={modals.teamModal.memberMode === "select" ? "primary" : "default"}
-                                        onPress={() => modals.teamModal.setMemberMode("select")}
-                                    >
-                                        เลือกจากรายชื่อ
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant={modals.teamModal.memberMode === "paste" ? "solid" : "flat"}
-                                        color={modals.teamModal.memberMode === "paste" ? "primary" : "default"}
-                                        onPress={() => modals.teamModal.setMemberMode("paste")}
-                                    >
-                                        วางจาก Excel
-                                    </Button>
-                                </div>
+                            {modals.teamModal.formationMethod === "manual" ? (
+                                <>
+                                    {/* Team Name */}
+                                    <Input
+                                        label="ชื่อกลุ่ม"
+                                        labelPlacement="outside"
+                                        placeholder="เช่น กลุ่ม 1, กลุ่ม A, ทีม Alpha"
+                                        variant="bordered"
+                                        size="md"
+                                        value={modals.teamModal.name}
+                                        onValueChange={modals.teamModal.setName}
+                                        isRequired
+                                        className="pt-3"
+                                        classNames={{
+                                            inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                            label: "text-slate-600 font-medium text-sm",
+                                        }}
+                                    />
 
-                                {modals.teamModal.memberMode === "select" ? (
-                                    <div className="mt-4">
-                                        <p className="text-sm text-slate-500 mb-2">
-                                            เลือกสมาชิก ({modals.teamModal.members.length} คน)
-                                        </p>
-                                        <div className="max-h-60 overflow-y-auto space-y-1">
-                                            {getUnassignedStudents(
-                                                modals.teamModal.type,
-                                                modals.teamModal.type === "weekly" ? selectedWeek : undefined
-                                            ).map(student => (
-                                                <div
-                                                    key={student.id}
-                                                    className={`p-2 rounded cursor-pointer transition-colors ${
-                                                        modals.teamModal.members.includes(student.id)
-                                                            ? "bg-primary-100 border border-primary"
-                                                            : "bg-slate-50 hover:bg-slate-100"
-                                                    }`}
-                                                    onClick={() => {
-                                                        const current = modals.teamModal.members;
-                                                        if (current.includes(student.id)) {
-                                                            modals.teamModal.setMembers(current.filter(id => id !== student.id));
+                                    {/* Member Selection Mode Toggle */}
+                                    <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
+                                        <button
+                                            onClick={() => {
+                                                modals.teamModal.setMemberMode("select");
+                                                modals.teamModal.setExcelData("");
+                                                modals.teamModal.setParsedMembers([]);
+                                            }}
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                                modals.teamModal.memberMode === "select"
+                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                                    : "text-slate-600 hover:bg-slate-200"
+                                            }`}
+                                        >
+                                            <Icon icon="solar:checklist-linear" />
+                                            เลือกจากรายชื่อ
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                modals.teamModal.setMemberMode("paste");
+                                                modals.teamModal.setMembers([]);
+                                            }}
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                                modals.teamModal.memberMode === "paste"
+                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                                    : "text-slate-600 hover:bg-slate-200"
+                                            }`}
+                                        >
+                                            <Icon icon="solar:clipboard-list-linear" />
+                                            วางจาก Excel
+                                        </button>
+                                    </div>
+
+                                    {/* Select Mode - Member Selection */}
+                                    {modals.teamModal.memberMode === "select" && (
+                                        <div>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="text-slate-600 font-medium text-sm">
+                                                    เลือกสมาชิก ({modals.teamModal.members.length} คน)
+                                                </label>
+                                                {modals.teamModal.members.length > 0 && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="light"
+                                                        color="danger"
+                                                        onPress={() => modals.teamModal.setMembers([])}
+                                                    >
+                                                        ล้างทั้งหมด
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                                <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                                                    <p className="text-sm text-slate-600">
+                                                        นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).length} คน
+                                                    </p>
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto">
+                                                    {getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).length > 0 ? (
+                                                        getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined).map((student) => (
+                                                            <div
+                                                                key={student.id}
+                                                                onClick={() => {
+                                                                    if (modals.teamModal.members.includes(student.id)) {
+                                                                        modals.teamModal.setMembers(modals.teamModal.members.filter(id => id !== student.id));
+                                                                    } else {
+                                                                        modals.teamModal.setMembers([...modals.teamModal.members, student.id]);
+                                                                    }
+                                                                }}
+                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${
+                                                                    modals.teamModal.members.includes(student.id)
+                                                                        ? modals.teamModal.type === "permanent"
+                                                                            ? "bg-purple-50 border-l-4 border-l-purple-500"
+                                                                            : "bg-emerald-50 border-l-4 border-l-emerald-500"
+                                                                        : "hover:bg-slate-50"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <Avatar name={student.full_name} size="sm" className={
+                                                                        modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
+                                                                    } />
+                                                                    <div>
+                                                                        <p className="font-medium text-slate-800">{student.full_name}</p>
+                                                                        <p className="text-sm text-slate-500">{student.student_id}</p>
+                                                                    </div>
+                                                                </div>
+                                                                {modals.teamModal.members.includes(student.id) && (
+                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${
+                                                                        modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                                    }`} />
+                                                                )}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-center py-8">
+                                                            <Icon icon="solar:users-group-rounded-linear" className="text-4xl text-slate-300 mx-auto mb-2" />
+                                                            <p className="text-slate-400">นักศึกษาทั้งหมดอยู่ในกลุ่มแล้ว</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Paste Mode - Excel Paste */}
+                                    {modals.teamModal.memberMode === "paste" && (
+                                        <>
+                                            <div>
+                                                <label className="text-slate-600 font-medium text-sm mb-2 block">
+                                                    วางรหัสนักศึกษาจาก Excel
+                                                </label>
+                                                <p className="text-xs text-slate-400 mb-2">
+                                                    คัดลอกคอลัมน์รหัสนักศึกษาจาก Excel แล้ววางที่นี่ (หนึ่งรหัสต่อหนึ่งบรรทัด)
+                                                </p>
+                                                <textarea
+                                                    value={modals.teamModal.excelData}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        modals.teamModal.setExcelData(value);
+                                                        if (value.trim()) {
+                                                            modals.teamModal.setIsParsing(true);
                                                         } else {
-                                                            modals.teamModal.setMembers([...current, student.id]);
+                                                            modals.teamModal.setParsedMembers([]);
                                                         }
                                                     }}
-                                                >
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-sm">{student.student_id} - {student.full_name}</span>
-                                                        {modals.teamModal.members.includes(student.id) && (
-                                                            <FaCheckCircle className="text-primary" />
-                                                        )}
+                                                    onBlur={() => {
+                                                        if (modals.teamModal.excelData.trim()) {
+                                                            parseTeamExcelData(modals.teamModal.excelData);
+                                                        }
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                                            e.preventDefault();
+                                                            if (modals.teamModal.excelData.trim()) {
+                                                                parseTeamExcelData(modals.teamModal.excelData);
+                                                            }
+                                                        }
+                                                    }}
+                                                    onPaste={(e) => {
+                                                        const pastedText = e.clipboardData.getData('text');
+                                                        if (pastedText.trim()) {
+                                                            modals.teamModal.setIsParsing(true);
+                                                            setTimeout(() => {
+                                                                const combinedText = modals.teamModal.excelData + pastedText;
+                                                                parseTeamExcelData(combinedText);
+                                                            }, 50);
+                                                        }
+                                                    }}
+                                                    placeholder={"64070001\n64070002\n64070003\n..."}
+                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${
+                                                        modals.teamModal.type === "permanent"
+                                                            ? "border-purple-200 focus:ring-purple-400"
+                                                            : "border-emerald-200 focus:ring-emerald-400"
+                                                    }`}
+                                                />
+                                                <div className="mt-2 flex justify-end">
+                                                    <Button
+                                                        size="sm"
+                                                        color={modals.teamModal.type === "permanent" ? "secondary" : "success"}
+                                                        variant="flat"
+                                                        onPress={() => parseTeamExcelData(modals.teamModal.excelData)}
+                                                        isLoading={modals.teamModal.isParsing}
+                                                        isDisabled={!modals.teamModal.excelData.trim()}
+                                                        startContent={!modals.teamModal.isParsing && <Icon icon="solar:magnifer-linear" />}
+                                                    >
+                                                        ค้นหานักศึกษา
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            {/* Loading State */}
+                                            {modals.teamModal.isParsing && modals.teamModal.parsedMembers.length === 0 && (
+                                                <div className="flex items-center justify-center py-8">
+                                                    <Spinner size="sm" color={modals.teamModal.type === "permanent" ? "secondary" : "success"} />
+                                                    <span className="ml-2 text-slate-500">กำลังค้นหานักศึกษา...</span>
+                                                </div>
+                                            )}
+
+                                            {/* Parse Results */}
+                                            {modals.teamModal.parsedMembers.length > 0 && (
+                                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+                                                        <p className="text-sm text-slate-600">
+                                                            ผลการตรวจสอบ ({modals.teamModal.parsedMembers.length} รายการ)
+                                                        </p>
+                                                        <div className="flex gap-2 text-xs">
+                                                            <span className={`px-2 py-1 rounded-full ${
+                                                                modals.teamModal.type === "permanent"
+                                                                    ? "bg-purple-100 text-purple-700"
+                                                                    : "bg-emerald-100 text-emerald-700"
+                                                            }`}>
+                                                                พบ {modals.teamModal.parsedMembers.filter(p => p.status === "matched").length}
+                                                            </span>
+                                                            <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
+                                                                มีกลุ่มแล้ว {modals.teamModal.parsedMembers.filter(p => p.status === "already_in_team").length}
+                                                            </span>
+                                                            <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full">
+                                                                ไม่พบ {modals.teamModal.parsedMembers.filter(p => p.status === "not_found").length}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="max-h-48 overflow-y-auto">
+                                                        {modals.teamModal.parsedMembers.map((result, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
+                                                                    result.status === "matched"
+                                                                        ? modals.teamModal.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
+                                                                        : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    {result.matchedStudent ? (
+                                                                        <>
+                                                                            <Avatar name={result.matchedStudent.full_name} size="sm" className={
+                                                                                result.status === "matched"
+                                                                                    ? modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"
+                                                                                    : "bg-amber-500"
+                                                                            } />
+                                                                            <div>
+                                                                                <p className="font-medium text-slate-800">{result.matchedStudent.full_name}</p>
+                                                                                <p className="text-sm text-slate-500">{result.matchedStudent.student_id}</p>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center">
+                                                                                <Icon icon="solar:question-circle-linear" className="text-red-600" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <p className="font-medium text-slate-800">{result.inputValue}</p>
+                                                                                <p className="text-sm text-red-500">ไม่พบในระบบ</p>
+                                                                            </div>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    {result.status === "matched" && (
+                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
+                                                                            modals.teamModal.type === "permanent"
+                                                                                ? "bg-purple-200 text-purple-700"
+                                                                                : "bg-emerald-200 text-emerald-700"
+                                                                        }`}>
+                                                                            <Icon icon="solar:check-circle-bold" className="text-sm" />
+                                                                            พร้อมเพิ่ม
+                                                                        </span>
+                                                                    )}
+                                                                    {result.status === "already_in_team" && (
+                                                                        <span className="text-xs px-2 py-1 bg-amber-200 text-amber-700 rounded-full flex items-center gap-1">
+                                                                            <Icon icon="solar:info-circle-bold" className="text-sm" />
+                                                                            มีกลุ่มแล้ว
+                                                                        </span>
+                                                                    )}
+                                                                    {result.status === "not_found" && (
+                                                                        <span className="text-xs px-2 py-1 bg-red-200 text-red-700 rounded-full flex items-center gap-1">
+                                                                            <Icon icon="solar:close-circle-bold" className="text-sm" />
+                                                                            ไม่พบ
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                            ))}
+                                            )}
+                                        </>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    {/* Random Formation Settings */}
+                                    <div>
+                                        <label className="text-slate-600 font-medium text-sm mb-2 block">จำนวนสมาชิกต่อกลุ่ม</label>
+                                        <div className="flex items-center gap-3">
+                                            <Button
+                                                isIconOnly
+                                                size="sm"
+                                                variant="flat"
+                                                onPress={() => modals.teamModal.setSize(Math.max(2, modals.teamModal.size - 1))}
+                                            >
+                                                <Icon icon="solar:minus-circle-linear" />
+                                            </Button>
+                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
+                                                modals.teamModal.type === "permanent"
+                                                    ? "bg-purple-50 border-purple-200"
+                                                    : "bg-emerald-50 border-emerald-200"
+                                            }`}>
+                                                <Icon icon="solar:users-group-rounded-linear" className={
+                                                    modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                } />
+                                                <span className="font-bold text-lg text-slate-800">{modals.teamModal.size}</span>
+                                                <span className="text-slate-500 text-sm">คน</span>
+                                            </div>
+                                            <Button
+                                                isIconOnly
+                                                size="sm"
+                                                variant="flat"
+                                                onPress={() => modals.teamModal.setSize(Math.min(10, modals.teamModal.size + 1))}
+                                            >
+                                                <Icon icon="solar:add-circle-linear" />
+                                            </Button>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="mt-4">
-                                        <Input
-                                            label="วางรายชื่อจาก Excel"
-                                            placeholder="วางรหัสนักศึกษา (แต่ละบรรทัด)"
-                                            value={modals.teamModal.excelData}
-                                            onValueChange={(value) => {
-                                                modals.teamModal.setExcelData(value);
-                                                parseTeamExcelData(value);
-                                            }}
-                                        />
-                                        {modals.teamModal.isParsing && (
-                                            <div className="flex items-center gap-2 mt-2">
-                                                <Spinner size="sm" />
-                                                <span className="text-sm text-slate-500">กำลังค้นหา...</span>
+
+                                    {/* Preview */}
+                                    <Card className={`shadow-sm border ${
+                                        modals.teamModal.type === "permanent"
+                                            ? "border-purple-100 bg-purple-50/50"
+                                            : "border-emerald-100 bg-emerald-50/50"
+                                    }`}>
+                                        <CardBody className="py-3 px-4">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${
+                                                    modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                }`} />
+                                                <div>
+                                                    <p className={`font-medium ${
+                                                        modals.teamModal.type === "permanent" ? "text-purple-800" : "text-emerald-800"
+                                                    }`}>ตัวอย่างการจับกลุ่ม</p>
+                                                    <p className={`text-sm ${
+                                                        modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"
+                                                    }`}>
+                                                        {(() => {
+                                                            const unassigned = getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined);
+                                                            const numTeams = Math.ceil(unassigned.length / modals.teamModal.size);
+                                                            const remainder = unassigned.length % modals.teamModal.size;
+                                                            if (unassigned.length === 0) {
+                                                                return "ไม่มีนักศึกษาที่ยังไม่อยู่ในกลุ่ม";
+                                                            }
+                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${
+                                                                remainder > 0 ? `(${numTeams - 1} กลุ่ม ${modals.teamModal.size} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${modals.teamModal.size} คน)`
+                                                            }`;
+                                                        })()}
+                                                    </p>
+                                                </div>
                                             </div>
-                                        )}
-                                        {modals.teamModal.parsedMembers.length > 0 && (
-                                            <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
-                                                {modals.teamModal.parsedMembers.map((item, index) => (
-                                                    <div
-                                                        key={index}
-                                                        className={`p-2 rounded text-sm ${
-                                                            item.status === "matched" ? "bg-green-50 text-green-700" :
-                                                            item.status === "already_in_team" ? "bg-amber-50 text-amber-700" :
-                                                            "bg-red-50 text-red-700"
-                                                        }`}
-                                                    >
-                                                        {item.inputValue}
-                                                        {item.matchedStudent && ` → ${item.matchedStudent.full_name}`}
-                                                        {item.status === "already_in_team" && " (อยู่ในกลุ่มแล้ว)"}
-                                                        {item.status === "not_found" && " (ไม่พบ)"}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <>
-                                <Input
-                                    type="number"
-                                    label="จำนวนสมาชิกต่อกลุ่ม"
-                                    value={String(modals.teamModal.size)}
-                                    onValueChange={(v) => modals.teamModal.setSize(parseInt(v) || 3)}
-                                    min={2}
-                                    max={10}
-                                />
-                                <p className="text-sm text-slate-500 mt-2">
-                                    มีนักศึกษาที่ยังไม่มีกลุ่ม: {getUnassignedStudents(
-                                        modals.teamModal.type,
-                                        modals.teamModal.type === "weekly" ? selectedWeek : undefined
-                                    ).length} คน
-                                </p>
-                                <p className="text-sm text-slate-500">
-                                    จะได้ประมาณ: {Math.ceil(getUnassignedStudents(
-                                        modals.teamModal.type,
-                                        modals.teamModal.type === "weekly" ? selectedWeek : undefined
-                                    ).length / modals.teamModal.size)} กลุ่ม
-                                </p>
-                            </>
-                        )}
+                                        </CardBody>
+                                    </Card>
+                                </>
+                            )}
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.teamModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            variant="light"
+                            onPress={modals.teamModal.reset}
+                        >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
+                        <Button
+                            color={modals.teamModal.type === "permanent" ? "secondary" : "success"}
                             onPress={handleCreateTeam}
                             isLoading={modals.isSubmitting}
-                            isDisabled={
-                                modals.teamModal.formationMethod === "manual" 
-                                    ? (!modals.teamModal.name.trim() || modals.teamModal.members.length === 0)
-                                    : getUnassignedStudents(
-                                        modals.teamModal.type,
-                                        modals.teamModal.type === "weekly" ? selectedWeek : undefined
-                                    ).length === 0
-                            }
+                            className={modals.teamModal.type === "permanent" ? "bg-purple-500" : "bg-emerald-500"}
+                            startContent={!modals.isSubmitting && <Icon icon={modals.teamModal.formationMethod === "random" ? "solar:shuffle-bold" : "solar:add-circle-bold"} />}
                         >
-                            {modals.teamModal.formationMethod === "manual" ? "สร้างกลุ่ม" : "สุ่มสร้างกลุ่ม"}
+                            {modals.teamModal.formationMethod === "random"
+                                ? "สุ่มกลุ่ม"
+                                : `สร้างกลุ่ม${modals.teamModal.members.length > 0 ? ` (${modals.teamModal.members.length} คน)` : ""}`
+                            }
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -1884,58 +2653,148 @@ export default function ClassroomDetailPage() {
             <Modal 
                 isOpen={modals.editTeamModal.isOpen} 
                 onClose={modals.editTeamModal.reset}
-                size="2xl"
+                size="xl"
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader>แก้ไขกลุ่ม</ModalHeader>
-                    <ModalBody>
-                        <Input
-                            label="ชื่อกลุ่ม"
-                            value={modals.editTeamModal.name}
-                            onValueChange={modals.editTeamModal.setName}
-                            isRequired
-                        />
-                        <p className="text-sm text-slate-500 mt-4 mb-2">
-                            สมาชิก ({modals.editTeamModal.members.length} คน)
-                        </p>
-                        <div className="max-h-60 overflow-y-auto space-y-1">
-                            {getAvailableStudentsForEdit().map(student => (
-                                <div
-                                    key={student.id}
-                                    className={`p-2 rounded cursor-pointer transition-colors ${
-                                        modals.editTeamModal.members.includes(student.id)
-                                            ? "bg-primary-100 border border-primary"
-                                            : "bg-slate-50 hover:bg-slate-100"
-                                    }`}
-                                    onClick={() => {
-                                        const current = modals.editTeamModal.members;
-                                        if (current.includes(student.id)) {
-                                            modals.editTeamModal.setMembers(current.filter(id => id !== student.id));
-                                        } else {
-                                            modals.editTeamModal.setMembers([...current, student.id]);
-                                        }
-                                    }}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm">{student.student_id} - {student.full_name}</span>
-                                        {modals.editTeamModal.members.includes(student.id) && (
-                                            <FaCheckCircle className="text-primary" />
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">แก้ไขกลุ่ม</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">แก้ไขชื่อและสมาชิกในกลุ่ม</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-5">
+                            {/* Team Name */}
+                            <Input
+                                label="ชื่อกลุ่ม"
+                                labelPlacement="outside"
+                                placeholder="เช่น กลุ่ม 1, กลุ่ม A, ทีม Alpha"
+                                variant="bordered"
+                                size="md"
+                                value={modals.editTeamModal.name}
+                                onValueChange={modals.editTeamModal.setName}
+                                isRequired
+                                className="pt-3"
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+
+                            {/* Current Members */}
+                            <div>
+                                <label className="text-slate-600 font-medium text-sm mb-2 block">
+                                    สมาชิกปัจจุบัน ({modals.editTeamModal.members.length} คน)
+                                </label>
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="max-h-40 overflow-y-auto">
+                                        {modals.editTeamModal.members.length > 0 ? (
+                                            modals.editTeamModal.members.map((memberId) => {
+                                                const student = getAllEnrolledStudents().find(
+                                                    (s) => s.id === memberId
+                                                );
+                                                if (!student) return null;
+                                                return (
+                                                    <div
+                                                        key={memberId}
+                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-amber-50"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar name={student.full_name} size="sm" className="bg-amber-500" />
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{student.full_name}</p>
+                                                                <p className="text-sm text-slate-500">{student.student_id}</p>
+                                                            </div>
+                                                        </div>
+                                                        <Button
+                                                            isIconOnly
+                                                            size="sm"
+                                                            variant="light"
+                                                            color="danger"
+                                                            onPress={() => {
+                                                                modals.editTeamModal.setMembers(
+                                                                    modals.editTeamModal.members.filter(id => id !== memberId)
+                                                                );
+                                                            }}
+                                                        >
+                                                            <Icon icon="solar:close-circle-bold" className="text-lg" />
+                                                        </Button>
+                                                    </div>
+                                                );
+                                            })
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:users-group-rounded-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-slate-400 text-sm">ยังไม่มีสมาชิกในกลุ่ม</p>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
-                            ))}
+                            </div>
+
+                            {/* Add Members */}
+                            <div>
+                                <label className="text-slate-600 font-medium text-sm mb-2 block">
+                                    เพิ่มสมาชิก
+                                </label>
+                                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="bg-slate-50 px-4 py-2 border-b border-slate-200">
+                                        <p className="text-sm text-slate-600">
+                                            นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getAvailableStudentsForEdit().filter(s => !modals.editTeamModal.members.includes(s.id)).length} คน
+                                        </p>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {getAvailableStudentsForEdit().filter(s => !modals.editTeamModal.members.includes(s.id)).length > 0 ? (
+                                            getAvailableStudentsForEdit()
+                                                .filter(s => !modals.editTeamModal.members.includes(s.id))
+                                                .map((student) => (
+                                                    <div
+                                                        key={student.id}
+                                                        onClick={() => {
+                                                            modals.editTeamModal.setMembers([...modals.editTeamModal.members, student.id]);
+                                                        }}
+                                                        className="flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 hover:bg-slate-50"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar name={student.full_name} size="sm" className="bg-slate-400" />
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{student.full_name}</p>
+                                                                <p className="text-sm text-slate-500">{student.student_id}</p>
+                                                            </div>
+                                                        </div>
+                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-amber-500" />
+                                                    </div>
+                                                ))
+                                        ) : (
+                                            <div className="text-center py-6">
+                                                <Icon icon="solar:users-group-rounded-linear" className="text-3xl text-slate-300 mx-auto mb-2" />
+                                                <p className="text-slate-400 text-sm">นักศึกษาทั้งหมดอยู่ในกลุ่มแล้ว</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={modals.editTeamModal.reset}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            variant="light"
+                            onPress={modals.editTeamModal.reset}
+                        >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="primary" 
+                        <Button
                             onPress={saveEditedTeam}
                             isLoading={modals.isSubmitting}
                             isDisabled={!modals.editTeamModal.name.trim()}
+                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-400/25"
+                            startContent={!modals.isSubmitting && <Icon icon="solar:diskette-bold" />}
                         >
                             บันทึก
                         </Button>
@@ -1950,46 +2809,91 @@ export default function ClassroomDetailPage() {
                 size="md"
             >
                 <ModalContent>
-                    <ModalHeader>ให้คะแนนกลุ่ม</ModalHeader>
-                    <ModalBody>
-                        <Select
-                            label="เลือกกลุ่ม"
-                            selectedKeys={scores.selectedGroup ? [String(scores.selectedGroup.id)] : []}
-                            onSelectionChange={(keys) => {
-                                const selectedId = Array.from(keys)[0];
-                                const group = scores.groupsForScore.find(g => g.id === Number(selectedId));
-                                scores.setSelectedGroup(group || null);
-                            }}
-                        >
-                            {scores.groupsForScore.map(group => (
-                                <SelectItem key={String(group.id)} textValue={group.name}>
-                                    {group.name} ({group.members?.length || 0} คน)
-                                </SelectItem>
-                            ))}
-                        </Select>
-                        {scores.selectedGroup && (
-                            <Input
-                                type="number"
-                                label="คะแนน"
-                                value={String(scores.groupScoreValue)}
-                                onValueChange={(v) => scores.setGroupScoreValue(parseFloat(v) || 0)}
-                                max={scores.selectedAssignment?.max_score || 100}
-                                min={0}
-                            />
-                        )}
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:chart-square-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ให้คะแนนกลุ่ม</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">เลือกกลุ่มและใส่คะแนน</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-4">
+                            <Select
+                                label="เลือกกลุ่ม"
+                                labelPlacement="outside"
+                                placeholder="เลือกกลุ่มที่ต้องการให้คะแนน"
+                                variant="bordered"
+                                size="lg"
+                                selectedKeys={scores.selectedGroup ? [String(scores.selectedGroup.id)] : []}
+                                onSelectionChange={(keys) => {
+                                    const selectedId = Array.from(keys)[0];
+                                    const group = scores.groupsForScore.find(g => g.id === Number(selectedId));
+                                    scores.setSelectedGroup(group || null);
+                                }}
+                                classNames={{
+                                    trigger: "h-12 bg-white border-slate-200 hover:border-indigo-300 data-[open=true]:border-indigo-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            >
+                                {scores.groupsForScore.map(group => (
+                                    <SelectItem key={String(group.id)} textValue={group.name}>
+                                        <div className="flex items-center gap-2">
+                                            <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
+                                            <span>{group.name}</span>
+                                            <Chip size="sm" variant="flat" color="primary">
+                                                {group.members?.length || 0} คน
+                                            </Chip>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </Select>
+                            {scores.selectedGroup && (
+                                <Input
+                                    type="number"
+                                    label="คะแนน"
+                                    labelPlacement="outside"
+                                    placeholder="ใส่คะแนน"
+                                    variant="bordered"
+                                    size="lg"
+                                    value={String(scores.groupScoreValue)}
+                                    onValueChange={(v) => scores.setGroupScoreValue(parseFloat(v) || 0)}
+                                    max={scores.selectedAssignment?.max_score || 100}
+                                    min={0}
+                                    startContent={<Icon icon="solar:star-linear" className="text-slate-400" />}
+                                    endContent={
+                                        <span className="text-sm text-slate-400">
+                                            / {scores.selectedAssignment?.max_score || 100}
+                                        </span>
+                                    }
+                                    classNames={{
+                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
+                                        label: "text-slate-600 font-medium text-sm",
+                                    }}
+                                />
+                            )}
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
-                        <Button variant="light" onPress={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button 
+                            variant="light"
+                            onPress={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}
+                        >
                             ยกเลิก
                         </Button>
                         <Button 
-                            color="primary" 
+                            color="secondary" 
                             onPress={async () => {
                                 const success = await scores.saveGroupScore();
                                 if (success) modals.scoreModals.setIsGroupScoreModalOpen(false);
                             }}
                             isLoading={scores.isSaving}
                             isDisabled={!scores.selectedGroup}
+                            startContent={!scores.isSaving && <Icon icon="solar:diskette-bold" />}
+                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
                         >
                             บันทึกคะแนน
                         </Button>

@@ -7,38 +7,22 @@ interface AssignmentsTabProps {
     assignments: AssignmentType[];
     setAssignments: React.Dispatch<React.SetStateAction<AssignmentType[]>>;
     isLoading: boolean;
-    expandedAssignments: number[];
-    setExpandedAssignments: React.Dispatch<React.SetStateAction<number[]>>;
-    onOpenCreateModal: () => void;
-    onOpenEditModal: (assignment: AssignmentType) => void;
+    courseId: string;
+    weeklyTeams?: Record<number, any[]>;
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
-    onAssignmentDeleted?: () => void;
+    onAssignmentChanged?: () => void;
 }
 
-/**
- * AssignmentsTab Container Component
- * 
- * This is a container component that:
- * 1. Uses the useAssignmentsTab hook to manage all state and business logic
- * 2. Passes data and handlers to the memoized AssignmentsTabView component
- * 
- * Benefits:
- * - Separation of concerns (logic vs presentation)
- * - Easier testing (can test hook and view separately)
- * - Reduced re-renders through React.memo in AssignmentsTabView
- */
 export default function AssignmentsTab({
     assignments,
     setAssignments,
     isLoading,
-    expandedAssignments,
-    setExpandedAssignments,
-    onOpenCreateModal,
-    onOpenEditModal,
+    courseId,
+    weeklyTeams = {},
     onOpenScoreModal,
     onOpenBonusScoreModal,
-    onAssignmentDeleted,
+    onAssignmentChanged,
 }: AssignmentsTabProps) {
     const {
         // State
@@ -48,6 +32,9 @@ export default function AssignmentsTab({
         isDeleteModalOpen,
         deleteTarget,
         isDeleting,
+        // Create/Edit Modal State
+        isAssignmentModalOpen,
+        editingAssignment,
         // Computed
         labAssignments,
         homeworkAssignments,
@@ -61,22 +48,32 @@ export default function AssignmentsTab({
         confirmDeleteAssignment,
         handleDeleteAssignment,
         clearSearch,
+        // Create/Edit Modal Actions
+        openCreateModal,
+        openEditModal,
+        closeAssignmentModal,
+        onAssignmentSaved,
     } = useAssignmentsTab({ 
         assignments, 
-        setAssignments, 
-        onAssignmentDeleted 
+        setAssignments,
+        courseId,
+        onAssignmentChanged,
     });
 
     return (
         <AssignmentsTabView
             assignments={assignments}
             isLoading={isLoading}
+            courseId={courseId}
+            weeklyTeams={weeklyTeams}
             searchQuery={searchQuery}
             activeTab={activeTab}
             viewMode={viewMode}
             isDeleteModalOpen={isDeleteModalOpen}
             deleteTarget={deleteTarget}
             isDeleting={isDeleting}
+            isAssignmentModalOpen={isAssignmentModalOpen}
+            editingAssignment={editingAssignment}
             labAssignments={labAssignments}
             homeworkAssignments={homeworkAssignments}
             groupAssignments={groupAssignments}
@@ -88,8 +85,10 @@ export default function AssignmentsTab({
             onConfirmDelete={confirmDeleteAssignment}
             onDeleteAssignment={handleDeleteAssignment}
             onClearSearch={clearSearch}
-            onOpenCreateModal={onOpenCreateModal}
-            onOpenEditModal={onOpenEditModal}
+            onOpenCreateModal={openCreateModal}
+            onOpenEditModal={openEditModal}
+            onCloseAssignmentModal={closeAssignmentModal}
+            onAssignmentSaved={onAssignmentSaved}
             onOpenScoreModal={onOpenScoreModal}
             onOpenBonusScoreModal={onOpenBonusScoreModal}
         />

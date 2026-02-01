@@ -62,6 +62,7 @@ interface TeamModalState {
     name: string;
     members: number[];
     size: number;
+    memberMode: "select" | "paste";
     isParsing: boolean;
     pasteData: string;
     parsedMembers: Array<{
@@ -154,6 +155,7 @@ export interface UseSectionsTabReturn {
         setName: (name: string) => void;
         setMembers: (members: number[]) => void;
         setSize: (size: number) => void;
+        setMemberMode: (mode: "select" | "paste") => void;
         setIsParsing: (parsing: boolean) => void;
         setPasteData: (data: string) => void;
         setParsedMembers: (members: TeamModalState["parsedMembers"]) => void;
@@ -279,6 +281,7 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         name: "",
         members: [],
         size: 3,
+        memberMode: "select",
         isParsing: false,
         pasteData: "",
         parsedMembers: [],
@@ -618,13 +621,14 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         setName: (name: string) => setTeamModalState(prev => ({ ...prev, name })),
         setMembers: (members: number[]) => setTeamModalState(prev => ({ ...prev, members })),
         setSize: (size: number) => setTeamModalState(prev => ({ ...prev, size })),
+        setMemberMode: (mode: "select" | "paste") => setTeamModalState(prev => ({ ...prev, memberMode: mode })),
         setIsParsing: (parsing: boolean) => setTeamModalState(prev => ({ ...prev, isParsing: parsing })),
         setPasteData: (data: string) => setTeamModalState(prev => ({ ...prev, pasteData: data })),
         setParsedMembers: (members: TeamModalState["parsedMembers"]) => 
             setTeamModalState(prev => ({ ...prev, parsedMembers: members })),
         reset: () => setTeamModalState({
             isOpen: false, type: "permanent", formationMethod: "manual",
-            name: "", members: [], size: 3, isParsing: false, pasteData: "", parsedMembers: [],
+            name: "", members: [], size: 3, memberMode: "select", isParsing: false, pasteData: "", parsedMembers: [],
         }),
     }), [teamModalState]);
     
@@ -1013,7 +1017,7 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 teams.push(shuffled.slice(i, i + teamModalState.size));
             }
             
-            const baseName = teamModalState.type === "permanent" ? "กลุ่มถาวร" : `กลุ่มสัปดาห์ ${selectedWeek}`;
+            const baseName = "กลุ่มที่";
             let successCount = 0;
             
             for (let i = 0; i < teams.length; i++) {
