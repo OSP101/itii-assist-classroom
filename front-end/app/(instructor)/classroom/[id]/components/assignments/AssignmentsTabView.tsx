@@ -13,11 +13,14 @@ import { Icon } from "@iconify/react";
 import type { AssignmentType } from "../types";
 import type { AssignmentTabType, ViewMode } from "./config";
 import { getTypeInfo, getTypeBgColor, getTypeTextColor } from "./config";
+import { AssignmentModal } from "./AssignmentModal";
 
 interface AssignmentsTabViewProps {
     // Data
     assignments: AssignmentType[];
     isLoading: boolean;
+    courseId: string;
+    weeklyTeams?: Record<number, any[]>;
     // State from hook
     searchQuery: string;
     activeTab: AssignmentTabType;
@@ -25,6 +28,9 @@ interface AssignmentsTabViewProps {
     isDeleteModalOpen: boolean;
     deleteTarget: AssignmentType | null;
     isDeleting: boolean;
+    // Create/Edit modal state
+    isAssignmentModalOpen: boolean;
+    editingAssignment: AssignmentType | null;
     // Computed from hook
     labAssignments: AssignmentType[];
     homeworkAssignments: AssignmentType[];
@@ -38,9 +44,12 @@ interface AssignmentsTabViewProps {
     onConfirmDelete: () => Promise<void>;
     onDeleteAssignment: (assignment: AssignmentType) => void;
     onClearSearch: () => void;
-    // External actions
+    // Create/Edit modal actions
     onOpenCreateModal: () => void;
     onOpenEditModal: (assignment: AssignmentType) => void;
+    onCloseAssignmentModal: () => void;
+    onAssignmentSaved: () => void;
+    // Score modal actions
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
 }
@@ -48,12 +57,16 @@ interface AssignmentsTabViewProps {
 function AssignmentsTabViewComponent({
     assignments,
     isLoading,
+    courseId,
+    weeklyTeams = {},
     searchQuery,
     activeTab,
     viewMode,
     isDeleteModalOpen,
     deleteTarget,
     isDeleting,
+    isAssignmentModalOpen,
+    editingAssignment,
     labAssignments,
     homeworkAssignments,
     groupAssignments,
@@ -67,6 +80,8 @@ function AssignmentsTabViewComponent({
     onClearSearch,
     onOpenCreateModal,
     onOpenEditModal,
+    onCloseAssignmentModal,
+    onAssignmentSaved,
     onOpenScoreModal,
     onOpenBonusScoreModal,
 }: AssignmentsTabViewProps) {
@@ -540,6 +555,16 @@ function AssignmentsTabViewComponent({
                     </ModalFooter>
                 </ModalContent>
             </Modal>
+
+            {/* Create/Edit Assignment Modal */}
+            <AssignmentModal
+                isOpen={isAssignmentModalOpen}
+                onClose={onCloseAssignmentModal}
+                courseId={courseId}
+                editingAssignment={editingAssignment}
+                onSuccess={onAssignmentSaved}
+                weeklyTeams={weeklyTeams}
+            />
         </div>
     );
 }

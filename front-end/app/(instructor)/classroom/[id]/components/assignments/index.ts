@@ -1,6 +1,7 @@
 export { useAssignmentsTab } from "./useAssignmentsTab";
 export type { UseAssignmentsTabReturn } from "./useAssignmentsTab";
 export { AssignmentsTabView } from "./AssignmentsTabView";
+export { AssignmentModal } from "./AssignmentModal";
 export { 
     getTypeInfo, 
     getTypeBgColor, 

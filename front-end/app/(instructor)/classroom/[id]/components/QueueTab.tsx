@@ -167,7 +167,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                 assignmentService.getAssignments(course.id),
                 attendanceService.getSessions(course.id),
             ]);
-            
+
             // Handle paginated response - classrooms is inside ApiResponse.data
             const classroomsData = classroomsResponse?.data?.classrooms || [];
             setClassrooms(classroomsData);
@@ -239,7 +239,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
 
     // Handle create session
     const handleCreateSession = async () => {
-    console.log("formData:", formData);
+        console.log("formData:", formData);
         if (!formData.title.trim()) {
             addToast({
                 title: "กรุณากรอกข้อมูล",
@@ -369,7 +369,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
 
     // Navigate to worker dashboard
     const handleGoToWorker = (session: QueueSession) => {
-        window.open(`/classroom/${course.id}/queue/${session.id}/worker`,'_blank');
+        window.open(`/classroom/${course.id}/queue/${session.id}/worker`, '_blank');
     };
 
     console.log("formData:", formData);
@@ -493,14 +493,14 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                     onValueChange={setSearchQuery}
                                     startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                     className="flex-1"
-                                    size="sm"
+                                    size="md"
                                 />
                                 <Select
                                     placeholder="สถานะ"
                                     selectedKeys={[statusFilter]}
                                     onSelectionChange={(keys) => setStatusFilter(Array.from(keys)[0] as string)}
                                     className="w-full sm:w-40"
-                                    size="sm"
+                                    size="md"
                                 >
                                     <SelectItem key="all">ทุกสถานะ</SelectItem>
                                     <SelectItem key="draft">ฉบับร่าง</SelectItem>
@@ -512,252 +512,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                         </CardBody>
                     </Card>
 
-                    {/* Sessions Table */}
-                    <Card className="shadow-sm border border-slate-200">
-                        <CardBody className="p-2">
-                            <div className="overflow-x-auto">
-                                <Table
-                                    aria-label="Queue sessions table"
-                                    removeWrapper
-                                    classNames={{
-                                        th: "bg-slate-50 text-slate-600 font-semibold text-sm",
-                                        td: "py-3",
-                                    }}
-                                >
-                                    <TableHeader>
-                                        <TableColumn>การจองคิว</TableColumn>
-                                        <TableColumn>ห้อง</TableColumn>
-                                        <TableColumn>หัวข้อลงคะแนน</TableColumn>
-                                        <TableColumn>สถานะ</TableColumn>
-                                        <TableColumn>คิวรอ/เสร็จ</TableColumn>
-                                        <TableColumn align="center">จัดการ</TableColumn>
-                                    </TableHeader>
-                                    <TableBody
-                                        emptyContent={
-                                            <div className="py-10 text-center">
-                                                <Icon
-                                                    icon="solar:clipboard-list-linear"
-                                                    className="text-5xl text-slate-300 mx-auto mb-3"
-                                                />
-                                                <p className="text-slate-400">ยังไม่มีการจองคิว</p>
-                                                <Button
-                                                    color="primary"
-                                                    variant="flat"
-                                                    size="sm"
-                                                    className="mt-3"
-                                                    onPress={handleOpenCreateModal}
-                                                >
-                                                    สร้างการจองคิวแรก
-                                                </Button>
-                                            </div>
-                                        }
-                                    >
-                                        {filteredSessions.map((session) => (
-                                            <TableRow key={session.id}>
-                                                <TableCell>
-                                                    <div>
-                                                        <p className="font-medium text-slate-800">{session.title}</p>
-                                                        <p className="text-xs text-slate-500">
-                                                            PIN: <span className="font-mono font-bold text-blue-600">{session.pin_code}</span>
-                                                            {session.created_at && ` • ${formatDate(session.created_at)}`}
-                                                        </p>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className="text-slate-800 text-sm">
-                                                        {session.classroom?.name || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className="text-slate-800 text-sm">
-                                                        {session.linkedAssignment?.name || '-'}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Chip
-                                                        size="sm"
-                                                        color={statusDisplay[session.status]?.color || "default"}
-                                                        variant="flat"
-                                                        startContent={
-                                                            session.status === "active" ? (
-                                                                <span className="relative flex h-2 w-2 mr-1">
-                                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                                                </span>
-                                                            ) : undefined
-                                                        }
-                                                    >
-                                                        {statusDisplay[session.status]?.label || session.status}
-                                                    </Chip>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Tooltip content="คิวรอ">
-                                                            <Chip size="sm" color="warning" variant="flat">
-                                                                {session.stats?.waiting || 0}
-                                                            </Chip>
-                                                        </Tooltip>
-                                                        <Tooltip content="เสร็จแล้ว">
-                                                            <Chip size="sm" color="success" variant="flat">
-                                                                {session.stats?.completed || 0}
-                                                            </Chip>
-                                                        </Tooltip>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        {/* Status change buttons */}
-                                                        {session.status === 'draft' && (
-                                                            <>
-                                                                <Tooltip content="เปิดใช้งาน">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="success"
-                                                                        onPress={() => handleStatusChange(session, 'active')}
-                                                                    >
-                                                                        <Icon icon="solar:play-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="แก้ไข">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => handleOpenEditModal(session)}
-                                                                    >
-                                                                        <Icon icon="solar:pen-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ลบ" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => {
-                                                                            setDeleteTarget(session);
-                                                                            setIsDeleteModalOpen(true);
-                                                                        }}
-                                                                    >
-                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                        {session.status === 'active' && (
-                                                            <>
-                                                                <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="secondary"
-                                                                        onPress={() => handleOpenProjector(session)}
-                                                                    >
-                                                                        <Icon icon="solar:monitor-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="เข้าหน้ารับคิว">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => handleGoToWorker(session)}
-                                                                    >
-                                                                        <Icon icon="solar:user-check-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="หยุดชั่วคราว">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="warning"
-                                                                        onPress={() => handleStatusChange(session, 'paused')}
-                                                                    >
-                                                                        <Icon icon="solar:pause-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => handleStatusChange(session, 'closed')}
-                                                                    >
-                                                                        <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                        {session.status === 'paused' && (
-                                                            <>
-                                                                <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="secondary"
-                                                                        onPress={() => handleOpenProjector(session)}
-                                                                    >
-                                                                        <Icon icon="solar:monitor-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="เข้าหน้ารับคิว">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="primary"
-                                                                        onPress={() => handleGoToWorker(session)}
-                                                                    >
-                                                                        <Icon icon="solar:user-check-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="เปิดใช้งานต่อ">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="success"
-                                                                        onPress={() => handleStatusChange(session, 'active')}
-                                                                    >
-                                                                        <Icon icon="solar:play-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                                <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        variant="light"
-                                                                        color="danger"
-                                                                        onPress={() => handleStatusChange(session, 'closed')}
-                                                                    >
-                                                                        <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                    </Button>
-                                                                </Tooltip>
-                                                            </>
-                                                        )}
-                                                        {session.status === 'closed' && (
-                                                            <span className="text-slate-400 text-sm">ปิดแล้ว</span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardBody>
-                    </Card>
 
-                    {/* Empty state when no sessions at all */}
-                    {sessions.length === 0 && (
+
+                    {sessions.length === 0 ? (
                         <Card className="shadow-sm border border-dashed border-slate-300 bg-slate-50/50">
                             <CardBody className="text-center py-16">
                                 <div className="w-24 h-24 mx-auto mb-6 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
@@ -780,13 +537,259 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                 </Button>
                             </CardBody>
                         </Card>
+                    ) : (
+                        <>
+                            {/* Sessions Table */}
+                            <Card className="shadow-sm border border-slate-200">
+                                <CardBody className="p-2">
+                                    <div className="overflow-x-auto">
+                                        <Table
+                                            aria-label="Queue sessions table"
+                                            removeWrapper
+                                            classNames={{
+                                                th: "bg-slate-50 text-slate-600 font-semibold text-sm",
+                                                td: "py-3",
+                                            }}
+                                        >
+                                            <TableHeader>
+                                                <TableColumn>การจองคิว</TableColumn>
+                                                <TableColumn>ห้อง</TableColumn>
+                                                <TableColumn>หัวข้อลงคะแนน</TableColumn>
+                                                <TableColumn>สถานะ</TableColumn>
+                                                <TableColumn>คิวรอ/เสร็จ</TableColumn>
+                                                <TableColumn align="center">จัดการ</TableColumn>
+                                            </TableHeader>
+                                            <TableBody
+                                                emptyContent={
+                                                    <div className="py-10 text-center">
+                                                        <Icon
+                                                            icon="solar:clipboard-list-linear"
+                                                            className="text-5xl text-slate-300 mx-auto mb-3"
+                                                        />
+                                                        <p className="text-slate-400">ยังไม่มีการจองคิว</p>
+                                                        <Button
+                                                            color="primary"
+                                                            variant="flat"
+                                                            size="sm"
+                                                            className="mt-3"
+                                                            onPress={handleOpenCreateModal}
+                                                        >
+                                                            สร้างการจองคิวแรก
+                                                        </Button>
+                                                    </div>
+                                                }
+                                            >
+                                                {filteredSessions.map((session) => (
+                                                    <TableRow key={session.id}>
+                                                        <TableCell>
+                                                            <div>
+                                                                <p className="font-medium text-slate-800">{session.title}</p>
+                                                                <p className="text-xs text-slate-500">
+                                                                    PIN: <span className="font-mono font-bold text-blue-600">{session.pin_code}</span>
+                                                                    {session.created_at && ` • ${formatDate(session.created_at)}`}
+                                                                </p>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className="text-slate-800 text-sm">
+                                                                {session.classroom?.name || '-'}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className="text-slate-800 text-sm">
+                                                                {session.linkedAssignment?.name || '-'}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Chip
+                                                                size="sm"
+                                                                color={statusDisplay[session.status]?.color || "default"}
+                                                                variant="flat"
+                                                                startContent={
+                                                                    session.status === "active" ? (
+                                                                        <span className="relative flex h-2 w-2 mr-1">
+                                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                                        </span>
+                                                                    ) : undefined
+                                                                }
+                                                            >
+                                                                {statusDisplay[session.status]?.label || session.status}
+                                                            </Chip>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center gap-2">
+                                                                <Tooltip content="คิวรอ">
+                                                                    <Chip size="sm" color="warning" variant="flat">
+                                                                        {session.stats?.waiting || 0}
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                                <Tooltip content="เสร็จแล้ว">
+                                                                    <Chip size="sm" color="success" variant="flat">
+                                                                        {session.stats?.completed || 0}
+                                                                    </Chip>
+                                                                </Tooltip>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                {/* Status change buttons */}
+                                                                {session.status === 'draft' && (
+                                                                    <>
+                                                                        <Tooltip content="เปิดใช้งาน">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="success"
+                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                            >
+                                                                                <Icon icon="solar:play-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="แก้ไข">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="primary"
+                                                                                onPress={() => handleOpenEditModal(session)}
+                                                                            >
+                                                                                <Icon icon="solar:pen-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="ลบ" color="danger">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="danger"
+                                                                                onPress={() => {
+                                                                                    setDeleteTarget(session);
+                                                                                    setIsDeleteModalOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    </>
+                                                                )}
+                                                                {session.status === 'active' && (
+                                                                    <>
+                                                                        <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="secondary"
+                                                                                onPress={() => handleOpenProjector(session)}
+                                                                            >
+                                                                                <Icon icon="solar:monitor-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="เข้าหน้ารับคิว">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="primary"
+                                                                                onPress={() => handleGoToWorker(session)}
+                                                                            >
+                                                                                <Icon icon="solar:user-check-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="หยุดชั่วคราว">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="warning"
+                                                                                onPress={() => handleStatusChange(session, 'paused')}
+                                                                            >
+                                                                                <Icon icon="solar:pause-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="danger"
+                                                                                onPress={() => handleStatusChange(session, 'closed')}
+                                                                            >
+                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    </>
+                                                                )}
+                                                                {session.status === 'paused' && (
+                                                                    <>
+                                                                        <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="secondary"
+                                                                                onPress={() => handleOpenProjector(session)}
+                                                                            >
+                                                                                <Icon icon="solar:monitor-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="เข้าหน้ารับคิว">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="primary"
+                                                                                onPress={() => handleGoToWorker(session)}
+                                                                            >
+                                                                                <Icon icon="solar:user-check-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="เปิดใช้งานต่อ">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="success"
+                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                            >
+                                                                                <Icon icon="solar:play-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="danger"
+                                                                                onPress={() => handleStatusChange(session, 'closed')}
+                                                                            >
+                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    </>
+                                                                )}
+                                                                {session.status === 'closed' && (
+                                                                    <span className="text-slate-400 text-sm">ปิดแล้ว</span>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardBody>
+                            </Card>
+                        </>
                     )}
                 </>
             )}
 
             {/* Create Modal */}
-            <Modal 
-                isOpen={isCreateModalOpen} 
+            <Modal
+                isOpen={isCreateModalOpen}
                 isDismissable={false}
                 isKeyboardDismissDisabled={true}
                 onClose={() => {
@@ -841,8 +844,8 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                     const selected = Array.from(keys)[0];
                                     console.log("Selected classroom ID:", keys);
                                     if (selected) {
-                                        
-                                        setFormData({ ...formData, classroom_id: selected.toString()});
+
+                                        setFormData({ ...formData, classroom_id: selected.toString() });
                                     }
                                 }}
                                 isRequired
@@ -883,16 +886,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                             }
                                         }}
                                         startContent={
-                                            <Icon 
-                                                icon={formData.linked_assignment_id ? "solar:link-bold" : "solar:link-broken-bold"} 
-                                                className="text-lg" 
+                                            <Icon
+                                                icon={formData.linked_assignment_id ? "solar:link-bold" : "solar:link-broken-bold"}
+                                                className="text-lg"
                                             />
                                         }
                                     >
                                         {formData.linked_assignment_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
-                                
+
                                 {assignments.length > 0 ? (
                                     <Select
                                         placeholder="เลือกหัวข้องานที่ต้องการลิงก์"
@@ -900,9 +903,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         selectedKeys={formData.linked_assignment_id ? new Set([formData.linked_assignment_id.toString()]) : new Set([])}
                                         onSelectionChange={(keys) => {
                                             const selected = Array.from(keys as Set<string>)[0];
-                                            setFormData({ 
-                                                ...formData, 
-                                                linked_assignment_id: selected ? parseInt(selected) : null 
+                                            setFormData({
+                                                ...formData,
+                                                linked_assignment_id: selected ? parseInt(selected) : null
                                             });
                                         }}
                                         variant="bordered"
@@ -914,8 +917,8 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {assignments.map((assignment) => (
                                             <SelectItem key={assignment.id.toString()} textValue={assignment.name}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
-                                                        icon={assignment.assignment_type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"} 
+                                                    <Icon
+                                                        icon={assignment.assignment_type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"}
                                                         className={assignment.assignment_type === "individual" ? "text-indigo-500" : "text-purple-500"}
                                                     />
                                                     <div>
@@ -934,7 +937,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         <p className="text-sm text-slate-500">ยังไม่มีหัวข้องาน</p>
                                     </div>
                                 )}
-                                
+
                                 {formData.linked_assignment_id && (
                                     <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
                                         <div className="flex items-center gap-2 text-amber-700">
@@ -969,16 +972,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                             }
                                         }}
                                         startContent={
-                                            <Icon 
-                                                icon={formData.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"} 
-                                                className="text-lg" 
+                                            <Icon
+                                                icon={formData.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"}
+                                                className="text-lg"
                                             />
                                         }
                                     >
                                         {formData.linked_attendance_session_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
-                                
+
                                 {attendanceSessions.length > 0 ? (
                                     <Select
                                         placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์"
@@ -986,10 +989,10 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         selectedKeys={formData.linked_attendance_session_id ? [formData.linked_attendance_session_id.toString()] : undefined}
                                         onSelectionChange={(keys) => {
                                             const selected = Array.from(keys)[0];
-                                            setFormData({ 
-                                                ...formData, 
+                                            setFormData({
+                                                ...formData,
                                                 require_attendance: selected ? true : false,
-                                                linked_attendance_session_id: selected ? parseInt(selected as string) : null 
+                                                linked_attendance_session_id: selected ? parseInt(selected as string) : null
                                             });
                                         }}
                                         variant="bordered"
@@ -1001,17 +1004,17 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {attendanceSessions.map((session) => (
                                             <SelectItem key={session.id.toString()} textValue={session.title}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
-                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
-                                                              session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
-                                                        className={session.session_type === "lecture" ? "text-blue-500" : 
-                                                                   session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
+                                                    <Icon
+                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" :
+                                                            session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"}
+                                                        className={session.session_type === "lecture" ? "text-blue-500" :
+                                                            session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
                                                     />
                                                     <div>
                                                         <span className="font-medium">{session.title}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
-                                                            {new Date(session.start_time).toLocaleDateString("th-TH", { 
-                                                                day: "numeric", 
+                                                            {new Date(session.start_time).toLocaleDateString("th-TH", {
+                                                                day: "numeric",
                                                                 month: "short",
                                                                 year: "2-digit"
                                                             })}
@@ -1027,7 +1030,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         <p className="text-sm text-slate-500">ยังไม่มีรอบเช็คชื่อ</p>
                                     </div>
                                 )}
-                                
+
                                 {formData.linked_attendance_session_id && (
                                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                                         <div className="flex items-center gap-2 text-blue-700">
@@ -1063,8 +1066,8 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
             </Modal>
 
             {/* Edit Modal */}
-            <Modal 
-                isOpen={isEditModalOpen} 
+            <Modal
+                isOpen={isEditModalOpen}
                 isDismissable={false}
                 isKeyboardDismissDisabled={true}
                 onClose={() => {
@@ -1133,16 +1136,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                             }
                                         }}
                                         startContent={
-                                            <Icon 
-                                                icon={formData.linked_assignment_id ? "solar:link-bold" : "solar:link-broken-bold"} 
-                                                className="text-lg" 
+                                            <Icon
+                                                icon={formData.linked_assignment_id ? "solar:link-bold" : "solar:link-broken-bold"}
+                                                className="text-lg"
                                             />
                                         }
                                     >
                                         {formData.linked_assignment_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
-                                
+
                                 {assignments.length > 0 ? (
                                     <Select
                                         placeholder="เลือกหัวข้องานที่ต้องการลิงก์"
@@ -1150,9 +1153,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         selectedKeys={formData.linked_assignment_id ? new Set([formData.linked_assignment_id.toString()]) : new Set([])}
                                         onSelectionChange={(keys) => {
                                             const selected = Array.from(keys as Set<string>)[0];
-                                            setFormData({ 
-                                                ...formData, 
-                                                linked_assignment_id: selected ? parseInt(selected) : null 
+                                            setFormData({
+                                                ...formData,
+                                                linked_assignment_id: selected ? parseInt(selected) : null
                                             });
                                         }}
                                         variant="bordered"
@@ -1164,8 +1167,8 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {assignments.map((assignment) => (
                                             <SelectItem key={assignment.id.toString()} textValue={assignment.name}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
-                                                        icon={assignment.assignment_type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"} 
+                                                    <Icon
+                                                        icon={assignment.assignment_type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"}
                                                         className={assignment.assignment_type === "individual" ? "text-indigo-500" : "text-purple-500"}
                                                     />
                                                     <div>
@@ -1184,7 +1187,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         <p className="text-sm text-slate-500">ยังไม่มีหัวข้องาน</p>
                                     </div>
                                 )}
-                                
+
                                 {formData.linked_assignment_id && (
                                     <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
                                         <div className="flex items-center gap-2 text-amber-700">
@@ -1219,16 +1222,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                             }
                                         }}
                                         startContent={
-                                            <Icon 
-                                                icon={formData.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"} 
-                                                className="text-lg" 
+                                            <Icon
+                                                icon={formData.linked_attendance_session_id ? "solar:link-bold" : "solar:link-broken-bold"}
+                                                className="text-lg"
                                             />
                                         }
                                     >
                                         {formData.linked_attendance_session_id ? "ลิงก์แล้ว" : "ไม่ลิงก์"}
                                     </Button>
                                 </div>
-                                
+
                                 {attendanceSessions.length > 0 ? (
                                     <Select
                                         placeholder="เลือกรอบเช็คชื่อที่ต้องการลิงก์"
@@ -1236,10 +1239,10 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         selectedKeys={formData.linked_attendance_session_id ? [formData.linked_attendance_session_id.toString()] : undefined}
                                         onSelectionChange={(keys) => {
                                             const selected = Array.from(keys)[0];
-                                            setFormData({ 
-                                                ...formData, 
+                                            setFormData({
+                                                ...formData,
                                                 require_attendance: selected ? true : false,
-                                                linked_attendance_session_id: selected ? parseInt(selected as string) : null 
+                                                linked_attendance_session_id: selected ? parseInt(selected as string) : null
                                             });
                                         }}
                                         variant="bordered"
@@ -1251,17 +1254,17 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {attendanceSessions.map((session) => (
                                             <SelectItem key={session.id.toString()} textValue={session.title}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon 
-                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" : 
-                                                              session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"} 
-                                                        className={session.session_type === "lecture" ? "text-blue-500" : 
-                                                                   session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
+                                                    <Icon
+                                                        icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" :
+                                                            session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"}
+                                                        className={session.session_type === "lecture" ? "text-blue-500" :
+                                                            session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
                                                     />
                                                     <div>
                                                         <span className="font-medium">{session.title}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
-                                                            {new Date(session.start_time).toLocaleDateString("th-TH", { 
-                                                                day: "numeric", 
+                                                            {new Date(session.start_time).toLocaleDateString("th-TH", {
+                                                                day: "numeric",
                                                                 month: "short",
                                                                 year: "2-digit"
                                                             })}
@@ -1277,7 +1280,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         <p className="text-sm text-slate-500">ยังไม่มีรอบเช็คชื่อ</p>
                                     </div>
                                 )}
-                                
+
                                 {formData.linked_attendance_session_id && (
                                     <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                                         <div className="flex items-center gap-2 text-blue-700">
