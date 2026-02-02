@@ -296,7 +296,7 @@ function AssignmentModalComponent({
                                         }`} />
                                     <p className={`font-semibold text-sm ${formData.assignment_type === "permanent_group" ? "text-purple-600" : "text-slate-600"
                                         }`}>กลุ่มโปรเจกต์</p>
-                                    <p className="text-xs text-slate-500 mt-1">กลุ่มถาวร</p>
+                                    <p className="text-xs text-slate-500 mt-1">งานกลุ่ม</p>
                                 </button>
                                 <button
                                     type="button"

@@ -170,6 +170,18 @@ export interface UseSectionsTabReturn {
     deleteModal: DeleteModalState & {
         open: (type: DeleteModalTarget["type"], target: Omit<DeleteModalTarget, "type">) => void;
         reset: () => void;
+        confirmInput: string;
+        setConfirmInput: (value: string) => void;
+    };
+    editSectionModal: {
+        isOpen: boolean;
+        sectionId: number | null;
+        sectionNo: string;
+        note: string;
+        setIsOpen: (open: boolean) => void;
+        setSectionNo: (no: string) => void;
+        setNote: (note: string) => void;
+        reset: () => void;
     };
     bulkDeleteModal: {
         isOpen: boolean;
@@ -186,6 +198,9 @@ export interface UseSectionsTabReturn {
     // CRUD Handlers
     handleAddSection: () => Promise<void>;
     handleRemoveSection: (sectionId: number) => void;
+    confirmRemoveSection: () => Promise<void>;
+    handleEditSection: () => Promise<void>;
+    openEditSectionModal: (sectionId: number) => void;
     handleAddStudent: () => Promise<void>;
     handleBulkAddStudents: () => Promise<void>;
     handleRemoveStudent: () => Promise<void>;
@@ -297,6 +312,22 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
     const [deleteModalState, setDeleteModalState] = useState<DeleteModalState>({
         isOpen: false,
         target: null,
+    });
+    
+    // Delete confirmation input
+    const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
+    
+    // Edit section modal state
+    const [editSectionModalState, setEditSectionModalState] = useState<{
+        isOpen: boolean;
+        sectionId: number | null;
+        sectionNo: string;
+        note: string;
+    }>({
+        isOpen: false,
+        sectionId: null,
+        sectionNo: "",
+        note: "",
     });
     
     const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
@@ -653,9 +684,15 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         ...deleteModalState,
         open: (type: DeleteModalTarget["type"], target: Omit<DeleteModalTarget, "type">) => {
             setDeleteModalState({ isOpen: true, target: { type, ...target } });
+            setDeleteConfirmInput(""); // Reset confirm input when opening
         },
-        reset: () => setDeleteModalState({ isOpen: false, target: null }),
-    }), [deleteModalState]);
+        reset: () => {
+            setDeleteModalState({ isOpen: false, target: null });
+            setDeleteConfirmInput(""); // Reset confirm input when closing
+        },
+        confirmInput: deleteConfirmInput,
+        setConfirmInput: setDeleteConfirmInput,
+    }), [deleteModalState, deleteConfirmInput]);
     
     const bulkDeleteModal = useMemo(() => ({
         isOpen: bulkDeleteModalOpen,
@@ -779,6 +816,104 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         }
     }, [courseId, deleteModalState.target, deleteModal, emitUpdate]);
     
+    // Open edit section modal
+    const openEditSectionModal = useCallback((sectionId: number) => {
+        const section = course?.sections?.find(s => s.id === sectionId);
+        if (!section) return;
+        
+        setEditSectionModalState({
+            isOpen: true,
+            sectionId,
+            sectionNo: section.section_no,
+            note: section.note || "",
+        });
+    }, [course?.sections]);
+    
+    // Handle edit section
+    const handleEditSection = useCallback(async () => {
+        if (!editSectionModalState.sectionId || !editSectionModalState.sectionNo.trim()) {
+            addToast({
+                title: "ข้อมูลไม่ครบ",
+                description: "กรุณากรอกหมายเลขกลุ่มเรียน",
+                color: "warning",
+            });
+            return;
+        }
+        
+        // Check for duplicate section number
+        const isDuplicate = course?.sections?.some(
+            s => s.id !== editSectionModalState.sectionId && 
+                 s.section_no === editSectionModalState.sectionNo.trim()
+        );
+        
+        if (isDuplicate) {
+            addToast({
+                title: "หมายเลขซ้ำ",
+                description: `หมายเลขกลุ่มเรียน ${editSectionModalState.sectionNo} มีอยู่แล้ว`,
+                color: "danger",
+            });
+            return;
+        }
+        
+        setIsSubmitting(true);
+        try {
+            const response = await courseService.updateSection(
+                courseId, 
+                editSectionModalState.sectionId,
+                {
+                    section_no: editSectionModalState.sectionNo.trim(),
+                    note: editSectionModalState.note || undefined,
+                }
+            );
+            
+            if (response.success) {
+                setCourse(prev => {
+                    if (!prev) return prev;
+                    return {
+                        ...prev,
+                        sections: prev.sections?.map(s => 
+                            s.id === editSectionModalState.sectionId
+                                ? { ...s, section_no: editSectionModalState.sectionNo.trim(), note: editSectionModalState.note || null }
+                                : s
+                        ) || []
+                    };
+                });
+                
+                cache.current.course = undefined;
+                
+                addToast({
+                    title: "สำเร็จ",
+                    description: "แก้ไขกลุ่มเรียนสำเร็จ",
+                    color: "success",
+                });
+                
+                emitUpdate("section", "update", editSectionModalState.sectionId);
+                editSectionModal.reset();
+            }
+        } catch (error: unknown) {
+            const err = error as { message?: string };
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: err.message || "ไม่สามารถแก้ไขกลุ่มเรียนได้",
+                color: "danger",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [courseId, editSectionModalState, course?.sections, emitUpdate]);
+    
+    // Edit section modal helpers
+    const editSectionModal = useMemo(() => ({
+        isOpen: editSectionModalState.isOpen,
+        sectionId: editSectionModalState.sectionId,
+        sectionNo: editSectionModalState.sectionNo,
+        note: editSectionModalState.note,
+        setIsOpen: (open: boolean) => setEditSectionModalState(prev => ({ ...prev, isOpen: open })),
+        setSectionNo: (no: string) => setEditSectionModalState(prev => ({ ...prev, sectionNo: no })),
+        setNote: (note: string) => setEditSectionModalState(prev => ({ ...prev, note })),
+        reset: () => setEditSectionModalState({ isOpen: false, sectionId: null, sectionNo: "", note: "" }),
+    }), [editSectionModalState]);
+
     const handleAddStudent = useCallback(async () => {
         if (!studentModalState.sectionId || !studentModalState.studentId) {
             addToast({
@@ -1428,6 +1563,7 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         editTeamModal,
         deleteModal,
         bulkDeleteModal,
+        editSectionModal,
         isSubmitting,
         
         // UI Handlers
@@ -1439,6 +1575,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         // CRUD Handlers
         handleAddSection,
         handleRemoveSection,
+        confirmRemoveSection,
+        handleEditSection,
         handleAddStudent,
         handleBulkAddStudents,
         handleRemoveStudent,
@@ -1455,6 +1593,7 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
         openEditTeamModal,
         openDeleteTeamModal,
         openBulkDeleteModal,
+        openEditSectionModal,
         
         // Computed Functions
         getFilteredSectionStudents,

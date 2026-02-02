@@ -539,7 +539,7 @@ export default function ClassroomDetailPage() {
                 modals.teamModal.type,
                 modals.teamModal.type === "weekly" ? selectedWeek : undefined
             );
-            const baseName = modals.teamModal.type === "permanent" ? "กลุ่มถาวร" : `กลุ่มสัปดาห์ ${selectedWeek}`;
+            const baseName = modals.teamModal.type === "permanent" ? "งานกลุ่ม" : `กลุ่มสัปดาห์ ${selectedWeek}`;
             await classroomActions.createRandomTeams(
                 modals.teamModal.type,
                 unassigned,

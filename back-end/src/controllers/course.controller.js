@@ -680,6 +680,58 @@ const removeSection = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Update section
+ * @route PUT /api/courses/:id/sections/:sectionId
+ */
+const updateSection = asyncHandler(async (req, res) => {
+  const { id, sectionId } = req.params;
+  const { section_no, note } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
+
+  const section = await CourseSection.findOne({
+    where: { id: sectionId, course_id: id },
+  });
+
+  if (!section) {
+    throw new ApiError(404, 'ไม่พบกลุ่มเรียน');
+  }
+
+  if (!section_no || !section_no.trim()) {
+    throw new ApiError(400, 'กรุณาระบุหมายเลขกลุ่มเรียน');
+  }
+
+  // Check duplicate (exclude current section)
+  const existingSection = await CourseSection.findOne({
+    where: { 
+      course_id: id, 
+      section_no: section_no.trim(),
+      id: { [Op.ne]: sectionId }
+    },
+  });
+  
+  if (existingSection) {
+    throw new ApiError(400, `หมายเลขกลุ่มเรียน ${section_no} มีอยู่แล้ว`);
+  }
+
+  await section.update({
+    section_no: section_no.trim(),
+    note: note || null,
+  });
+
+  res.json({
+    success: true,
+    message: 'แก้ไขกลุ่มเรียนสำเร็จ',
+    data: section,
+  });
+});
+
 // ============================================
 // TA Management
 // ============================================
@@ -2005,6 +2057,7 @@ module.exports = {
   deleteCourse,
   toggleCourseStatus,
   addSection,
+  updateSection,
   removeSection,
   addTA,
   bulkAddTAs,

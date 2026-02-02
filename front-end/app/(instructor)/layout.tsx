@@ -193,7 +193,7 @@ export default function InstructorLayout({
     };
 
     // Determine current page for breadcrumb
-    const isHomePage = pathname === "/home" || pathname === "/home/create-course";
+    const isHomePage = pathname === "/home/closed" || pathname === "/home";
     const isClassroomPage = pathname.includes("/classroom/");
 
     // Show loading screen while checking auth

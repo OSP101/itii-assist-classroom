@@ -63,6 +63,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
         editTeamModal,
         deleteModal,
         bulkDeleteModal,
+        editSectionModal,
         isSubmitting,
         
         // UI Handlers
@@ -74,6 +75,8 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
         // CRUD Handlers
         handleAddSection,
         handleRemoveSection,
+        confirmRemoveSection,
+        handleEditSection,
         handleAddStudent,
         handleBulkAddStudents,
         handleRemoveStudent,
@@ -90,6 +93,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
         openEditTeamModal,
         openDeleteTeamModal,
         openBulkDeleteModal,
+        openEditSectionModal,
         
         // Computed Functions
         getFilteredSectionStudents,
@@ -168,6 +172,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 onOpenEditTeamModal={openEditTeamModal}
                 onCopyTeamsFromWeek={handleCopyTeamsFromWeek}
                 onOpenBulkDeleteModal={openBulkDeleteModal}
+                onOpenEditSectionModal={openEditSectionModal}
                 
                 // Computed Functions
                 getFilteredSectionStudents={getFilteredSectionStudents}
@@ -200,8 +205,10 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                 placeholder="เช่น 1, 2, 801"
                                 variant="bordered"
                                 size="md"
+                                type="number"
                                 value={sectionModal.sectionNo}
                                 onValueChange={sectionModal.setSectionNo}
+                                className="pb-3"
                                 isRequired
                                 classNames={{
                                     inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
@@ -211,7 +218,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                             <Input
                                 label="หมายเหตุ (ถ้ามี)"
                                 labelPlacement="outside"
-                                placeholder="เช่น กลุ่มพิเศษ"
+                                placeholder="เช่น ภาคปกติ ภาคพิเศษ ฯลฯ"
                                 variant="bordered"
                                 size="md"
                                 value={sectionModal.note}
@@ -234,6 +241,73 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
                         >
                             เพิ่มกลุ่มเรียน
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Edit Section Modal */}
+            <Modal 
+                isOpen={editSectionModal.isOpen} 
+                onClose={editSectionModal.reset}
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                                <Icon icon="solar:pen-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">แก้ไขกลุ่มเรียน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">แก้ไขข้อมูลกลุ่มเรียน</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        <div className="space-y-5">
+                            <Input
+                                label="หมายเลขกลุ่มเรียน"
+                                labelPlacement="outside"
+                                placeholder="เช่น 1, 2, 801"
+                                variant="bordered"
+                                size="md"
+                                value={editSectionModal.sectionNo}
+                                onValueChange={editSectionModal.setSectionNo}
+                                className="pb-3"
+                                isRequired
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                            <Input
+                                label="หมายเหตุ (ถ้ามี)"
+                                labelPlacement="outside"
+                                placeholder="เช่น ภาคปกติ ภาคพิเศษ ฯลฯ"
+                                variant="bordered"
+                                size="md"
+                                value={editSectionModal.note}
+                                onValueChange={editSectionModal.setNote}
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button variant="light" onPress={editSectionModal.reset}>
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            onPress={handleEditSection}
+                            isLoading={isSubmitting}
+                            isDisabled={!editSectionModal.sectionNo.trim()}
+                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25"
+                            startContent={!isSubmitting && <Icon icon="solar:diskette-bold" />}
+                        >
+                            บันทึก
                         </Button>
                     </ModalFooter>
                 </ModalContent>
@@ -1096,20 +1170,50 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                 </CardBody>
                             </Card>
 
-                            {/* Red Warning */}
-                            <div className="p-4 bg-red-100 rounded-xl border border-red-200">
-                                <div className="flex items-center gap-3">
-                                    <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
-                                    <div>
-                                        <p className="font-semibold text-red-800">
-                                            คุณต้องการดำเนินการต่อหรือไม่?
-                                        </p>
-                                        <p className="text-sm text-red-600">
-                                            การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                                        </p>
+                            {/* Confirmation Input for Section Delete */}
+                            {deleteModal.target?.type === "section" && (
+                                <div className="space-y-3">
+                                    <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                        <div className="flex items-start gap-3">
+                                            <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600 mt-0.5" />
+                                            <div>
+                                                <p className="font-semibold text-red-800">
+                                                    พิมพ์ &quot;{deleteModal.target.sectionNo}&quot; เพื่อยืนยันการลบ
+                                                </p>
+                                                <p className="text-sm text-red-600 mt-1">
+                                                    การลบกลุ่มเรียนจะลบนักศึกษาทั้งหมดออกจากรายวิชา
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <Input
+                                        placeholder={`พิมพ์ "${deleteModal.target.sectionNo}" เพื่อยืนยัน`}
+                                        value={deleteModal.confirmInput}
+                                        onValueChange={deleteModal.setConfirmInput}
+                                        variant="bordered"
+                                        classNames={{
+                                            inputWrapper: "border-red-200 hover:border-red-300 focus-within:!border-red-400",
+                                        }}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Red Warning for non-section delete */}
+                            {deleteModal.target?.type !== "section" && (
+                                <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                                    <div className="flex items-center gap-3">
+                                        <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600" />
+                                        <div>
+                                            <p className="font-semibold text-red-800">
+                                                คุณต้องการดำเนินการต่อหรือไม่?
+                                            </p>
+                                            <p className="text-sm text-red-600">
+                                                การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
@@ -1124,8 +1228,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                             color="danger"
                             onPress={() => {
                                 if (deleteModal.target?.type === "section") {
-                                    // Call confirmRemoveSection from hook
-                                    // We need to expose this in the hook
+                                    confirmRemoveSection();
                                 } else if (deleteModal.target?.type === "student") {
                                     handleRemoveStudent();
                                 } else if (deleteModal.target?.type === "team") {
@@ -1133,6 +1236,11 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                 }
                             }}
                             isLoading={isSubmitting}
+                            isDisabled={
+                                deleteModal.target?.type === "section" 
+                                    ? deleteModal.confirmInput !== deleteModal.target?.sectionNo
+                                    : false
+                            }
                             className="bg-red-500"
                         >
                             {deleteModal.target?.type === "section" && "ลบกลุ่มเรียน"}
