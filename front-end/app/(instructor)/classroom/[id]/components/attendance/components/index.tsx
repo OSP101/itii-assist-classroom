@@ -658,18 +658,16 @@ export const LocationCheckCard = memo(function LocationCheckCard({
                             type="button"
                             onClick={onGetCurrentLocation}
                             disabled={isGettingLocation}
-                            className={`group relative p-4 rounded-xl border-2 border-dashed transition-all duration-200 w-full ${
-                                isGettingLocation
-                                    ? "border-blue-400 bg-blue-50 cursor-wait"
-                                    : "border-slate-200 hover:border-blue-400 hover:bg-blue-50/50"
-                            }`}
+                            className={`group relative p-4 rounded-xl border-2 border-dashed transition-all duration-200 w-full ${isGettingLocation
+                                ? "border-blue-400 bg-blue-50 cursor-wait"
+                                : "border-slate-200 hover:border-blue-400 hover:bg-blue-50/50"
+                                }`}
                         >
                             <div className="flex flex-col items-center gap-2">
-                                <div className={`p-3 rounded-full transition-colors ${
-                                    isGettingLocation
-                                        ? "bg-blue-200 animate-pulse"
-                                        : "bg-blue-100 group-hover:bg-blue-200"
-                                }`}>
+                                <div className={`p-3 rounded-full transition-colors ${isGettingLocation
+                                    ? "bg-blue-200 animate-pulse"
+                                    : "bg-blue-100 group-hover:bg-blue-200"
+                                    }`}>
                                     <Icon
                                         icon="solar:gps-bold"
                                         className={`text-2xl text-blue-600 ${isGettingLocation ? "animate-spin" : ""}`}
@@ -855,139 +853,191 @@ export const CreateSessionModal = memo(function CreateSessionModal({
             scrollBehavior="inside"
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1">
-                    <span>สร้างรอบการเช็คชื่อ</span>
-                    <span className="text-sm font-normal text-slate-500">
-                        กำหนดรายละเอียดการเช็คชื่อเข้าเรียน
-                    </span>
+                <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg">
+                            <Icon icon="solar:clipboard-check-bold" className="text-2xl text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">สร้างรอบการเช็คชื่อ</h3>
+                            <p className="text-sm text-slate-500 font-normal mt-1">
+                                กำหนดรายละเอียดการเช็คชื่อเข้าเรียน
+                            </p>
+                        </div>
+                    </div>
                 </ModalHeader>
-                <ModalBody>
-                    <div className="space-y-4">
+                <ModalBody className="px-6 py-4">
+                    <div className="space-y-5">
                         {/* Title */}
-                        <Input
-                            label="ชื่อรอบการเช็คชื่อ"
-                            value={formData.title}
-                            onValueChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
-                            isRequired
-                            labelPlacement="outside-top"
-                            variant="bordered"
-                            size="md"
-                        />
-
-                        {/* Section - Multi-select */}
-                        <Select
-                            label="กลุ่มเรียน"
-                            placeholder="เลือกกลุ่มเรียน"
-                            selectionMode="multiple"
-                            selectedKeys={new Set((formData.course_section_ids || []).map(String))}
-                            labelPlacement="outside-top"
-                            variant="bordered"
-                            size="md"
-                            onSelectionChange={(keys) => {
-                                const selectedIds = Array.from(keys).map((k) => Number(k));
-                                setFormData((prev: CreateAttendanceData) => ({
-                                    ...prev,
-                                    course_section_ids: selectedIds,
-                                    course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
-                                }));
-                            }}
-                        >
-                            {sections.map((section) => (
-                                <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
-                                    {section.section_no}{section.note ? ` - ${section.note}` : ""}
-                                </SelectItem>
-                            ))}
-                        </Select>
-
-                        {/* Session Type */}
-                        <Select
-                            label="ประเภทการเรียน"
-                            selectedKeys={[formData.session_type]}
-                            variant="bordered"
-                            onSelectionChange={(keys) => {
-                                const selected = Array.from(keys)[0] as "lecture" | "lab" | "online";
-                                setFormData((prev: CreateAttendanceData) => ({ ...prev, session_type: selected }));
-                            }}
-                            isRequired
-                            labelPlacement="outside-top"
-                            size="md"
-                        >
-                            <SelectItem key="lecture">บรรยาย (Lecture)</SelectItem>
-                            <SelectItem key="lab">ปฏิบัติ (Lab)</SelectItem>
-                            <SelectItem key="online">ออนไลน์ (Online)</SelectItem>
-                        </Select>
-
-                        {/* Date Time */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <DatePicker
-                                label="เวลาเริ่มต้น"
-                                variant="bordered"
-                                labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
-                                value={startDateTime}
-                                onChange={(value) => value && setStartDateTime(value)}
+                        <div>
+                            <Input
+                                label="ชื่อรอบการเช็คชื่อ"
+                                placeholder="เช่น เช็คชื่อสัปดาห์ที่ 1, Lab 1"
+                                value={formData.title}
+                                onValueChange={(value) => setFormData((prev) => ({ ...prev, title: value }))}
                                 isRequired
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "pt-4 bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
-                            />
-                            <DatePicker
-                                label="เวลาสิ้นสุด"
-                                variant="bordered"
                                 labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
-                                value={endDateTime}
-                                onChange={(value) => value && setEndDateTime(value)}
-                                isRequired
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "pt-4 bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
+                                variant="bordered"
+                                size="md"
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                    label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
                         </div>
 
+                        {/* Section - Multi-select */}
+
+                        <div>
+                            <Select
+                                label="กลุ่มเรียน"
+                                placeholder="เลือกกลุ่มเรียน"
+                                selectionMode="multiple"
+                                selectedKeys={new Set((formData.course_section_ids || []).map(String))}
+                                labelPlacement="outside"
+                                variant="bordered"
+                                size="md"
+                                className="py-4"
+                                onSelectionChange={(keys) => {
+                                    const selectedIds = Array.from(keys).map((k) => Number(k));
+                                    setFormData((prev: CreateAttendanceData) => ({
+                                        ...prev,
+                                        course_section_ids: selectedIds,
+                                        course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
+                                    }));
+                                }}
+                                classNames={{
+                                    trigger: "bg-white border-slate-200",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            >
+                                {sections.map((section) => (
+                                    <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
+                                        {section.section_no}{section.note ? ` - ${section.note}` : ""}
+                                    </SelectItem>
+                                ))}
+                            </Select>
+                        </div>
+
+
+                        {/* Session Type */}
+                        <div>
+                            <Select
+                                label="ประเภทการเรียน"
+                                selectedKeys={[formData.session_type]}
+                                variant="bordered"
+                                onSelectionChange={(keys) => {
+                                    const selected = Array.from(keys)[0] as "lecture" | "lab" | "online";
+                                    setFormData((prev: CreateAttendanceData) => ({ ...prev, session_type: selected }));
+                                }}
+                                isRequired
+                                labelPlacement="outside"
+                                size="md"
+                                classNames={{
+                                    trigger: "bg-white border-slate-200",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            >
+                                <SelectItem key="lecture">
+                                    บรรยาย (Lecture)
+                                </SelectItem>
+                                <SelectItem key="lab">
+                                    ปฏิบัติการ (Lab)
+                                </SelectItem>
+                                <SelectItem key="online">
+                                    ออนไลน์ (Online)
+                                </SelectItem>
+                            </Select>
+                        </div>
+
+                        {/* Date Time */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <DatePicker
+                                    label="เวลาเริ่มต้น"
+                                    variant="bordered"
+                                    labelPlacement="outside"
+                                    granularity="minute"
+                                    hideTimeZone
+                                    showMonthAndYearPickers
+                                    value={startDateTime}
+                                    onChange={(value) => value && setStartDateTime(value)}
+                                    isRequired
+                                    classNames={{
+                                        base: "w-full",
+                                        selectorButton: "text-blue-500",
+                                        label: "text-slate-800 font-medium text-sm",
+                                    }}
+                                    popoverProps={{
+                                        placement: "bottom",
+                                        classNames: { content: "z-[9999]" },
+                                    }}
+                                    calendarProps={{
+                                        classNames: {
+                                            base: "bg-white shadow-xl",
+                                            headerWrapper: "bg-white",
+                                            prevButton: "border-1 border-default-200 rounded-small",
+                                            nextButton: "border-1 border-default-200 rounded-small",
+                                            gridHeader: "bg-white shadow-none",
+                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                        },
+                                    }}
+                                />
+                                <DatePicker
+                                    label="เวลาสิ้นสุด"
+                                    variant="bordered"
+                                    labelPlacement="outside"
+                                    granularity="minute"
+                                    hideTimeZone
+                                    showMonthAndYearPickers
+                                    value={endDateTime}
+                                    onChange={(value) => value && setEndDateTime(value)}
+                                    isRequired
+                                    classNames={{
+                                        base: "w-full",
+                                        selectorButton: "text-blue-500",
+                                        label: "text-slate-800 font-medium text-sm",
+                                    }}
+                                    popoverProps={{
+                                        placement: "bottom",
+                                        classNames: { content: "z-[9999]" },
+                                    }}
+                                    calendarProps={{
+                                        classNames: {
+                                            base: "bg-white shadow-xl",
+                                            headerWrapper: "bg-white",
+                                            prevButton: "border-1 border-default-200 rounded-small",
+                                            nextButton: "border-1 border-default-200 rounded-small",
+                                            gridHeader: "bg-white shadow-none",
+                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                        },
+                                    }}
+                                />
+                            </div>
+
                         {/* Late Threshold */}
-                        <Input
-                            type="number"
-                            label="เวลาสาย (นาที)"
-                            labelPlacement="outside-top"
-                            variant="bordered"
-                            value={String(formData.late_threshold_minutes)}
-                            onValueChange={(value) =>
-                                setFormData((prev: CreateAttendanceData) => ({
-                                    ...prev,
-                                    late_threshold_minutes: parseInt(value) || 15,
-                                }))
-                            }
-                            description="หลังเวลาเริ่มต้นกี่นาทีจึงนับว่ามาสาย"
-                            endContent={<span className="text-slate-400 text-sm">นาที</span>}
-                            size="md"
-                        />
+                        <div>
+                            <Input
+                                type="number"
+                                label="เวลาสาย (นาที)"
+                                labelPlacement="outside"
+                                variant="bordered"
+                                value={String(formData.late_threshold_minutes)}
+                                className="pt-4"
+                                onValueChange={(value) =>
+                                    setFormData((prev: CreateAttendanceData) => ({
+                                        ...prev,
+                                        late_threshold_minutes: parseInt(value) || 15,
+                                    }))
+                                }
+                                description="หลังเวลาเริ่มต้นกี่นาทีจึงนับว่ามาสาย"
+                                endContent={<span className="text-slate-400 text-sm">นาที</span>}
+                                size="md"
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
+                        </div>
 
                         {/* Location Check */}
                         <LocationCheckCard
@@ -1004,7 +1054,7 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                         />
                     </div>
                 </ModalBody>
-                <ModalFooter>
+                <ModalFooter className="px-6 py-4 border-t border-slate-100">
                     <Button variant="light" onPress={onClose}>
                         ยกเลิก
                     </Button>
@@ -1071,23 +1121,34 @@ export const EditSessionModal = memo(function EditSessionModal({
             scrollBehavior="inside"
         >
             <ModalContent>
-                <ModalHeader className="flex flex-col gap-1">
-                    <span>แก้ไขรอบการเช็คชื่อ</span>
-                    <span className="text-sm font-normal text-slate-500">
-                        แก้ไขรายละเอียดการเช็คชื่อ: {editTarget?.title}
-                    </span>
+                <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-lg">
+                            <Icon icon="solar:pen-bold" className="text-2xl text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">แก้ไขรอบการเช็คชื่อ</h3>
+                            <p className="text-sm text-slate-500 font-normal mt-1">
+                                {editTarget?.title}
+                            </p>
+                        </div>
+                    </div>
                 </ModalHeader>
-                <ModalBody>
-                    <div className="space-y-4">
+                <ModalBody className="px-6 py-4">
+                    <div className="space-y-3">
                         {/* Title */}
                         <Input
                             label="ชื่อรอบการเช็คชื่อ"
                             value={formData.title}
                             onValueChange={(value) => setFormData((prev: CreateAttendanceData) => ({ ...prev, title: value }))}
                             isRequired
-                            labelPlacement="outside-top"
+                            labelPlacement="outside"
                             variant="bordered"
                             size="md"
+                            classNames={{
+                                inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                label: "text-slate-600 font-medium text-sm",
+                            }}
                         />
 
                         {/* Section - Multi-select */}
@@ -1096,9 +1157,10 @@ export const EditSessionModal = memo(function EditSessionModal({
                             placeholder="เลือกกลุ่มเรียน"
                             selectionMode="multiple"
                             selectedKeys={new Set((formData.course_section_ids || []).map(String))}
-                            labelPlacement="outside-top"
+                            labelPlacement="outside"
                             variant="bordered"
                             size="md"
+                            className="py-3"
                             onSelectionChange={(keys) => {
                                 const selectedIds = Array.from(keys).map((k) => Number(k));
                                 setFormData((prev: CreateAttendanceData) => ({
@@ -1107,12 +1169,10 @@ export const EditSessionModal = memo(function EditSessionModal({
                                     course_section_id: selectedIds.length === 1 ? selectedIds[0] : null,
                                 }));
                             }}
-                            description={
-                                (formData.course_section_ids || []).length === allSectionIds.length
-                                    ? "เลือกทุกกลุ่มเรียนแล้ว"
-                                    : `เลือกแล้ว ${(formData.course_section_ids || []).length} จาก ${allSectionIds.length} กลุ่มเรียน`
-                            }
-                            classNames={{ trigger: "min-h-[50px]" }}
+                            classNames={{
+                                trigger: "bg-white border-slate-200",
+                                label: "text-slate-800 font-medium text-sm",
+                            }}
                         >
                             {sections.map((section) => (
                                 <SelectItem key={String(section.id)} textValue={`${section.section_no}${section.note ? ` - ${section.note}` : ""}`}>
@@ -1125,46 +1185,88 @@ export const EditSessionModal = memo(function EditSessionModal({
                         <Select
                             label="ประเภทการสอน"
                             selectedKeys={[formData.session_type]}
-                            labelPlacement="outside-top"
+                            labelPlacement="outside"
                             variant="bordered"
                             size="md"
                             onSelectionChange={(keys) => {
                                 const selected = Array.from(keys)[0] as "lecture" | "lab" | "online";
                                 setFormData((prev: CreateAttendanceData) => ({ ...prev, session_type: selected }));
                             }}
+                            classNames={{
+                                trigger: "bg-white border-slate-200",
+                                label: "text-slate-800 font-medium text-sm",
+                            }}
                         >
-                            <SelectItem key="lecture" startContent={<Icon icon="solar:presentation-graph-bold" />}>
+                            <SelectItem key="lecture" startContent={<Icon icon="solar:presentation-graph-bold" className="text-blue-500" />}>
                                 บรรยาย
                             </SelectItem>
-                            <SelectItem key="lab" startContent={<Icon icon="solar:test-tube-bold" />}>
+                            <SelectItem key="lab" startContent={<Icon icon="solar:test-tube-bold" className="text-emerald-500" />}>
                                 ปฏิบัติ
                             </SelectItem>
-                            <SelectItem key="online" startContent={<Icon icon="solar:laptop-bold" />}>
+                            <SelectItem key="online" startContent={<Icon icon="solar:laptop-bold" className="text-violet-500" />}>
                                 ออนไลน์
                             </SelectItem>
                         </Select>
 
                         {/* Time Settings */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DatePicker
-                                label="เวลาเริ่มต้น"
-                                value={startDateTime}
-                                onChange={(value) => value && setStartDateTime(value)}
-                                granularity="minute"
-                                hideTimeZone
-                                labelPlacement="outside-top"
-                                variant="bordered"
-                            />
-                            <DatePicker
-                                label="เวลาสิ้นสุด"
-                                value={endDateTime}
-                                onChange={(value) => value && setEndDateTime(value)}
-                                granularity="minute"
-                                hideTimeZone
-                                labelPlacement="outside-top"
-                                variant="bordered"
-                            />
-                        </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                                <DatePicker
+                                    label="เวลาเริ่มต้น"
+                                    value={startDateTime}
+                                    onChange={(value) => value && setStartDateTime(value)}
+                                    granularity="minute"
+                                    hideTimeZone
+                                    showMonthAndYearPickers
+                                    labelPlacement="outside"
+                                    variant="bordered"
+                                    classNames={{
+                                        base: "w-full",
+                                        selectorButton: "text-amber-500",
+                                    }}
+                                    popoverProps={{
+                                        placement: "bottom",
+                                        classNames: { content: "z-[9999]" },
+                                    }}
+                                    calendarProps={{
+                                        classNames: {
+                                            base: "bg-white shadow-xl",
+                                            headerWrapper: "pt-4 bg-white",
+                                            prevButton: "border-1 border-default-200 rounded-small",
+                                            nextButton: "border-1 border-default-200 rounded-small",
+                                            gridHeader: "bg-white shadow-none",
+                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                        },
+                                    }}
+                                />
+                                <DatePicker
+                                    label="เวลาสิ้นสุด"
+                                    value={endDateTime}
+                                    onChange={(value) => value && setEndDateTime(value)}
+                                    granularity="minute"
+                                    hideTimeZone
+                                    showMonthAndYearPickers
+                                    labelPlacement="outside"
+                                    variant="bordered"
+                                    classNames={{
+                                        base: "w-full",
+                                        selectorButton: "text-amber-500",
+                                    }}
+                                    popoverProps={{
+                                        placement: "bottom",
+                                        classNames: { content: "z-[9999]" },
+                                    }}
+                                    calendarProps={{
+                                        classNames: {
+                                            base: "bg-white shadow-xl",
+                                            headerWrapper: "pt-4 bg-white",
+                                            prevButton: "border-1 border-default-200 rounded-small",
+                                            nextButton: "border-1 border-default-200 rounded-small",
+                                            gridHeader: "bg-white shadow-none",
+                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                        },
+                                    }}
+                                />
+                            </div>
 
                         {/* Late Threshold */}
                         <div>
@@ -1278,7 +1380,7 @@ export const EditSessionModal = memo(function EditSessionModal({
                         color="primary"
                         onPress={onSubmit}
                         isLoading={isSubmitting}
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500"
+                        className="bg-gradient-to-r from-amber-400 to-orange-500"
                     >
                         บันทึกการแก้ไข
                     </Button>

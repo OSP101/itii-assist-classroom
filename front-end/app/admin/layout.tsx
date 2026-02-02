@@ -47,12 +47,12 @@ const menuItems: MenuItem[] = [
         icon: "solar:book-bookmark-bold",
         href: "/admin/courses",
     },
-    // {
-    //     key: "classrooms",
-    //     label: "ห้องเรียน",
-    //     icon: "solar:display-bold",
-    //     href: "/admin/classrooms",
-    // },
+    {
+        key: "classrooms",
+        label: "ห้องเรียน",
+        icon: "solar:display-bold",
+        href: "/admin/classrooms",
+    },
     {
         key: "feedback",
         label: "Feedback",
