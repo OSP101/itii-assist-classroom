@@ -381,6 +381,13 @@ class CourseService {
   }
 
   /**
+   * Update section
+   */
+  async updateSection(courseId: string, sectionId: number, data: { section_no: string; note?: string }) {
+    return apiService.put<CourseSection>(`/courses/${courseId}/sections/${sectionId}`, data);
+  }
+
+  /**
    * Remove section from course
    */
   async removeSection(courseId: string, sectionId: number) {

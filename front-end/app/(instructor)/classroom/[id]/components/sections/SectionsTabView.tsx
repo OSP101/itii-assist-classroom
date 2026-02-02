@@ -45,7 +45,7 @@ interface SectionsTabViewProps {
     expandedSections: number[];
     isTeamsLoading: boolean;
     sectionStudents: Record<number, SectionStudent[]>;
-    
+
     // Handlers
     onSubTabChange: (tab: SectionSubTab) => void;
     onSearchQueryChange: (query: string) => void;
@@ -60,7 +60,8 @@ interface SectionsTabViewProps {
     onOpenEditTeamModal: (teamId: number, type: TeamType, weekNumber?: number) => void;
     onCopyTeamsFromWeek: (sourceWeek: number) => void;
     onOpenBulkDeleteModal: () => void;
-    
+    onOpenEditSectionModal: (sectionId: number) => void;
+
     // Computed functions
     getFilteredSectionStudents: (sectionId: number) => SectionStudent[];
     findStudentTeam: (studentId: number, type: TeamType, weekNumber?: number) => string | null;
@@ -76,6 +77,7 @@ interface SectionHeaderProps {
     isExpanded: boolean;
     onToggle: () => void;
     onAddStudent: () => void;
+    onEdit: () => void;
     onRemove: () => void;
 }
 
@@ -85,15 +87,15 @@ const SectionHeader = React.memo(function SectionHeader({
     isExpanded,
     onToggle,
     onAddStudent,
+    onEdit,
     onRemove,
 }: SectionHeaderProps) {
     return (
         <div
-            className={`flex items-center justify-between p-4 cursor-pointer transition-all ${
-                isExpanded
-                    ? "bg-gradient-to-r from-blue-400 to-indigo-500"
-                    : "bg-white hover:from-amber-50 hover:to-blue-50"
-            }`}
+            className={`flex items-center justify-between p-4 cursor-pointer transition-all ${isExpanded
+                ? "bg-gradient-to-r from-blue-400 to-indigo-500"
+                : "bg-white hover:from-amber-50 hover:to-blue-50"
+                }`}
             onClick={onToggle}
         >
             <div className="flex items-center gap-4">
@@ -124,6 +126,17 @@ const SectionHeader = React.memo(function SectionHeader({
                         <Icon icon="solar:user-plus-bold" className="text-lg" />
                     </Button>
                 </Tooltip>
+                <Tooltip content="แก้ไขกลุ่มเรียน">
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="flat"
+                        className={isExpanded ? "bg-white/20 text-white" : "bg-amber-100 text-amber-600"}
+                        onPress={onEdit}
+                    >
+                        <Icon icon="solar:pen-bold" className="text-lg" />
+                    </Button>
+                </Tooltip>
                 <Tooltip content="ลบกลุ่มเรียน" color="danger">
                     <Button
                         isIconOnly
@@ -135,7 +148,7 @@ const SectionHeader = React.memo(function SectionHeader({
                         <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
                     </Button>
                 </Tooltip>
-                <div 
+                <div
                     className={`ml-2 p-1 rounded-lg ${isExpanded ? "bg-white/20" : "bg-slate-200"}`}
                     onClick={onToggle}
                 >
@@ -182,17 +195,19 @@ const TeamCard = React.memo(function TeamCard({
     return (
         <Card className={`shadow-sm border border-slate-200 hover:shadow-lg ${hoverClass} transition-all group`}>
             <CardHeader className={`px-4 py-3 bg-gradient-to-r ${gradientClass}`}>
-                <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white">
+                <div className="flex items-center justify-between w-full gap-2">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 overflow-hidden">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold text-white flex-shrink-0">
                             {index + 1}
                         </div>
-                        <div>
-                            <span className="font-semibold text-white">{team.name}</span>
+                        <div className="min-w-0 flex-1 overflow-hidden">
+                            <Tooltip content={team.name}>
+                                <p className="font-semibold text-white truncate cursor-default">{team.name}</p>
+                            </Tooltip>
                             <p className="text-xs text-white/70">{team.members.length} สมาชิก</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                         <Tooltip content="แก้ไขกลุ่ม">
                             <Button
                                 isIconOnly
@@ -221,8 +236,8 @@ const TeamCard = React.memo(function TeamCard({
             <CardBody className="px-4 py-3">
                 <div className="space-y-2">
                     {team.members.map((member, idx) => (
-                        <div 
-                            key={member.id} 
+                        <div
+                            key={member.id}
                             className={`flex items-center gap-3 p-2 rounded-lg ${memberHoverClass} transition-colors`}
                         >
                             <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${memberBgClass} flex items-center justify-center text-white text-xs font-medium`}>
@@ -269,6 +284,7 @@ function SectionsTabViewComponent({
     onOpenEditTeamModal,
     onCopyTeamsFromWeek,
     onOpenBulkDeleteModal,
+    onOpenEditSectionModal,
     getFilteredSectionStudents,
     findStudentTeam,
 }: SectionsTabViewProps) {
@@ -359,6 +375,7 @@ function SectionsTabViewComponent({
                     onOpenAddStudentModal={onOpenAddStudentModal}
                     onRemoveSection={onRemoveSection}
                     onOpenDeleteStudentModal={onOpenDeleteStudentModal}
+                    onOpenEditSectionModal={onOpenEditSectionModal}
                     getFilteredSectionStudents={getFilteredSectionStudents}
                     findStudentTeam={findStudentTeam}
                 />
@@ -409,6 +426,7 @@ interface StudentsSubTabProps {
     onOpenAddStudentModal: (sectionId: number) => void;
     onRemoveSection: (sectionId: number) => void;
     onOpenDeleteStudentModal: (sectionId: number, student: SectionStudent) => void;
+    onOpenEditSectionModal: (sectionId: number) => void;
     getFilteredSectionStudents: (sectionId: number) => SectionStudent[];
     findStudentTeam: (studentId: number, type: TeamType, weekNumber?: number) => string | null;
 }
@@ -424,6 +442,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
     onOpenAddStudentModal,
     onRemoveSection,
     onOpenDeleteStudentModal,
+    onOpenEditSectionModal,
     getFilteredSectionStudents,
     findStudentTeam,
 }: StudentsSubTabProps) {
@@ -472,6 +491,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
                                 isExpanded={expandedSections.includes(section.id)}
                                 onToggle={() => onToggleSection(section.id)}
                                 onAddStudent={() => onOpenAddStudentModal(section.id)}
+                                onEdit={() => onOpenEditSectionModal(section.id)}
                                 onRemove={() => onRemoveSection(section.id)}
                             />
 
@@ -507,23 +527,22 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
                                                                 <div className="text-xs font-medium text-black">{student.student_id}</div>
                                                             </TableCell>
                                                             <TableCell>
-                                                                <div className="flex items-center gap-2">
+                                                                <div className="flex items-center gap-2 min-w-0">
                                                                     <Avatar
                                                                         name={student.full_name}
                                                                         size="sm"
                                                                         className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white flex-shrink-0"
                                                                     />
-                                                                    <span className="font-medium text-black text-sm">{student.full_name}</span>
+                                                                    <span className="font-medium text-black text-sm whitespace-nowrap">{student.full_name}</span>
                                                                 </div>
                                                             </TableCell>
                                                             <TableCell>
                                                                 {findStudentTeam(student.id, "permanent") ? (
-                                                                    <Chip
-                                                                        size="sm"
-                                                                        className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white"
-                                                                    >
-                                                                        {findStudentTeam(student.id, "permanent")}
-                                                                    </Chip>
+                                                                    <Tooltip content={findStudentTeam(student.id, "permanent")}>
+                                                                        <span className="inline-block max-w-[280px] sm:max-w-[400px] truncate text-xs font-medium text-purple-600 bg-purple-100 px-2 py-1 rounded-md cursor-default">
+                                                                            {findStudentTeam(student.id, "permanent")}
+                                                                        </span>
+                                                                    </Tooltip>
                                                                 ) : (
                                                                     <span className="text-slate-300 text-xs">-</span>
                                                                 )}
@@ -622,44 +641,99 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
     onOpenEditTeamModal,
     onOpenDeleteTeamModal,
 }: PermanentTeamsSubTabProps) {
+    const [searchQuery, setSearchQuery] = React.useState("");
+
+    // Filter teams by search query
+    const filteredTeams = React.useMemo(() => {
+        if (!searchQuery.trim()) return permanentTeams;
+        const query = searchQuery.toLowerCase().trim();
+        return permanentTeams.filter(team =>
+            team.name.toLowerCase().includes(query) ||
+            team.members.some(member =>
+                member.full_name.toLowerCase().includes(query) ||
+                member.student_id.toLowerCase().includes(query)
+            )
+        );
+    }, [permanentTeams, searchQuery]);
+
     return (
         <div className="space-y-4">
-            {/* Action Bar */}
+            {/* Search & Action Bar */}
             <Card className="shadow-sm border border-slate-200">
                 <CardBody className="py-3 px-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-2">
+                        {/* Info - hidden on mobile */}
+                        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
                             <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0">
                                 <Icon icon="solar:info-circle-bold" className="text-xl text-purple-500" />
                             </div>
                             <div>
                                 <p className="font-medium text-slate-700">กลุ่มโปรเจกต์</p>
-                                <p className="text-sm text-slate-500">กลุ่มที่ใช้ตลอดทั้งเทอม สำหรับโปรเจกต์ระยะยาว</p>
+                                <p className="text-sm text-slate-500">
+                                    {searchQuery ? `พบ ${filteredTeams.length} จาก ${permanentTeams.length} กลุ่ม` : `${permanentTeams.length} กลุ่ม · ที่ใช้ตลอดทั้งเทอม`}
+                                </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                        {/* Search + Buttons */}
+                        <div className="flex items-center gap-2 flex-1 md:flex-initial md:w-auto justify-end">
+                            <Input
+                                placeholder="ค้นหากลุ่ม..."
+                                value={searchQuery}
+                                onValueChange={setSearchQuery}
+                                startContent={<Icon icon="solar:magnifer-linear" className="text-purple-400 text-lg" />}
+                                className="flex-1 md:w-48 lg:w-56"
+                                size="md"
+                                variant="bordered"
+                                isClearable
+                                classNames={{
+                                    inputWrapper: "border-purple-200 hover:border-purple-300 focus-within:!border-purple-400",
+                                }}
+                            />
+                            <Tooltip content="สุ่มกลุ่มอัตโนมัติ">
+                                <Button
+                                    color="secondary"
+                                    variant="flat"
+                                    isIconOnly
+                                    onPress={() => onOpenCreateTeamModal("permanent", "random")}
+                                    className="bg-purple-100 text-purple-700 flex-shrink-0 md:hidden"
+                                    size="md"
+                                    isDisabled={isTeamsLoading}
+                                >
+                                    <Icon icon="solar:shuffle-bold" className="text-lg" />
+                                </Button>
+                            </Tooltip>
                             <Button
                                 color="secondary"
                                 variant="flat"
                                 startContent={<Icon icon="solar:shuffle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("permanent", "random")}
-                                className="bg-purple-100 text-purple-700 flex-1 sm:flex-initial"
+                                className="bg-purple-100 text-purple-700 flex-shrink-0 hidden md:flex"
                                 size="md"
                                 isDisabled={isTeamsLoading}
                             >
-                                <span className="hidden sm:inline">สุ่มกลุ่มอัตโนมัติ</span>
-                                <span className="sm:hidden">สุ่มกลุ่ม</span>
+                                สุ่มกลุ่ม
                             </Button>
+                            <Tooltip content="สร้างกลุ่มใหม่">
+                                <Button
+                                    color="primary"
+                                    isIconOnly
+                                    onPress={() => onOpenCreateTeamModal("permanent", "manual")}
+                                    className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 md:hidden"
+                                    size="md"
+                                    isDisabled={isTeamsLoading}
+                                >
+                                    <Icon icon="solar:add-circle-bold" className="text-lg" />
+                                </Button>
+                            </Tooltip>
                             <Button
                                 color="primary"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("permanent", "manual")}
-                                className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-1 sm:flex-initial"
+                                className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 hidden md:flex"
                                 size="md"
                                 isDisabled={isTeamsLoading}
                             >
-                                <span className="hidden sm:inline">สร้างกลุ่มใหม่</span>
-                                <span className="sm:hidden">สร้างกลุ่ม</span>
+                                สร้างกลุ่ม
                             </Button>
                         </div>
                     </div>
@@ -669,19 +743,29 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
             {/* Teams Grid */}
             {isTeamsLoading ? (
                 <TeamsGridSkeleton />
-            ) : permanentTeams.length > 0 ? (
+            ) : filteredTeams.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {permanentTeams.map((team, idx) => (
+                    {filteredTeams.map((team, idx) => (
                         <TeamCard
                             key={team.id}
                             team={team}
-                            index={idx}
+                            index={permanentTeams.findIndex(t => t.id === team.id)}
                             type="permanent"
                             onEdit={() => onOpenEditTeamModal(team.id, "permanent")}
                             onDelete={() => onOpenDeleteTeamModal(team.id, "permanent")}
                         />
                     ))}
                 </div>
+            ) : searchQuery ? (
+                <Card className="shadow-sm border border-dashed border-purple-200 bg-purple-50/30">
+                    <CardBody className="text-center py-12">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-100 flex items-center justify-center">
+                            <Icon icon="solar:magnifer-linear" className="text-3xl text-purple-400" />
+                        </div>
+                        <p className="text-slate-500 font-medium">ไม่พบกลุ่มที่ค้นหา</p>
+                        <p className="text-sm text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาใหม่</p>
+                    </CardBody>
+                </Card>
             ) : (
                 <Card className="shadow-sm border border-dashed border-purple-200 bg-purple-50/30">
                     <CardBody className="text-center py-16">
@@ -746,43 +830,70 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
     onCopyTeamsFromWeek,
     onOpenBulkDeleteModal,
 }: WeeklyTeamsSubTabProps) {
+    const [searchQuery, setSearchQuery] = React.useState("");
+
     const hasOtherWeeksWithTeams = Object.keys(weeklyTeams).some(
         k => parseInt(k) !== selectedWeek && weeklyTeams[parseInt(k)]?.length > 0
     );
 
+    // Filter teams by search query
+    const currentWeekTeams = weeklyTeams[selectedWeek] || [];
+    const filteredTeams = React.useMemo(() => {
+        if (!searchQuery.trim()) return currentWeekTeams;
+        const query = searchQuery.toLowerCase().trim();
+        return currentWeekTeams.filter(team =>
+            team.name.toLowerCase().includes(query) ||
+            team.members.some(member =>
+                member.full_name.toLowerCase().includes(query) ||
+                member.student_id.toLowerCase().includes(query)
+            )
+        );
+    }, [currentWeekTeams, searchQuery]);
+
     return (
         <div className="space-y-4">
-            {/* Week Selector Bar */}
+            {/* Search & Week Selector Bar */}
             <Card className="shadow-sm border border-slate-200">
                 <CardBody className="py-3 px-4">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2 bg-emerald-100 rounded-lg flex-shrink-0">
-                                    <Icon icon="solar:calendar-bold" className="text-xl text-emerald-500" />
-                                </div>
-                                <div>
-                                    <p className="font-medium text-slate-700">สัปดาห์ที่ {selectedWeek}</p>
-                                    <p className="text-sm text-slate-500">
-                                        {weeklyTeams[selectedWeek]?.length || 0} กลุ่ม
-                                    </p>
-                                </div>
+                    <div className="flex items-center justify-between gap-2">
+                        {/* Info - hidden on mobile */}
+                        <div className="hidden md:flex items-center gap-3 flex-shrink-0">
+                            <div className="p-2 bg-emerald-100 rounded-lg flex-shrink-0">
+                                <Icon icon="solar:calendar-bold" className="text-xl text-emerald-500" />
+                            </div>
+                            <div>
+                                <p className="font-medium text-slate-700">สัปดาห์ที่ {selectedWeek}</p>
+                                <p className="text-sm text-slate-500">
+                                    {searchQuery ? `พบ ${filteredTeams.length} จาก ${currentWeekTeams.length} กลุ่ม` : `${currentWeekTeams.length} กลุ่ม`}
+                                </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
-                            {/* Copy from week dropdown */}
+                        {/* Search + Buttons */}
+                        <div className="flex items-center gap-2 flex-1 md:flex-initial md:w-auto justify-end">
+                            <Input
+                                placeholder="ค้นหากลุ่ม..."
+                                value={searchQuery}
+                                onValueChange={setSearchQuery}
+                                startContent={<Icon icon="solar:magnifer-linear" className="text-emerald-400 text-lg" />}
+                                className="flex-1 md:w-48 lg:w-56"
+                                size="md"
+                                variant="bordered"
+                                isClearable
+                                classNames={{
+                                    inputWrapper: "border-emerald-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                }}
+                            />
+                            {/* Copy dropdown */}
                             {!weeklyTeams[selectedWeek]?.length && hasOtherWeeksWithTeams && (
                                 <Dropdown>
                                     <DropdownTrigger>
                                         <Button
                                             variant="flat"
                                             size="md"
-                                            startContent={<Icon icon="solar:copy-bold" />}
-                                            endContent={<Icon icon="solar:alt-arrow-down-linear" className="text-sm" />}
-                                            className="bg-slate-100 flex-shrink-0"
+                                            isIconOnly
+                                            className="bg-slate-100 flex-shrink-0 md:hidden"
                                         >
-                                            <span className="hidden sm:inline">คัดลอกจาก</span>
-                                            <span className="sm:hidden">คัดลอก</span>
+                                            <Icon icon="solar:copy-bold" className="text-lg" />
                                         </Button>
                                     </DropdownTrigger>
                                     <DropdownMenu
@@ -804,34 +915,93 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                     </DropdownMenu>
                                 </Dropdown>
                             )}
+                            {!weeklyTeams[selectedWeek]?.length && hasOtherWeeksWithTeams && (
+                                <Dropdown>
+                                    <DropdownTrigger>
+                                        <Button
+                                            variant="flat"
+                                            size="md"
+                                            startContent={<Icon icon="solar:copy-bold" />}
+                                            className="bg-slate-100 flex-shrink-0 hidden md:flex"
+                                        >
+                                            คัดลอก
+                                        </Button>
+                                    </DropdownTrigger>
+                                    <DropdownMenu
+                                        aria-label="เลือกสัปดาห์ที่จะคัดลอก"
+                                        onAction={(key) => onCopyTeamsFromWeek(parseInt(key as string))}
+                                    >
+                                        {Array.from({ length: totalWeeks }, (_, i) => i + 1)
+                                            .filter(week => week !== selectedWeek && weeklyTeams[week]?.length > 0)
+                                            .map((week) => (
+                                                <DropdownItem
+                                                    key={week.toString()}
+                                                    startContent={<Icon icon="solar:calendar-linear" className="text-emerald-500" />}
+                                                    description={`${weeklyTeams[week]?.length || 0} กลุ่ม`}
+                                                >
+                                                    สัปดาห์ที่ {week}
+                                                </DropdownItem>
+                                            ))
+                                        }
+                                    </DropdownMenu>
+                                </Dropdown>
+                            )}
+                            {/* Delete all */}
                             {weeklyTeams[selectedWeek]?.length > 0 && (
+                                <>
+                                    <Tooltip content="ลบกลุ่มทั้งหมด" color="danger">
+                                        <Button
+                                            variant="flat"
+                                            size="md"
+                                            color="danger"
+                                            isIconOnly
+                                            onPress={onOpenBulkDeleteModal}
+                                            className="flex-shrink-0"
+                                        >
+                                            <Icon icon="solar:eraser-bold" className="text-lg" />
+                                        </Button>
+                                    </Tooltip>
+                                </>
+                            )}
+                            {/* Random */}
+                            <Tooltip content="สุ่มกลุ่มอัตโนมัติ">
                                 <Button
                                     variant="flat"
                                     size="md"
-                                    color="danger"
-                                    startContent={<Icon icon="solar:eraser-bold" />}
-                                    onPress={onOpenBulkDeleteModal}
-                                    className="flex-shrink-0"
+                                    isIconOnly
+                                    onPress={() => onOpenCreateTeamModal("weekly", "random")}
+                                    className="bg-emerald-100 text-emerald-700 flex-shrink-0 md:hidden"
                                 >
-                                    <span className="hidden sm:inline">ล้างทั้งหมด</span>
-                                    <span className="sm:hidden">ล้าง</span>
+                                    <Icon icon="solar:shuffle-bold" className="text-lg" />
                                 </Button>
-                            )}
+                            </Tooltip>
                             <Button
                                 variant="flat"
                                 size="md"
                                 startContent={<Icon icon="solar:shuffle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("weekly", "random")}
-                                className="bg-emerald-100 text-emerald-700 flex-shrink-0"
+                                className="bg-emerald-100 text-emerald-700 flex-shrink-0 hidden md:flex"
                             >
                                 สุ่มกลุ่ม
                             </Button>
+                            {/* Create */}
+                            <Tooltip content="สร้างกลุ่มเอง">
+                                <Button
+                                    color="primary"
+                                    size="md"
+                                    isIconOnly
+                                    onPress={() => onOpenCreateTeamModal("weekly", "manual")}
+                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 md:hidden"
+                                >
+                                    <Icon icon="solar:add-circle-bold" className="text-lg" />
+                                </Button>
+                            </Tooltip>
                             <Button
                                 color="primary"
                                 size="md"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("weekly", "manual")}
-                                className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0"
+                                className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 hidden md:flex"
                             >
                                 สร้างกลุ่ม
                             </Button>
@@ -849,13 +1019,12 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                         <button
                             key={week}
                             onClick={() => onWeekChange(week)}
-                            className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all ${
-                                isSelected
-                                    ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
-                                    : hasTeams
-                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-                            }`}
+                            className={`flex-shrink-0 px-4 py-2 rounded-xl font-medium text-sm transition-all ${isSelected
+                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/25"
+                                : hasTeams
+                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                                    : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                                }`}
                         >
                             W{week}
                             {hasTeams && !isSelected && (
@@ -869,13 +1038,13 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
             {/* Teams Grid */}
             {isTeamsLoading ? (
                 <TeamsGridSkeleton />
-            ) : weeklyTeams[selectedWeek] && weeklyTeams[selectedWeek].length > 0 ? (
+            ) : filteredTeams.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {weeklyTeams[selectedWeek].map((team, idx) => (
+                    {filteredTeams.map((team, idx) => (
                         <TeamCard
                             key={team.id}
                             team={team}
-                            index={idx}
+                            index={currentWeekTeams.findIndex(t => t.id === team.id)}
                             type="weekly"
                             weekNumber={selectedWeek}
                             onEdit={() => onOpenEditTeamModal(team.id, "weekly", selectedWeek)}
@@ -883,6 +1052,16 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                         />
                     ))}
                 </div>
+            ) : searchQuery ? (
+                <Card className="shadow-sm border border-dashed border-emerald-200 bg-emerald-50/30">
+                    <CardBody className="text-center py-12">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center">
+                            <Icon icon="solar:magnifer-linear" className="text-3xl text-emerald-400" />
+                        </div>
+                        <p className="text-slate-500 font-medium">ไม่พบกลุ่มที่ค้นหา</p>
+                        <p className="text-sm text-slate-400 mt-1">ลองเปลี่ยนคำค้นหาใหม่</p>
+                    </CardBody>
+                </Card>
             ) : (
                 <Card className="shadow-sm border border-dashed border-emerald-200 bg-emerald-50/30">
                     <CardBody className="text-center py-16">

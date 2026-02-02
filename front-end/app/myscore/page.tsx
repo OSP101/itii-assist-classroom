@@ -165,7 +165,7 @@ export default function MyScorePage() {
 
     const renderAssignmentCard = (assignment: AssignmentScore) => {
         const hasSubItems = assignment.sub_items && assignment.sub_items.length > 0;
-        const isGroupWork = assignment.is_group_assignment || assignment.type !== "individual";
+        const isGroupWork = assignment.is_group_assignment || assignment.type === "group" || assignment.type === "permanent_group" || assignment.type === "weekly_group";
 
         // คำนวณคะแนนจาก sub_items ที่ตรวจแล้วเท่านั้น
         const getCalculatedScore = () => {

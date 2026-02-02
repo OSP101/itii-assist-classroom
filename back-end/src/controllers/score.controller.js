@@ -1080,34 +1080,32 @@ const searchStudents = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'course_id is required');
     }
 
-    // Get students in this course
-    const sections = await CourseSection.findAll({
-        where: { course_id },
-        include: [
-            {
-                model: Student,
-                as: 'students',
-                through: { attributes: [] },
-                where: query ? {
-                    [Op.or]: [
-                        { student_id: { [Op.like]: `%${query}%` } },
-                        { full_name: { [Op.like]: `%${query}%` } },
-                    ],
-                } : {},
-            },
-        ],
-    });
+    // ✅ OPTIMIZED: Use raw SQL for better performance and reliability
+    // Previous Sequelize include with where: {} had issues when some sections had no students
+    let sql = `
+        SELECT DISTINCT s.id, s.student_id, s.full_name, s.email
+        FROM students s
+        INNER JOIN course_section_students css ON s.id = css.student_id
+        INNER JOIN course_sections cs ON css.course_section_id = cs.id
+        WHERE cs.course_id = ?
+    `;
+    const replacements = [course_id];
 
-    const allStudents = sections.flatMap(section => section.students);
-    const uniqueStudents = [...new Map(allStudents.map(s => [s.id, s])).values()];
+    // Add search filter if query provided
+    if (query && query.trim()) {
+        sql += ` AND (s.student_id LIKE ? OR s.full_name LIKE ?)`;
+        const searchPattern = `%${query.trim()}%`;
+        replacements.push(searchPattern, searchPattern);
+    }
 
-    // Sort by student_id for consistent ordering
-    uniqueStudents.sort((a, b) => a.student_id.localeCompare(b.student_id));
+    sql += ` ORDER BY s.student_id`;
+
+    const [students] = await sequelize.query(sql, { replacements });
 
     res.json({
         success: true,
-        data: uniqueStudents, // Return all students (filter in frontend)
-        total: uniqueStudents.length,
+        data: students,
+        total: students.length,
     });
 });
 

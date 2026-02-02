@@ -180,7 +180,9 @@ const scoreService = {
         if (query) {
             url += `&query=${encodeURIComponent(query)}`;
         }
+        console.log('[scoreService] searchStudents URL:', url);
         const response = await api.get<Student[]>(url);
+        console.log('[scoreService] searchStudents response:', response);
         return response.data || [];
     },
 

@@ -30,8 +30,8 @@ export const ASSIGNMENT_TYPE_CONFIG: Record<string, {
         gradientClass: "from-amber-500 to-amber-600",
     },
     permanent_group: {
-        label: "กลุ่มถาวร",
-        shortLabel: "กลุ่มถาวร",
+        label: "งานกลุ่ม",
+        shortLabel: "งานกลุ่ม",
         icon: "solar:users-group-rounded-bold",
         color: "secondary",
         bgClass: "bg-purple-100",

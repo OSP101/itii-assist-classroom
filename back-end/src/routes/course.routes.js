@@ -28,6 +28,7 @@ router.patch('/:id/toggle-status', authorize('admin', 'instructor'), courseContr
 
 // Section management (admin or course owner/TA)
 router.post('/:id/sections', authorize('admin', 'instructor', 'ta'), courseController.addSection);
+router.put('/:id/sections/:sectionId', authorize('admin', 'instructor', 'ta'), courseController.updateSection);
 router.delete('/:id/sections/:sectionId', authorize('admin', 'instructor', 'ta'), courseController.removeSection);
 
 // TA management (admin or course instructor only)

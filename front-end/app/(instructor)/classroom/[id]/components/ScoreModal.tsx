@@ -94,7 +94,9 @@ export default function ScoreModal({
     const [groupSearchQuery, setGroupSearchQuery] = useState("");
     const [isCheckingScore, setIsCheckingScore] = useState(false);
 
-    const isGroupAssignment = assignment?.assignment_type !== "individual";
+    // ✅ FIX: "assignment" and "individual" are both individual assignments
+    // Only "permanent_group" and "weekly_group" are group assignments
+    const isGroupAssignment = assignment?.assignment_type === "permanent_group" || assignment?.assignment_type === "weekly_group";
     const isPermanentGroup = assignment?.assignment_type === "permanent_group";
     const hasSubItems = assignment?.subItems && assignment.subItems.length > 0;
 
@@ -105,9 +107,12 @@ export default function ScoreModal({
 
     // Load students and groups when modal opens
     useEffect(() => {
-        console.log("useEffect triggered - isOpen:", isOpen, "assignment:", assignment?.id);
+        console.log("🔵 useEffect triggered - isOpen:", isOpen, "assignment:", assignment?.id, "isGroupAssignment:", isGroupAssignment);
         if (isOpen && assignment) {
+            console.log("🟢 Calling loadData...");
             loadData();
+        } else {
+            console.log("🔴 NOT calling loadData - isOpen:", isOpen, "assignment:", !!assignment);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen, assignment?.id]);
@@ -121,7 +126,7 @@ export default function ScoreModal({
     }, [isOpen]);
 
     const loadData = async () => {
-        console.log("loadData called - courseId:", courseId);
+        console.log("loadData called - courseId:", courseId, "assignment:", assignment?.id, "type:", assignment?.assignment_type);
         setIsLoading(true);
         try {
             const studentData = await scoreService.searchStudents(courseId);
@@ -129,16 +134,20 @@ export default function ScoreModal({
             setStudents(studentData);
 
             if (isGroupAssignment && assignment) {
+                console.log("Loading groups for assignment:", assignment.id);
                 const groupData = await scoreService.getGroupsForAssignment(assignment.id);
+                console.log("Groups loaded:", groupData.length);
                 setGroups(groupData);
             }
 
             // Load existing scores for this assignment
             if (assignment) {
                 const scores = await scoreService.getScores(assignment.id);
+                console.log("Scores data loaded:", scores?.student_scores?.length, "student scores");
                 setScoresData(scores);
             }
         } catch (error) {
+            console.error("loadData error:", error);
             addToast({
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",

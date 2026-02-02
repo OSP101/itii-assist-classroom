@@ -40,9 +40,8 @@ export default function HomePage() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 12;
 
-    // View mode & status tab
+    // View mode (no status tab needed - this page shows only active courses)
     const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-    const [statusTab, setStatusTab] = useState<"active" | "inactive">("active");
 
     // Instructors list (for multi-select)
     const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -141,7 +140,7 @@ export default function HomePage() {
     useEffect(() => {
         if (currentUserId) {
             subscribeToCourseUpdates(currentUserId);
-            
+
             return () => {
                 unsubscribeFromCourseUpdates(currentUserId);
             };
@@ -155,7 +154,7 @@ export default function HomePage() {
             // Refresh data when any course change is detected
             fetchCourses();
             fetchStats();
-            
+
             // Show notification
             addToast({
                 title: "ข้อมูลอัปเดต",
@@ -169,14 +168,10 @@ export default function HomePage() {
         };
     }, [onCourseUpdate, fetchCourses, fetchStats]);
 
-    // Client-side filtering
+    // Client-side filtering - show only active courses
     const filteredCourses = useMemo(() => {
-        let result = [...allCourses];
-
-        // Status tab filter (active/inactive)
-        result = result.filter(course => 
-            statusTab === "active" ? course.is_active === true : course.is_active === false
-        );
+        // Show only active courses on this page
+        let result = allCourses.filter(course => course.is_active === true);
 
         // Search filter
         if (search.trim()) {
@@ -200,7 +195,7 @@ export default function HomePage() {
         }
 
         return result;
-    }, [allCourses, search, yearFilter, semesterFilter, statusTab]);
+    }, [allCourses, search, yearFilter, semesterFilter]);
 
     // Client-side pagination
     const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
@@ -212,7 +207,7 @@ export default function HomePage() {
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [search, yearFilter, semesterFilter, statusTab]);
+    }, [search, yearFilter, semesterFilter]);
 
     const clearFilters = () => {
         setSearch("");
@@ -487,6 +482,8 @@ export default function HomePage() {
         }
     };
 
+    console.log("courseToToggle",courseToToggle)
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -502,91 +499,49 @@ export default function HomePage() {
                     </div>
                     {/* Real-time connection indicator */}
                     <Tooltip content={isConnected ? "ข้อมูลอัปเดตแบบ Real-time" : "กำลังเชื่อมต่อ..."}>
-                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${
-                            isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
-                        }`}>
-                            <span className={`w-2 h-2 rounded-full ${
-                                isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500 animate-bounce"
-                            }`} />
+                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${isConnected ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                            }`}>
+                            <span className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-yellow-500 animate-bounce"
+                                }`} />
                             <span className="hidden sm:inline">{isConnected ? "Live" : "..."}</span>
                         </div>
                     </Tooltip>
                 </div>
 
-                {userRole === "instructor" && (
+                <div className="flex items-center gap-2">
                     <Button
-                        color="primary"
-                        startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
-                        onPress={handleCreateCourse}
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500"
+                        color="default"
+                        variant="bordered"
+                        startContent={<Icon icon="solar:archive-bold" className="text-xl" />}
+                        onPress={() => router.push('/home/closed')}
                     >
-                        สร้างรายวิชาใหม่
+                        วิชาที่ปิดใช้งาน
+                        {stats?.byStatus?.inactive ? (
+                            <Chip size="sm" className="ml-1 bg-slate-200 text-slate-600" variant="flat">
+                                {stats.byStatus.inactive}
+                            </Chip>
+                        ) : null}
                     </Button>
-                )}
+                    {userRole === "instructor" && (
+                        <Button
+                            color="primary"
+                            startContent={<Icon icon="solar:add-circle-bold" className="text-xl" />}
+                            onPress={handleCreateCourse}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
+                        >
+                            สร้างรายวิชาใหม่
+                        </Button>
+                    )}
+                </div>
             </div>
 
-            {/* Status Tabs & View Mode Toggle */}
-            <Card className="border border-slate-200 shadow-sm">
-                <CardBody className="p-4">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        {/* Status Tab Buttons */}
-                        <div className="flex gap-2">
-                            <Button
-                                variant={statusTab === "active" ? "solid" : "bordered"}
-                                color={statusTab === "active" ? "success" : "default"}
-                                onPress={() => setStatusTab("active")}
-                                startContent={<Icon icon="solar:check-circle-bold" className="text-lg" />}
-                                className={statusTab === "active" ? "" : "border-slate-300 text-slate-600"}
-                            >
-                                เปิดใช้งาน ({stats?.byStatus?.active ?? 0})
-                            </Button>
-                            <Button
-                                variant={statusTab === "inactive" ? "solid" : "bordered"}
-                                color={statusTab === "inactive" ? "danger" : "default"}
-                                onPress={() => setStatusTab("inactive")}
-                                startContent={<Icon icon="solar:close-circle-bold" className="text-lg" />}
-                                className={statusTab === "inactive" ? "" : "border-slate-300 text-slate-600"}
-                            >
-                                ปิดใช้งาน ({stats?.byStatus?.inactive ?? 0})
-                            </Button>
-                        </div>
-
-                        {/* View Mode Toggle */}
-                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
-                            <Tooltip content="แบบการ์ด">
-                                <Button
-                                    isIconOnly
-                                    size="md"
-                                    variant="light"
-                                    className={`rounded-none ${viewMode === "grid" ? "bg-slate-100" : ""}`}
-                                    onPress={() => setViewMode("grid")}
-                                >
-                                    <Icon icon="solar:widget-bold" className={`text-lg ${viewMode === "grid" ? "text-blue-600" : "text-slate-400"}`} />
-                                </Button>
-                            </Tooltip>
-                            <div className="w-px h-5 bg-slate-200" />
-                            <Tooltip content="แบบรายการ">
-                                <Button
-                                    isIconOnly
-                                    size="md"
-                                    variant="light"
-                                    className={`rounded-none ${viewMode === "list" ? "bg-slate-100" : ""}`}
-                                    onPress={() => setViewMode("list")}
-                                >
-                                    <Icon icon="solar:list-bold" className={`text-lg ${viewMode === "list" ? "text-blue-600" : "text-slate-400"}`} />
-                                </Button>
-                            </Tooltip>
-                        </div>
-                    </div>
-                </CardBody>
-            </Card>
 
             {/* Filters */}
             <Card className="border border-slate-200 shadow-sm">
                 <CardBody className="p-4">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search */}
-                        <div className="flex-1">
+                        <div className="flex flex-row gap-2 sm:gap-3 w-full">
                             <Input
                                 placeholder="ค้นหารายวิชา..."
                                 value={search}
@@ -600,10 +555,37 @@ export default function HomePage() {
                                     label: "text-blue-400 text-sm",
                                 }}
                             />
+
+                            <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+                                <Tooltip content="แบบการ์ด">
+                                    <Button
+                                        isIconOnly
+                                        size="md"
+                                        variant="light"
+                                        className={`rounded-none ${viewMode === "grid" ? "bg-slate-100" : ""}`}
+                                        onPress={() => setViewMode("grid")}
+                                    >
+                                        <Icon icon="solar:widget-bold" className={`text-lg ${viewMode === "grid" ? "text-blue-600" : "text-slate-400"}`} />
+                                    </Button>
+                                </Tooltip>
+                                <div className="w-px h-5 bg-slate-200" />
+                                <Tooltip content="แบบรายการ">
+                                    <Button
+                                        isIconOnly
+                                        size="md"
+                                        variant="light"
+                                        className={`rounded-none ${viewMode === "list" ? "bg-slate-100" : ""}`}
+                                        onPress={() => setViewMode("list")}
+                                    >
+                                        <Icon icon="solar:list-bold" className={`text-lg ${viewMode === "list" ? "text-blue-600" : "text-slate-400"}`} />
+                                    </Button>
+                                </Tooltip>
+                            </div>
                         </div>
 
                         {/* Filters */}
-                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                        <div className="flex flex-row gap-2 sm:gap-3">
+                            
                             <Select
                                 placeholder="ปีการศึกษา"
                                 selectedKeys={yearFilter ? [yearFilter] : []}
@@ -662,11 +644,9 @@ export default function HomePage() {
                         <p className="text-slate-500 text-center">
                             {hasActiveFilters
                                 ? "ไม่พบรายวิชาที่ตรงกับการค้นหา"
-                                : statusTab === "active"
-                                    ? userRole === "instructor"
-                                        ? "คุณยังไม่มีรายวิชาที่เปิดใช้งาน กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
-                                        : "คุณยังไม่มีรายวิชาที่เปิดใช้งาน"
-                                    : "ไม่มีรายวิชาที่ปิดใช้งาน"}
+                                : userRole === "instructor"
+                                    ? "คุณยังไม่มีรายวิชาที่เปิดใช้งาน กดปุ่ม \"สร้างรายวิชาใหม่\" เพื่อเริ่มต้น"
+                                    : "คุณยังไม่มีรายวิชาที่เปิดใช้งาน"}
                         </p>
                         {hasActiveFilters && (
                             <Button
@@ -752,13 +732,13 @@ export default function HomePage() {
                                                             key="toggle"
                                                             startContent={
                                                                 <Icon
-                                                                    icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                                                                    icon={course.is_active ? "solar:archive-linear" : "solar:eye-linear"}
                                                                     className="text-lg"
                                                                 />
                                                             }
                                                             color={course.is_active ? "warning" : "success"}
                                                         >
-                                                            {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                                                            {course.is_active ? "เก็บชั้นเรียน" : "เปิดใช้งาน"}
                                                         </DropdownItem>
                                                     </DropdownMenu>
                                                 </Dropdown>
@@ -887,13 +867,13 @@ export default function HomePage() {
                                                                 key="toggle"
                                                                 startContent={
                                                                     <Icon
-                                                                        icon={course.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
+                                                                        icon={course.is_active ? "solar:archive-linear" : "solar:eye-linear"}
                                                                         className="text-lg"
                                                                     />
                                                                 }
                                                                 color={course.is_active ? "warning" : "success"}
                                                             >
-                                                                {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                                                                {course.is_active ? "เก็บชั้นเรียน" : "เปิดใช้งาน"}
                                                             </DropdownItem>
                                                         </DropdownMenu>
                                                     </Dropdown>
@@ -1501,7 +1481,7 @@ export default function HomePage() {
                 </ModalContent>
             </Modal>
 
-            {/* Toggle Status Confirmation Modal */}
+            {/* Toggle Status Confirmation Modal - Archive Style */}
             <Modal
                 isOpen={isToggleStatusModalOpen}
                 onClose={() => {
@@ -1511,12 +1491,12 @@ export default function HomePage() {
                 size="md"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1">
+                    <ModalHeader className="flex flex-col gap-1 pb-2">
                         <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl ${courseToToggle?.is_active ? 'bg-red-100' : 'bg-green-100'}`}>
+                            <div className={`p-2.5 rounded-xl ${courseToToggle?.is_active ? 'bg-amber-100' : 'bg-green-100'}`}>
                                 <Icon
-                                    icon={courseToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"}
-                                    className={`text-xl ${courseToToggle?.is_active ? 'text-red-600' : 'text-green-600'}`}
+                                    icon={courseToToggle?.is_active ? "solar:archive-bold" : "solar:eye-bold"}
+                                    className={`text-xl ${courseToToggle?.is_active ? 'text-amber-600' : 'text-green-600'}`}
                                 />
                             </div>
                             <div>
@@ -1526,16 +1506,63 @@ export default function HomePage() {
                             </div>
                         </div>
                     </ModalHeader>
-                    <ModalBody>
-                        <p className="text-slate-600">
-                            คุณต้องการ{courseToToggle?.is_active ? "ปิด" : "เปิด"}ใช้งานรายวิชา{" "}
-                            <span className="font-semibold">{courseToToggle?.code} - {courseToToggle?.name}</span>{" "}
-                            หรือไม่?
-                        </p>
-                        {courseToToggle?.is_active && (
-                            <p className="text-sm text-red-500 mt-2">
-                                * เมื่อปิดใช้งาน นักศึกษาและ TA จะไม่สามารถเข้าถึงรายวิชานี้ได้
-                            </p>
+                    <ModalBody className="py-4">
+                        {courseToToggle?.is_active ? (
+                            <div className="space-y-4">
+                                {/* Info items like in the image */}
+                                <div className="space-y-3">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:square-academic-cap-bold" className="text-xl text-blue-500 mt-0.5" />
+                                        <p className="text-slate-600 text-sm">
+                                            อาจารย์หรือผู้ช่วยสอนจะแก้ไขชั้นเรียนที่ปิดใช้งานไม่ได้ เว้นแต่ชั้นเรียนจะได้รับการกู้คืน
+                                        </p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:eye-bold" className="text-xl text-blue-500 mt-0.5" />
+                                        <p className="text-slate-600 text-sm">
+                                            อาจารย์ยังคงดูตัวอย่างและส่งออกรายงานได้
+                                        </p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:eye-closed-linear" className="text-xl text-blue-500 mt-0.5" />
+                                        <p className="text-slate-600 text-sm">
+                                            นักศึกษาจะไม่สามารถค้นหาของนักศึกษาในคะแนนของรายวิชาที่ปิดใช้งานได้
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Course info card */}
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                    <div className="flex items-center gap-3">
+                                        {/* <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+                                            {courseToToggle?.semester}
+                                        </div> */}
+                                        <div>
+                                            <p className="font-semibold text-slate-800">
+                                                {courseToToggle?.year}/{courseToToggle?.code} {courseToToggle?.name}
+                                            </p>
+                                            <p className="text-sm text-slate-500">
+                                                {courseToToggle?.sections?.length ?? 0} Section • {courseToToggle?.instructor?.full_name || 'ผู้สอน'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <p className="text-slate-500 text-sm">
+                                    ระบบจะย้ายชั้นเรียนต่อไปนี้ไปยังชั้นเรียนที่ปิดใช้งาน
+                                </p>
+                            </div>
+                        ) : (
+                            <div>
+                                <p className="text-slate-600">
+                                    คุณต้องการเปิดใช้งานรายวิชา{" "}
+                                    <span className="font-semibold">{courseToToggle?.code} - {courseToToggle?.name}</span>{" "}
+                                    หรือไม่?
+                                </p>
+                                <p className="text-sm text-green-600 mt-2">
+                                    * เมื่อเปิดใช้งาน นักศึกษาและผู้ช่วยสอนจะสามารถเข้าถึงรายวิชานี้ได้อีกครั้ง
+                                </p>
+                            </div>
                         )}
                     </ModalBody>
                     <ModalFooter>
@@ -1549,9 +1576,10 @@ export default function HomePage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color={courseToToggle?.is_active ? "danger" : "success"}
+                            color={courseToToggle?.is_active ? "primary" : "success"}
                             onPress={handleToggleStatus}
                             isLoading={isSubmitting}
+                            className={`${courseToToggle?.is_active && "bg-gradient-to-r from-blue-400 to-indigo-500"}`}
                         >
                             {courseToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                         </Button>
