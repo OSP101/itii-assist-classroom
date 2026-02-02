@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@heroui/button";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Chip } from "@heroui/chip";
@@ -174,6 +174,18 @@ export default function ClassroomsPage() {
         fetchClassrooms();
     }, [fetchClassrooms]);
 
+    // Helper function to refresh stats only (reduces duplicate code)
+    const refreshStats = useCallback(async () => {
+        try {
+            const statsRes = await classroomService.getStats();
+            if (statsRes.success && statsRes.data) {
+                setStats(statsRes.data);
+            }
+        } catch (error) {
+            console.error("Failed to refresh stats:", error);
+        }
+    }, []);
+
     // Update stage size based on container
     useEffect(() => {
         const updateSize = () => {
@@ -234,11 +246,8 @@ export default function ClassroomsPage() {
             setEditingClassroom(newClassroom);
             setShowLayoutModal(true);
 
-            // Refresh stats
-            const statsRes = await classroomService.getStats();
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
+            // Refresh stats in background (non-blocking)
+            refreshStats();
 
             addToast({
                 title: "สำเร็จ",
@@ -267,11 +276,8 @@ export default function ClassroomsPage() {
                 prev.map((c) => (c.id === id ? { ...c, isDeleted: true } : c))
             );
 
-            // Refresh stats
-            const statsRes = await classroomService.getStats();
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
+            // Refresh stats in background
+            refreshStats();
 
             addToast({
                 title: "สำเร็จ",
@@ -296,11 +302,8 @@ export default function ClassroomsPage() {
                 prev.map((c) => (c.id === id ? { ...c, isDeleted: false } : c))
             );
 
-            // Refresh stats
-            const statsRes = await classroomService.getStats();
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
+            // Refresh stats in background
+            refreshStats();
 
             addToast({
                 title: "สำเร็จ",
@@ -356,11 +359,8 @@ export default function ClassroomsPage() {
             await classroomService.deleteClassroom(id, true);
             setClassrooms((prev) => prev.filter((c) => c.id !== id));
 
-            // Refresh stats
-            const statsRes = await classroomService.getStats();
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
+            // Refresh stats in background
+            refreshStats();
 
             addToast({
                 title: "สำเร็จ",
@@ -526,11 +526,8 @@ export default function ClassroomsPage() {
                 )
             );
 
-            // Refresh stats
-            const statsRes = await classroomService.getStats();
-            if (statsRes.success && statsRes.data) {
-                setStats(statsRes.data);
-            }
+            // Refresh stats in background
+            refreshStats();
 
             setShowLayoutModal(false);
             setEditingClassroom(null);
@@ -552,11 +549,14 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Get unique floors for filter
-    const uniqueFloors = Array.from(new Set(classrooms.map((c) => c.floor))).sort();
+    // Get unique floors for filter (memoized)
+    const uniqueFloors = useMemo(() => 
+        Array.from(new Set(classrooms.map((c) => c.floor))).sort(),
+        [classrooms]
+    );
 
-    // Filter classrooms
-    const filteredClassrooms = classrooms.filter((c) => {
+    // Filter classrooms (memoized)
+    const filteredClassrooms = useMemo(() => classrooms.filter((c) => {
         // Deleted filter
         if (showDeletedOnly && !c.isDeleted) return false;
         if (!showDeletedOnly && c.isDeleted) return false;
@@ -579,7 +579,7 @@ export default function ClassroomsPage() {
         }
 
         return true;
-    });
+    }), [classrooms, showDeletedOnly, searchQuery, floorFilter]);
 
     // Render cell content
     const renderCell = (classroom: Classroom, columnKey: string) => {
@@ -921,7 +921,10 @@ export default function ClassroomsPage() {
             {/* Create Classroom Modal */}
             <Modal
                 isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
+                onClose={() => {
+                    setShowCreateModal(false);
+                    setFormData({ name: "", building: "", floor: "", description: "" });
+                }}
                 size="lg"
                 scrollBehavior="inside"
                 classNames={{
@@ -1049,7 +1052,10 @@ export default function ClassroomsPage() {
                     <ModalFooter>
                         <Button
                             variant="light"
-                            onPress={() => setShowCreateModal(false)}
+                            onPress={() => {
+                                setShowCreateModal(false);
+                                setFormData({ name: "", building: "", floor: "", description: "" });
+                            }}
                             isDisabled={isSaving}
                         >
                             ยกเลิก

@@ -800,13 +800,20 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1">
-                        <span>สร้างการจองคิว</span>
-                        <span className="text-sm font-normal text-slate-500">
-                            กำหนดรายละเอียดการจองคิวตรวจงาน
-                        </span>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:clipboard-list-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">สร้างการจองคิว</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    กำหนดรายละเอียดการจองคิวตรวจงาน
+                                </p>
+                            </div>
+                        </div>
                     </ModalHeader>
-                    <ModalBody>
+                    <ModalBody className="px-6 py-4">
                         <div className="space-y-5">
                             <Input
                                 label="ชื่อการจองคิว"
@@ -816,44 +823,31 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                 isRequired
                                 labelPlacement="outside"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
-                            <Input
-                                label="คำอธิบาย (ถ้ามี)"
-                                placeholder="รายละเอียดเพิ่มเติม"
-                                value={formData.description || ""}
-                                onValueChange={(value) => setFormData({ ...formData, description: value })}
-                                labelPlacement="outside"
-                                variant="bordered"
-                                size="lg"
-                                classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                    label: "text-slate-600 font-medium text-sm",
-                                }}
-                            />
+                            
                             <Select
                                 label="เลือกห้องเรียน"
                                 placeholder="เลือกห้อง"
                                 isLoading={isOptionsLoading}
-                                selectedKeys={[formData.classroom_id.toString()]}
+                                selectedKeys={formData.classroom_id ? [formData.classroom_id.toString()] : []}
                                 onSelectionChange={(keys) => {
                                     const selected = Array.from(keys)[0];
-                                    console.log("Selected classroom ID:", keys);
                                     if (selected) {
-
                                         setFormData({ ...formData, classroom_id: selected.toString() });
                                     }
                                 }}
                                 isRequired
                                 labelPlacement="outside"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
+                                className="py-3"
                                 classNames={{
-                                    trigger: "h-12 bg-white border-slate-200",
+                                    trigger: "bg-white border-slate-200",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             >
@@ -863,6 +857,20 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                     </SelectItem>
                                 ))}
                             </Select>
+
+                            <Input
+                                label="คำอธิบาย (ถ้ามี)"
+                                placeholder="รายละเอียดเพิ่มเติม"
+                                value={formData.description || ""}
+                                onValueChange={(value) => setFormData({ ...formData, description: value })}
+                                labelPlacement="outside"
+                                variant="bordered"
+                                size="md"
+                                classNames={{
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    label: "text-slate-600 font-medium text-sm",
+                                }}
+                            />
 
                             {/* ลิงก์กับหัวข้องาน */}
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
@@ -917,10 +925,10 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {assignments.map((assignment) => (
                                             <SelectItem key={assignment.id.toString()} textValue={assignment.name}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon
+                                                    {/* <Icon
                                                         icon={assignment.assignment_type === "individual" ? "solar:user-bold" : "solar:users-group-rounded-bold"}
                                                         className={assignment.assignment_type === "individual" ? "text-indigo-500" : "text-purple-500"}
-                                                    />
+                                                    /> */}
                                                     <div>
                                                         <span className="font-medium">{assignment.name}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
@@ -1004,12 +1012,12 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                         {attendanceSessions.map((session) => (
                                             <SelectItem key={session.id.toString()} textValue={session.title}>
                                                 <div className="flex items-center gap-3">
-                                                    <Icon
+                                                    {/* <Icon
                                                         icon={session.session_type === "lecture" ? "solar:presentation-graph-bold" :
                                                             session.session_type === "lab" ? "solar:test-tube-bold" : "solar:laptop-bold"}
                                                         className={session.session_type === "lecture" ? "text-blue-500" :
                                                             session.session_type === "lab" ? "text-emerald-500" : "text-violet-500"}
-                                                    />
+                                                    /> */}
                                                     <div>
                                                         <span className="font-medium">{session.title}</span>
                                                         <span className="text-xs text-slate-500 ml-2">
@@ -1044,9 +1052,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                             </div>
                         </div>
                     </ModalBody>
-                    <ModalFooter>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
-                            variant="flat"
+                            variant="light"
                             onPress={() => {
                                 setIsCreateModalOpen(false);
                                 resetForm();
@@ -1058,6 +1066,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                             color="primary"
                             onPress={handleCreateSession}
                             isLoading={isSubmitting}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
                         >
                             สร้างการจองคิว
                         </Button>
@@ -1078,13 +1087,20 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                 scrollBehavior="inside"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1">
-                        <span>แก้ไขการจองคิว</span>
-                        <span className="text-sm font-normal text-slate-500">
-                            แก้ไขข้อมูลการจองคิวตรวจงาน
-                        </span>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-lg">
+                                <Icon icon="solar:pen-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">แก้ไขการจองคิว</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    แก้ไขข้อมูลการจองคิวตรวจงาน
+                                </p>
+                            </div>
+                        </div>
                     </ModalHeader>
-                    <ModalBody>
+                    <ModalBody className="px-6 py-4">
                         <div className="space-y-5">
                             <Input
                                 label="ชื่อการจองคิว"
@@ -1094,9 +1110,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                 isRequired
                                 labelPlacement="outside"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -1107,9 +1123,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                 onValueChange={(value) => setFormData({ ...formData, description: value })}
                                 labelPlacement="outside"
                                 variant="bordered"
-                                size="lg"
+                                size="md"
                                 classNames={{
-                                    inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -1294,9 +1310,9 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                             </div>
                         </div>
                     </ModalBody>
-                    <ModalFooter>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
                         <Button
-                            variant="flat"
+                            variant="light"
                             onPress={() => {
                                 setIsEditModalOpen(false);
                                 resetForm();
@@ -1308,6 +1324,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                             color="primary"
                             onPress={handleUpdateSession}
                             isLoading={isSubmitting}
+                            className="bg-gradient-to-r from-amber-400 to-orange-500"
                         >
                             บันทึกการแก้ไข
                         </Button>
@@ -1324,10 +1341,10 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                         <p className="text-sm text-slate-500">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
                     </ModalBody>
                     <ModalFooter>
-                        <Button variant="flat" onPress={() => setIsDeleteModalOpen(false)}>
+                        <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
                             ยกเลิก
                         </Button>
-                        <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting}>
+                        <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting} className="bg-red-500">
                             ลบ
                         </Button>
                     </ModalFooter>

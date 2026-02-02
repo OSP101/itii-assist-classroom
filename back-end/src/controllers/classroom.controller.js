@@ -367,61 +367,82 @@ const toggleStatus = asyncHandler(async (req, res) => {
 /**
  * Get classroom statistics
  * @route GET /api/classrooms/stats
+ * Optimized: Uses Promise.all for parallel queries
  */
 const getStats = asyncHandler(async (req, res) => {
-  const totalClassrooms = await Classroom.count({
-    where: { is_deleted: false },
-  });
-
-  const deletedClassrooms = await Classroom.count({
-    where: { is_deleted: true },
-  });
-
-  const totalDesks = await Desk.count({
-    include: [{
-      model: Classroom,
-      as: 'classroom',
+  // Execute all count queries in parallel for better performance
+  const [
+    totalClassrooms,
+    deletedClassrooms,
+    totalDesks,
+    computerDesks,
+    normalDesks,
+    teacherDesks,
+    enabledDesks,
+    buildings,
+  ] = await Promise.all([
+    // Classroom counts
+    Classroom.count({ where: { is_deleted: false } }),
+    Classroom.count({ where: { is_deleted: true } }),
+    
+    // Desk counts - use subquery approach for better performance
+    Desk.count({
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'computer' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'normal' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'teacher' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { is_enabled: true },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    
+    // Unique buildings
+    Classroom.findAll({
       where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const computerDesks = await Desk.count({
-    where: { type: 'computer' },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const teacherDesks = await Desk.count({
-    where: { type: 'teacher' },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const enabledDesks = await Desk.count({
-    where: { is_enabled: true },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  // Get unique buildings
-  const buildings = await Classroom.findAll({
-    where: { is_deleted: false },
-    attributes: [[sequelize.fn('DISTINCT', sequelize.col('building')), 'building']],
-    raw: true,
-  });
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('building')), 'building']],
+      raw: true,
+    }),
+  ]);
 
   res.json({
     success: true,
@@ -430,7 +451,7 @@ const getStats = asyncHandler(async (req, res) => {
       deletedClassrooms,
       totalDesks,
       computerDesks,
-      normalDesks: totalDesks - computerDesks - teacherDesks,
+      normalDesks,
       teacherDesks,
       enabledDesks,
       disabledDesks: totalDesks - enabledDesks,
