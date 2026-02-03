@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Button } from "@heroui/button";
 import { Input, Textarea } from "@heroui/input";
@@ -9,12 +9,23 @@ import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Card, CardBody } from "@heroui/card";
 import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
+import { Select, SelectItem } from "@heroui/select";
 import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import scoreService, { type Student, type Group, type StudentScore, type ScoresData, type SubItemScoreData } from "@/services/score.service";
 import type { AssignmentType } from "./types";
+
+// Preset reasons for score edit requests
+const PRESET_EDIT_REASONS = [
+    { key: "wrong_score", label: "กรอกคะแนนผิด" },
+    { key: "wrong_student", label: "ให้คะแนนผิดคน" },
+    { key: "calculation_error", label: "คำนวณคะแนนผิด" },
+    { key: "missing_score", label: "ลืมให้คะแนนบางข้อ" },
+    { key: "recheck_request", label: "นักศึกษาขอตรวจสอบใหม่" },
+    { key: "other", label: "อื่นๆ (ระบุเอง)" },
+];
 
 interface ScoreModalProps {
     isOpen: boolean;
@@ -83,9 +94,18 @@ export default function ScoreModal({
     const [currentScore, setCurrentScore] = useState<StudentScore | null>(null);
     const [newScore, setNewScore] = useState<string>("");
     const [editReason, setEditReason] = useState("");
+    const [editReasonType, setEditReasonType] = useState<string>(""); // Preset reason key
+    const [editReasonCustom, setEditReasonCustom] = useState(""); // Custom reason text when "other" is selected
+    // Image upload states
+    const [editImages, setEditImages] = useState<File[]>([]);
+    const [editImagePreviews, setEditImagePreviews] = useState<string[]>([]);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     // For sub-items editing
     const [editSubItemScores, setEditSubItemScores] = useState<{ subItemId: number; scoreId: number | null; currentScore: number | null; newScore: string }[]>([]);
     const [selectedEditSubItemId, setSelectedEditSubItemId] = useState<number | null>(null);
+    // For group editing - store all member scores
+    const [groupMemberScores, setGroupMemberScores] = useState<{ studentId: number; studentName: string; scoreId: number | null; score: number | null; selected: boolean }[]>([]);
+    const [editGroupMode, setEditGroupMode] = useState<"all" | "selected">("all"); // "all" = edit all members, "selected" = edit selected members only
 
     // Existing score states (for checking duplicates)
     const [scoresData, setScoresData] = useState<ScoresData | null>(null);
@@ -173,11 +193,76 @@ export default function ScoreModal({
         setCurrentScore(null);
         setNewScore("");
         setEditReason("");
+        setEditReasonType("");
+        setEditReasonCustom("");
+        setEditImages([]);
+        setEditImagePreviews([]);
         setEditSubItemScores([]);
         setSelectedEditSubItemId(null);
         setExistingScore(null);
         setSubItemExistingScores([]);
         setGroupSearchQuery("");
+        setGroupMemberScores([]);
+        setEditGroupMode("all");
+    };
+
+    // Helper function to get final edit reason
+    const getFinalEditReason = (): string => {
+        if (editReasonType === "other") {
+            return editReasonCustom.trim();
+        }
+        const preset = PRESET_EDIT_REASONS.find(r => r.key === editReasonType);
+        return preset?.label || "";
+    };
+
+    // Handle image upload
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+
+        const newFiles: File[] = [];
+        const newPreviews: string[] = [];
+        const maxImages = 3 - editImages.length;
+
+        for (let i = 0; i < Math.min(files.length, maxImages); i++) {
+            const file = files[i];
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                addToast({
+                    title: "ไฟล์ไม่ถูกต้อง",
+                    description: `${file.name} ไม่ใช่ไฟล์รูปภาพ`,
+                    color: "warning",
+                });
+                continue;
+            }
+            // Validate file size (max 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                addToast({
+                    title: "ไฟล์ใหญ่เกินไป",
+                    description: `${file.name} มีขนาดเกิน 5MB`,
+                    color: "warning",
+                });
+                continue;
+            }
+            newFiles.push(file);
+            newPreviews.push(URL.createObjectURL(file));
+        }
+
+        setEditImages(prev => [...prev, ...newFiles]);
+        setEditImagePreviews(prev => [...prev, ...newPreviews]);
+
+        // Reset input
+        if (imageInputRef.current) {
+            imageInputRef.current.value = '';
+        }
+    };
+
+    // Remove image
+    const handleRemoveImage = (index: number) => {
+        // Revoke URL to prevent memory leak
+        URL.revokeObjectURL(editImagePreviews[index]);
+        setEditImages(prev => prev.filter((_, i) => i !== index));
+        setEditImagePreviews(prev => prev.filter((_, i) => i !== index));
     };
 
     // Helper function to check if student can be scored (attendance check)
@@ -622,24 +707,43 @@ export default function ScoreModal({
             setCurrentScore(null);
             setEditSubItemScores([]);
             setSelectedEditSubItemId(null);
+            setGroupMemberScores([]);
+            setEditGroupMode("all");
             return;
         }
 
         const group = groups.find(g => g.id.toString() === key.toString());
         setEditSelectedGroup(group || null);
         setEditGroupSearchQuery("");
+        setEditGroupMode("all"); // Reset to "all" when selecting new group
 
         if (group && group.members.length > 0) {
             try {
                 const scoresData = await scoreService.getScores(assignment.id);
-                // Get score from first member (all members should have same score for group assignment)
+
+                // Collect scores for ALL members in the group
+                const memberScoresData = group.members.map(member => {
+                    const studentScore = scoresData?.student_scores.find(
+                        ss => ss.student.id === member.id
+                    );
+                    return {
+                        studentId: member.id,
+                        studentName: member.full_name,
+                        scoreId: studentScore?.score_id || null,
+                        score: studentScore?.score ?? null,
+                        selected: true, // Default all selected
+                    };
+                });
+                setGroupMemberScores(memberScoresData);
+
+                // Get score from first member (for display purposes)
                 const memberScore = scoresData?.student_scores.find(
                     ss => group.members.some(m => m.id === ss.student.id)
                 );
                 setCurrentScore(memberScore || null);
                 setNewScore(memberScore?.score?.toString() || "");
 
-                // Load sub-item scores for editing
+                // Load sub-item scores for editing (from first member)
                 if (memberScore?.sub_item_scores && memberScore.sub_item_scores.length > 0) {
                     setEditSubItemScores(memberScore.sub_item_scores.map(si => ({
                         subItemId: si.sub_item_id,
@@ -656,6 +760,18 @@ export default function ScoreModal({
         }
     };
 
+    // Toggle member selection for group edit
+    const toggleMemberSelection = (studentId: number) => {
+        setGroupMemberScores(prev => prev.map(m =>
+            m.studentId === studentId ? { ...m, selected: !m.selected } : m
+        ));
+    };
+
+    // Select/deselect all members
+    const toggleAllMembersSelection = (selected: boolean) => {
+        setGroupMemberScores(prev => prev.map(m => ({ ...m, selected })));
+    };
+
     // Filter groups for edit search
     const filteredEditGroups = useMemo(() => {
         if (!editGroupSearchQuery.trim()) return groups;
@@ -670,20 +786,31 @@ export default function ScoreModal({
     }, [groups, editGroupSearchQuery]);
 
     const canSubmitEdit = useMemo(() => {
+        // Check if reason is valid
+        const hasValidReason = editReasonType !== "" && (editReasonType !== "other" || editReasonCustom.trim() !== "");
+
         // For sub-items
         if (hasSubItems && selectedEditSubItemId !== null) {
             const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
-            if (!subItem || !subItem.scoreId || !editReason.trim()) return false;
+            if (!subItem || !subItem.scoreId || !hasValidReason) return false;
             const maxScore = assignment?.subItems?.find(si => si.id === selectedEditSubItemId)?.max_score || 0;
             if (subItem.newScore === "" || !validateScore(subItem.newScore, maxScore)) return false;
             return true;
         }
 
-        // For main score
-        if (!currentScore || !editReason.trim()) return false;
+        // For group edit - check if at least one member is selected with valid score
+        if (isGroupAssignment && editSelectedGroup) {
+            const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId);
+            if (selectedMembers.length === 0 || !hasValidReason) return false;
+            if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
+            return true;
+        }
+
+        // For main score (individual)
+        if (!currentScore || !hasValidReason) return false;
         if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
         return true;
-    }, [currentScore, newScore, editReason, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores]);
+    }, [currentScore, newScore, editReasonType, editReasonCustom, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores, isGroupAssignment, editSelectedGroup, groupMemberScores]);
 
     const handleSubItemNewScoreChange = (subItemId: number, value: string) => {
         setEditSubItemScores(prev => prev.map(s =>
@@ -694,6 +821,8 @@ export default function ScoreModal({
     const handleSubmitEdit = async () => {
         setIsSubmitting(true);
         try {
+            const finalReason = getFinalEditReason();
+
             // For sub-items
             if (hasSubItems && selectedEditSubItemId !== null) {
                 const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
@@ -702,34 +831,65 @@ export default function ScoreModal({
                 await scoreService.requestScoreEdit({
                     score_id: subItem.scoreId,
                     new_score: parseFloat(subItem.newScore),
-                    reason: editReason,
+                    reason: finalReason,
+                }, editImages);
+            } else if (isGroupAssignment && editSelectedGroup) {
+                // For group edit - submit edit requests for all selected members
+                const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId);
+
+                if (selectedMembers.length === 0) {
+                    addToast({
+                        title: "ไม่มีสมาชิกที่เลือก",
+                        description: "กรุณาเลือกอย่างน้อย 1 คนที่มีคะแนนอยู่แล้ว",
+                        color: "warning",
+                    });
+                    return;
+                }
+
+                // Submit batch edit request
+                await scoreService.requestGroupScoreEdit({
+                    score_ids: selectedMembers.map(m => m.scoreId!),
+                    new_score: parseFloat(newScore),
+                    reason: finalReason,
+                }, editImages);
+
+                addToast({
+                    title: "ส่งคำขอแก้ไขสำเร็จ",
+                    description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${selectedMembers.length} คนเรียบร้อยแล้ว`,
+                    color: "success",
                 });
             } else {
-                // For main score
+                // For main score (individual)
                 if (!currentScore?.score_id) return;
 
                 await scoreService.requestScoreEdit({
                     score_id: currentScore.score_id,
                     new_score: parseFloat(newScore),
-                    reason: editReason,
+                    reason: finalReason,
+                }, editImages);
+
+                addToast({
+                    title: "ส่งคำขอแก้ไขสำเร็จ",
+                    description: "คำขอแก้ไขคะแนนถูกส่งไปยังผู้ดูแลแล้ว",
+                    color: "success",
                 });
             }
-
-            addToast({
-                title: "ส่งคำขอแก้ไขสำเร็จ",
-                description: "คำขอแก้ไขคะแนนถูกส่งไปยังผู้ดูแลแล้ว",
-                color: "success",
-            });
 
             setEditSelectedStudent(null);
             setEditSelectedGroup(null);
             setCurrentScore(null);
             setNewScore("");
             setEditReason("");
+            setEditReasonType("");
+            setEditReasonCustom("");
+            setEditImages([]);
+            setEditImagePreviews([]);
             setEditSearchQuery("");
             setEditGroupSearchQuery("");
             setEditSubItemScores([]);
             setSelectedEditSubItemId(null);
+            setGroupMemberScores([]);
+            setEditGroupMode("all");
         } catch (error) {
             addToast({
                 title: "เกิดข้อผิดพลาด",
@@ -1451,7 +1611,7 @@ export default function ScoreModal({
                                             {/* Selected Group Info */}
                                             {editSelectedGroup && (
                                                 <div className={`p-3 rounded-xl border ${groupColors.bg} ${groupColors.border}`}>
-                                                    <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center justify-between mb-3">
                                                         <div className="flex items-center gap-2">
                                                             <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${groupColors.icon}`} />
                                                             <span className="font-semibold text-slate-800">{editSelectedGroup.name}</span>
@@ -1469,18 +1629,107 @@ export default function ScoreModal({
                                                                 setCurrentScore(null);
                                                                 setEditSubItemScores([]);
                                                                 setSelectedEditSubItemId(null);
+                                                                setGroupMemberScores([]);
+                                                                setEditGroupMode("all");
                                                             }}
                                                         >
                                                             <Icon icon="solar:close-circle-bold" className="text-xl text-slate-400" />
                                                         </Button>
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {editSelectedGroup.members.map((member) => (
-                                                            <Chip key={member.id} size="sm" variant="flat" className="bg-white">
-                                                                {member.full_name}
-                                                            </Chip>
-                                                        ))}
+
+                                                    {/* Edit Mode Selection */}
+                                                    <div className="mb-3 p-2 bg-white rounded-lg border border-slate-200">
+                                                        <p className="text-xs text-slate-500 mb-2">เลือกโหมดการแก้ไข:</p>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant={editGroupMode === "all" ? "solid" : "bordered"}
+                                                                color={editGroupMode === "all" ? "primary" : "default"}
+                                                                onPress={() => {
+                                                                    setEditGroupMode("all");
+                                                                    toggleAllMembersSelection(true);
+                                                                }}
+                                                                startContent={<Icon icon="solar:users-group-rounded-bold" />}
+                                                            >
+                                                                แก้ทั้งกลุ่ม
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant={editGroupMode === "selected" ? "solid" : "bordered"}
+                                                                color={editGroupMode === "selected" ? "warning" : "default"}
+                                                                onPress={() => setEditGroupMode("selected")}
+                                                                startContent={<Icon icon="solar:user-check-bold" />}
+                                                            >
+                                                                เลือกเฉพาะบางคน
+                                                            </Button>
+                                                        </div>
                                                     </div>
+
+                                                    {/* Member Selection (show when "selected" mode) */}
+                                                    {editGroupMode === "selected" && (
+                                                        <div className="space-y-2 mb-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-xs text-slate-600 font-medium">เลือกสมาชิกที่ต้องการแก้ไขคะแนน:</p>
+                                                                <div className="flex gap-1">
+                                                                    <Button size="sm" variant="light" onPress={() => toggleAllMembersSelection(true)}>
+                                                                        เลือกทั้งหมด
+                                                                    </Button>
+                                                                    <Button size="sm" variant="light" onPress={() => toggleAllMembersSelection(false)}>
+                                                                        ไม่เลือกทั้งหมด
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                            {groupMemberScores.map((member) => (
+                                                                <div
+                                                                    key={member.studentId}
+                                                                    className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${member.selected
+                                                                        ? 'bg-blue-50 border-blue-300'
+                                                                        : 'bg-white border-slate-200 hover:border-slate-300'
+                                                                        } ${!member.scoreId ? 'opacity-50' : ''}`}
+                                                                    onClick={() => member.scoreId && toggleMemberSelection(member.studentId)}
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${member.selected ? 'bg-blue-500 border-blue-500' : 'border-slate-300'
+                                                                            }`}>
+                                                                            {member.selected && <Icon icon="solar:check-bold" className="text-white text-sm" />}
+                                                                        </div>
+                                                                        <span className="text-sm text-slate-700">{member.studentName}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {member.scoreId ? (
+                                                                            <Chip size="sm" color="success" variant="flat">
+                                                                                {member.score ?? 0} คะแนน
+                                                                            </Chip>
+                                                                        ) : (
+                                                                            <Chip size="sm" color="default" variant="flat">
+                                                                                ยังไม่มีคะแนน
+                                                                            </Chip>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            <p className="text-xs text-slate-500 mt-1">
+                                                                เลือกแล้ว {groupMemberScores.filter(m => m.selected && m.scoreId).length} / {groupMemberScores.filter(m => m.scoreId).length} คน
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Show members chips only in "all" mode */}
+                                                    {editGroupMode === "all" && (
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {groupMemberScores.map((member) => (
+                                                                <Chip
+                                                                    key={member.studentId}
+                                                                    size="sm"
+                                                                    variant="flat"
+                                                                    className={member.scoreId ? "bg-white" : "bg-slate-100 text-slate-400"}
+                                                                >
+                                                                    {member.studentName}
+                                                                    {!member.scoreId && " (ไม่มีคะแนน)"}
+                                                                </Chip>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -1601,22 +1850,98 @@ export default function ScoreModal({
                                                                 </div>
 
                                                                 {/* Reason Input */}
-                                                                <div>
+                                                                <div className="space-y-3">
                                                                     <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
                                                                         <Icon icon="solar:document-text-bold" className="text-slate-400" />
                                                                         เหตุผลในการแก้ไข *
                                                                     </label>
-                                                                    <Textarea
-                                                                        placeholder="กรุณาระบุเหตุผลในการขอแก้ไขคะแนน..."
-                                                                        value={editReason}
-                                                                        onValueChange={setEditReason}
-                                                                        variant="bordered"
-                                                                        minRows={2}
-                                                                        isRequired
-                                                                        classNames={{
-                                                                            inputWrapper: "bg-white border-slate-200",
+                                                                    <Select
+                                                                        placeholder="เลือกเหตุผลในการแก้ไข"
+                                                                        selectedKeys={editReasonType ? new Set([editReasonType]) : new Set()}
+                                                                        onSelectionChange={(keys) => {
+                                                                            const selected = Array.from(keys)[0] as string;
+                                                                            setEditReasonType(selected || "");
+                                                                            if (selected !== "other") {
+                                                                                setEditReasonCustom("");
+                                                                            }
                                                                         }}
-                                                                    />
+                                                                        variant="bordered"
+                                                                        classNames={{
+                                                                            trigger: "bg-white border-slate-200",
+                                                                        }}
+                                                                    >
+                                                                        {PRESET_EDIT_REASONS.map((reason) => (
+                                                                            <SelectItem key={reason.key} textValue={reason.label}>
+                                                                                {reason.label}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </Select>
+
+
+                                                                    {editReasonType === "other" && (
+                                                                        <Textarea
+                                                                            placeholder="กรุณาระบุเหตุผลในการขอแก้ไขคะแนน..."
+                                                                            value={editReasonCustom}
+                                                                            onValueChange={setEditReasonCustom}
+                                                                            variant="bordered"
+                                                                            minRows={2}
+                                                                            isRequired
+                                                                            classNames={{
+                                                                                inputWrapper: "bg-white border-slate-200",
+                                                                            }}
+                                                                        />
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Image Upload */}
+                                                                <div className="space-y-3">
+                                                                    <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
+                                                                        <Icon icon="solar:camera-bold" className="text-slate-400" />
+                                                                        แนบรูปภาพประกอบ (ไม่บังคับ, สูงสุด 3 รูป)
+                                                                    </label>
+
+                                                                    {/* Image Previews */}
+                                                                    {editImagePreviews.length > 0 && (
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            {editImagePreviews.map((preview, index) => (
+                                                                                <div key={index} className="relative group">
+                                                                                    <img
+                                                                                        src={preview}
+                                                                                        alt={`Preview ${index + 1}`}
+                                                                                        className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+                                                                                    />
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => handleRemoveImage(index)}
+                                                                                        className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                    >
+                                                                                        <Icon icon="solar:close-circle-bold" className="text-sm" />
+                                                                                    </button>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+
+                                                                    {editImages.length < 3 && (
+                                                                        <div>
+                                                                            <input
+                                                                                type="file"
+                                                                                ref={imageInputRef}
+                                                                                accept="image/*"
+                                                                                multiple
+                                                                                onChange={handleImageUpload}
+                                                                                className="hidden"
+                                                                            />
+                                                                            <Button
+                                                                                variant="bordered"
+                                                                                size="sm"
+                                                                                onPress={() => imageInputRef.current?.click()}
+                                                                                startContent={<Icon icon="solar:upload-bold" />}
+                                                                            >
+                                                                                เพิ่มรูปภาพ ({editImages.length}/3)
+                                                                            </Button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         );
@@ -1680,22 +2005,101 @@ export default function ScoreModal({
                                                         </div>
                                                     </div>
 
-                                                    <div>
-                                                        <label className="text-slate-600 font-medium text-sm mb-2 block">เหตุผลในการแก้ไข *</label>
-                                                        <Textarea
-                                                            placeholder="กรุณาระบุเหตุผลในการขอแก้ไขคะแนน..."
-                                                            value={editReason}
-                                                            onValueChange={setEditReason}
-                                                            variant="bordered"
-                                                            minRows={3}
-                                                            isRequired
-                                                            classNames={{
-                                                                inputWrapper: "bg-white border-slate-200",
+                                                    <div className="space-y-3">
+                                                        <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
+                                                            <Icon icon="solar:document-text-bold" className="text-slate-400" />
+                                                            เหตุผลในการแก้ไข *
+                                                        </label>
+                                                        <Select
+                                                            placeholder="เลือกเหตุผลในการแก้ไข"
+                                                            selectedKeys={editReasonType ? new Set([editReasonType]) : new Set()}
+                                                            onSelectionChange={(keys) => {
+                                                                const selected = Array.from(keys)[0] as string;
+                                                                setEditReasonType(selected || "");
+                                                                if (selected !== "other") {
+                                                                    setEditReasonCustom("");
+                                                                }
                                                             }}
-                                                        />
+                                                            variant="bordered"
+                                                            classNames={{
+                                                                trigger: "bg-white border-slate-200",
+                                                            }}
+                                                        >
+                                                            {PRESET_EDIT_REASONS.map((reason) => (
+                                                                <SelectItem key={reason.key} textValue={reason.label}>
+                                                                    {reason.label}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </Select>
+
+
+                                                        {editReasonType === "other" && (
+                                                            <Textarea
+                                                                placeholder="กรุณาระบุเหตุผลในการขอแก้ไขคะแนน..."
+                                                                value={editReasonCustom}
+                                                                onValueChange={setEditReasonCustom}
+                                                                variant="bordered"
+                                                                minRows={3}
+                                                                isRequired
+                                                                classNames={{
+                                                                    inputWrapper: "bg-white border-slate-200",
+                                                                }}
+                                                            />
+                                                        )}
                                                         <p className="text-xs text-slate-500 mt-1">
                                                             * เหตุผลในการแก้ไขจะถูกบันทึกไว้เพื่อการตรวจสอบ
                                                         </p>
+                                                    </div>
+
+                                                    {/* Image Upload */}
+                                                    <div className="space-y-3">
+                                                        <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
+                                                            <Icon icon="solar:camera-bold" className="text-slate-400" />
+                                                            แนบรูปภาพประกอบ (ไม่บังคับ, สูงสุด 3 รูป)
+                                                        </label>
+
+                                                        {/* Image Previews */}
+                                                        {editImagePreviews.length > 0 && (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {editImagePreviews.map((preview, index) => (
+                                                                    <div key={index} className="relative group">
+                                                                        <img
+                                                                            src={preview}
+                                                                            alt={`Preview ${index + 1}`}
+                                                                            className="w-20 h-20 object-cover rounded-lg border border-slate-200"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleRemoveImage(index)}
+                                                                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                        >
+                                                                            <Icon icon="solar:close-circle-bold" className="text-sm" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+
+                                                        {editImages.length < 3 && (
+                                                            <div>
+                                                                <input
+                                                                    type="file"
+                                                                    ref={imageInputRef}
+                                                                    accept="image/*"
+                                                                    multiple
+                                                                    onChange={handleImageUpload}
+                                                                    className="hidden"
+                                                                />
+                                                                <Button
+                                                                    variant="bordered"
+                                                                    size="sm"
+                                                                    onPress={() => imageInputRef.current?.click()}
+                                                                    startContent={<Icon icon="solar:upload-bold" />}
+                                                                >
+                                                                    เพิ่มรูปภาพ ({editImages.length}/3)
+                                                                </Button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}

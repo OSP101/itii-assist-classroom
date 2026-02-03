@@ -195,14 +195,50 @@ const scoreService = {
     },
 
     /**
-     * Request score edit
+     * Request score edit (single)
      */
     async requestScoreEdit(data: {
         score_id: number;
         new_score: number;
         reason: string;
-    }): Promise<boolean> {
-        const response = await api.post<unknown>('/scores/edit-request', data);
+    }, images?: File[]): Promise<boolean> {
+        // If images provided, use FormData
+        if (images && images.length > 0) {
+            const formData = new FormData();
+            formData.append('score_id', data.score_id.toString());
+            formData.append('new_score', data.new_score.toString());
+            formData.append('reason', data.reason);
+            images.forEach((image) => {
+                formData.append('images', image);
+            });
+            const response = await api.post<unknown>('/score-edit-requests', formData);
+            return response.success;
+        }
+        const response = await api.post<unknown>('/score-edit-requests', data);
+        return response.success;
+    },
+
+    /**
+     * Request group score edit (multiple scores at once)
+     */
+    async requestGroupScoreEdit(data: {
+        score_ids: number[];
+        new_score: number;
+        reason: string;
+    }, images?: File[]): Promise<boolean> {
+        // If images provided, use FormData
+        if (images && images.length > 0) {
+            const formData = new FormData();
+            formData.append('score_ids', JSON.stringify(data.score_ids));
+            formData.append('new_score', data.new_score.toString());
+            formData.append('reason', data.reason);
+            images.forEach((image) => {
+                formData.append('images', image);
+            });
+            const response = await api.post<unknown>('/score-edit-requests/batch', formData);
+            return response.success;
+        }
+        const response = await api.post<unknown>('/score-edit-requests/batch', data);
         return response.success;
     },
 

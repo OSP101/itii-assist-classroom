@@ -120,9 +120,14 @@ class ApiService {
     }
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...options?.headers,
     };
+
+    // Only set Content-Type for non-FormData requests
+    const isFormData = body instanceof FormData;
+    if (!isFormData) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     const accessToken = this.getAccessToken();
     if (accessToken) {
@@ -133,7 +138,7 @@ class ApiService {
       const response = await fetch(url.toString(), {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: body ? (isFormData ? body as FormData : JSON.stringify(body)) : undefined,
       });
 
       // Handle 429 Too Many Requests - retry with exponential backoff
