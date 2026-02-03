@@ -5,7 +5,7 @@
 
 "use client";
 
-import React, { memo, Suspense, lazy } from "react";
+import React, { memo, Suspense, lazy, useState } from "react";
 import Link from "next/link";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -15,6 +15,8 @@ import { Skeleton } from "@heroui/skeleton";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { DatePicker } from "@heroui/date-picker";
+import { Divider } from "@heroui/divider";
+import { addToast } from "@heroui/toast";
 import {
     Table,
     TableHeader,
@@ -32,6 +34,7 @@ import {
 } from "@heroui/modal";
 import { Icon } from "@iconify/react";
 import { type DateValue } from "@internationalized/date";
+import { QRCodeSVG } from "qrcode.react";
 
 import {
     type SessionWithComputedStatus,
@@ -264,6 +267,158 @@ export const EmptyState = memo(function EmptyState({ onCreateClick }: EmptyState
 });
 
 // ============================================================================
+// QR Code Preview Modal (for draft sessions - schedule posting)
+// ============================================================================
+
+interface QRPreviewModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    session: SessionWithComputedStatus | null;
+}
+
+export const QRPreviewModal = memo(function QRPreviewModal({
+    isOpen,
+    onClose,
+    session,
+}: QRPreviewModalProps) {
+    if (!session) return null;
+
+    const checkInUrl = typeof window !== "undefined"
+        ? `${window.location.origin}/check-in/${session.id}`
+        : "";
+
+    const copyPIN = () => {
+        if (session.pin_code) {
+            navigator.clipboard.writeText(session.pin_code);
+            addToast({
+                title: "คัดลอกแล้ว",
+                description: "PIN ถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
+                color: "success",
+            });
+        }
+    };
+
+    const copyURL = () => {
+        navigator.clipboard.writeText(checkInUrl);
+        addToast({
+            title: "คัดลอกแล้ว",
+            description: "ลิงก์เช็คชื่อถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
+            color: "success",
+        });
+    };
+
+    const downloadQR = () => {
+        const svg = document.getElementById("qr-code-preview");
+        if (!svg) return;
+
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const img = new Image();
+
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx?.drawImage(img, 0, 0);
+            const pngFile = canvas.toDataURL("image/png");
+            const downloadLink = document.createElement("a");
+            downloadLink.download = `check-in-${session.title}-${session.pin_code}.png`;
+            downloadLink.href = pngFile;
+            downloadLink.click();
+        };
+
+        img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="lg">
+            <ModalContent>
+                <ModalHeader className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 rounded-xl">
+                        <Icon icon="solar:qr-code-bold" className="text-xl text-blue-600" />
+                    </div>
+                    <div>
+                        <p className="font-semibold">QR Code และ PIN</p>
+                        <p className="text-sm font-normal text-slate-500">สำหรับตั้งเวลาโพสต์</p>
+                    </div>
+                </ModalHeader>
+                <Divider />
+                <ModalBody className="py-6">
+
+
+                    {/* QR Code */}
+                    <div className="text-center mb-3">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-3">QR CODE</p>
+                        <div className="inline-block p-4 bg-white rounded-xl border-2 border-slate-200">
+                            <QRCodeSVG
+                                id="qr-code-preview"
+                                value={checkInUrl}
+                                size={300}
+                                level="L"
+                                fgColor="#000000"
+                                bgColor="#ffffff"
+                                marginSize={0}
+                            />
+                        </div>
+                    </div>
+
+                    {/* PIN Code */}
+                    <div className="text-center mb-3">
+                        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">PIN CODE</p>
+                        <div
+                            className="inline-block px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl cursor-pointer hover:from-blue-600 hover:to-indigo-600 transition-colors"
+                            onClick={copyPIN}
+                        >
+                            <div className="flex gap-4 px-5">
+                                {session.pin_code.split('').map((digit, index) => (
+                                    <span key={index} className="text-4xl font-bold text-white font-mono">
+                                        {digit}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* URL */}
+                    <div className="p-3 bg-slate-50 rounded-xl">
+                        <p className="text-xs text-slate-400 mb-1">ลิงก์เช็คชื่อ</p>
+                        <div className="flex items-center gap-2">
+                            <code className="flex-1 text-sm text-blue-600 bg-white px-3 py-2 rounded-lg border truncate">
+                                {checkInUrl}
+                            </code>
+                            <Button
+                                isIconOnly
+                                size="sm"
+                                variant="flat"
+                                color="primary"
+                                onPress={copyURL}
+                            >
+                                <Icon icon="solar:copy-bold" />
+                            </Button>
+                        </div>
+                    </div>
+
+
+                </ModalBody>
+                <Divider />
+                <ModalFooter>
+                    <Button variant="flat" onPress={onClose}>
+                        ปิด
+                    </Button>
+                    <Button
+                        color="primary"
+                        startContent={<Icon icon="solar:download-bold" />}
+                        onPress={downloadQR}
+                    >
+                        ดาวน์โหลด QR
+                    </Button>
+                </ModalFooter>
+            </ModalContent>
+        </Modal>
+    );
+});
+
+// ============================================================================
 // Session Table Row
 // ============================================================================
 
@@ -274,6 +429,7 @@ interface SessionRowActionsProps {
     onEdit: (session: AttendanceSession) => void;
     onDelete: (session: AttendanceSession) => void;
     onClose: (session: AttendanceSession) => void;
+    onShowQR?: (session: SessionWithComputedStatus) => void;
 }
 
 const SessionRowActions = memo(function SessionRowActions({
@@ -283,10 +439,22 @@ const SessionRowActions = memo(function SessionRowActions({
     onEdit,
     onDelete,
     onClose,
+    onShowQR,
 }: SessionRowActionsProps) {
     if (session.status === "draft") {
         return (
             <>
+                <Tooltip content="ดู QR/PIN">
+                    <Button
+                        isIconOnly
+                        size="sm"
+                        variant="light"
+                        color="secondary"
+                        onPress={() => onShowQR?.(session)}
+                    >
+                        <Icon icon="solar:qr-code-bold" className="text-lg" />
+                    </Button>
+                </Tooltip>
                 <Tooltip content="เริ่มเปิดเช็คชื่อทันที">
                     <Button
                         isIconOnly
@@ -441,154 +609,167 @@ export const SessionsTable = memo(function SessionsTable({
     onDelete,
     onClose,
 }: SessionsTableProps) {
+    // QR Preview Modal State
+    const [qrPreviewSession, setQRPreviewSession] = useState<SessionWithComputedStatus | null>(null);
+
     return (
-        <Card className="shadow-sm border border-slate-200">
-            <CardBody className="p-2">
-                <div className="overflow-x-auto">
-                    <Table
-                        aria-label="Attendance sessions table"
-                        removeWrapper
-                        classNames={{
-                            th: "bg-slate-50 text-slate-600 font-semibold text-sm",
-                            td: "py-3",
-                        }}
-                    >
-                        <TableHeader>
-                            <TableColumn>รอบการเช็คชื่อ</TableColumn>
-                            <TableColumn>เซคชัน</TableColumn>
-                            <TableColumn>ประเภท</TableColumn>
-                            <TableColumn>วันเวลา</TableColumn>
-                            <TableColumn>สถานะ</TableColumn>
-                            <TableColumn>สถิติ</TableColumn>
-                            <TableColumn align="center">จัดการ</TableColumn>
-                        </TableHeader>
-                        <TableBody
-                            emptyContent={
-                                <div className="py-10 text-center">
-                                    <Icon
-                                        icon="solar:clipboard-list-linear"
-                                        className="text-5xl text-slate-300 mx-auto mb-3"
-                                    />
-                                    <p className="text-slate-400">ไม่พบรอบการเช็คชื่อที่ตรงกับเงื่อนไข</p>
-                                    <Button
-                                        color="primary"
-                                        variant="flat"
-                                        size="sm"
-                                        className="mt-3"
-                                        onPress={onCreateClick}
-                                    >
-                                        สร้างรอบเช็คชื่อ
-                                    </Button>
-                                </div>
-                            }
+        <>
+            <Card className="shadow-sm border border-slate-200">
+                <CardBody className="p-2">
+                    <div className="overflow-x-auto">
+                        <Table
+                            aria-label="Attendance sessions table"
+                            removeWrapper
+                            classNames={{
+                                th: "bg-slate-50 text-slate-600 font-semibold text-sm",
+                                td: "py-3",
+                            }}
                         >
-                            {sessions.map((session) => (
-                                <TableRow key={session.id}>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <div>
-                                                <p className="font-medium text-slate-800">{session.title}</p>
-                                                {session.check_location && (
-                                                    <div className="flex items-center gap-1 text-xs text-slate-500">
-                                                        <span>ตรวจสอบตำแหน่ง</span>
-                                                    </div>
-                                                )}
+                            <TableHeader>
+                                <TableColumn>รอบการเช็คชื่อ</TableColumn>
+                                <TableColumn>เซคชัน</TableColumn>
+                                <TableColumn>ประเภท</TableColumn>
+                                <TableColumn>วันเวลา</TableColumn>
+                                <TableColumn>สถานะ</TableColumn>
+                                <TableColumn>สถิติ</TableColumn>
+                                <TableColumn align="center">จัดการ</TableColumn>
+                            </TableHeader>
+                            <TableBody
+                                emptyContent={
+                                    <div className="py-10 text-center">
+                                        <Icon
+                                            icon="solar:clipboard-list-linear"
+                                            className="text-5xl text-slate-300 mx-auto mb-3"
+                                        />
+                                        <p className="text-slate-400">ไม่พบรอบการเช็คชื่อที่ตรงกับเงื่อนไข</p>
+                                        <Button
+                                            color="primary"
+                                            variant="flat"
+                                            size="sm"
+                                            className="mt-3"
+                                            onPress={onCreateClick}
+                                        >
+                                            สร้างรอบเช็คชื่อ
+                                        </Button>
+                                    </div>
+                                }
+                            >
+                                {sessions.map((session) => (
+                                    <TableRow key={session.id}>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <div>
+                                                    <p className="font-medium text-slate-800">{session.title}</p>
+                                                    {session.check_location && (
+                                                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                                                            <span>ตรวจสอบตำแหน่ง</span>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        {session.sections && session.sections.length > 0 ? (
-                                            <div className="flex flex-wrap gap-1">
-                                                {session.sections.map((sec) => (
-                                                    <Chip key={sec.id} size="sm" variant="flat" color="default">
-                                                        {sec.section_no}
-                                                    </Chip>
-                                                ))}
-                                            </div>
-                                        ) : session.section ? (
-                                            <Chip size="sm" variant="flat" color="default">
-                                                {session.section.section_no}
+                                        </TableCell>
+                                        <TableCell>
+                                            {session.sections && session.sections.length > 0 ? (
+                                                <div className="flex flex-wrap gap-1">
+                                                    {session.sections.map((sec) => (
+                                                        <Chip key={sec.id} size="sm" variant="flat" color="default">
+                                                            {sec.section_no}
+                                                        </Chip>
+                                                    ))}
+                                                </div>
+                                            ) : session.section ? (
+                                                <Chip size="sm" variant="flat" color="default">
+                                                    {session.section.section_no}
+                                                </Chip>
+                                            ) : (
+                                                <span className="text-slate-500 text-sm">ทุกเซคชัน</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="sm"
+                                                color={SESSION_TYPE_DISPLAY[session.session_type]?.color || "default"}
+                                                variant="flat"
+                                            >
+                                                {SESSION_TYPE_DISPLAY[session.session_type]?.label || session.session_type}
                                             </Chip>
-                                        ) : (
-                                            <span className="text-slate-500 text-sm">ทุกเซคชัน</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            size="sm"
-                                            color={SESSION_TYPE_DISPLAY[session.session_type]?.color || "default"}
-                                            variant="flat"
-                                        >
-                                            {SESSION_TYPE_DISPLAY[session.session_type]?.label || session.session_type}
-                                        </Chip>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="text-sm">
-                                            <p className="text-slate-800">{formatDate(session.start_time)}</p>
-                                            <p className="text-slate-500">
-                                                {formatTime(session.start_time)} - {formatTime(session.end_time)}
-                                            </p>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Chip
-                                            size="sm"
-                                            color={STATUS_DISPLAY[session.status]?.color || "default"}
-                                            variant="flat"
-                                            startContent={
-                                                session.status === "active" ? (
-                                                    <span className="relative flex h-2 w-2 mr-1">
-                                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                                    </span>
-                                                ) : undefined
-                                            }
-                                        >
-                                            {STATUS_DISPLAY[session.status]?.label || session.status}
-                                        </Chip>
-                                    </TableCell>
-                                    <TableCell>
-                                        {session.stats ? (
-                                            <div className="flex items-center gap-2">
-                                                <Tooltip content="มาเรียน">
-                                                    <Chip size="sm" color="success" variant="flat">
-                                                        {session.stats.present + session.stats.late}
-                                                    </Chip>
-                                                </Tooltip>
-                                                <Tooltip content="สาย">
-                                                    <Chip size="sm" color="warning" variant="flat">
-                                                        {session.stats.late}
-                                                    </Chip>
-                                                </Tooltip>
-                                                <Tooltip content="ขาด">
-                                                    <Chip size="sm" color="danger" variant="flat">
-                                                        {session.stats.absent}
-                                                    </Chip>
-                                                </Tooltip>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="text-sm">
+                                                <p className="text-slate-800">{formatDate(session.start_time)}</p>
+                                                <p className="text-slate-500">
+                                                    {formatTime(session.start_time)} - {formatTime(session.end_time)}
+                                                </p>
                                             </div>
-                                        ) : (
-                                            <span className="text-slate-400">-</span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center justify-center gap-1">
-                                            <SessionRowActions
-                                                session={session}
-                                                courseId={courseId}
-                                                onActivate={onActivate}
-                                                onEdit={onEdit}
-                                                onDelete={onDelete}
-                                                onClose={onClose}
-                                            />
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            </CardBody>
-        </Card>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Chip
+                                                size="sm"
+                                                color={STATUS_DISPLAY[session.status]?.color || "default"}
+                                                variant="flat"
+                                                startContent={
+                                                    session.status === "active" ? (
+                                                        <span className="relative flex h-2 w-2 mr-1">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                                        </span>
+                                                    ) : undefined
+                                                }
+                                            >
+                                                {STATUS_DISPLAY[session.status]?.label || session.status}
+                                            </Chip>
+                                        </TableCell>
+                                        <TableCell>
+                                            {session.stats ? (
+                                                <div className="flex items-center gap-2">
+                                                    <Tooltip content="มาเรียน">
+                                                        <Chip size="sm" color="success" variant="flat">
+                                                            {session.stats.present + session.stats.late}
+                                                        </Chip>
+                                                    </Tooltip>
+                                                    <Tooltip content="สาย">
+                                                        <Chip size="sm" color="warning" variant="flat">
+                                                            {session.stats.late}
+                                                        </Chip>
+                                                    </Tooltip>
+                                                    <Tooltip content="ขาด">
+                                                        <Chip size="sm" color="danger" variant="flat">
+                                                            {session.stats.absent}
+                                                        </Chip>
+                                                    </Tooltip>
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-400">-</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center justify-center gap-1">
+                                                <SessionRowActions
+                                                    session={session}
+                                                    courseId={courseId}
+                                                    onActivate={onActivate}
+                                                    onEdit={onEdit}
+                                                    onDelete={onDelete}
+                                                    onClose={onClose}
+                                                    onShowQR={setQRPreviewSession}
+                                                />
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardBody>
+            </Card>
+
+            {/* QR Preview Modal */}
+            <QRPreviewModal
+                isOpen={!!qrPreviewSession}
+                onClose={() => setQRPreviewSession(null)}
+                session={qrPreviewSession}
+            />
+        </>
     );
 });
 
@@ -951,68 +1132,68 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                         </div>
 
                         {/* Date Time */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <DatePicker
-                                    label="เวลาเริ่มต้น"
-                                    variant="bordered"
-                                    labelPlacement="outside"
-                                    granularity="minute"
-                                    hideTimeZone
-                                    showMonthAndYearPickers
-                                    value={startDateTime}
-                                    onChange={(value) => value && setStartDateTime(value)}
-                                    isRequired
-                                    classNames={{
-                                        base: "w-full",
-                                        selectorButton: "text-blue-500",
-                                        label: "text-slate-800 font-medium text-sm",
-                                    }}
-                                    popoverProps={{
-                                        placement: "bottom",
-                                        classNames: { content: "z-[9999]" },
-                                    }}
-                                    calendarProps={{
-                                        classNames: {
-                                            base: "bg-white shadow-xl",
-                                            headerWrapper: "bg-white",
-                                            prevButton: "border-1 border-default-200 rounded-small",
-                                            nextButton: "border-1 border-default-200 rounded-small",
-                                            gridHeader: "bg-white shadow-none",
-                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                        },
-                                    }}
-                                />
-                                <DatePicker
-                                    label="เวลาสิ้นสุด"
-                                    variant="bordered"
-                                    labelPlacement="outside"
-                                    granularity="minute"
-                                    hideTimeZone
-                                    showMonthAndYearPickers
-                                    value={endDateTime}
-                                    onChange={(value) => value && setEndDateTime(value)}
-                                    isRequired
-                                    classNames={{
-                                        base: "w-full",
-                                        selectorButton: "text-blue-500",
-                                        label: "text-slate-800 font-medium text-sm",
-                                    }}
-                                    popoverProps={{
-                                        placement: "bottom",
-                                        classNames: { content: "z-[9999]" },
-                                    }}
-                                    calendarProps={{
-                                        classNames: {
-                                            base: "bg-white shadow-xl",
-                                            headerWrapper: "bg-white",
-                                            prevButton: "border-1 border-default-200 rounded-small",
-                                            nextButton: "border-1 border-default-200 rounded-small",
-                                            gridHeader: "bg-white shadow-none",
-                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                        },
-                                    }}
-                                />
-                            </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <DatePicker
+                                label="เวลาเริ่มต้น"
+                                variant="bordered"
+                                labelPlacement="outside"
+                                granularity="minute"
+                                hideTimeZone
+                                showMonthAndYearPickers
+                                value={startDateTime}
+                                onChange={(value) => value && setStartDateTime(value)}
+                                isRequired
+                                classNames={{
+                                    base: "w-full",
+                                    selectorButton: "text-blue-500",
+                                    label: "text-slate-800 font-medium text-sm",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
+                                }}
+                            />
+                            <DatePicker
+                                label="เวลาสิ้นสุด"
+                                variant="bordered"
+                                labelPlacement="outside"
+                                granularity="minute"
+                                hideTimeZone
+                                showMonthAndYearPickers
+                                value={endDateTime}
+                                onChange={(value) => value && setEndDateTime(value)}
+                                isRequired
+                                classNames={{
+                                    base: "w-full",
+                                    selectorButton: "text-blue-500",
+                                    label: "text-slate-800 font-medium text-sm",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
+                                }}
+                            />
+                        </div>
 
                         {/* Late Threshold */}
                         <div>
@@ -1209,64 +1390,64 @@ export const EditSessionModal = memo(function EditSessionModal({
                         </Select>
 
                         {/* Time Settings */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                                <DatePicker
-                                    label="เวลาเริ่มต้น"
-                                    value={startDateTime}
-                                    onChange={(value) => value && setStartDateTime(value)}
-                                    granularity="minute"
-                                    hideTimeZone
-                                    showMonthAndYearPickers
-                                    labelPlacement="outside"
-                                    variant="bordered"
-                                    classNames={{
-                                        base: "w-full",
-                                        selectorButton: "text-amber-500",
-                                    }}
-                                    popoverProps={{
-                                        placement: "bottom",
-                                        classNames: { content: "z-[9999]" },
-                                    }}
-                                    calendarProps={{
-                                        classNames: {
-                                            base: "bg-white shadow-xl",
-                                            headerWrapper: "pt-4 bg-white",
-                                            prevButton: "border-1 border-default-200 rounded-small",
-                                            nextButton: "border-1 border-default-200 rounded-small",
-                                            gridHeader: "bg-white shadow-none",
-                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                        },
-                                    }}
-                                />
-                                <DatePicker
-                                    label="เวลาสิ้นสุด"
-                                    value={endDateTime}
-                                    onChange={(value) => value && setEndDateTime(value)}
-                                    granularity="minute"
-                                    hideTimeZone
-                                    showMonthAndYearPickers
-                                    labelPlacement="outside"
-                                    variant="bordered"
-                                    classNames={{
-                                        base: "w-full",
-                                        selectorButton: "text-amber-500",
-                                    }}
-                                    popoverProps={{
-                                        placement: "bottom",
-                                        classNames: { content: "z-[9999]" },
-                                    }}
-                                    calendarProps={{
-                                        classNames: {
-                                            base: "bg-white shadow-xl",
-                                            headerWrapper: "pt-4 bg-white",
-                                            prevButton: "border-1 border-default-200 rounded-small",
-                                            nextButton: "border-1 border-default-200 rounded-small",
-                                            gridHeader: "bg-white shadow-none",
-                                            cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                        },
-                                    }}
-                                />
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                            <DatePicker
+                                label="เวลาเริ่มต้น"
+                                value={startDateTime}
+                                onChange={(value) => value && setStartDateTime(value)}
+                                granularity="minute"
+                                hideTimeZone
+                                showMonthAndYearPickers
+                                labelPlacement="outside"
+                                variant="bordered"
+                                classNames={{
+                                    base: "w-full",
+                                    selectorButton: "text-amber-500",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "pt-4 bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
+                                }}
+                            />
+                            <DatePicker
+                                label="เวลาสิ้นสุด"
+                                value={endDateTime}
+                                onChange={(value) => value && setEndDateTime(value)}
+                                granularity="minute"
+                                hideTimeZone
+                                showMonthAndYearPickers
+                                labelPlacement="outside"
+                                variant="bordered"
+                                classNames={{
+                                    base: "w-full",
+                                    selectorButton: "text-amber-500",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "pt-4 bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
+                                }}
+                            />
+                        </div>
 
                         {/* Late Threshold */}
                         <div>
