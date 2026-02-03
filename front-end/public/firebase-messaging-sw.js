@@ -1,14 +1,6 @@
-/* eslint-disable no-undef */
-/* Firebase Cloud Messaging Service Worker */
-
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-/**
- * ⚠️ Firebase config
- * - ไม่ใช่ secret
- * - ใส่ตรงนี้ได้เลย
- */
 firebase.initializeApp({
   apiKey: "AIzaSyAOgm56BteZP_ipSdv8il8r6knK3i4vTFc",
   authDomain: "itii-assist-classrooms.firebaseapp.com",
@@ -20,9 +12,6 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-/**
- * 🔔 รับแจ้งเตือนตอนเว็บปิด / ดับจอ
- */
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Background message received:', payload);
 

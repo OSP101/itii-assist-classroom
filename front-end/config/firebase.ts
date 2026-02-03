@@ -1,14 +1,14 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getMessaging, Messaging, getToken, onMessage, MessagePayload } from "firebase/messaging";
 
-// Firebase configuration - ต้องตั้งค่าใน .env.local
+
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  apiKey: "AIzaSyAOgm56BteZP_ipSdv8il8r6knK3i4vTFc",
+  authDomain: "itii-assist-classrooms.firebaseapp.com",
+  projectId: "itii-assist-classrooms",
+  storageBucket: "itii-assist-classrooms.firebasestorage.app",
+  messagingSenderId: "217696858922",
+  appId: "1:217696858922:web:27341ecb0e7b7ca971e453",
 };
 
 // VAPID Key สำหรับ web push
