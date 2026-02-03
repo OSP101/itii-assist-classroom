@@ -10,6 +10,8 @@ const {
     QueueBooking,
     QueueDeskStatus,
     Course,
+    CourseSection,
+    CourseSectionStudent,
     Classroom,
     Desk,
     Assignment,
@@ -22,6 +24,7 @@ const {
     sequelize,
 } = require('../models');
 const logger = require('../utils/logger');
+const fcmService = require('../utils/fcmService');
 
 // ============================================
 // Queue Session Management (Instructor/TA)
@@ -656,6 +659,68 @@ const getWorkers = async (req, res) => {
     }
 };
 
+/**
+ * Get worker's current booking (for reconnection)
+ */
+const getWorkerCurrentBooking = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const userId = req.user.id;
+
+        logger.debug(`getWorkerCurrentBooking: sessionId=${sessionId}, userId=${userId}`);
+
+        // Find worker record (may or may not exist)
+        const worker = await QueueWorker.findOne({
+            where: {
+                queue_session_id: sessionId,
+                user_id: userId,
+            },
+        });
+
+        logger.debug(`Worker found: ${worker ? worker.id : 'null'}, status: ${worker?.status}`);
+
+        // Find current in-progress booking assigned to this worker
+        // This is independent of worker status - booking may still be in_progress
+        const currentBooking = await QueueBooking.findOne({
+            where: {
+                queue_session_id: sessionId,
+                assigned_worker_id: userId,
+                status: 'in_progress',
+            },
+            include: [
+                { model: Student, as: 'student' },
+                { model: Desk, as: 'desk' },
+            ],
+        });
+
+        logger.debug(`Current booking found: ${currentBooking ? currentBooking.id : 'null'}`);
+
+        // If there's a pending booking but worker is offline, re-set worker to online
+        if (currentBooking && worker && worker.status === 'offline') {
+            await worker.update({
+                status: 'online',
+                current_booking_id: currentBooking.id,
+                last_active_at: new Date(),
+            });
+            logger.debug(`Worker status updated to online`);
+        }
+
+        res.json({
+            success: true,
+            data: {
+                worker: worker,
+                currentBooking: currentBooking,
+            },
+        });
+    } catch (error) {
+        console.error('Error getting worker current booking:', error);
+        res.status(500).json({
+            success: false,
+            error: { message: error.message },
+        });
+    }
+};
+
 // ============================================
 // Booking Management (Student)
 // ============================================
@@ -721,6 +786,78 @@ const createBooking = async (req, res) => {
             }
         }
 
+        // Check if grading and session has linked assignment - validate score completion
+        if (booking_type === 'grading' && session.linked_assignment_id) {
+            const assignment = await Assignment.findOne({
+                where: { id: session.linked_assignment_id },
+                include: [{ model: AssignmentSubItem, as: 'subItems' }],
+            });
+
+            if (assignment) {
+                const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+                if (hasSubItems) {
+                    // Assignment has sub-items - check how many are already graded
+                    const gradedSubItems = await Score.findAll({
+                        where: {
+                            assignment_id: assignment.id,
+                            student_id: student.id,
+                            sub_item_id: { [Op.ne]: null },
+                            status: 'graded',
+                        },
+                    });
+
+                    const gradedSubItemIds = gradedSubItems.map(s => s.sub_item_id);
+                    const allSubItemIds = assignment.subItems.map(s => s.id);
+                    const allGraded = allSubItemIds.every(id => gradedSubItemIds.includes(id));
+
+                    if (allGraded) {
+                        await transaction.rollback();
+                        return res.status(400).json({
+                            success: false,
+                            error: { message: 'คุณได้รับการตรวจครบทุกข้อแล้ว ไม่สามารถจองคิวตรวจงานได้อีก' },
+                        });
+                    }
+                } else {
+                    // Single score assignment - check if already graded
+                    const existingScore = await Score.findOne({
+                        where: {
+                            assignment_id: assignment.id,
+                            student_id: student.id,
+                            sub_item_id: null,
+                            status: 'graded',
+                        },
+                    });
+
+                    if (existingScore) {
+                        await transaction.rollback();
+                        return res.status(400).json({
+                            success: false,
+                            error: { message: 'คุณได้รับการตรวจงานแล้ว ไม่สามารถจองคิวตรวจงานได้อีก' },
+                        });
+                    }
+                }
+            }
+        }
+
+        // Check if student already has an active booking in this session
+        const existingActiveBooking = await QueueBooking.findOne({
+            where: {
+                queue_session_id: session.id,
+                student_id: student.id,
+                status: { [Op.in]: ['waiting', 'in_progress'] },
+            },
+            transaction,
+        });
+
+        if (existingActiveBooking) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                error: { message: 'คุณมีคิวที่รออยู่แล้ว กรุณารอให้ TA ดำเนินการเสร็จก่อน' },
+            });
+        }
+
         // Find desk
         const desk = await Desk.findOne({
             where: {
@@ -747,22 +884,94 @@ const createBooking = async (req, res) => {
             transaction,
         });
 
-        // If grading type, check if desk already completed
+        // If grading type, check desk completion status based on assignment type
         if (booking_type === 'grading') {
-            if (deskStatus && deskStatus.grading_status === 'completed') {
-                await transaction.rollback();
-                return res.status(400).json({
-                    success: false,
-                    error: { message: 'โต๊ะนี้ได้รับการตรวจแล้ว' },
-                });
-            }
-
+            // First check if desk has active booking (waiting/in_progress)
             if (deskStatus && ['waiting', 'in_progress'].includes(deskStatus.grading_status)) {
                 await transaction.rollback();
                 return res.status(400).json({
                     success: false,
                     error: { message: 'โต๊ะนี้มีการจองตรวจงานอยู่แล้ว' },
                 });
+            }
+
+            // Check desk completion based on assignment type
+            if (session.linked_assignment_id) {
+                const assignment = await Assignment.findOne({
+                    where: { id: session.linked_assignment_id },
+                    include: [{ model: AssignmentSubItem, as: 'subItems' }],
+                });
+
+                if (assignment) {
+                    const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+                    // Find students at this desk (from student groups or individual)
+                    // We'll check scores for this specific desk using previous bookings
+                    const deskBookings = await QueueBooking.findAll({
+                        where: {
+                            queue_session_id: session.id,
+                            desk_id: desk.id,
+                            booking_type: 'grading',
+                            status: 'completed',
+                        },
+                        attributes: ['student_id'],
+                        group: ['student_id'],
+                    });
+
+                    if (deskBookings.length > 0) {
+                        const studentIds = deskBookings.map(b => b.student_id);
+
+                        if (hasSubItems) {
+                            // Check if all students have all sub-items graded
+                            const allSubItemIds = assignment.subItems.map(s => s.id);
+                            
+                            let deskFullyGraded = true;
+                            for (const sid of studentIds) {
+                                const gradedSubItems = await Score.findAll({
+                                    where: {
+                                        assignment_id: assignment.id,
+                                        student_id: sid,
+                                        sub_item_id: { [Op.ne]: null },
+                                        status: 'graded',
+                                    },
+                                });
+                                const gradedIds = gradedSubItems.map(s => s.sub_item_id);
+                                const allGraded = allSubItemIds.every(id => gradedIds.includes(id));
+                                if (!allGraded) {
+                                    deskFullyGraded = false;
+                                    break;
+                                }
+                            }
+
+                            // Only block if desk is fully graded
+                            if (deskFullyGraded && deskStatus && deskStatus.grading_status === 'completed') {
+                                await transaction.rollback();
+                                return res.status(400).json({
+                                    success: false,
+                                    error: { message: 'โต๊ะนี้ได้รับการตรวจครบทุกข้อแล้ว' },
+                                });
+                            }
+                        } else {
+                            // Single score - if completed, desk is done
+                            if (deskStatus && deskStatus.grading_status === 'completed') {
+                                await transaction.rollback();
+                                return res.status(400).json({
+                                    success: false,
+                                    error: { message: 'โต๊ะนี้ได้รับการตรวจแล้ว' },
+                                });
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No linked assignment - use simple desk status
+                if (deskStatus && deskStatus.grading_status === 'completed') {
+                    await transaction.rollback();
+                    return res.status(400).json({
+                        success: false,
+                        error: { message: 'โต๊ะนี้ได้รับการตรวจแล้ว' },
+                    });
+                }
             }
         }
 
@@ -869,11 +1078,11 @@ const createBooking = async (req, res) => {
  */
 const tryAssignBooking = async (sessionId, bookingId, io) => {
     try {
-        logger.debug(`Trying to assign booking ${bookingId} for session ${sessionId}`);
+        logger.info(`tryAssignBooking: sessionId=${sessionId}, bookingId=${bookingId}`);
         
         const booking = await QueueBooking.findByPk(bookingId);
         if (!booking || booking.status !== 'waiting') {
-            logger.debug(`Booking not found or not waiting: ${booking?.status}`);
+            logger.info(`Booking not found or not waiting: status=${booking?.status}`);
             return;
         }
 
@@ -889,7 +1098,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
             workerCondition.accept_help = true;
         }
 
-        logger.debug(`Looking for workers with condition: ${JSON.stringify(workerCondition)}`);
+        logger.info(`Looking for workers with condition: ${JSON.stringify(workerCondition)}`);
 
         const availableWorker = await QueueWorker.findOne({
             where: workerCondition,
@@ -906,7 +1115,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
         });
 
         if (availableWorker) {
-            logger.debug(`Found available worker: user_id=${availableWorker.user_id}`);
+            logger.info(`Found available worker: user_id=${availableWorker.user_id}, status=${availableWorker.status}`);
             
             // Assign booking to worker
             await booking.update({
@@ -951,14 +1160,28 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                     workerId: availableWorker.user_id,
                 });
 
-                // Emit to specific worker
-                logger.debug(`Emitting new-task to worker-${availableWorker.user_id}`);
-                io.to(`worker-${availableWorker.user_id}`).emit('new-task', {
+                // Emit to specific worker (ensure string for room name)
+                const workerRoom = `worker-${String(availableWorker.user_id)}`;
+                logger.info(`Emitting new-task to room: ${workerRoom}, booking: ${bookingId}`);
+                
+                // Check how many sockets are in the room
+                const roomSockets = io.sockets.adapter.rooms.get(workerRoom);
+                logger.info(`Sockets in room ${workerRoom}: ${roomSockets ? roomSockets.size : 0}`);
+                
+                io.to(workerRoom).emit('new-task', {
                     booking: fullBooking,
                 });
+                logger.info(`new-task event emitted successfully to room ${workerRoom}`);
+
+                // Send FCM push notification to worker
+                fcmService.notifyWorkerNewTask(
+                    availableWorker.user_id,
+                    sessionId,
+                    fullBooking
+                ).catch(err => logger.error('FCM worker notification error:', err));
             }
         } else {
-            logger.debug(`No available worker found for session ${sessionId}`);
+            logger.info(`No available worker found for session ${sessionId}`);
         }
     } catch (error) {
         logger.error('Error assigning booking:', error);
@@ -1044,6 +1267,13 @@ const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) =>
             booking: waitingBooking,
         });
 
+        // Send FCM push notification to student (Your Turn)
+        const workerUser = await User.findByPk(userId, {
+            attributes: ['id', 'full_name'],
+        });
+        fcmService.notifyStudentYourTurn(waitingBooking, workerUser || { full_name: 'ผู้ช่วยสอน' })
+            .catch(err => logger.error('FCM student notification error:', err));
+
         // Return the assigned booking (socket emit to worker will be handled by response)
         return waitingBooking;
 
@@ -1064,8 +1294,22 @@ const getBookingStatus = async (req, res) => {
             include: [
                 {
                     model: QueueSession,
-                    as: 'queueSession',
-                    attributes: ['id', 'title', 'status'],
+                    as: 'session',
+                    attributes: ['id', 'title', 'status', 'linked_assignment_id'],
+                    include: [
+                        {
+                            model: Assignment,
+                            as: 'linkedAssignment',
+                            attributes: ['id', 'name', 'max_score'],
+                            include: [
+                                {
+                                    model: AssignmentSubItem,
+                                    as: 'subItems',
+                                    attributes: ['id', 'name', 'max_score', 'order_index'],
+                                }
+                            ]
+                        }
+                    ]
                 },
                 {
                     model: Student,
@@ -1097,11 +1341,91 @@ const getBookingStatus = async (req, res) => {
             },
         });
 
+        // If booking is completed and has linked assignment, get scores
+        let scoreDetails = null;
+        if (booking.status === 'completed' && booking.session?.linked_assignment_id) {
+            logger.info(`getBookingStatus: Fetching scores for completed booking ${bookingId}, assignment ${booking.session.linked_assignment_id}`);
+            const assignment = booking.session.linkedAssignment;
+            const hasSubItems = assignment?.subItems && assignment.subItems.length > 0;
+
+            if (hasSubItems) {
+                // Get sub-item scores
+                const subItemScores = await Score.findAll({
+                    where: {
+                        assignment_id: assignment.id,
+                        student_id: booking.student_id,
+                        sub_item_id: { [Op.ne]: null },
+                    },
+                    include: [
+                        {
+                            model: User,
+                            as: 'grader',
+                            attributes: ['id', 'full_name'],
+                        },
+                        {
+                            model: AssignmentSubItem,
+                            as: 'subItem',
+                            attributes: ['id', 'name', 'max_score'],
+                        }
+                    ],
+                });
+
+                scoreDetails = {
+                    type: 'sub_items',
+                    assignment_name: assignment.name,
+                    sub_items: subItemScores.map(s => ({
+                        id: s.sub_item_id,
+                        name: s.subItem?.name,
+                        score: s.score,
+                        max_score: s.subItem?.max_score,
+                        graded_by: s.grader?.full_name,
+                        graded_at: s.graded_at,
+                    })),
+                    total_score: subItemScores.reduce((sum, s) => sum + (parseFloat(s.score) || 0), 0),
+                    total_max_score: assignment.subItems.reduce((sum, s) => sum + (parseFloat(s.max_score) || 0), 0),
+                };
+            } else {
+                // Get single score
+                const singleScore = await Score.findOne({
+                    where: {
+                        assignment_id: assignment.id,
+                        student_id: booking.student_id,
+                        sub_item_id: null,
+                    },
+                    include: [
+                        {
+                            model: User,
+                            as: 'grader',
+                            attributes: ['id', 'full_name'],
+                        }
+                    ],
+                });
+
+                if (singleScore) {
+                    scoreDetails = {
+                        type: 'single',
+                        assignment_name: assignment.name,
+                        score: singleScore.score,
+                        max_score: assignment.max_score,
+                        graded_by: singleScore.grader?.full_name,
+                        graded_at: singleScore.graded_at,
+                        comment: singleScore.comment,
+                    };
+                    logger.info(`getBookingStatus: Found single score: ${singleScore.score}/${assignment.max_score}`);
+                } else {
+                    logger.info(`getBookingStatus: No single score found for student ${booking.student_id}`);
+                }
+            }
+        }
+
+        logger.info(`getBookingStatus: Returning score_details: ${scoreDetails ? JSON.stringify(scoreDetails) : 'null'}`);
+
         res.json({
             success: true,
             data: {
                 ...booking.toJSON(),
                 position_in_queue: position + 1,
+                score_details: scoreDetails,
             },
         });
     } catch (error) {
@@ -1127,7 +1451,7 @@ const completeBooking = async (req, res) => {
             include: [
                 { 
                     model: QueueSession, 
-                    as: 'queueSession',
+                    as: 'session',
                     include: [
                         {
                             model: Assignment,
@@ -1161,7 +1485,7 @@ const completeBooking = async (req, res) => {
         }
 
         // Check if assignment has sub-items
-        const linkedAssignment = booking.queueSession?.linkedAssignment;
+        const linkedAssignment = booking.session?.linkedAssignment;
         const assignmentSubItems = linkedAssignment?.subItems || [];
         const hasSubItems = assignmentSubItems.length > 0;
 
@@ -1183,7 +1507,7 @@ const completeBooking = async (req, res) => {
             // Get all existing scores for this student on this assignment
             const existingScores = await Score.findAll({
                 where: {
-                    assignment_id: booking.queueSession.linked_assignment_id,
+                    assignment_id: booking.session.linked_assignment_id,
                     student_id: booking.student_id,
                     sub_item_id: { [Op.ne]: null }, // Only sub-item scores
                 },
@@ -1267,14 +1591,14 @@ const completeBooking = async (req, res) => {
         // Save score to Score table if assignment is linked
         if (
             booking.booking_type === 'grading' &&
-            booking.queueSession.linked_assignment_id
+            booking.session.linked_assignment_id
         ) {
             // Check if we have sub-item scores
             if (sub_item_scores && Array.isArray(sub_item_scores) && sub_item_scores.length > 0) {
                 // Save each sub-item score
                 for (const subItemScore of sub_item_scores) {
                     const whereClause = {
-                        assignment_id: booking.queueSession.linked_assignment_id,
+                        assignment_id: booking.session.linked_assignment_id,
                         student_id: booking.student_id,
                         sub_item_id: subItemScore.sub_item_id,
                     };
@@ -1304,7 +1628,7 @@ const completeBooking = async (req, res) => {
             } else if (score !== undefined && score !== null) {
                 // Save single score (no sub-items)
                 const whereClause = {
-                    assignment_id: booking.queueSession.linked_assignment_id,
+                    assignment_id: booking.session.linked_assignment_id,
                     student_id: booking.student_id,
                     sub_item_id: null,
                 };
@@ -1349,6 +1673,10 @@ const completeBooking = async (req, res) => {
                 booking: booking.toJSON(),
             });
 
+            // Send FCM push notification to student (Completed)
+            fcmService.notifyStudentCompleted(booking, score)
+                .catch(err => logger.error('FCM student completed notification error:', err));
+
             // Notify all waiting students that queue position may have changed
             io.to(`queue-${booking.queue_session_id}`).emit('queue-position-updated', {
                 completedBookingType: booking.booking_type,
@@ -1378,6 +1706,8 @@ const completeBooking = async (req, res) => {
  */
 const tryAssignNextBooking = async (sessionId, workerId, io) => {
     try {
+        logger.info(`tryAssignNextBooking: sessionId=${sessionId}, workerId=${workerId}`);
+        
         const worker = await QueueWorker.findOne({
             where: {
                 queue_session_id: sessionId,
@@ -1386,7 +1716,12 @@ const tryAssignNextBooking = async (sessionId, workerId, io) => {
             },
         });
 
-        if (!worker) return;
+        logger.info(`Worker lookup result: ${worker ? `found (id=${worker.id}, user_id=${worker.user_id}, status=${worker.status})` : 'not found'}`);
+
+        if (!worker) {
+            logger.info('Worker not found or not online, skipping assignment');
+            return;
+        }
 
         // Find next waiting booking matching worker preferences
         const whereCondition = {
@@ -1401,8 +1736,11 @@ const tryAssignNextBooking = async (sessionId, workerId, io) => {
         } else if (worker.accept_help) {
             whereCondition.booking_type = 'help';
         } else {
+            logger.debug('Worker does not accept any booking type');
             return;
         }
+
+        logger.info(`Looking for next booking with condition: ${JSON.stringify(whereCondition)}`);
 
         const nextBooking = await QueueBooking.findOne({
             where: whereCondition,
@@ -1412,8 +1750,13 @@ const tryAssignNextBooking = async (sessionId, workerId, io) => {
             ],
         });
 
+        logger.info(`Next booking: ${nextBooking ? `id=${nextBooking.id}, type=${nextBooking.booking_type}, queue=${nextBooking.queue_number}` : 'none'}`);
+
         if (nextBooking) {
+            logger.info(`Calling tryAssignBooking for booking ${nextBooking.id}`);
             await tryAssignBooking(sessionId, nextBooking.id, io);
+        } else {
+            logger.info('No waiting bookings found');
         }
     } catch (error) {
         console.error('Error assigning next booking:', error);
@@ -1713,6 +2056,355 @@ const verifyPIN = async (req, res) => {
     }
 };
 
+/**
+ * Validate booking info before creating booking
+ * Check student enrollment and desk availability
+ */
+const validateBookingInfo = async (req, res) => {
+    try {
+        const { pin_code, student_id, desk_number, booking_type } = req.body;
+
+        const errors = [];
+        const warnings = [];
+
+        // Find session by PIN
+        const session = await QueueSession.findOne({
+            where: { pin_code, status: 'active' },
+            include: [
+                {
+                    model: Course,
+                    as: 'course',
+                    attributes: ['id', 'code', 'name'],
+                },
+                {
+                    model: Classroom,
+                    as: 'classroom',
+                    include: [{ model: Desk, as: 'desks' }],
+                },
+            ],
+        });
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                error: { message: 'PIN ไม่ถูกต้อง หรือไม่มีการเปิดรับจองคิว' },
+            });
+        }
+
+        let studentInfo = null;
+        let deskInfo = null;
+
+        // Validate student
+        if (student_id) {
+            const student = await Student.findOne({
+                where: { student_id },
+            });
+
+            if (!student) {
+                errors.push({
+                    field: 'student_id',
+                    message: 'ไม่พบรหัสนักศึกษานี้ในระบบ',
+                });
+            } else {
+                // Check if student is enrolled in the course (via any section)
+                const enrollment = await CourseSectionStudent.findOne({
+                    include: [{
+                        model: CourseSection,
+                        as: 'section',
+                        where: { course_id: session.course_id },
+                        required: true,
+                    }],
+                    where: {
+                        student_id: student.id,
+                    },
+                });
+
+                if (!enrollment) {
+                    errors.push({
+                        field: 'student_id',
+                        message: `รหัสนักศึกษา ${student_id} ไม่ได้ลงทะเบียนในรายวิชานี้`,
+                    });
+                } else {
+                    studentInfo = {
+                        id: student.id,
+                        student_id: student.student_id,
+                        full_name: student.full_name,
+                    };
+
+                    // Check attendance requirement
+                    if (session.require_attendance && session.linked_attendance_session_id) {
+                        const attendanceRecord = await AttendanceRecord.findOne({
+                            where: {
+                                attendance_session_id: session.linked_attendance_session_id,
+                                student_id: student.id,
+                                status: { [Op.in]: ['present', 'late'] },
+                            },
+                        });
+
+                        if (!attendanceRecord) {
+                            errors.push({
+                                field: 'student_id',
+                                message: 'นักศึกษายังไม่ได้เช็คชื่อในรอบการเรียนนี้',
+                            });
+                        }
+                    }
+
+                    // Check if student already has active booking in this session
+                    const existingBooking = await QueueBooking.findOne({
+                        where: {
+                            queue_session_id: session.id,
+                            student_id: student.id,
+                            status: { [Op.in]: ['waiting', 'in_progress'] },
+                        },
+                    });
+
+                    if (existingBooking) {
+                        warnings.push({
+                            field: 'student_id',
+                            message: `นักศึกษามีการจองคิวอยู่แล้ว (คิวที่ ${existingBooking.queue_number})`,
+                            existing_booking: {
+                                id: existingBooking.id,
+                                queue_number: existingBooking.queue_number,
+                                booking_type: existingBooking.booking_type,
+                                status: existingBooking.status,
+                            },
+                        });
+                    }
+
+                    // Check if student already has score for grading type
+                    if (booking_type === 'grading' && session.linked_assignment_id) {
+                        const assignment = await Assignment.findOne({
+                            where: { id: session.linked_assignment_id },
+                            include: [{ model: AssignmentSubItem, as: 'subItems' }],
+                        });
+
+                        if (assignment) {
+                            const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+                            if (hasSubItems) {
+                                // Check how many sub-items are already graded
+                                const gradedSubItems = await Score.findAll({
+                                    where: {
+                                        assignment_id: assignment.id,
+                                        student_id: student.id,
+                                        sub_item_id: { [Op.ne]: null },
+                                        status: 'graded',
+                                    },
+                                });
+
+                                const gradedSubItemIds = gradedSubItems.map(s => s.sub_item_id);
+                                const allSubItemIds = assignment.subItems.map(s => s.id);
+                                const allGraded = allSubItemIds.every(id => gradedSubItemIds.includes(id));
+
+                                if (allGraded) {
+                                    errors.push({
+                                        field: 'student_id',
+                                        message: 'นักศึกษาได้รับการตรวจครบทุกข้อแล้ว ไม่สามารถจองคิวตรวจงานได้อีก',
+                                    });
+                                } else if (gradedSubItems.length > 0) {
+                                    // Some items graded - show info
+                                    const remainingCount = allSubItemIds.length - gradedSubItemIds.length;
+                                    warnings.push({
+                                        field: 'student_id',
+                                        message: `นักศึกษาได้รับการตรวจไปแล้ว ${gradedSubItems.length}/${allSubItemIds.length} ข้อ (เหลืออีก ${remainingCount} ข้อ)`,
+                                    });
+                                }
+                            } else {
+                                // Single score - check if already graded
+                                const existingScore = await Score.findOne({
+                                    where: {
+                                        assignment_id: assignment.id,
+                                        student_id: student.id,
+                                        sub_item_id: null,
+                                        status: 'graded',
+                                    },
+                                });
+
+                                if (existingScore) {
+                                    errors.push({
+                                        field: 'student_id',
+                                        message: `นักศึกษาได้รับการตรวจงานแล้ว (${existingScore.score} คะแนน) ไม่สามารถจองคิวตรวจงานได้อีก`,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Validate desk
+        if (desk_number) {
+            const desk = await Desk.findOne({
+                where: {
+                    classroom_id: session.classroom_id,
+                    number: desk_number,
+                    is_enabled: true,
+                },
+            });
+
+            if (!desk) {
+                // Check if desk exists but disabled
+                const disabledDesk = await Desk.findOne({
+                    where: {
+                        classroom_id: session.classroom_id,
+                        number: desk_number,
+                    },
+                });
+
+                if (disabledDesk) {
+                    errors.push({
+                        field: 'desk_number',
+                        message: `โต๊ะหมายเลข ${desk_number} ถูกปิดใช้งาน`,
+                    });
+                } else {
+                    errors.push({
+                        field: 'desk_number',
+                        message: `ไม่พบโต๊ะหมายเลข ${desk_number} ในห้องนี้`,
+                    });
+                }
+            } else {
+                deskInfo = {
+                    id: desk.id,
+                    number: desk.number,
+                    type: desk.type,
+                };
+
+                // Check desk status
+                const deskStatus = await QueueDeskStatus.findOne({
+                    where: {
+                        queue_session_id: session.id,
+                        desk_id: desk.id,
+                    },
+                });
+
+                if (deskStatus) {
+                    if (booking_type === 'grading') {
+                        if (deskStatus.grading_status === 'completed') {
+                            errors.push({
+                                field: 'desk_number',
+                                message: `โต๊ะหมายเลข ${desk_number} ได้รับการตรวจงานแล้ว`,
+                            });
+                        } else if (['waiting', 'in_progress'].includes(deskStatus.grading_status)) {
+                            errors.push({
+                                field: 'desk_number',
+                                message: `โต๊ะหมายเลข ${desk_number} มีการจองตรวจงานอยู่แล้ว`,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        const isValid = errors.length === 0;
+
+        res.json({
+            success: true,
+            data: {
+                valid: isValid,
+                errors,
+                warnings,
+                student: studentInfo,
+                desk: deskInfo,
+            },
+        });
+    } catch (error) {
+        console.error('Error validating booking info:', error);
+        res.status(500).json({
+            success: false,
+            error: { message: error.message },
+        });
+    }
+};
+
+/**
+ * Check if student has existing active booking in session
+ * Used to restore booking state after page refresh
+ */
+const checkExistingBooking = async (req, res) => {
+    try {
+        const { pin_code, student_id } = req.body;
+
+        // Find session by PIN
+        const session = await QueueSession.findOne({
+            where: { pin_code, status: 'active' },
+        });
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                error: { message: 'PIN ไม่ถูกต้อง หรือไม่มีการเปิดรับจองคิว' },
+            });
+        }
+
+        // Find student
+        const student = await Student.findOne({
+            where: { student_id },
+        });
+
+        if (!student) {
+            return res.json({
+                success: true,
+                data: { has_booking: false },
+            });
+        }
+
+        // Find active booking
+        const booking = await QueueBooking.findOne({
+            where: {
+                queue_session_id: session.id,
+                student_id: student.id,
+                status: { [Op.in]: ['waiting', 'in_progress'] },
+            },
+            include: [
+                {
+                    model: QueueSession,
+                    as: 'session',
+                    attributes: ['id', 'title', 'status'],
+                },
+            ],
+        });
+
+        if (!booking) {
+            return res.json({
+                success: true,
+                data: { has_booking: false },
+            });
+        }
+
+        // Get position in queue
+        const waitingAhead = await QueueBooking.count({
+            where: {
+                queue_session_id: session.id,
+                booking_type: booking.booking_type,
+                status: 'waiting',
+                queue_number: { [Op.lt]: booking.queue_number },
+            },
+        });
+
+        res.json({
+            success: true,
+            data: {
+                has_booking: true,
+                booking: {
+                    id: booking.id,
+                    queue_number: booking.queue_number,
+                    booking_type: booking.booking_type,
+                    desk_number: booking.desk_number,
+                    status: booking.status,
+                    position_in_queue: waitingAhead,
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Error checking existing booking:', error);
+        res.status(500).json({
+            success: false,
+            error: { message: error.message },
+        });
+    }
+};
+
 module.exports = {
     // Session management
     getQueueSessions,
@@ -1727,6 +2419,7 @@ module.exports = {
     joinAsWorker,
     leaveAsWorker,
     getWorkers,
+    getWorkerCurrentBooking,
 
     // Booking management
     createBooking,
@@ -1740,4 +2433,6 @@ module.exports = {
 
     // Public
     verifyPIN,
+    validateBookingInfo,
+    checkExistingBooking,
 };

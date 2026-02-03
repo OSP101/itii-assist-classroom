@@ -365,6 +365,19 @@ const queueService = {
         return response.data || [];
     },
 
+    /**
+     * Get worker's current booking (for reconnection)
+     */
+    async getWorkerCurrentBooking(
+        courseId: string,
+        sessionId: string
+    ): Promise<{ worker: QueueWorker | null; currentBooking: QueueBooking | null }> {
+        const response = await api.get<{ worker: QueueWorker | null; currentBooking: QueueBooking | null }>(
+            `/courses/${courseId}/queue/sessions/${sessionId}/workers/current-booking`
+        );
+        return response.data || { worker: null, currentBooking: null };
+    },
+
     // ============================================
     // Booking Management
     // ============================================

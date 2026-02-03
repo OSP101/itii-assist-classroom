@@ -107,6 +107,14 @@ router.get(
     queueController.getWorkers
 );
 
+// Get worker's current booking (for reconnection)
+router.get(
+    '/sessions/:sessionId/workers/current-booking',
+    authenticate,
+    authorize('admin', 'instructor', 'ta'),
+    queueController.getWorkerCurrentBooking
+);
+
 // ============================================
 // Booking Management (for workers)
 // ============================================

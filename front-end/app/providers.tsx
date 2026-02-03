@@ -8,6 +8,7 @@ import { ToastProvider } from "@heroui/toast";
 import { useRouter, usePathname } from "next/navigation";
 import { ThemeProvider as NextThemesProvider } from "next-themes";
 import { SocketProvider } from "@/contexts/SocketContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { authService } from "@/services/auth.service";
 
 export interface ProvidersProps {
@@ -57,9 +58,11 @@ export function Providers({ children, themeProps }: ProvidersProps) {
     <HeroUIProvider navigate={router.push}>
       <NextThemesProvider {...themeProps}>
         <SocketProvider>
-          <AuthSyncProvider>
-            {children}
-          </AuthSyncProvider>
+          <NotificationProvider>
+            <AuthSyncProvider>
+              {children}
+            </AuthSyncProvider>
+          </NotificationProvider>
         </SocketProvider>
         <ToastProvider placement="top-right" toastProps={{timeout: 5000}} />
       </NextThemesProvider>

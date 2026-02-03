@@ -184,6 +184,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={sectionModal.isOpen} 
                 onClose={sectionModal.reset}
                 size="md"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
@@ -251,6 +252,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={editSectionModal.isOpen} 
                 onClose={editSectionModal.reset}
                 size="md"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
@@ -318,7 +320,8 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={studentModal.isOpen} 
                 onClose={studentModal.reset}
                 size="xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
@@ -351,7 +354,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                 </button>
                                 <button
                                     onClick={() => studentModal.setMode("bulk")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                                         studentModal.mode === "bulk"
                                             ? "bg-white shadow-sm text-blue-600"
                                             : "text-slate-600 hover:bg-slate-200"
@@ -509,10 +512,11 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={teamModal.isOpen} 
                 onClose={teamModal.reset}
                 size="xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
+                placement="center"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6">
                         <div className="flex items-center gap-4">
                             <div className={`p-3 rounded-xl shadow-lg ${
                                 teamModal.type === "permanent" 
@@ -631,7 +635,6 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                         value={teamModal.name}
                                         onValueChange={teamModal.setName}
                                         isRequired
-                                        className="pt-3"
                                         classNames={{
                                             inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                             label: "text-slate-600 font-medium text-sm",
@@ -695,7 +698,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                                         นักศึกษาที่ยังไม่อยู่ในกลุ่ม: {getUnassignedStudents(teamModal.type, teamModal.type === "weekly" ? selectedWeek : undefined).length} คน
                                                     </p>
                                                 </div>
-                                                <div className="max-h-60 overflow-y-auto">
+                                                <div className="max-h-52 overflow-y-auto">
                                                     {getUnassignedStudents(teamModal.type, teamModal.type === "weekly" ? selectedWeek : undefined).length > 0 ? (
                                                         getUnassignedStudents(teamModal.type, teamModal.type === "weekly" ? selectedWeek : undefined).map((student) => (
                                                             <div
@@ -741,6 +744,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                                             </div>
                                         </div>
                                     )}
+
 
                                     {/* Paste Mode - Excel Paste */}
                                     {teamModal.memberMode === "paste" && (
@@ -904,7 +908,8 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={editTeamModal.isOpen} 
                 onClose={editTeamModal.reset}
                 size="xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
@@ -1052,6 +1057,8 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={deleteModal.isOpen} 
                 onClose={deleteModal.reset}
                 size="lg"
+                scrollBehavior="outside"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
@@ -1256,6 +1263,8 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 isOpen={bulkDeleteModal.isOpen} 
                 onClose={() => bulkDeleteModal.setIsOpen(false)}
                 size="lg"
+                scrollBehavior="outside"
+                placement="center"
             >
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
