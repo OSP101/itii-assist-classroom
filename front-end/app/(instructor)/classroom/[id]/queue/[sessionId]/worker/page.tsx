@@ -8,7 +8,6 @@ import { Chip } from "@heroui/chip";
 import { Avatar } from "@heroui/avatar";
 import { Checkbox } from "@heroui/checkbox";
 import { Input } from "@heroui/input";
-import { Textarea } from "@heroui/input";
 import { Skeleton } from "@heroui/skeleton";
 import { Spinner } from "@heroui/spinner";
 import {
@@ -28,6 +27,7 @@ import queueService, {
 } from "@/services/queue.service";
 import { authService } from "@/services/auth.service";
 import scoreService from "@/services/score.service";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 
@@ -80,6 +80,15 @@ export default function WorkerDashboardPage() {
     // Socket
     const socketRef = useRef<Socket | null>(null);
 
+    // Notification (FCM)
+    const { 
+        isSupported: notificationSupported, 
+        permissionStatus, 
+        requestPermission, 
+        registerFcmToken,
+        fcmToken,
+    } = useNotification();
+
     // Get current user
     useEffect(() => {
         const user = authService.getStoredUser();
@@ -88,23 +97,53 @@ export default function WorkerDashboardPage() {
         }
     }, []);
 
-    // Fetch session details
+    // Fetch session details and check for existing booking
     const fetchSession = useCallback(async () => {
         setIsLoading(true);
         try {
             const data = await queueService.getQueueSession(courseId, sessionId);
             setSession(data);
 
-            // Check if current user is already a worker
-            if (currentUser && data.workers) {
-                const myWorker = data.workers.find((w) => w.user_id === currentUser.id);
-                if (myWorker && myWorker.status !== "offline") {
+            // Always check for existing booking assigned to current user (even if offline)
+            // This handles reconnection after page refresh
+            try {
+                const result = await queueService.getWorkerCurrentBooking(courseId, sessionId);
+                console.log("getWorkerCurrentBooking result:", result);
+                
+                const { worker, currentBooking } = result;
+                
+                if (currentBooking) {
+                    console.log("Found pending booking:", currentBooking);
+                    // Has pending booking - restore state
+                    setCurrentBooking(currentBooking);
                     setIsWorkerOnline(true);
-                    setWorkerPreferences({
-                        accept_grading: myWorker.accept_grading,
-                        accept_help: myWorker.accept_help,
+                    
+                    if (worker) {
+                        setWorkerPreferences({
+                            accept_grading: worker.accept_grading,
+                            accept_help: worker.accept_help,
+                        });
+                    }
+                    
+                    addToast({
+                        title: "พบงานที่ค้างอยู่",
+                        description: `โต๊ะ ${currentBooking.desk_number} - ${currentBooking.booking_type === "grading" ? "ตรวจงาน" : "ช่วยเหลือ"}`,
+                        color: "primary",
                     });
+                } else if (currentUser && data.workers) {
+                    console.log("No pending booking, checking worker list");
+                    // No pending booking - check if user is a worker
+                    const myWorker = data.workers.find((w) => w.user_id === currentUser.id);
+                    if (myWorker && myWorker.status !== "offline") {
+                        setIsWorkerOnline(true);
+                        setWorkerPreferences({
+                            accept_grading: myWorker.accept_grading,
+                            accept_help: myWorker.accept_help,
+                        });
+                    }
                 }
+            } catch (err) {
+                console.error("Error fetching current booking:", err);
             }
         } catch (error) {
             console.error("Error fetching session:", error);
@@ -124,6 +163,54 @@ export default function WorkerDashboardPage() {
         }
     }, [fetchSession, currentUser]);
 
+    // Prevent page refresh/close when worker is online or has current booking
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (isWorkerOnline || currentBooking) {
+                e.preventDefault();
+                // Chrome requires returnValue to be set
+                e.returnValue = "คุณกำลังรับงานอยู่ ต้องการออกจากหน้านี้หรือไม่?";
+                return e.returnValue;
+            }
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+        };
+    }, [isWorkerOnline, currentBooking]);
+
+    // Polling interval ref
+    const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Poll for current booking (fallback if socket fails)
+    // Use ref to track if we should skip polling (to avoid stale closure issues)
+    const skipPollingRef = useRef(false);
+    
+    const pollForBooking = useCallback(async (force: boolean = false) => {
+        // Skip if not online or already have booking (unless forced)
+        if (!isWorkerOnline) return;
+        if (!force && (currentBooking || skipPollingRef.current)) return;
+        
+        try {
+            console.log("Polling for new booking...");
+            const result = await queueService.getWorkerCurrentBooking(courseId, sessionId);
+            if (result.currentBooking) {
+                console.log("Polling found new booking:", result.currentBooking);
+                setCurrentBooking(result.currentBooking);
+                skipPollingRef.current = true;
+                addToast({
+                    title: "มีงานใหม่!",
+                    description: `โต๊ะ ${result.currentBooking.desk_number} - ${result.currentBooking.booking_type === "grading" ? "ตรวจงาน" : "ขอความช่วยเหลือ"}`,
+                    color: "primary",
+                });
+            }
+        } catch (err) {
+            console.error("Polling error:", err);
+        }
+    }, [courseId, sessionId, isWorkerOnline, currentBooking]);
+
     // Socket connection - connect only when worker is online
     useEffect(() => {
         if (!currentUser || !isWorkerOnline) return;
@@ -133,15 +220,25 @@ export default function WorkerDashboardPage() {
         });
 
         socket.on("connect", () => {
-            console.log("Socket connected for worker");
+            console.log("Socket connected for worker, socketId:", socket.id, "userId:", currentUser.id);
             // Join queue and worker rooms
             socket.emit("join-queue", sessionId);
-            socket.emit("join-worker", currentUser.id);
+            socket.emit("join-worker", String(currentUser.id));
+            console.log("Joined rooms: queue-" + sessionId + ", worker-" + String(currentUser.id));
+        });
+
+        socket.on("disconnect", () => {
+            console.log("Socket disconnected for worker");
+        });
+
+        socket.on("connect_error", (err) => {
+            console.error("Socket connection error:", err);
         });
 
         // Listen for task assignment
         socket.on("new-task", (data: { booking: QueueBooking }) => {
-            console.log("New task assigned:", data);
+            console.log("=== RECEIVED new-task event ===");
+            console.log("Data:", JSON.stringify(data, null, 2));
             setCurrentBooking(data.booking);
             addToast({
                 title: "มีงานใหม่!",
@@ -171,12 +268,25 @@ export default function WorkerDashboardPage() {
 
         socketRef.current = socket;
 
+        // Start polling as fallback (every 3 seconds)
+        pollingRef.current = setInterval(() => {
+            // Only poll if no current booking
+            if (!currentBooking) {
+                skipPollingRef.current = false;
+                pollForBooking();
+            }
+        }, 3000);
+
         return () => {
             socket.emit("leave-queue", sessionId);
-            socket.emit("leave-worker", currentUser.id);
+            socket.emit("leave-worker", String(currentUser.id));
             socket.disconnect();
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+            }
         };
-    }, [sessionId, currentUser, isWorkerOnline]);
+    }, [sessionId, currentUser, isWorkerOnline, pollForBooking]);
 
     // Join as worker
     const handleJoinAsWorker = async () => {
@@ -191,6 +301,18 @@ export default function WorkerDashboardPage() {
 
         setIsJoining(true);
         try {
+            // Request notification permission and register FCM token
+            if (notificationSupported && permissionStatus !== "granted") {
+                const granted = await requestPermission();
+                if (granted) {
+                    // Register FCM token for this worker and session
+                    await registerFcmToken("worker", parseInt(sessionId));
+                }
+            } else if (fcmToken) {
+                // Already have permission, just register token
+                await registerFcmToken("worker", parseInt(sessionId));
+            }
+
             const result = await queueService.joinAsWorker(courseId, sessionId, workerPreferences);
             setIsWorkerOnline(true);
             
@@ -287,8 +409,14 @@ export default function WorkerDashboardPage() {
             });
 
             setCurrentBooking(null);
+            skipPollingRef.current = false; // Allow polling again
             setIsCompleteModalOpen(false);
             setCompleteForm({ score: "", score_comment: "", worker_note: "", sub_item_scores: [] });
+            
+            // Poll immediately for new booking (don't wait for interval)
+            setTimeout(() => {
+                pollForBooking(true);
+            }, 500);
         } catch (error: unknown) {
             console.error("Error completing booking:", error);
             addToast({
@@ -547,6 +675,35 @@ export default function WorkerDashboardPage() {
                                         </div>
                                     </Checkbox>
                                 </div>
+
+                                {/* Notification Permission Info */}
+                                {notificationSupported && permissionStatus !== "granted" && (
+                                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
+                                        <div className="flex items-start gap-2">
+                                            <Icon icon="solar:bell-bold" className="text-amber-500 text-lg mt-0.5" />
+                                            <div className="text-sm">
+                                                <p className="font-medium text-amber-700">เปิดการแจ้งเตือน</p>
+                                                <p className="text-amber-600 text-xs mt-0.5">
+                                                    เมื่อกดเริ่มรับงาน ระบบจะขออนุญาตส่งการแจ้งเตือนเมื่อมีงานใหม่ แม้ปิดหน้าจอก็ได้รับแจ้งเตือน
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {permissionStatus === "denied" && (
+                                    <div className="bg-red-50 rounded-xl p-3 border border-red-200">
+                                        <div className="flex items-start gap-2">
+                                            <Icon icon="solar:bell-off-bold" className="text-red-500 text-lg mt-0.5" />
+                                            <div className="text-sm">
+                                                <p className="font-medium text-red-700">การแจ้งเตือนถูกปิด</p>
+                                                <p className="text-red-600 text-xs mt-0.5">
+                                                    กรุณาเปิดการแจ้งเตือนในการตั้งค่าเบราว์เซอร์เพื่อรับการแจ้งเตือนเมื่อมีงานใหม่
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <Button
                                     color="primary"
@@ -950,12 +1107,11 @@ export default function WorkerDashboardPage() {
                                 </div>
                             )}
 
-                            <Textarea
+                            <Input
                                 label="ความคิดเห็น/หมายเหตุ (ถ้ามี)"
                                 placeholder="เพิ่มความคิดเห็นหรือหมายเหตุ..."
                                 value={completeForm.score_comment}
                                 onValueChange={(value) => setCompleteForm({ ...completeForm, score_comment: value })}
-                                minRows={2}
                             />
                         </div>
                     </ModalBody>
@@ -990,6 +1146,8 @@ export default function WorkerDashboardPage() {
                         <Input
                             label="เหตุผล (ถ้ามี)"
                             placeholder="ไม่พบนักศึกษา..."
+                            labelPlacement="outside"
+                            variant="bordered"
                             value={skipReason}
                             onValueChange={setSkipReason}
                         />

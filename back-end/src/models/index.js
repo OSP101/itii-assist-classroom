@@ -29,6 +29,10 @@ const QueueWorker = require('./QueueWorker');
 const QueueBooking = require('./QueueBooking');
 const QueueDeskStatus = require('./QueueDeskStatus');
 
+// FCM Notification Models
+const FcmToken = require('./FcmToken');
+const NotificationLog = require('./NotificationLog');
+
 // ============================================
 // Define Associations
 // ============================================;
@@ -580,17 +584,6 @@ User.hasMany(QueueWorker, {
   as: 'queueWorkerAssignments',
 });
 
-// QueueWorker -> Desk
-QueueWorker.belongsTo(Desk, {
-  foreignKey: 'desk_id',
-  as: 'desk',
-});
-
-Desk.hasMany(QueueWorker, {
-  foreignKey: 'desk_id',
-  as: 'queueWorkers',
-});
-
 // QueueBooking -> QueueSession
 QueueBooking.belongsTo(QueueSession, {
   foreignKey: 'queue_session_id',
@@ -613,26 +606,26 @@ Student.hasMany(QueueBooking, {
   as: 'queueBookings',
 });
 
-// QueueBooking -> Desk (assigned)
+// QueueBooking -> Desk
 QueueBooking.belongsTo(Desk, {
-  foreignKey: 'assigned_desk_id',
-  as: 'assignedDesk',
+  foreignKey: 'desk_id',
+  as: 'desk',
 });
 
 Desk.hasMany(QueueBooking, {
-  foreignKey: 'assigned_desk_id',
+  foreignKey: 'desk_id',
   as: 'queueBookings',
 });
 
-// QueueBooking -> User (handled_by)
+// QueueBooking -> User (assigned worker)
 QueueBooking.belongsTo(User, {
-  foreignKey: 'handled_by',
-  as: 'handler',
+  foreignKey: 'assigned_worker_id',
+  as: 'assignedWorker',
 });
 
 User.hasMany(QueueBooking, {
-  foreignKey: 'handled_by',
-  as: 'handledBookings',
+  foreignKey: 'assigned_worker_id',
+  as: 'assignedBookings',
 });
 
 // QueueDeskStatus -> QueueSession
@@ -655,6 +648,54 @@ QueueDeskStatus.belongsTo(Desk, {
 Desk.hasMany(QueueDeskStatus, {
   foreignKey: 'desk_id',
   as: 'queueStatuses',
+});
+
+// ============================================
+// FCM Token Associations
+// ============================================
+
+// FcmToken -> User (for workers)
+FcmToken.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+User.hasMany(FcmToken, {
+  foreignKey: 'user_id',
+  as: 'fcmTokens',
+});
+
+// FcmToken -> QueueSession (for workers)
+FcmToken.belongsTo(QueueSession, {
+  foreignKey: 'session_id',
+  as: 'queueSession',
+});
+
+QueueSession.hasMany(FcmToken, {
+  foreignKey: 'session_id',
+  as: 'fcmTokens',
+});
+
+// FcmToken -> QueueBooking (for students)
+FcmToken.belongsTo(QueueBooking, {
+  foreignKey: 'booking_id',
+  as: 'booking',
+});
+
+QueueBooking.hasMany(FcmToken, {
+  foreignKey: 'booking_id',
+  as: 'fcmTokens',
+});
+
+// NotificationLog -> FcmToken
+NotificationLog.belongsTo(FcmToken, {
+  foreignKey: 'fcm_token_id',
+  as: 'fcmToken',
+});
+
+FcmToken.hasMany(NotificationLog, {
+  foreignKey: 'fcm_token_id',
+  as: 'notificationLogs',
 });
 
 // ============================================
@@ -690,4 +731,7 @@ module.exports = {
   QueueWorker,
   QueueBooking,
   QueueDeskStatus,
+  // FCM Notification Models
+  FcmToken,
+  NotificationLog,
 };

@@ -90,7 +90,7 @@ export default function PeopleTab({
     // Get instructors count - use instructors array if available, otherwise fallback to single instructor
     const instructorsCount = course.instructors?.length || (course.instructor ? 1 : 0);
     const instructorsList = course.instructors || (course.instructor ? [course.instructor] : []);
-    
+
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -99,8 +99,9 @@ export default function PeopleTab({
                     <h2 className="text-lg font-semibold text-slate-800">บุคลากรในรายวิชา</h2>
                     <p className="text-sm text-slate-500">จัดการอาจารย์ผู้สอนและผู้ช่วยสอน (TA)</p>
                 </div>
-                <div className="flex gap-2">
-                    {userRole === "instructor" && (
+
+                {userRole === "instructor" && (
+                    <div className="flex gap-2">
                         <Button
                             color="secondary"
                             variant="flat"
@@ -111,17 +112,19 @@ export default function PeopleTab({
                         >
                             เพิ่มอาจารย์
                         </Button>
-                    )}
-                    <Button
-                        color="primary"
-                        startContent={<Icon icon="solar:user-plus-bold" />}
-                        onPress={onOpenAddTAModal}
-                        isDisabled={isPeopleLoading}
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
-                    >
-                        เพิ่มผู้ช่วยสอน
-                    </Button>
-                </div>
+                        <Button
+                            color="primary"
+                            startContent={<Icon icon="solar:user-plus-bold" />}
+                            onPress={onOpenAddTAModal}
+                            isDisabled={isPeopleLoading}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                        >
+                            เพิ่มผู้ช่วยสอน
+                        </Button>
+                    </div>
+                )}
+
+
             </div>
 
             {/* Loading state */}
@@ -245,7 +248,7 @@ export default function PeopleTab({
                                                             name={person.full_name}
                                                             src={person.avatar || undefined}
                                                             size="sm"
-                                                            className={person.type === 'instructor' 
+                                                            className={person.type === 'instructor'
                                                                 ? "bg-gradient-to-br from-blue-500 to-indigo-500"
                                                                 : "bg-gradient-to-br from-emerald-500 to-teal-500"
                                                             }

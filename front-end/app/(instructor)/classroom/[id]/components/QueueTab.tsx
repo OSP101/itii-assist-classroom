@@ -829,16 +829,23 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
-                            
+
                             <Select
                                 label="เลือกห้องเรียน"
                                 placeholder="เลือกห้อง"
                                 isLoading={isOptionsLoading}
-                                selectedKeys={formData.classroom_id ? [formData.classroom_id.toString()] : []}
+                                selectedKeys={
+                                    formData.classroom_id
+                                        ? new Set([formData.classroom_id])
+                                        : new Set()
+                                }
                                 onSelectionChange={(keys) => {
                                     const selected = Array.from(keys)[0];
                                     if (selected) {
-                                        setFormData({ ...formData, classroom_id: selected.toString() });
+                                        setFormData({
+                                            ...formData,
+                                            classroom_id: selected as string,
+                                        });
                                     }
                                 }}
                                 isRequired
@@ -852,11 +859,15 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                 }}
                             >
                                 {classrooms.map((room) => (
-                                    <SelectItem key={room.id.toString()}>
+                                    <SelectItem
+                                        key={room.id.toString()}
+                                        textValue={`${room.name} - ${room.building}`}
+                                    >
                                         {room.name} - {room.building}
                                     </SelectItem>
                                 ))}
                             </Select>
+
 
                             <Input
                                 label="คำอธิบาย (ถ้ามี)"
