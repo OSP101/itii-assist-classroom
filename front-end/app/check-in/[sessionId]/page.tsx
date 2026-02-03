@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
-import { Input } from "@heroui/input";
+import { InputOtp } from "@heroui/input-otp";
 import { Spinner } from "@heroui/spinner";
 import { Avatar } from "@heroui/avatar";
 import { addToast } from "@heroui/toast";
@@ -471,18 +471,21 @@ export default function StudentCheckInPage() {
                             <h2 className="text-lg font-semibold text-slate-800 mb-2">กรอกรหัส PIN</h2>
                             <p className="text-slate-500 text-sm mb-6">กรอกรหัส PIN 6 หลักที่แสดงในห้องเรียน</p>
 
-                            <Input
-                                type="text"
-                                placeholder="______"
-                                value={pinCode}
-                                onValueChange={(val) => setPinCode(val.replace(/\D/g, "").slice(0, 6))}
-                                classNames={{
-                                    input: "text-center text-3xl tracking-[0.5em] font-mono font-bold",
-                                    inputWrapper: "h-16 bg-slate-50",
-                                }}
-                                maxLength={6}
-                                autoFocus
-                            />
+                            <div className="flex justify-center">
+                                <InputOtp
+                                    length={6}
+                                    value={pinCode}
+                                    onValueChange={setPinCode}
+                                    size="lg"
+                                    variant="bordered"
+                                    color="primary"
+                                    onComplete={handleCheckIn}
+                                    classNames={{
+                                        segment: "w-11 h-14 text-xl font-bold",
+                                        segmentWrapper: "gap-1.5",
+                                    }}
+                                />
+                            </div>
 
                             {location && (
                                 <div className="mt-4 p-2 bg-emerald-50 text-emerald-600 rounded-lg text-xs flex items-center justify-center gap-1">
