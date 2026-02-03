@@ -142,6 +142,10 @@ app.use(slowQueryLogger(2000));
 // Initialize Passport
 app.use(passport.initialize());
 
+// Serve uploaded files (static)
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Request Logger Middleware (บันทึกเฉพาะการกระทำต่อระบบ ไม่บันทึกการเข้าหน้า)
 const { requestLogger } = require('./middlewares');
 app.use('/api', requestLogger({
