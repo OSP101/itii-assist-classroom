@@ -19,6 +19,7 @@ export interface AttendanceSession {
     start_time: string;
     end_time: string;
     late_threshold_minutes: number;
+    late_threshold_time?: string | null; // New: absolute time for late threshold (e.g. "08:15:00")
     status: 'draft' | 'active' | 'closed';
     created_by: number;
     created_at: string;
@@ -91,6 +92,7 @@ export interface CreateAttendanceData {
     start_time: string;
     end_time: string;
     late_threshold_minutes?: number;
+    late_threshold_time?: string | null; // New: absolute time for late threshold (e.g. "08:15:00")
 }
 
 export interface StudentCheckInData {

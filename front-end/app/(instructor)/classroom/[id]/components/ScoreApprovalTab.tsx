@@ -716,58 +716,102 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                 </div>
 
                                 {/* Member Selection */}
-                                <div className="space-y-2">
+                                <div className="space-y-3">
                                     <div className="flex items-center justify-between">
-                                        <p className="text-sm font-medium text-slate-700">
-                                            <Icon icon="solar:users-group-rounded-bold" className="inline mr-1" />
+                                        <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                                            <Icon icon="solar:users-group-two-rounded-bold" className="text-blue-500" />
                                             เลือกสมาชิกที่ต้องการ{actionModal.type === "approve" ? "อนุมัติ" : "ปฏิเสธ"}
                                         </p>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-1">
                                             <Button
                                                 size="sm"
                                                 variant="flat"
+                                                color="primary"
                                                 onPress={() => toggleAllSelection(true)}
+                                                className="text-xs h-7 px-2"
                                             >
                                                 เลือกทั้งหมด
                                             </Button>
                                             <Button
                                                 size="sm"
                                                 variant="flat"
+                                                color="default"
                                                 onPress={() => toggleAllSelection(false)}
+                                                className="text-xs h-7 px-2"
                                             >
                                                 ยกเลิกทั้งหมด
                                             </Button>
                                         </div>
                                     </div>
-                                    <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                                    <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-64 overflow-y-auto">
                                         {actionModal.group.requests
                                             .filter(r => r.status === "pending")
                                             .map(req => (
-                                                <label
+                                                <div
                                                     key={req.id}
-                                                    className="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer"
+                                                    className={`flex items-center justify-between p-3 cursor-pointer transition-all ${
+                                                        actionModal.selectedIds.includes(req.id)
+                                                            ? 'bg-blue-50/70'
+                                                            : 'hover:bg-slate-50'
+                                                    }`}
+                                                    onClick={() => toggleRequestSelection(req.id)}
                                                 >
-                                                    <Checkbox
-                                                        isSelected={actionModal.selectedIds.includes(req.id)}
-                                                        onValueChange={() => toggleRequestSelection(req.id)}
-                                                    />
-                                                    <div className="flex-1">
-                                                        <p className="text-sm font-medium text-slate-700">
-                                                            {req.student.full_name}
-                                                        </p>
-                                                        <p className="text-xs text-slate-500">
-                                                            {req.student.student_id}
-                                                        </p>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                                            actionModal.selectedIds.includes(req.id)
+                                                                ? 'bg-blue-500 border-blue-500 shadow-sm'
+                                                                : 'border-slate-300 bg-white hover:border-blue-300'
+                                                        }`}>
+                                                            {actionModal.selectedIds.includes(req.id) && (
+                                                                <Icon icon="solar:check-bold" className="text-white text-xs" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
+                                                                actionModal.selectedIds.includes(req.id)
+                                                                    ? 'bg-blue-100 text-blue-600'
+                                                                    : 'bg-slate-100 text-slate-600'
+                                                            }`}>
+                                                                <Icon icon="solar:user-bold" className="text-sm" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium text-slate-700">
+                                                                    {req.student.full_name}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500">
+                                                                    {req.student.student_id}
+                                                                </p>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className="text-sm text-slate-500">
-                                                        {req.old_score ?? "-"} → <span className="text-emerald-600 font-medium">{req.new_score}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-sm">
+                                                            <span className="text-slate-500">{req.old_score ?? "-"}</span>
+                                                            <span className="mx-1 text-slate-400">→</span>
+                                                            <span className="text-emerald-600 font-semibold">{req.new_score}</span>
+                                                        </div>
+                                                        {actionModal.selectedIds.includes(req.id) && (
+                                                            <Chip size="sm" color="primary" variant="flat" className="text-xs">
+                                                                <Icon icon="solar:check-circle-bold" className="mr-1 text-xs" />
+                                                                เลือกแล้ว
+                                                            </Chip>
+                                                        )}
                                                     </div>
-                                                </label>
+                                                </div>
                                             ))}
                                     </div>
-                                    <p className="text-xs text-slate-500">
-                                        เลือกแล้ว {actionModal.selectedIds.length} จาก {actionModal.group.requests.filter(r => r.status === "pending").length} คน
-                                    </p>
+                                    <div className="flex items-center justify-between text-xs">
+                                        <p className="text-slate-500 flex items-center gap-1">
+                                            <Icon icon="solar:user-check-bold" className="text-blue-500" />
+                                            เลือกแล้ว {actionModal.selectedIds.length} / {actionModal.group.requests.filter(r => r.status === "pending").length} คน
+                                        </p>
+                                        {actionModal.selectedIds.length === 0 && (
+                                            <p className="text-amber-600 flex items-center gap-1">
+                                                <Icon icon="solar:danger-triangle-bold" />
+                                                กรุณาเลือกอย่างน้อย 1 คน
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Comment Input */}

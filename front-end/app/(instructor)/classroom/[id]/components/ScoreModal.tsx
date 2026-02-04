@@ -85,6 +85,18 @@ export default function ScoreModal({
     const [mainScore, setMainScore] = useState<string>("");
     const [subItemScores, setSubItemScores] = useState<SubItemScore[]>([]);
     const [comment, setComment] = useState("");
+    // Grade group mode - "all" = grade all members, "selected" = grade selected members only
+    const [gradeGroupMode, setGradeGroupMode] = useState<"all" | "selected">("all");
+    const [gradeGroupMembers, setGradeGroupMembers] = useState<{
+        studentId: number;
+        studentName: string;
+        selected: boolean;
+        canScore: boolean;
+        hasScore: boolean; // Already has a score
+        existingScore: number | null;
+        gradedBy: string | null;
+        gradedAt: string | null;
+    }[]>([]);
 
     // Edit tab states
     const [editSearchQuery, setEditSearchQuery] = useState("");
@@ -186,6 +198,8 @@ export default function ScoreModal({
         setMainScore("");
         setSubItemScores([]);
         setComment("");
+        setGradeGroupMode("all");
+        setGradeGroupMembers([]);
         setEditSearchQuery("");
         setEditGroupSearchQuery("");
         setEditSelectedStudent(null);
@@ -491,18 +505,22 @@ export default function ScoreModal({
             setSelectedGroup(null);
             setExistingScore(null);
             setSubItemExistingScores([]);
+            setGradeGroupMembers([]);
+            setGradeGroupMode("all");
             return;
         }
         const group = groups.find(g => g.id.toString() === key.toString());
         setSelectedGroup(group || null);
         setGroupSearchQuery(""); // Clear search query after selection
         setMainScore("");
+        setGradeGroupMode("all");
 
-        // Fetch latest scores from server to check if already graded by another TA
+        // Fetch latest scores first to get member score data
+        let latestScores = scoresData;
         if (group && assignment) {
             setIsCheckingScore(true);
             try {
-                const latestScores = await scoreService.getScores(assignment.id);
+                latestScores = await scoreService.getScores(assignment.id);
                 setScoresData(latestScores);
             } catch (error) {
                 console.error("Error checking scores:", error);
@@ -510,7 +528,67 @@ export default function ScoreModal({
                 setIsCheckingScore(false);
             }
         }
+
+        // Setup grade group members with score info
+        if (group) {
+            const members = group.members.map(member => {
+                const info = getStudentAttendanceInfo(member.id);
+                // Find existing score for this member
+                const memberScore = latestScores?.student_scores?.find(
+                    ss => ss.student.id === member.id
+                );
+                const hasExistingScore = memberScore?.score !== null && memberScore?.score !== undefined;
+                
+                return {
+                    studentId: member.id,
+                    studentName: member.full_name,
+                    // Only auto-select students who can score AND don't have a score yet
+                    selected: info.canScore && !hasExistingScore,
+                    canScore: info.canScore,
+                    hasScore: hasExistingScore,
+                    existingScore: memberScore?.score ?? null,
+                    gradedBy: memberScore?.graded_by?.display_name ?? null,
+                    gradedAt: memberScore?.graded_at ?? null,
+                };
+            });
+            setGradeGroupMembers(members);
+        }
     };
+
+    // Toggle single grade group member selection (only if they don't have score yet)
+    const toggleGradeMemberSelection = (studentId: number) => {
+        setGradeGroupMembers(prev =>
+            prev.map(m => {
+                if (m.studentId === studentId && !m.hasScore) {
+                    return { ...m, selected: !m.selected };
+                }
+                return m;
+            })
+        );
+    };
+
+    // Toggle all grade group members selection (only those without scores)
+    const toggleAllGradeMembersSelection = (selectAll: boolean) => {
+        setGradeGroupMembers(prev =>
+            prev.map(m => ({ ...m, selected: selectAll && m.canScore && !m.hasScore }))
+        );
+    };
+
+    // Get selected grade group member IDs (only those without existing scores)
+    const selectedGradeMembers = useMemo(() => {
+        return gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore).map(m => m.studentId);
+    }, [gradeGroupMembers]);
+
+    // Check if there are members still needing scores
+    const membersNeedingScores = useMemo(() => {
+        return gradeGroupMembers.filter(m => m.canScore && !m.hasScore);
+    }, [gradeGroupMembers]);
+
+    // Check if all members already have scores
+    const allMembersHaveScores = useMemo(() => {
+        if (gradeGroupMembers.length === 0) return false;
+        return gradeGroupMembers.every(m => m.hasScore || !m.canScore);
+    }, [gradeGroupMembers]);
 
     const handleSubItemScoreChange = (subItemId: number, value: string) => {
         setSubItemScores(prev =>
@@ -541,11 +619,20 @@ export default function ScoreModal({
         if (!isGroupAssignment && !selectedStudent) return false;
         if (isGroupAssignment && !selectedGroup) return false;
 
-        // Check attendance - cannot score if absent
-        if (!canScoreSelected) return false;
+        // Check attendance - cannot score if absent (for individual)
+        if (!isGroupAssignment && !canScoreSelected) return false;
 
-        // If already scored (non sub-items), cannot submit
-        if (!hasSubItems && existingScore) return false;
+        // For individual: If already scored (non sub-items), cannot submit
+        if (!isGroupAssignment && !hasSubItems && existingScore) return false;
+
+        // For group assignments
+        if (isGroupAssignment) {
+            // Check if all members already have scores
+            if (allMembersHaveScores && !hasSubItems) return false;
+            
+            // Must have at least 1 member selected who needs scoring
+            if (selectedGradeMembers.length === 0) return false;
+        }
 
         if (hasSubItems) {
             // อย่างน้อยต้องกรอกคะแนน 1 ข้อ และคะแนนที่กรอกต้องถูกต้อง
@@ -559,13 +646,18 @@ export default function ScoreModal({
         } else {
             return mainScore !== "" && validateScore(mainScore, assignment.max_score);
         }
-    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore, canScoreSelected]);
+    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore, canScoreSelected, gradeGroupMode, selectedGradeMembers, allMembersHaveScores]);
 
     const handleSubmitGrade = async () => {
         if (!assignment || !canSubmitGrade) return;
 
         setIsSubmitting(true);
         try {
+            // For group assignments, always use selectedGradeMembers (which only includes members without scores)
+            const studentIdsForGrade = isGroupAssignment && selectedGradeMembers.length > 0
+                ? selectedGradeMembers
+                : undefined;
+
             if (hasSubItems) {
                 // Submit each sub-item score individually
                 const itemsToSubmit = subItemScores.filter(item => {
@@ -582,6 +674,7 @@ export default function ScoreModal({
                             score: parseFloat(item.score.toString()),
                             sub_item_id: item.subItemId,
                             comment: comment || undefined,
+                            student_ids: studentIdsForGrade,
                         });
                     }
                 } else if (selectedStudent) {
@@ -603,12 +696,14 @@ export default function ScoreModal({
                         assignment_id: assignment.id,
                         group_id: selectedGroup.id,
                         score: parseFloat(mainScore),
+                        student_ids: studentIdsForGrade,
                     });
                     const result = await scoreService.submitGroupScore({
                         assignment_id: assignment.id,
                         group_id: selectedGroup.id,
                         score: parseFloat(mainScore),
                         comment: comment || undefined,
+                        student_ids: studentIdsForGrade,
                     });
                     console.log('Group score result:', result);
                     if (!result) {
@@ -647,6 +742,8 @@ export default function ScoreModal({
             setGroupSearchQuery("");
             setExistingScore(null);
             setSubItemExistingScores([]);
+            setGradeGroupMode("all");
+            setGradeGroupMembers([]);
 
             onScoreSubmitted?.();
         } catch (error) {
@@ -1182,7 +1279,7 @@ export default function ScoreModal({
                                             {/* Selected Group Info */}
                                             {selectedGroup && (
                                                 <div className={`mt-3 p-3 rounded-xl border ${absentGroupMembers.length > 0 ? 'bg-red-50 border-red-200' : existingScore ? 'bg-amber-50 border-amber-200' : `${groupColors.bg} ${groupColors.border}`}`}>
-                                                    <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center justify-between ">
                                                         <div className="flex items-center gap-2">
                                                             <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${absentGroupMembers.length > 0 ? 'text-red-500' : groupColors.icon}`} />
                                                             <span className="font-semibold text-slate-800">{selectedGroup.name}</span>
@@ -1203,7 +1300,8 @@ export default function ScoreModal({
                                                             <Icon icon="solar:close-circle-bold" className="text-xl text-slate-400" />
                                                         </Button>
                                                     </div>
-                                                    <div className="flex flex-wrap gap-2">
+                                                    {/* รายชื่อกลุ่ม  */}
+                                                    {/* <div className="flex flex-wrap gap-2">
                                                         {selectedGroup.members.map((member) => {
                                                             const info = getStudentAttendanceInfo(member.id);
                                                             const label = getAttendanceLabel(info.status);
@@ -1222,7 +1320,7 @@ export default function ScoreModal({
                                                                 </Chip>
                                                             );
                                                         })}
-                                                    </div>
+                                                    </div> */}
 
                                                     {/* Warning if any member is absent */}
                                                     {absentGroupMembers.length > 0 && (
@@ -1249,36 +1347,237 @@ export default function ScoreModal({
                                                         </div>
                                                     )}
 
-                                                    {/* Warning if already scored */}
-                                                    {!isCheckingScore && canScoreSelected && existingScore && !hasSubItems && (
-                                                        <div className="mt-3 p-3 bg-amber-100 rounded-lg border border-amber-300">
+                                                    {/* Info: Some members already have scores */}
+                                                    {/* {!isCheckingScore && canScoreSelected && gradeGroupMembers.some(m => m.hasScore) && !allMembersHaveScores && !hasSubItems && (
+                                                        <div className="mt-3 p-3 bg-blue-100 rounded-lg border border-blue-300">
                                                             <div className="flex items-start gap-2">
-                                                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600 shrink-0 mt-0.5" />
+                                                                <Icon icon="solar:info-circle-bold" className="text-xl text-blue-600 shrink-0 mt-0.5" />
                                                                 <div>
-                                                                    <p className="text-sm font-semibold text-amber-800">กลุ่มนี้ได้รับคะแนนไปแล้ว</p>
-                                                                    <p className="text-lg font-bold text-amber-900 mt-1">
-                                                                        {existingScore.score} / {assignment?.max_score} คะแนน
+                                                                    <p className="text-sm font-medium text-blue-800">
+                                                                        มีสมาชิก {gradeGroupMembers.filter(m => m.hasScore).length} คนที่ได้รับคะแนนแล้ว
                                                                     </p>
-                                                                    {existingScore.graded_by && (
-                                                                        <p className="text-xs text-amber-700 mt-1">
-                                                                            ให้คะแนนโดย: {existingScore.graded_by.display_name}
-                                                                            {existingScore.graded_at && ` เมื่อ ${new Date(existingScore.graded_at).toLocaleDateString("th-TH")}`}
-                                                                        </p>
-                                                                    )}
-                                                                    <p className="text-xs text-amber-600 mt-2">
-                                                                        หากต้องการแก้ไข กรุณาไปที่แท็บ "แก้ไขคะแนน"
+                                                                    <p className="text-xs text-blue-600 mt-1">
+                                                                        คุณสามารถลงคะแนนเพิ่มเติมให้สมาชิกที่เหลืออีก {membersNeedingScores.length} คน
                                                                     </p>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    )}
+                                                    )} */}
                                                 </div>
                                             )}
                                         </div>
                                     )}
 
+                                    {/* Grade Mode Selection for Group Assignments */}
+                                    {isGroupAssignment && selectedGroup && !isCheckingScore && canScoreSelected && !allMembersHaveScores && (
+                                        <div className="mb-4 p-4 bg-gradient-to-br from-slate-50 to-blue-50/30 rounded-xl border border-slate-200">
+                                            {/* Show members who already have scores */}
+                                            {gradeGroupMembers.some(m => m.hasScore) && (
+                                                <div className="mb-4 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                                    <p className="text-xs text-emerald-700 font-medium mb-2 flex items-center gap-1.5">
+                                                        <Icon icon="solar:check-circle-bold" className="text-emerald-600" />
+                                                        สมาชิกที่ลงคะแนนแล้ว ({gradeGroupMembers.filter(m => m.hasScore).length} คน)
+                                                    </p>
+                                                    <div className="space-y-1.5">
+                                                        {gradeGroupMembers.filter(m => m.hasScore).map((member) => (
+                                                            <div key={member.studentId} className="flex items-center justify-between text-xs bg-white/60 rounded-md px-2 py-1.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    {/* <Icon icon="solar:user-check-bold" className="text-emerald-600" /> */}
+                                                                    <span className="text-slate-700 text-sm font-medium">{member.studentName}</span>
+                                                                </div>
+                                                                <div className="gap-2 text-slate-500">
+                                                                    <p className="text-end text-md font-semibold text-emerald-600">{member.existingScore} คะแนน</p>
+                                                                    {member.gradedBy && (
+                                                                        <>
+                                                                            <span>{member.gradedBy}</span>
+                                                                        </>
+                                                                    )}
+                                                                    {member.gradedAt && (
+                                                                        <>
+                                                                            <span> • </span>
+                                                                            <span>{new Date(member.gradedAt).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Show members needing scores */}
+                                            {membersNeedingScores.length > 0 && (
+                                                <>
+                                                    <p className="text-xs text-slate-500 mb-3 font-medium flex items-center gap-1.5">
+                                                        {/* <Icon icon="solar:pen-new-square-bold" className="text-blue-500" /> */}
+                                                        สมาชิกที่ยังไม่มีคะแนน ({membersNeedingScores.length} คน)
+                                                    </p>
+                                                    
+                                                    {/* Mode selection buttons */}
+                                                    <div className="flex gap-2 mb-3">
+                                                        <Button
+                                                            size="sm"
+                                                            variant={gradeGroupMode === "all" ? "solid" : "bordered"}
+                                                            color={gradeGroupMode === "all" ? "primary" : "default"}
+                                                            onPress={() => {
+                                                                setGradeGroupMode("all");
+                                                                toggleAllGradeMembersSelection(true);
+                                                            }}
+                                                            startContent={<Icon icon="solar:users-group-rounded-bold" />}
+                                                            className={gradeGroupMode === "all" ? "shadow-md" : ""}
+                                                        >
+                                                            ลงทุกคนที่เหลือ
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant={gradeGroupMode === "selected" ? "solid" : "bordered"}
+                                                            color={gradeGroupMode === "selected" ? "warning" : "default"}
+                                                            onPress={() => setGradeGroupMode("selected")}
+                                                            startContent={<Icon icon="solar:user-check-rounded-bold" />}
+                                                            className={gradeGroupMode === "selected" ? "shadow-md" : ""}
+                                                        >
+                                                            เลือกเฉพาะบางคน
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Member Selection when mode is "selected" */}
+                                                    {gradeGroupMode === "selected" && (
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className="text-xs text-slate-600 font-medium">
+                                                                    เลือกสมาชิกที่ต้องการลงคะแนน:
+                                                                </p>
+                                                                <div className="flex gap-1">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="primary"
+                                                                        onPress={() => toggleAllGradeMembersSelection(true)}
+                                                                        className="text-xs h-7 px-2"
+                                                                    >
+                                                                        เลือกทั้งหมด
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="default"
+                                                                        onPress={() => toggleAllGradeMembersSelection(false)}
+                                                                        className="text-xs h-7 px-2"
+                                                                    >
+                                                                        ยกเลิกทั้งหมด
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                                                                {gradeGroupMembers.filter(m => !m.hasScore).map((member) => (
+                                                                    <div
+                                                                        key={member.studentId}
+                                                                        className={`flex items-center justify-between p-3 cursor-pointer transition-all ${
+                                                                            !member.canScore
+                                                                                ? 'bg-red-50/50 cursor-not-allowed'
+                                                                                : member.selected
+                                                                                    ? 'bg-blue-50/70'
+                                                                                    : 'hover:bg-slate-50'
+                                                                        }`}
+                                                                        onClick={() => member.canScore && toggleGradeMemberSelection(member.studentId)}
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                                                                !member.canScore
+                                                                                    ? 'bg-red-100 border-red-300'
+                                                                                    : member.selected
+                                                                                        ? 'bg-blue-500 border-blue-500 shadow-sm'
+                                                                                        : 'border-slate-300 bg-white hover:border-blue-300'
+                                                                            }`}>
+                                                                                {member.selected && member.canScore && (
+                                                                                    <Icon icon="solar:check-bold" className="text-white text-xs" />
+                                                                                )}
+                                                                                {!member.canScore && (
+                                                                                    <Icon icon="solar:close-circle-bold" className="text-red-500 text-xs" />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
+                                                                                    !member.canScore
+                                                                                        ? 'bg-red-100 text-red-600'
+                                                                                        : member.selected
+                                                                                            ? 'bg-blue-100 text-blue-600'
+                                                                                            : 'bg-slate-100 text-slate-600'
+                                                                                }`}>
+                                                                                    <Icon icon="solar:user-bold" className="text-sm" />
+                                                                                </div>
+                                                                                <span className={`text-sm font-medium ${!member.canScore ? 'text-red-700' : 'text-slate-700'}`}>
+                                                                                    {member.studentName}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div>
+                                                                            {!member.canScore ? (
+                                                                                <Chip size="sm" color="danger" variant="flat" className="text-xs" startContent={<Icon icon="solar:user-cross-bold" className="mr-1 text-xs" />}>
+                                                                                    ขาดเรียน
+                                                                                </Chip>
+                                                                            ) : member.selected ? (
+                                                                                <Chip size="sm" color="primary" variant="flat" className="text-xs" startContent={<Icon icon="solar:check-circle-bold" className="mr-1 text-xs" />}>
+                                                                                    เลือกแล้ว
+                                                                                </Chip>
+                                                                            ) : null}
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex items-center justify-between text-xs">
+                                                                <p className="text-slate-500 flex items-center gap-1">
+                                                                    <Icon icon="solar:user-check-bold" className="text-blue-500" />
+                                                                    เลือกแล้ว {selectedGradeMembers.length} / {membersNeedingScores.length} คน
+                                                                </p>
+                                                                {selectedGradeMembers.length === 0 && (
+                                                                    <p className="text-amber-600 flex items-center gap-1">
+                                                                        <Icon icon="solar:danger-triangle-bold" />
+                                                                        กรุณาเลือกอย่างน้อย 1 คน
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* All members already have scores warning */}
+                                    {isGroupAssignment && selectedGroup && !isCheckingScore && allMembersHaveScores && !hasSubItems && (
+                                        <div className="mb-4 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                                            <div className="flex items-start gap-3">
+                                                <Icon icon="solar:check-circle-bold" className="text-2xl text-emerald-600 shrink-0" />
+                                                <div>
+                                                    <p className="text-sm font-semibold text-emerald-800">กลุ่มนี้ลงคะแนนครบทุกคนแล้ว</p>
+                                                    <p className="text-xs text-emerald-600 mt-1">หากต้องการแก้ไข กรุณาไปที่แท็บ "แก้ไขคะแนน"</p>
+                                                    <div className="mt-3 space-y-1.5">
+                                                        {gradeGroupMembers.map((member) => (
+                                                            <div key={member.studentId} className="flex items-center justify-between text-xs bg-white/60 rounded-md px-2 py-1.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Icon icon="solar:user-check-bold" className="text-emerald-600" />
+                                                                    <span className="text-slate-700 font-medium">{member.studentName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-slate-500">
+                                                                    <span className="font-semibold text-emerald-600">{member.existingScore} คะแนน</span>
+                                                                    {member.gradedBy && (
+                                                                        <>
+                                                                            <span>•</span>
+                                                                            <span>โดย {member.gradedBy}</span>
+                                                                        </>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Score Input Section */}
-                                    {(selectedStudent || selectedGroup) && !isCheckingScore && (!existingScore || hasSubItems) && canScoreSelected && (
+                                    {(selectedStudent || (selectedGroup && !allMembersHaveScores)) && !isCheckingScore && ((!isGroupAssignment && (!existingScore || hasSubItems)) || (isGroupAssignment && membersNeedingScores.length > 0)) && canScoreSelected && (
                                         <>
                                             <Divider />
 
@@ -1610,36 +1909,43 @@ export default function ScoreModal({
 
                                             {/* Selected Group Info */}
                                             {editSelectedGroup && (
-                                                <div className={`p-3 rounded-xl border ${groupColors.bg} ${groupColors.border}`}>
-                                                    <div className="flex items-center justify-between mb-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${groupColors.icon}`} />
-                                                            <span className="font-semibold text-slate-800">{editSelectedGroup.name}</span>
-                                                            <Chip size="sm" variant="flat" className={groupColors.chip}>
-                                                                {editSelectedGroup.members.length} คน
-                                                            </Chip>
+                                                <>
+                                                    <div className={`p-3 rounded-xl border mb-5 ${groupColors.bg} ${groupColors.border}`}>
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Icon icon={isPermanentGroup ? "solar:users-group-two-rounded-bold" : "solar:users-group-rounded-bold"} className={`text-xl ${groupColors.icon}`} />
+                                                                <span className="font-semibold text-slate-800">{editSelectedGroup.name}</span>
+                                                                <Chip size="sm" variant="flat" className={groupColors.chip}>
+                                                                    {editSelectedGroup.members.length} คน
+                                                                </Chip>
+                                                            </div>
+                                                            <Button
+                                                                isIconOnly
+                                                                size="sm"
+                                                                variant="light"
+                                                                onPress={() => {
+                                                                    setEditSelectedGroup(null);
+                                                                    setEditGroupSearchQuery("");
+                                                                    setCurrentScore(null);
+                                                                    setEditSubItemScores([]);
+                                                                    setSelectedEditSubItemId(null);
+                                                                    setGroupMemberScores([]);
+                                                                    setEditGroupMode("all");
+                                                                }}
+                                                            >
+                                                                <Icon icon="solar:close-circle-bold" className="text-xl text-slate-400" />
+                                                            </Button>
                                                         </div>
-                                                        <Button
-                                                            isIconOnly
-                                                            size="sm"
-                                                            variant="light"
-                                                            onPress={() => {
-                                                                setEditSelectedGroup(null);
-                                                                setEditGroupSearchQuery("");
-                                                                setCurrentScore(null);
-                                                                setEditSubItemScores([]);
-                                                                setSelectedEditSubItemId(null);
-                                                                setGroupMemberScores([]);
-                                                                setEditGroupMode("all");
-                                                            }}
-                                                        >
-                                                            <Icon icon="solar:close-circle-bold" className="text-xl text-slate-400" />
-                                                        </Button>
+
+                                                        {/* Edit Mode Selection */}
+
                                                     </div>
 
-                                                    {/* Edit Mode Selection */}
-                                                    <div className="mb-3 p-2 bg-white rounded-lg border border-slate-200">
-                                                        <p className="text-xs text-slate-500 mb-2">เลือกโหมดการแก้ไข:</p>
+                                                    <div className="mb-3 p-4 bg-gradient-to-br from-slate-50 to-amber-50/30 rounded-xl border border-slate-200">
+                                                        <p className="text-xs text-slate-500 mb-3 font-medium flex items-center gap-1.5">
+                                                            {/* <Icon icon="solar:settings-bold" className="text-slate-400" /> */}
+                                                            เลือกโหมดการแก้ไข
+                                                        </p>
                                                         <div className="flex gap-2">
                                                             <Button
                                                                 size="sm"
@@ -1650,6 +1956,7 @@ export default function ScoreModal({
                                                                     toggleAllMembersSelection(true);
                                                                 }}
                                                                 startContent={<Icon icon="solar:users-group-rounded-bold" />}
+                                                                className={editGroupMode === "all" ? "shadow-md" : ""}
                                                             >
                                                                 แก้ทั้งกลุ่ม
                                                             </Button>
@@ -1659,78 +1966,133 @@ export default function ScoreModal({
                                                                 color={editGroupMode === "selected" ? "warning" : "default"}
                                                                 onPress={() => setEditGroupMode("selected")}
                                                                 startContent={<Icon icon="solar:user-check-bold" />}
+                                                                className={editGroupMode === "selected" ? "shadow-md" : ""}
                                                             >
                                                                 เลือกเฉพาะบางคน
                                                             </Button>
                                                         </div>
-                                                    </div>
 
-                                                    {/* Member Selection (show when "selected" mode) */}
-                                                    {editGroupMode === "selected" && (
-                                                        <div className="space-y-2 mb-2">
-                                                            <div className="flex items-center justify-between">
-                                                                <p className="text-xs text-slate-600 font-medium">เลือกสมาชิกที่ต้องการแก้ไขคะแนน:</p>
-                                                                <div className="flex gap-1">
-                                                                    <Button size="sm" variant="light" onPress={() => toggleAllMembersSelection(true)}>
-                                                                        เลือกทั้งหมด
-                                                                    </Button>
-                                                                    <Button size="sm" variant="light" onPress={() => toggleAllMembersSelection(false)}>
-                                                                        ไม่เลือกทั้งหมด
-                                                                    </Button>
+                                                        {/* Member Selection (show when "selected" mode) */}
+                                                        {editGroupMode === "selected" && (
+                                                            <div className="mt-4 space-y-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <p className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
+                                                                        <Icon icon="solar:users-group-two-rounded-bold" className="text-amber-500" />
+                                                                        เลือกสมาชิกที่ต้องการแก้ไขคะแนน
+                                                                    </p>
+                                                                    <div className="flex gap-1">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="flat"
+                                                                            color="warning"
+                                                                            onPress={() => toggleAllMembersSelection(true)}
+                                                                            className="text-xs h-7 px-2"
+                                                                        >
+                                                                            เลือกทั้งหมด
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="flat"
+                                                                            color="default"
+                                                                            onPress={() => toggleAllMembersSelection(false)}
+                                                                            className="text-xs h-7 px-2"
+                                                                        >
+                                                                            ยกเลิกทั้งหมด
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                                                                    {groupMemberScores.map((member) => (
+                                                                        <div
+                                                                            key={member.studentId}
+                                                                            className={`flex items-center justify-between p-3 cursor-pointer transition-all ${!member.scoreId
+                                                                                ? 'bg-slate-50/50 cursor-not-allowed'
+                                                                                : member.selected
+                                                                                    ? 'bg-amber-50/70'
+                                                                                    : 'hover:bg-slate-50'
+                                                                                }`}
+                                                                            onClick={() => member.scoreId && toggleMemberSelection(member.studentId)}
+                                                                        >
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${!member.scoreId
+                                                                                    ? 'bg-slate-100 border-slate-300'
+                                                                                    : member.selected
+                                                                                        ? 'bg-amber-500 border-amber-500 shadow-sm'
+                                                                                        : 'border-slate-300 bg-white hover:border-amber-300'
+                                                                                    }`}>
+                                                                                    {member.selected && member.scoreId && (
+                                                                                        <Icon icon="solar:check-bold" className="text-white text-xs" />
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${!member.scoreId
+                                                                                        ? 'bg-slate-100 text-slate-400'
+                                                                                        : member.selected
+                                                                                            ? 'bg-amber-100 text-amber-600'
+                                                                                            : 'bg-slate-100 text-slate-600'
+                                                                                        }`}>
+                                                                                        <Icon icon="solar:user-bold" className="text-sm" />
+                                                                                    </div>
+                                                                                    <span className={`text-sm font-medium ${!member.scoreId ? 'text-slate-400' : 'text-slate-700'}`}>
+                                                                                        {member.studentName}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div>
+                                                                                {member.scoreId ? (
+                                                                                    <Chip size="sm" color="success" variant="flat" className="text-xs" startContent={<Icon icon="solar:medal-star-bold" className="mr-1 text-xs" />}>
+
+                                                                                        {member.score ?? 0} คะแนน
+                                                                                    </Chip>
+                                                                                ) : (
+                                                                                    <Chip size="sm" color="default" variant="flat" className="text-xs">
+                                                                                        ยังไม่มีคะแนน
+                                                                                    </Chip>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <div className="flex items-center justify-between text-xs">
+                                                                    <p className="text-slate-500 flex items-center gap-1">
+                                                                        <Icon icon="solar:user-check-bold" className="text-amber-500" />
+                                                                        เลือกแล้ว {groupMemberScores.filter(m => m.selected && m.scoreId).length} / {groupMemberScores.filter(m => m.scoreId).length} คน
+                                                                    </p>
+                                                                    {groupMemberScores.filter(m => m.selected && m.scoreId).length === 0 && (
+                                                                        <p className="text-amber-600 flex items-center gap-1">
+                                                                            <Icon icon="solar:danger-triangle-bold" />
+                                                                            กรุณาเลือกอย่างน้อย 1 คน
+                                                                        </p>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                            {groupMemberScores.map((member) => (
-                                                                <div
-                                                                    key={member.studentId}
-                                                                    className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${member.selected
-                                                                        ? 'bg-blue-50 border-blue-300'
-                                                                        : 'bg-white border-slate-200 hover:border-slate-300'
-                                                                        } ${!member.scoreId ? 'opacity-50' : ''}`}
-                                                                    onClick={() => member.scoreId && toggleMemberSelection(member.studentId)}
-                                                                >
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${member.selected ? 'bg-blue-500 border-blue-500' : 'border-slate-300'
-                                                                            }`}>
-                                                                            {member.selected && <Icon icon="solar:check-bold" className="text-white text-sm" />}
-                                                                        </div>
-                                                                        <span className="text-sm text-slate-700">{member.studentName}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        {member.scoreId ? (
-                                                                            <Chip size="sm" color="success" variant="flat">
-                                                                                {member.score ?? 0} คะแนน
-                                                                            </Chip>
-                                                                        ) : (
-                                                                            <Chip size="sm" color="default" variant="flat">
-                                                                                ยังไม่มีคะแนน
-                                                                            </Chip>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                            <p className="text-xs text-slate-500 mt-1">
-                                                                เลือกแล้ว {groupMemberScores.filter(m => m.selected && m.scoreId).length} / {groupMemberScores.filter(m => m.scoreId).length} คน
-                                                            </p>
-                                                        </div>
-                                                    )}
+                                                        )}
 
-                                                    {/* Show members chips only in "all" mode */}
-                                                    {editGroupMode === "all" && (
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {groupMemberScores.map((member) => (
-                                                                <Chip
-                                                                    key={member.studentId}
-                                                                    size="sm"
-                                                                    variant="flat"
-                                                                    className={member.scoreId ? "bg-white" : "bg-slate-100 text-slate-400"}
-                                                                >
-                                                                    {member.studentName}
-                                                                    {!member.scoreId && " (ไม่มีคะแนน)"}
-                                                                </Chip>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                        {/* Show members chips only in "all" mode */}
+                                                        {/* {editGroupMode === "all" && (
+                                                            <div className="flex flex-wrap gap-2 mt-3">
+                                                                {groupMemberScores.map((member) => (
+                                                                    <Chip
+                                                                        key={member.studentId}
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        className={member.scoreId ? "bg-white border border-slate-200" : "bg-slate-100 text-slate-400"}
+                                                                        startContent={
+                                                                            member.scoreId ? (
+                                                                                <Icon icon="solar:user-check-bold" className="text-emerald-500 text-xs" />
+                                                                            ) : (
+                                                                                <Icon icon="solar:user-cross-bold" className="text-slate-400 text-xs" />
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {member.studentName}
+                                                                        {member.scoreId && <span className="ml-1 text-emerald-600 font-medium">({member.score})</span>}
+                                                                    </Chip>
+                                                                ))}
+                                                            </div>
+                                                        )} */}
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     )}
@@ -1851,8 +2213,8 @@ export default function ScoreModal({
 
                                                                 {/* Reason Input */}
                                                                 <div className="space-y-3">
-                                                                    <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
-                                                                        <Icon icon="solar:document-text-bold" className="text-slate-400" />
+                                                                    <label className="text-slate-600 font-medium text-sm mb-2 flex items-center gap-2">
+                                                                        {/* <Icon icon="solar:document-text-bold" className="text-slate-400" /> */}
                                                                         เหตุผลในการแก้ไข *
                                                                     </label>
                                                                     <Select
@@ -1895,8 +2257,8 @@ export default function ScoreModal({
 
                                                                 {/* Image Upload */}
                                                                 <div className="space-y-3">
-                                                                    <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
-                                                                        <Icon icon="solar:camera-bold" className="text-slate-400" />
+                                                                    <label className="text-slate-600 font-medium text-sm mb-2 flex items-center gap-2">
+                                                                        {/* <Icon icon="solar:camera-bold" className="text-slate-400" /> */}
                                                                         แนบรูปภาพประกอบ (ไม่บังคับ, สูงสุด 3 รูป)
                                                                     </label>
 

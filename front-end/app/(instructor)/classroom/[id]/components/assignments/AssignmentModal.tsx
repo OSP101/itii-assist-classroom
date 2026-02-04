@@ -31,6 +31,7 @@ interface AssignmentFormData {
     maxScore: number;
     dueDate: string;
     description: string;
+    isScoreVisible: boolean;
 }
 
 interface AssignmentModalProps {
@@ -53,6 +54,7 @@ const initialFormData: AssignmentFormData = {
     maxScore: 10,
     dueDate: "",
     description: "",
+    isScoreVisible: true, // Default: students can see scores
 };
 
 function AssignmentModalComponent({
@@ -107,6 +109,7 @@ function AssignmentModalComponent({
                     maxScore: Number(editingAssignment.max_score),
                     dueDate: editingAssignment.due_date || "",
                     description: editingAssignment.description || "",
+                    isScoreVisible: editingAssignment.is_score_visible !== false, // Default to true if undefined
                 });
             } else {
                 // Reset to initial form data
@@ -173,6 +176,7 @@ function AssignmentModalComponent({
                     }))
                     : undefined,
                 due_date: formData.dueDate || undefined,
+                is_score_visible: formData.isScoreVisible,
             };
 
             let result;
@@ -704,6 +708,53 @@ function AssignmentModalComponent({
                                 label: "text-slate-600 font-medium text-sm",
                             }}
                         />
+
+                        {/* Score Visibility Toggle */}
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${formData.isScoreVisible ? 'bg-green-100' : 'bg-amber-100'}`}>
+                                        <Icon 
+                                            icon={formData.isScoreVisible ? "solar:eye-bold" : "solar:eye-closed-bold"} 
+                                            className={`text-lg ${formData.isScoreVisible ? 'text-green-600' : 'text-amber-600'}`} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-slate-700">การแสดงคะแนนต่อนักศึกษา</p>
+                                        <p className="text-xs text-slate-500">
+                                            {formData.isScoreVisible 
+                                                ? "นักศึกษาสามารถดูคะแนนงานนี้ได้" 
+                                                : "ซ่อนคะแนน - นักศึกษาจะไม่เห็นคะแนนงานนี้"
+                                            }
+                                        </p>
+                                    </div>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant={formData.isScoreVisible ? "solid" : "bordered"}
+                                    color={formData.isScoreVisible ? "success" : "warning"}
+                                    onPress={() => setFormData(prev => ({ ...prev, isScoreVisible: !prev.isScoreVisible }))}
+                                    startContent={
+                                        <Icon 
+                                            icon={formData.isScoreVisible ? "solar:eye-bold" : "solar:eye-closed-bold"} 
+                                            className="text-lg" 
+                                        />
+                                    }
+                                >
+                                    {formData.isScoreVisible ? "แสดง" : "ซ่อน"}
+                                </Button>
+                            </div>
+                            {!formData.isScoreVisible && (
+                                <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                    <p className="text-xs text-amber-700 flex items-start gap-2">
+                                        <Icon icon="solar:info-circle-bold" className="mt-0.5 flex-shrink-0" />
+                                        <span>
+                                            คะแนนงานนี้จะไม่แสดงในหน้าค้นหาคะแนนของนักศึกษา แต่ยังสามารถลงคะแนนและ Export Excel ได้ตามปกติ
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </ModalBody>
 

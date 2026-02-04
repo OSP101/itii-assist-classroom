@@ -12,6 +12,7 @@ export interface ScoreDetailModal {
     gradedBy?: string;
     gradedAt?: string;
     updatedAt?: string;
+    comment?: string;
 }
 
 export interface ColumnDef {

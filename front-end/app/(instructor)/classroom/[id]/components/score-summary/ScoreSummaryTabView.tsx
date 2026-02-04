@@ -474,6 +474,19 @@ const ScoreSummaryTabView = memo(function ScoreSummaryTabView({
                                     </div>
                                 )}
 
+                                {/* Comment/Note */}
+                                {scoreModal.comment && (
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+                                            <Icon icon="solar:chat-round-dots-bold" className="text-violet-600" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs text-slate-500">หมายเหตุ</p>
+                                            <p className="font-medium text-slate-700 whitespace-pre-wrap">{scoreModal.comment}</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* No score info */}
                                 {scoreModal.score === null && (
                                     <div className="p-3 bg-slate-50 rounded-lg text-center">

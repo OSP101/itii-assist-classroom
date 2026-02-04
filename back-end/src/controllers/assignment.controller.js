@@ -109,7 +109,8 @@ const createAssignment = asyncHandler(async (req, res) => {
         attendance_condition, // 'and' or 'or'
         max_score, 
         sub_items,
-        due_date 
+        due_date,
+        is_score_visible, // Whether students can see their scores
     } = req.body;
 
     if (!course_id || !name) {
@@ -153,6 +154,7 @@ const createAssignment = asyncHandler(async (req, res) => {
             max_score: max_score || 10,
             due_date,
             order_index: maxOrder + 1,
+            is_score_visible: is_score_visible !== false, // Default to true
             created_by: req.user.id,
         }, { transaction });
 
@@ -231,7 +233,8 @@ const updateAssignment = asyncHandler(async (req, res) => {
         attendance_condition, // 'and' or 'or'
         max_score, 
         sub_items,
-        due_date 
+        due_date,
+        is_score_visible, // Whether students can see their scores
     } = req.body;
 
     const assignment = await Assignment.findByPk(id);
@@ -272,6 +275,11 @@ const updateAssignment = asyncHandler(async (req, res) => {
             max_score: max_score !== undefined ? max_score : assignment.max_score,
             due_date: due_date !== undefined ? due_date : assignment.due_date,
         };
+
+        // Update is_score_visible if provided
+        if (is_score_visible !== undefined) {
+            updateData.is_score_visible = is_score_visible;
+        }
 
         // Update attendance condition if provided
         if (attendance_condition !== undefined) {

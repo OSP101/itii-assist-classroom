@@ -828,7 +828,7 @@ export default function WorkerDashboardPage() {
                                                 startContent={<Icon icon="solar:check-circle-bold" className="text-xl" />}
                                                 onPress={initializeCompleteForm}
                                             >
-                                                เสร็จสิ้น
+                                                ลงคะแนน
                                             </Button>
                                             <Button
                                                 color="warning"

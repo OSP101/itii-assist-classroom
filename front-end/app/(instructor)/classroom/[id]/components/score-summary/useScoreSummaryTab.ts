@@ -29,6 +29,7 @@ interface StudentType {
         graded_by?: string | null;
         graded_at?: string | null;
         updated_at?: string | null;
+        comment?: string | null;
     }>;
 }
 
@@ -181,7 +182,7 @@ export function useScoreSummaryTab({ courseId }: UseScoreSummaryTabProps) {
     const handleScoreClick = useCallback((
         student: StudentType,
         col: ColumnDef,
-        scoreData: { score: number | null; max_score: number; sub_item_name?: string; graded_by?: string | null; graded_at?: string | null; updated_at?: string | null } | undefined
+        scoreData: { score: number | null; max_score: number; sub_item_name?: string; graded_by?: string | null; graded_at?: string | null; updated_at?: string | null; comment?: string | null } | undefined
     ) => {
         setScoreModal({
             isOpen: true,
@@ -194,6 +195,7 @@ export function useScoreSummaryTab({ courseId }: UseScoreSummaryTabProps) {
             gradedBy: scoreData?.graded_by ?? undefined,
             gradedAt: scoreData?.graded_at ?? undefined,
             updatedAt: scoreData?.updated_at ?? undefined,
+            comment: scoreData?.comment ?? undefined,
         });
     }, []);
 

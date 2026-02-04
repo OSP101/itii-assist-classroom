@@ -406,11 +406,12 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
     }
   });
 
-  // Get ALL assignments for enrolled courses
+  // Get ALL assignments for enrolled courses (only visible ones for student lookup)
   const allAssignments = await Assignment.findAll({
     where: { 
       course_id: { [Op.in]: courseIds },
       is_active: true,
+      is_score_visible: true, // Only show assignments where scores are visible to students
     },
     include: [
       {
@@ -671,14 +672,20 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
     });
   });
 
-  // Get attendance records for this student
+  // Get attendance records for this student (only from sessions that have started or ended)
+  const now = new Date();
   const attendanceRecords = await AttendanceRecord.findAll({
     where: { student_id: student.id },
     include: [
       {
         model: AttendanceSession,
         as: 'session',
-        attributes: ['id', 'title', 'start_time', 'end_time', 'course_id'],
+        attributes: ['id', 'title', 'start_time', 'end_time', 'course_id', 'status'],
+        where: {
+          // Only show sessions that are active or closed (started)
+          // Don't show draft sessions (not yet opened)
+          start_time: { [Op.lte]: now }, // Session has started
+        },
       },
     ],
     order: [['created_at', 'DESC']],

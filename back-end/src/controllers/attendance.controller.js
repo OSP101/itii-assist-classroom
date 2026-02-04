@@ -286,6 +286,7 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
     start_time,
     end_time,
     late_threshold_minutes,
+    late_threshold_time, // Absolute time for late check (e.g., "08:15:00")
   } = req.body;
 
   if (!course_id || !title || !start_time || !end_time) {
@@ -321,6 +322,7 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
       start_time,
       end_time,
       late_threshold_minutes: late_threshold_minutes || 15,
+      late_threshold_time: late_threshold_time || null, // Absolute time for late check
       status: 'draft', // Default value, but will be computed from time when queried
       created_by: req.user.id,
     }, { transaction });
@@ -771,8 +773,19 @@ const studentCheckIn = asyncHandler(async (req, res) => {
   }
 
   // Determine status (present or late)
-  const lateThreshold = new Date(session.start_time);
-  lateThreshold.setMinutes(lateThreshold.getMinutes() + session.late_threshold_minutes);
+  // Use late_threshold_time if available, otherwise calculate from late_threshold_minutes
+  let lateThreshold;
+  if (session.late_threshold_time) {
+    // Parse the absolute time (e.g., "08:15:00") and combine with session date
+    const sessionDate = new Date(session.start_time);
+    const [hours, minutes, seconds = 0] = session.late_threshold_time.split(':').map(Number);
+    lateThreshold = new Date(sessionDate);
+    lateThreshold.setHours(hours, minutes, seconds, 0);
+  } else {
+    // Fallback to relative minutes
+    lateThreshold = new Date(session.start_time);
+    lateThreshold.setMinutes(lateThreshold.getMinutes() + session.late_threshold_minutes);
+  }
 
   const status = now > lateThreshold ? 'late' : 'present';
 

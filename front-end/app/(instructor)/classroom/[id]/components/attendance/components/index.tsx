@@ -44,7 +44,6 @@ import {
     SESSION_TYPE_DISPLAY,
     STATUS_DISPLAY,
     RADIUS_OPTIONS,
-    LATE_THRESHOLD_OPTIONS,
     formatDate,
     formatTime,
 } from "../config";
@@ -1002,6 +1001,9 @@ interface CreateSessionModalProps {
     setStartDateTime: (value: DateValue) => void;
     endDateTime: DateValue;
     setEndDateTime: (value: DateValue) => void;
+    lateThresholdTime: DateValue;
+    setLateThresholdTime: (value: DateValue) => void;
+    lateThresholdMinutes: number;
     sections: Section[];
     isSubmitting: boolean;
     isGettingLocation: boolean;
@@ -1018,6 +1020,9 @@ export const CreateSessionModal = memo(function CreateSessionModal({
     setStartDateTime,
     endDateTime,
     setEndDateTime,
+    lateThresholdTime,
+    setLateThresholdTime,
+    lateThresholdMinutes,
     sections,
     isSubmitting,
     isGettingLocation,
@@ -1061,7 +1066,7 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                                 variant="bordered"
                                 size="md"
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-emerald-300 focus-within:!border-emerald-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -1195,27 +1200,43 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                             />
                         </div>
 
-                        {/* Late Threshold */}
-                        <div>
-                            <Input
-                                type="number"
-                                label="เวลาสาย (นาที)"
-                                labelPlacement="outside"
+                        {/* Late Threshold Time */}
+                        <div className="">
+                            <DatePicker
+                                label="เวลาตัดสาย"
                                 variant="bordered"
-                                value={String(formData.late_threshold_minutes)}
-                                className="pt-4"
-                                onValueChange={(value) =>
-                                    setFormData((prev: CreateAttendanceData) => ({
-                                        ...prev,
-                                        late_threshold_minutes: parseInt(value) || 15,
-                                    }))
+                                labelPlacement="outside"
+                                granularity="minute"
+                                hideTimeZone
+                                value={lateThresholdTime}
+                                onChange={(value) => value && setLateThresholdTime(value)}
+                                isRequired
+                                description={
+                                    lateThresholdMinutes > 0 
+                                        ? `(${lateThresholdMinutes} นาที หลังเวลาเริ่มต้น)` 
+                                        : lateThresholdMinutes < 0 
+                                            ? `(${Math.abs(lateThresholdMinutes)} นาที ก่อนเวลาเริ่มต้น)` 
+                                            : "(ตรงกับเวลาเริ่มต้น)"
                                 }
-                                description="หลังเวลาเริ่มต้นกี่นาทีจึงนับว่ามาสาย"
-                                endContent={<span className="text-slate-400 text-sm">นาที</span>}
-                                size="md"
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
-                                    label: "text-slate-600 font-medium text-sm",
+                                    base: "w-full",
+                                    selectorButton: "text-amber-500",
+                                    label: "text-slate-800 font-medium text-sm",
+                                    description: "text-amber-600 font-medium",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
                                 }}
                             />
                         </div>
@@ -1267,6 +1288,9 @@ interface EditSessionModalProps {
     setStartDateTime: (value: DateValue) => void;
     endDateTime: DateValue;
     setEndDateTime: (value: DateValue) => void;
+    lateThresholdTime: DateValue;
+    setLateThresholdTime: (value: DateValue) => void;
+    lateThresholdMinutes: number;
     sections: Section[];
     allSectionIds: number[];
     isSubmitting: boolean;
@@ -1285,6 +1309,9 @@ export const EditSessionModal = memo(function EditSessionModal({
     setStartDateTime,
     endDateTime,
     setEndDateTime,
+    lateThresholdTime,
+    setLateThresholdTime,
+    lateThresholdMinutes,
     sections,
     allSectionIds,
     isSubmitting,
@@ -1449,24 +1476,45 @@ export const EditSessionModal = memo(function EditSessionModal({
                             />
                         </div>
 
-                        {/* Late Threshold */}
-                        <div>
-                            <label className="text-sm text-slate-700 mb-2 block">
-                                เวลาสายหลังเริ่มต้น (นาที)
-                            </label>
-                            <div className="flex gap-2">
-                                {LATE_THRESHOLD_OPTIONS.map((mins) => (
-                                    <Button
-                                        key={mins}
-                                        size="sm"
-                                        variant={formData.late_threshold_minutes === mins ? "solid" : "flat"}
-                                        color={formData.late_threshold_minutes === mins ? "primary" : "default"}
-                                        onPress={() => setFormData((prev: CreateAttendanceData) => ({ ...prev, late_threshold_minutes: mins }))}
-                                    >
-                                        {mins} นาที
-                                    </Button>
-                                ))}
-                            </div>
+                        {/* Late Threshold Time */}
+                        <div className="">
+                            <DatePicker
+                                label="เวลาตัดสาย"
+                                variant="bordered"
+                                labelPlacement="outside"
+                                granularity="minute"
+                                hideTimeZone
+                                value={lateThresholdTime}
+                                onChange={(value) => value && setLateThresholdTime(value)}
+                                isRequired
+                                description={
+                                    lateThresholdMinutes > 0 
+                                        ? `(${lateThresholdMinutes} นาที หลังเวลาเริ่มต้น)` 
+                                        : lateThresholdMinutes < 0 
+                                            ? `(${Math.abs(lateThresholdMinutes)} นาที ก่อนเวลาเริ่มต้น)` 
+                                            : "(ตรงกับเวลาเริ่มต้น)"
+                                }
+                                classNames={{
+                                    base: "w-full",
+                                    selectorButton: "text-amber-500",
+                                    label: "text-slate-800 font-medium text-sm",
+                                    description: "text-amber-600 font-medium",
+                                }}
+                                popoverProps={{
+                                    placement: "bottom",
+                                    classNames: { content: "z-[9999]" },
+                                }}
+                                calendarProps={{
+                                    classNames: {
+                                        base: "bg-white shadow-xl",
+                                        headerWrapper: "pt-4 bg-white",
+                                        prevButton: "border-1 border-default-200 rounded-small",
+                                        nextButton: "border-1 border-default-200 rounded-small",
+                                        gridHeader: "bg-white shadow-none",
+                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
+                                    },
+                                }}
+                            />
                         </div>
 
                         {/* Location Check */}

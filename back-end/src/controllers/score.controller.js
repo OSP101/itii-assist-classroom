@@ -493,10 +493,10 @@ const submitBulkScores = asyncHandler(async (req, res) => {
 });
 
 /**
- * Submit group score (applies to all members, with optional sub_item_id)
+ * Submit group score (applies to all members or selected members, with optional sub_item_id)
  */
 const submitGroupScore = asyncHandler(async (req, res) => {
-    const { assignment_id, group_id, score, comment, sub_item_id } = req.body;
+    const { assignment_id, group_id, score, comment, sub_item_id, student_ids } = req.body;
 
     if (!assignment_id || !group_id || score === undefined) {
         throw new ApiError(400, 'assignment_id, group_id and score are required');
@@ -537,10 +537,22 @@ const submitGroupScore = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'No members found in this group');
     }
 
+    // Filter members if student_ids is provided (for selective grading)
+    let targetMembers = groupMembers;
+    if (student_ids && Array.isArray(student_ids) && student_ids.length > 0) {
+        // Validate that all provided student_ids are members of the group
+        const memberIds = groupMembers.map(m => m.student_id);
+        const invalidIds = student_ids.filter(id => !memberIds.includes(id));
+        if (invalidIds.length > 0) {
+            throw new ApiError(400, `Students ${invalidIds.join(', ')} are not members of this group`);
+        }
+        targetMembers = groupMembers.filter(m => student_ids.includes(m.student_id));
+    }
+
     const transaction = await sequelize.transaction();
 
     try {
-        for (const member of groupMembers) {
+        for (const member of targetMembers) {
             // Build where clause for finding existing score
             const whereClause = {
                 assignment_id,
@@ -583,7 +595,7 @@ const submitGroupScore = asyncHandler(async (req, res) => {
 
         res.json({
             success: true,
-            message: `Score submitted for ${groupMembers.length} group members`,
+            message: `Score submitted for ${targetMembers.length} group members`,
         });
     } catch (error) {
         await transaction.rollback();
@@ -932,6 +944,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             graded_by: score.grader?.full_name || null,
             graded_at: score.graded_at || score.createdAt,
             updated_at: score.updatedAt,
+            comment: score.comment || null,
         };
     }
 
@@ -972,6 +985,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                         graded_by: scoreObj?.graded_by || null,
                         graded_at: scoreObj?.graded_at || null,
                         updated_at: scoreObj?.updated_at || null,
+                        comment: scoreObj?.comment || null,
                     };
 
                     if (scoreObj?.score !== undefined) {
@@ -996,6 +1010,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                     graded_by: scoreObj?.graded_by || null,
                     graded_at: scoreObj?.graded_at || null,
                     updated_at: scoreObj?.updated_at || null,
+                    comment: scoreObj?.comment || null,
                 };
 
                 if (scoreObj?.score !== undefined) {
