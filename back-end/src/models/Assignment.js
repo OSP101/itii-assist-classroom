@@ -69,6 +69,12 @@ const Assignment = sequelize.define('Assignment', {
         allowNull: true,
         defaultValue: true,
     },
+    is_score_visible: {
+        type: DataTypes.BOOLEAN,
+        allowNull: true,
+        defaultValue: true,
+        comment: 'Whether students can see their scores for this assignment',
+    },
     created_by: {
         type: DataTypes.BIGINT,
         allowNull: true,

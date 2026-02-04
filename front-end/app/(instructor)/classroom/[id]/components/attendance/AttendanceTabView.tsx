@@ -187,6 +187,9 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
         setStartDateTime,
         endDateTime,
         setEndDateTime,
+        lateThresholdTime,
+        setLateThresholdTime,
+        lateThresholdMinutes,
 
         // Actions
         handleCreateSession,
@@ -238,6 +241,9 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
                 setStartDateTime={setStartDateTime}
                 endDateTime={endDateTime}
                 setEndDateTime={setEndDateTime}
+                lateThresholdTime={lateThresholdTime}
+                setLateThresholdTime={setLateThresholdTime}
+                lateThresholdMinutes={lateThresholdMinutes}
                 sections={course.sections || []}
                 isSubmitting={isSubmitting}
                 isGettingLocation={isGettingLocation}
@@ -255,6 +261,9 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
                 setStartDateTime={setStartDateTime}
                 endDateTime={endDateTime}
                 setEndDateTime={setEndDateTime}
+                lateThresholdTime={lateThresholdTime}
+                setLateThresholdTime={setLateThresholdTime}
+                lateThresholdMinutes={lateThresholdMinutes}
                 sections={course.sections || []}
                 allSectionIds={allSectionIds}
                 isSubmitting={isSubmitting}

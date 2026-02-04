@@ -165,6 +165,7 @@ const scoreService = {
         score: number;
         comment?: string;
         sub_item_id?: number;
+        student_ids?: number[]; // Optional: for grading selected members only
     }): Promise<boolean> {
         console.log('submitGroupScore called with:', data);
         const response = await api.post<unknown>('/scores/group', data);
@@ -313,6 +314,7 @@ export interface ScoreSummaryMatrixStudent {
             graded_by?: string | null;
             graded_at?: string | null;
             updated_at?: string | null;
+            comment?: string | null;
         };
     };
     total_score: number;

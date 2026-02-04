@@ -169,6 +169,7 @@ export function getInitialFormData(courseId: string, sectionIds: number[]): Crea
         start_time: "",
         end_time: "",
         late_threshold_minutes: 15,
+        late_threshold_time: null,
     };
 }
 

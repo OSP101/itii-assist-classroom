@@ -21,6 +21,9 @@ router.post('/bookings', queueController.createBooking);
 // Get booking status
 router.get('/bookings/:bookingId/status', queueController.getBookingStatus);
 
+// Cancel booking (student) - only for waiting status
+router.post('/bookings/:bookingId/cancel', queueController.cancelBooking);
+
 // ============================================
 // Projector View (public for display)
 // ============================================

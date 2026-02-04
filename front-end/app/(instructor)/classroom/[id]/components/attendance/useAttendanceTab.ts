@@ -67,6 +67,9 @@ export interface UseAttendanceTabReturn {
     setStartDateTime: (value: DateValue) => void;
     endDateTime: DateValue;
     setEndDateTime: (value: DateValue) => void;
+    lateThresholdTime: DateValue;
+    setLateThresholdTime: (value: DateValue) => void;
+    lateThresholdMinutes: number;
     resetForm: () => void;
 
     // Actions
@@ -174,6 +177,9 @@ export function useAttendanceTab(
     const [endDateTime, setEndDateTime] = useState<DateValue>(
         now(getLocalTimeZone()).add({ hours: 2 })
     );
+    const [lateThresholdTime, setLateThresholdTime] = useState<DateValue>(
+        now(getLocalTimeZone()).add({ minutes: 15 })
+    );
 
     // Reset form when allSectionIds changes (initial load)
     const initializedRef = useRef(false);
@@ -210,6 +216,15 @@ export function useAttendanceTab(
         () => calculateStats(sessionsWithComputedStatus),
         [sessionsWithComputedStatus]
     );
+
+    // Calculate late threshold in minutes from startDateTime and lateThresholdTime
+    const lateThresholdMinutes = useMemo(() => {
+        const startDate = startDateTime.toDate(getLocalTimeZone());
+        const lateDate = lateThresholdTime.toDate(getLocalTimeZone());
+        const diffMs = lateDate.getTime() - startDate.getTime();
+        const diffMinutes = Math.round(diffMs / (1000 * 60));
+        return Math.max(0, diffMinutes);
+    }, [startDateTime, lateThresholdTime]);
 
     // ========================================================================
     // Data Fetching
@@ -258,8 +273,10 @@ export function useAttendanceTab(
 
     const resetForm = useCallback(() => {
         setFormData(getInitialFormData(course.id, allSectionIds));
-        setStartDateTime(now(getLocalTimeZone()));
-        setEndDateTime(now(getLocalTimeZone()).add({ hours: 2 }));
+        const currentTime = now(getLocalTimeZone());
+        setStartDateTime(currentTime);
+        setEndDateTime(currentTime.add({ hours: 2 }));
+        setLateThresholdTime(currentTime.add({ minutes: 15 }));
         setEditTarget(null);
     }, [course.id, allSectionIds]);
 
@@ -294,9 +311,23 @@ export function useAttendanceTab(
             start_time: session.start_time,
             end_time: session.end_time,
             late_threshold_minutes: session.late_threshold_minutes,
+            late_threshold_time: session.late_threshold_time,
         });
-        setStartDateTime(parseAbsolute(session.start_time, getLocalTimeZone()));
+        const startDt = parseAbsolute(session.start_time, getLocalTimeZone());
+        setStartDateTime(startDt);
         setEndDateTime(parseAbsolute(session.end_time, getLocalTimeZone()));
+        
+        // Set late threshold time - use late_threshold_time if available, otherwise calculate from minutes
+        if (session.late_threshold_time) {
+            // Parse time string (e.g., "08:15:00") and apply to start date
+            const [hours, minutes] = session.late_threshold_time.split(':').map(Number);
+            const startDate = new Date(session.start_time);
+            startDate.setHours(hours, minutes, 0, 0);
+            setLateThresholdTime(parseAbsolute(startDate.toISOString(), getLocalTimeZone()));
+        } else {
+            // Calculate from late_threshold_minutes
+            setLateThresholdTime(startDt.add({ minutes: session.late_threshold_minutes }));
+        }
         setIsEditModalOpen(true);
     }, [course.id]);
 
@@ -343,12 +374,18 @@ export function useAttendanceTab(
         try {
             const startDate = startDateTime.toDate(getLocalTimeZone());
             const endDate = endDateTime.toDate(getLocalTimeZone());
+            const lateDate = lateThresholdTime.toDate(getLocalTimeZone());
+
+            // Format late_threshold_time as HH:MM:SS
+            const lateTimeStr = `${String(lateDate.getHours()).padStart(2, '0')}:${String(lateDate.getMinutes()).padStart(2, '0')}:00`;
 
             const data: CreateAttendanceData = {
                 ...formData,
                 course_id: course.id,
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
+                late_threshold_minutes: lateThresholdMinutes,
+                late_threshold_time: lateTimeStr,
             };
 
             const result = await attendanceService.createSession(data);
@@ -373,7 +410,7 @@ export function useAttendanceTab(
         } finally {
             setIsSubmitting(false);
         }
-    }, [formData, startDateTime, endDateTime, course.id, closeCreateModal, fetchSessions, emitDataUpdate, onAttendanceChanged]);
+    }, [formData, startDateTime, endDateTime, lateThresholdTime, lateThresholdMinutes, course.id, closeCreateModal, fetchSessions, emitDataUpdate, onAttendanceChanged]);
 
     const handleUpdateSession = useCallback(async () => {
         if (!editTarget) return;
@@ -391,6 +428,10 @@ export function useAttendanceTab(
         try {
             const startDate = startDateTime.toDate(getLocalTimeZone());
             const endDate = endDateTime.toDate(getLocalTimeZone());
+            const lateDate = lateThresholdTime.toDate(getLocalTimeZone());
+
+            // Format late_threshold_time as HH:MM:SS
+            const lateTimeStr = `${String(lateDate.getHours()).padStart(2, '0')}:${String(lateDate.getMinutes()).padStart(2, '0')}:00`;
 
             const data: Partial<CreateAttendanceData> = {
                 title: formData.title,
@@ -401,7 +442,8 @@ export function useAttendanceTab(
                 radius_meters: formData.radius_meters,
                 start_time: startDate.toISOString(),
                 end_time: endDate.toISOString(),
-                late_threshold_minutes: formData.late_threshold_minutes,
+                late_threshold_minutes: lateThresholdMinutes,
+                late_threshold_time: lateTimeStr,
             };
 
             if (formData.course_section_ids && formData.course_section_ids.length > 0) {
@@ -619,6 +661,9 @@ export function useAttendanceTab(
         setStartDateTime,
         endDateTime,
         setEndDateTime,
+        lateThresholdTime,
+        setLateThresholdTime,
+        lateThresholdMinutes,
         resetForm,
 
         // Actions

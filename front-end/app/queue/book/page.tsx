@@ -179,6 +179,7 @@ function BookQueueContent() {
     const [bookingResult, setBookingResult] = useState<BookingResult | null>(null);
     const [bookingStatus, setBookingStatus] = useState<BookingStatus | null>(null);
     const [isLoadingStatus, setIsLoadingStatus] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
 
     // Socket and polling refs
     const socketRef = useRef<Socket | null>(null);
@@ -495,6 +496,54 @@ function BookQueueContent() {
         }
     }, []);
 
+    // Cancel booking
+    const handleCancelBooking = async () => {
+        if (!bookingResult) return;
+
+        setIsCancelling(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/queue/bookings/${bookingResult.id}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Clear localStorage
+                clearBookingState();
+                // Cleanup socket/polling
+                cleanupPolling();
+                
+                addToast({
+                    title: "ยกเลิกการจองสำเร็จ",
+                    description: `คิวที่ ${bookingResult.queue_number} ถูกยกเลิกแล้ว`,
+                    color: "success",
+                });
+
+                // Reset to form step so user can book again
+                setBookingResult(null);
+                setBookingStatus(null);
+                setStep("form");
+            } else {
+                addToast({
+                    title: "ยกเลิกไม่สำเร็จ",
+                    description: result.error?.message || "เกิดข้อผิดพลาด",
+                    color: "danger",
+                });
+            }
+        } catch (error) {
+            console.error("Error cancelling booking:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: "ไม่สามารถยกเลิกการจองได้",
+                color: "danger",
+            });
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
     // Cleanup previous polling/socket
     const cleanupPolling = useCallback(() => {
         if (socketRef.current) {
@@ -749,6 +798,7 @@ function BookQueueContent() {
                                 <Input
                                     placeholder="เช่น 1, 2, 3..."
                                     label="เลขโต๊ะ"
+                                    description="กรุณาดูเลขโต๊ะจากแผนผังที่แสดงบนหน้าจอโปรเจกเตอร์เท่านั้น"
                                     value={deskNumber}
                                     onValueChange={(val) => {
                                         setDeskNumber(val);
@@ -1002,10 +1052,24 @@ function BookQueueContent() {
 
                             {/* Instructions */}
                             {isWaiting && (
-                                <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-xl text-sm">
-                                    <Icon icon="solar:info-circle-bold" className="inline mr-1" />
-                                    กรุณารออยู่ที่โต๊ะ {status.desk_number} ระบบจะแจ้งเตือนเมื่อถึงคิว
-                                </div>
+                                <>
+                                    <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-xl text-sm">
+                                        <Icon icon="solar:info-circle-bold" className="inline mr-1" />
+                                        กรุณารออยู่ที่โต๊ะ {status.desk_number} ระบบจะแจ้งเตือนเมื่อถึงคิว
+                                    </div>
+                                    
+                                    {/* Cancel Booking Button */}
+                                    <Button
+                                        color="danger"
+                                        variant="flat"
+                                        className="mt-4 w-full"
+                                        onPress={handleCancelBooking}
+                                        isLoading={isCancelling}
+                                        startContent={!isCancelling && <Icon icon="solar:close-circle-bold" className="text-lg" />}
+                                    >
+                                        {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกการจอง"}
+                                    </Button>
+                                </>
                             )}
 
                             {isInProgress && (

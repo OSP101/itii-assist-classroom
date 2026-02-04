@@ -84,6 +84,8 @@ export default function LiveAttendancePage() {
         minutes: number;
         seconds: number;
     } | null>(null);
+    const [isPastLateThreshold, setIsPastLateThreshold] = useState(false);
+    const [lateThresholdDisplay, setLateThresholdDisplay] = useState<string | null>(null);
     const [isClosing, setIsClosing] = useState(false);
 
     // Socket
@@ -213,12 +215,37 @@ export default function LiveAttendancePage() {
     useEffect(() => {
         if (!session) return;
 
+        // Calculate late threshold time once
+        let lateThreshold: Date;
+        if (session.late_threshold_time) {
+            // Use absolute time
+            const sessionDate = new Date(session.start_time);
+            const [hours, minutes, seconds = 0] = session.late_threshold_time.split(':').map(Number);
+            lateThreshold = new Date(sessionDate);
+            lateThreshold.setHours(hours, minutes, seconds, 0);
+            // Format for display (HH:MM)
+            setLateThresholdDisplay(
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+            );
+        } else {
+            // Fallback to relative minutes
+            lateThreshold = new Date(session.start_time);
+            lateThreshold.setMinutes(lateThreshold.getMinutes() + session.late_threshold_minutes);
+            // Format for display
+            setLateThresholdDisplay(
+                lateThreshold.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
+            );
+        }
+
         const updateCountdown = () => {
             const now = new Date();
             const endTime = new Date(session.end_time);
             const startTime = new Date(session.start_time);
             const diff = endTime.getTime() - now.getTime();
             const startDiff = startTime.getTime() - now.getTime();
+
+            // Check if past late threshold
+            setIsPastLateThreshold(now > lateThreshold);
 
             if (startDiff > 0) {
                 // ยังไม่ถึงเวลาเริ่มต้น
@@ -493,13 +520,20 @@ export default function LiveAttendancePage() {
                                     <Icon icon="solar:clock-circle-linear" className="text-base" />
                                     <span className="text-xs">เวลาที่เหลือ</span>
                                 </div>
-                                <div className="inline-block px-6 py-3 bg-slate-700 rounded-xl">
+                                <div className={`inline-block px-6 py-3 rounded-xl ${isPastLateThreshold ? 'bg-amber-500' : 'bg-slate-700'}`}>
                                     <span className="text-2xl font-mono font-bold text-white">
                                         {timeRemaining
                                             ? `${String(timeRemaining.hours).padStart(2, "0")}:${String(timeRemaining.minutes).padStart(2, "0")}:${String(timeRemaining.seconds).padStart(2, "0")}`
                                             : "00:00:00"}
                                     </span>
                                 </div>
+                                {/* Late threshold time display */}
+                                {lateThresholdDisplay && (
+                                    <div className="mt-2 text-xs text-amber-400">
+                                        <Icon icon="solar:alarm-bold" className="inline mr-1" />
+                                        ตัดสาย {lateThresholdDisplay} น.
+                                    </div>
+                                )}
                             </div>
                         </CardBody>
                     </Card>
@@ -516,13 +550,16 @@ export default function LiveAttendancePage() {
                         </CardHeader>
                         <CardBody>
                             {/* Late threshold info */}
-                            {session.late_threshold_minutes > 0 && (
-                                <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3">
-                                    <Icon icon="solar:clock-circle-bold" className="text-2xl text-amber-500" />
+                            {lateThresholdDisplay && (
+                                <div className={`mb-4 p-3 rounded-xl flex items-center gap-3 ${isPastLateThreshold ? 'bg-amber-100 border border-amber-300' : 'bg-amber-50 border border-amber-200'}`}>
+                                    <Icon icon="solar:clock-circle-bold" className={`text-2xl ${isPastLateThreshold ? 'text-amber-600' : 'text-amber-500'}`} />
                                     <div>
-                                        <p className="text-sm font-medium text-amber-700">เกณฑ์เวลาสาย</p>
+                                        <p className={`text-sm font-medium ${isPastLateThreshold ? 'text-amber-800' : 'text-amber-700'}`}>
+                                            เกณฑ์เวลาสาย: <span className="font-bold">{lateThresholdDisplay} น.</span>
+                                            {isPastLateThreshold && <span className="ml-2 text-red-600">(เลยเวลาตัดสายแล้ว)</span>}
+                                        </p>
                                         <p className="text-xs text-amber-600">
-                                            เช็คชื่อหลังเวลาเริ่ม <span className="font-bold">{session.late_threshold_minutes} นาที</span> จะถือว่า "สาย"
+                                            เช็คชื่อหลัง {lateThresholdDisplay} น. จะถือว่า "สาย"
                                         </p>
                                     </div>
                                 </div>

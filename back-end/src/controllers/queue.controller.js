@@ -858,12 +858,13 @@ const createBooking = async (req, res) => {
             });
         }
 
-        // Find desk
+        // Find desk (exclude teacher desks - students cannot book teacher desks)
         const desk = await Desk.findOne({
             where: {
                 classroom_id: session.classroom_id,
                 number: desk_number,
                 is_enabled: true,
+                type: { [Op.ne]: 'teacher' }, // Exclude teacher desks from student booking
             },
         });
 
@@ -871,7 +872,7 @@ const createBooking = async (req, res) => {
             await transaction.rollback();
             return res.status(404).json({
                 success: false,
-                error: { message: 'ไม่พบโต๊ะหมายเลขนี้' },
+                error: { message: 'ไม่พบโต๊ะหมายเลขนี้ (โต๊ะอาจารย์ไม่สามารถจองได้)' },
             });
         }
 
@@ -1430,6 +1431,95 @@ const getBookingStatus = async (req, res) => {
         });
     } catch (error) {
         console.error('Error getting booking status:', error);
+        res.status(500).json({
+            success: false,
+            error: { message: error.message },
+        });
+    }
+};
+
+/**
+ * Cancel booking (Student)
+ * นักศึกษาสามารถยกเลิกการจองได้เฉพาะเมื่อ status เป็น 'waiting' เท่านั้น
+ */
+const cancelBooking = async (req, res) => {
+    const transaction = await sequelize.transaction();
+
+    try {
+        const { bookingId } = req.params;
+
+        const booking = await QueueBooking.findByPk(bookingId, {
+            include: [
+                {
+                    model: QueueSession,
+                    as: 'session',
+                    attributes: ['id', 'title', 'status'],
+                },
+                {
+                    model: ClassroomDesk,
+                    as: 'desk',
+                    attributes: ['id', 'desk_number', 'status'],
+                },
+            ],
+            transaction,
+        });
+
+        if (!booking) {
+            await transaction.rollback();
+            return res.status(404).json({
+                success: false,
+                error: { message: 'ไม่พบข้อมูลการจอง' },
+            });
+        }
+
+        // Only allow cancellation if status is 'waiting'
+        if (booking.status !== 'waiting') {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                error: { message: 'ไม่สามารถยกเลิกได้ เนื่องจากถึงคิวแล้วหรือดำเนินการเสร็จสิ้นแล้ว' },
+            });
+        }
+
+        // Update booking status to cancelled
+        await booking.update(
+            {
+                status: 'cancelled',
+                completed_at: new Date(),
+            },
+            { transaction }
+        );
+
+        // If booking had an assigned desk, release it
+        if (booking.desk) {
+            await booking.desk.update(
+                { status: 'available' },
+                { transaction }
+            );
+        }
+
+        await transaction.commit();
+
+        // Emit socket event for real-time update
+        const io = getIO();
+        if (io) {
+            io.to(`session_${booking.queue_session_id}`).emit('queue:booking_cancelled', {
+                bookingId: booking.id,
+                queueNumber: booking.queue_number,
+                bookingType: booking.booking_type,
+            });
+        }
+
+        logger.info(`Booking ${bookingId} cancelled by student`);
+
+        res.json({
+            success: true,
+            message: 'ยกเลิกการจองสำเร็จ',
+            data: booking.toJSON(),
+        });
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Error cancelling booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2424,6 +2514,7 @@ module.exports = {
     // Booking management
     createBooking,
     getBookingStatus,
+    cancelBooking,
     completeBooking,
     skipBooking,
     getSessionBookings,

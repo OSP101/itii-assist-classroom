@@ -185,7 +185,7 @@ export default function ProjectorViewPage() {
         if (desk.status.grading_status === "completed") {
             return "bg-emerald-500"; // ตรวจเสร็จแล้ว
         }
-        return "bg-slate-600"; // ยังไม่ได้ทำอะไร
+        return "bg-slate-200"; // ยังไม่ได้ทำอะไร - เปลี่ยนเป็นสีอ่อน
     };
 
     // Get desk border based on type
@@ -206,10 +206,10 @@ export default function ProjectorViewPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Spinner size="lg" color="primary" />
-                    <p className="text-white mt-4">กำลังโหลด...</p>
+                    <p className="text-slate-600 mt-4">กำลังโหลด...</p>
                 </div>
             </div>
         );
@@ -217,11 +217,11 @@ export default function ProjectorViewPage() {
 
     if (error || !data) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Icon icon="solar:danger-triangle-bold" className="text-6xl text-red-400 mb-4" />
-                    <h2 className="text-xl font-bold text-white mb-2">เกิดข้อผิดพลาด</h2>
-                    <p className="text-slate-400 mb-4">{error || "ไม่สามารถโหลดข้อมูลได้"}</p>
+                    <h2 className="text-xl font-bold text-slate-800 mb-2">เกิดข้อผิดพลาด</h2>
+                    <p className="text-slate-500 mb-4">{error || "ไม่สามารถโหลดข้อมูลได้"}</p>
                     <Button color="primary" onPress={() => fetchData()}>
                         ลองใหม่
                     </Button>
@@ -232,16 +232,16 @@ export default function ProjectorViewPage() {
 
     if (data.session.status !== "active") {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Icon 
                         icon={data.session.status === "paused" ? "solar:pause-circle-bold" : "solar:stop-circle-bold"} 
-                        className={`text-8xl ${data.session.status === "paused" ? "text-amber-400" : "text-rose-400"} mb-4`} 
+                        className={`text-8xl ${data.session.status === "paused" ? "text-amber-500" : "text-rose-500"} mb-4`} 
                     />
-                    <h2 className="text-2xl font-bold text-white mb-2">
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">
                         {data.session.status === "paused" ? "หยุดชั่วคราว" : "ปิดแล้ว"}
                     </h2>
-                    <p className="text-slate-400">
+                    <p className="text-slate-500">
                         {data.session.status === "paused" 
                             ? "การจองคิวถูกหยุดชั่วคราว" 
                             : "การจองคิวถูกปิดแล้ว"}
@@ -259,12 +259,12 @@ export default function ProjectorViewPage() {
     const canvasHeight = maxY + 100;
 
     return (
-        <div ref={containerRef} className="min-h-screen bg-slate-900 p-4 flex flex-col">
+        <div ref={containerRef} className="min-h-screen bg-slate-100 p-4 flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-white">{data.session.title}</h1>
-                    <p className="text-slate-400">
+                    <h1 className="text-2xl font-bold text-slate-800">{data.session.title}</h1>
+                    <p className="text-slate-500">
                         {data.classroom.name} • {data.classroom.building}
                     </p>
                 </div>
@@ -277,8 +277,8 @@ export default function ProjectorViewPage() {
                             color="primary" 
                             variant="flat"
                             classNames={{
-                                base: "bg-blue-500/20",
-                                content: "text-blue-400 font-bold",
+                                base: "bg-blue-100 border border-blue-300",
+                                content: "text-blue-700 font-bold",
                             }}
                             startContent={<Icon icon="solar:clipboard-check-bold"/>}
                         >
@@ -289,8 +289,8 @@ export default function ProjectorViewPage() {
                             color="warning" 
                             variant="flat"
                             classNames={{
-                                base: "bg-amber-500/20",
-                                content: "text-amber-400 font-bold",
+                                base: "bg-amber-100 border border-amber-300",
+                                content: "text-amber-700 font-bold",
                             }}
                             startContent={<Icon icon="solar:hand-shake-bold"/>}
                         >
@@ -299,22 +299,22 @@ export default function ProjectorViewPage() {
                     </div>
 
                     {/* Zoom Controls */}
-                    <div className="flex items-center gap-2 bg-slate-800 rounded-xl px-3 py-2">
+                    <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 border border-slate-200 shadow-sm">
                         <Button
                             isIconOnly
                             size="sm"
                             variant="flat"
-                            className="bg-slate-700 text-white text-2xl"
+                            className="bg-slate-100 text-slate-700 text-2xl"
                             onPress={() => setZoom((prev) => Math.max(prev - 0.1, 0.5))}
                         >
                             {/* <Icon icon="solar:minus-bold" /> */} -
                         </Button>
-                        <span className="text-white text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
+                        <span className="text-slate-700 text-sm w-12 text-center">{Math.round(zoom * 100)}%</span>
                         <Button
                             isIconOnly
                             size="sm"
                             variant="flat"
-                            className="bg-slate-700 text-white text-2xl"
+                            className="bg-slate-100 text-slate-700 text-2xl"
                             onPress={() => setZoom((prev) => Math.min(prev + 0.1, 2))}
                         >
                             {/* <Icon icon="solar:add-bold" /> */} +
@@ -326,7 +326,7 @@ export default function ProjectorViewPage() {
                         isIconOnly
                         size="lg"
                         variant="flat"
-                        className="bg-slate-800 text-white"
+                        className="bg-white text-slate-700 border border-slate-200 shadow-sm"
                         onPress={toggleFullscreen}
                     >
                         <Icon icon={isFullscreen ? "solar:quit-full-screen-bold" : "solar:full-screen-bold"} className="text-xl" />
@@ -337,7 +337,7 @@ export default function ProjectorViewPage() {
             {/* Main Content */}
             <div className="flex-1 flex gap-4">
                 {/* Room Layout */}
-                <div className="flex-1 bg-slate-800 rounded-2xl p-4 overflow-auto">
+                <div className="flex-1 bg-white rounded-2xl p-4 overflow-auto border border-slate-200 shadow-sm">
                     <div 
                         className="relative"
                         style={{
@@ -368,7 +368,7 @@ export default function ProjectorViewPage() {
                                     }}
                                     title={isTeacher ? `โต๊ะอาจารย์ ${desk.number}` : `โต๊ะ ${desk.number}${desk.label ? ` (${desk.label})` : ""}`}
                                 >
-                                    <span className={`text-white font-bold ${isTeacher ? "text-sm" : "text-lg"}`}>
+                                    <span className={`font-bold ${isTeacher ? "text-sm text-black" : "text-lg"} ${desk.status.grading_status === "not_started" && desk.status.help_status === "none" ? "text-slate-700" : "text-white"}`}>
                                         {isTeacher ? `อาจารย์ ${desk.number}` : desk.number}
                                     </span>
 
@@ -405,9 +405,14 @@ export default function ProjectorViewPage() {
                         <p className="text-lg font-bold text-slate-800 mb-1">สแกนเพื่อจองคิว</p>
                         <div className="bg-blue-100 rounded-xl px-4 py-2">
                             <span className="text-sm text-slate-600">PIN Code</span>
-                            <p className="text-3xl font-mono font-bold text-blue-600">
-                                {data.session.pin_code}
-                            </p>
+                           
+                            <div className="flex gap-4 px-5">
+                                {data.session.pin_code.split('').map((digit, index) => (
+                                    <span key={index} className="text-4xl font-bold text-white font-mono">
+                                        {digit}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
                         <div>
                             <Divider className="my-3" />
@@ -416,46 +421,46 @@ export default function ProjectorViewPage() {
                     </div>
 
                     {/* Legend */}
-                    <div className="bg-slate-800 rounded-2xl p-4">
-                        <h3 className="text-white font-semibold mb-3">สัญลักษณ์</h3>
+                    <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
+                        <h3 className="text-slate-800 font-semibold mb-3">สัญลักษณ์</h3>
                         <div className="space-y-2">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-slate-600 border border-slate-500" />
-                                <span className="text-slate-300 text-sm">ยังไม่ได้ตรวจ</span>
+                                <div className="w-8 h-8 rounded bg-slate-200 border border-slate-300" />
+                                <span className="text-slate-600 text-sm">ยังไม่ได้ตรวจ</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-blue-300 border border-slate-500" />
-                                <span className="text-slate-300 text-sm">รอตรวจงาน</span>
+                                <div className="w-8 h-8 rounded bg-blue-300 border border-blue-400" />
+                                <span className="text-slate-600 text-sm">รอตรวจงาน</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-blue-500 animate-pulse border border-slate-500" />
-                                <span className="text-slate-300 text-sm">กำลังตรวจ</span>
+                                <div className="w-8 h-8 rounded bg-blue-500 animate-pulse border border-blue-600" />
+                                <span className="text-slate-600 text-sm">กำลังตรวจ</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-emerald-500 border border-slate-500" />
-                                <span className="text-slate-300 text-sm">ตรวจเสร็จแล้ว</span>
+                                <div className="w-8 h-8 rounded bg-emerald-500 border border-emerald-600" />
+                                <span className="text-slate-600 text-sm">ตรวจเสร็จแล้ว</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-amber-300 border border-slate-500" />
-                                <span className="text-slate-300 text-sm">รอช่วยเหลือ</span>
+                                <div className="w-8 h-8 rounded bg-amber-300 border border-amber-400" />
+                                <span className="text-slate-600 text-sm">รอช่วยเหลือ</span>
                             </div>
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded bg-amber-500 animate-pulse border border-slate-500" />
-                                <span className="text-slate-300 text-sm">กำลังช่วยเหลือ</span>
+                                <div className="w-8 h-8 rounded bg-amber-500 animate-pulse border border-amber-600" />
+                                <span className="text-slate-600 text-sm">กำลังช่วยเหลือ</span>
                             </div>
                         </div>
 
                         {/* Desk types */}
-                        <div className="mt-4 pt-4 border-t border-slate-700">
-                            <h4 className="text-slate-400 text-sm mb-2">ประเภทโต๊ะ</h4>
+                        <div className="mt-4 pt-4 border-t border-slate-200">
+                            <h4 className="text-slate-500 text-sm mb-2">ประเภทโต๊ะ</h4>
                             <div className="space-y-2">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded bg-slate-600 border-2 border-cyan-400" />
-                                    <span className="text-slate-300 text-sm">คอมพิวเตอร์</span>
+                                    <div className="w-8 h-8 rounded bg-slate-200 border-2 border-cyan-400" />
+                                    <span className="text-slate-600 text-sm">คอมพิวเตอร์</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded bg-slate-600 border-4 border-purple-400" />
-                                    <span className="text-slate-300 text-sm">โต๊ะอาจารย์</span>
+                                    <div className="w-8 h-8 rounded bg-slate-200 border-4 border-purple-400" />
+                                    <span className="text-slate-600 text-sm">โต๊ะอาจารย์</span>
                                 </div>
                             </div>
                         </div>

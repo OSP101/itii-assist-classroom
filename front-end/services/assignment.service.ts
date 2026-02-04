@@ -36,6 +36,7 @@ export interface Assignment {
     due_date?: string;
     order_index: number;
     is_active: boolean;
+    is_score_visible?: boolean; // Whether students can see their scores
     created_by?: number;
     created_at?: string;
     updated_at?: string;
@@ -58,6 +59,7 @@ export interface CreateAssignmentData {
     max_score?: number;
     sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
     due_date?: string;
+    is_score_visible?: boolean; // Whether students can see their scores
 }
 
 export interface UpdateAssignmentData {
