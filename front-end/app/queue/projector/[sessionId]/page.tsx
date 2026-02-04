@@ -406,9 +406,9 @@ export default function ProjectorViewPage() {
                         <div className="bg-blue-100 rounded-xl px-4 py-2">
                             <span className="text-sm text-slate-600">PIN Code</span>
                            
-                            <div className="flex gap-4 px-5">
+                            <div className="flex gap-2 px-3">
                                 {data.session.pin_code.split('').map((digit, index) => (
-                                    <span key={index} className="text-4xl font-bold text-white font-mono">
+                                    <span key={index} className="text-3xl font-bold text-white font-mono">
                                         {digit}
                                     </span>
                                 ))}
