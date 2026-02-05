@@ -2042,6 +2042,31 @@ const getDeskStatuses = async (req, res) => {
             where: { queue_session_id: sessionId },
         });
 
+        // Get active bookings for each desk
+        const activeBookings = await QueueBooking.findAll({
+            where: {
+                queue_session_id: sessionId,
+                status: ['waiting', 'in_progress'],
+            },
+            include: [
+                { model: Student, as: 'student', attributes: ['id', 'student_id', 'full_name'] },
+            ],
+        });
+
+        // Map bookings by desk_id
+        const bookingMap = {};
+        activeBookings.forEach((booking) => {
+            if (booking.desk_id) {
+                bookingMap[booking.desk_id] = {
+                    id: booking.id,
+                    queue_number: booking.queue_number,
+                    booking_type: booking.booking_type,
+                    status: booking.status,
+                    student_name: booking.student?.full_name,
+                };
+            }
+        });
+
         // Map desk statuses to desks
         const statusMap = {};
         deskStatuses.forEach((ds) => {
@@ -2054,6 +2079,7 @@ const getDeskStatuses = async (req, res) => {
                 grading_status: 'not_started',
                 help_status: 'none',
             },
+            booking: bookingMap[desk.id] || null,
         }));
 
         // Get queue statistics

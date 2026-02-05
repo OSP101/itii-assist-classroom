@@ -120,8 +120,11 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+    const [isStopModalOpen, setIsStopModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<QueueSession | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<QueueSession | null>(null);
+    const [actionTarget, setActionTarget] = useState<QueueSession | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Options for selects
@@ -636,13 +639,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                 {/* Status change buttons */}
                                                                 {session.status === 'draft' && (
                                                                     <>
-                                                                        <Tooltip content="เปิดใช้งาน">
+                                                                        <Tooltip content="เริ่มการจับคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="success"
-                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                                onPress={() => {
+                                                                                    setActionTarget(session);
+                                                                                    setIsStartModalOpen(true);
+                                                                                }}
                                                                             >
                                                                                 <Icon icon="solar:play-bold" className="text-lg" />
                                                                             </Button>
@@ -698,28 +704,37 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 <Icon icon="solar:user-check-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="หยุดชั่วคราว">
+                                                                        <Tooltip content="หยุดรับคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="warning"
-                                                                                onPress={() => handleStatusChange(session, 'paused')}
+                                                                                onPress={() => {
+                                                                                    setActionTarget(session);
+                                                                                    setIsStopModalOpen(true);
+                                                                                }}
                                                                             >
                                                                                 <Icon icon="solar:pause-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="danger"
-                                                                                onPress={() => handleStatusChange(session, 'closed')}
-                                                                            >
-                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
+                                                                        {/* ลบได้เฉพาะเมื่อไม่มีคิวรอ */}
+                                                                        {(session.stats?.waiting || 0) === 0 && (session.stats?.in_progress || 0) === 0 && (
+                                                                            <Tooltip content="ลบ" color="danger">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="danger"
+                                                                                    onPress={() => {
+                                                                                        setDeleteTarget(session);
+                                                                                        setIsDeleteModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                                 {session.status === 'paused' && (
@@ -746,32 +761,54 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 <Icon icon="solar:user-check-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="เปิดใช้งานต่อ">
+                                                                        <Tooltip content="เปิดรับคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="success"
-                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                                onPress={() => {
+                                                                                    setActionTarget(session);
+                                                                                    setIsStartModalOpen(true);
+                                                                                }}
                                                                             >
                                                                                 <Icon icon="solar:play-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="danger"
-                                                                                onPress={() => handleStatusChange(session, 'closed')}
-                                                                            >
-                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
+                                                                        {/* ลบได้เฉพาะเมื่อไม่มีคิวรอ */}
+                                                                        {(session.stats?.waiting || 0) === 0 && (session.stats?.in_progress || 0) === 0 && (
+                                                                            <Tooltip content="ลบ" color="danger">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="danger"
+                                                                                    onPress={() => {
+                                                                                        setDeleteTarget(session);
+                                                                                        setIsDeleteModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                                 {session.status === 'closed' && (
-                                                                    <span className="text-slate-400 text-sm">ปิดแล้ว</span>
+                                                                    <Tooltip content="ลบ" color="danger">
+                                                                        <Button
+                                                                            isIconOnly
+                                                                            size="sm"
+                                                                            variant="light"
+                                                                            color="danger"
+                                                                            onPress={() => {
+                                                                                setDeleteTarget(session);
+                                                                                setIsDeleteModalOpen(true);
+                                                                            }}
+                                                                        >
+                                                                            <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                        </Button>
+                                                                    </Tooltip>
                                                                 )}
                                                             </div>
                                                         </TableCell>
@@ -1357,6 +1394,88 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                         </Button>
                         <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting} className="bg-red-500">
                             ลบ
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Start Queue Confirmation Modal */}
+            <Modal isOpen={isStartModalOpen} onClose={() => setIsStartModalOpen(false)}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-100 rounded-lg">
+                            <Icon icon="solar:play-bold" className="text-emerald-600 text-xl" />
+                        </div>
+                        <span>เริ่มเปิดรับคิว</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p>คุณต้องการเปิดรับคิว <span className="font-semibold">{actionTarget?.title}</span> ใช่หรือไม่?</p>
+                        <div className="mt-3 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                            <Icon icon="solar:info-circle-bold" className="inline mr-1" />
+                            เมื่อเปิดรับคิวแล้ว นักศึกษาจะสามารถจองคิวผ่าน PIN Code ได้
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsStartModalOpen(false)}>
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="success" 
+                            onPress={async () => {
+                                if (actionTarget) {
+                                    await handleStatusChange(actionTarget, 'active');
+                                    setIsStartModalOpen(false);
+                                    setActionTarget(null);
+                                }
+                            }} 
+                            isLoading={isSubmitting}
+                            className="bg-emerald-500"
+                        >
+                            เปิดรับคิว
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Stop Queue Confirmation Modal */}
+            <Modal isOpen={isStopModalOpen} onClose={() => setIsStopModalOpen(false)}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-3">
+                        <div className="p-2 bg-amber-100 rounded-lg">
+                            <Icon icon="solar:pause-bold" className="text-amber-600 text-xl" />
+                        </div>
+                        <span>หยุดรับคิว</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p>คุณต้องการหยุดรับคิว <span className="font-semibold">{actionTarget?.title}</span> ใช่หรือไม่?</p>
+                        <div className="mt-3 p-3 bg-amber-50 rounded-lg text-sm text-amber-700">
+                            <Icon icon="solar:info-circle-bold" className="inline mr-1" />
+                            <strong>ผลกระทบ:</strong>
+                            <ul className="list-disc list-inside mt-1 space-y-1">
+                                <li>นักศึกษาจะไม่สามารถส่งคิวใหม่เข้ามาได้</li>
+                                <li>QR Code และ PIN Code จะถูกซ่อน</li>
+                                <li>คิวที่รอตรวจอยู่ยังคงดำเนินการต่อได้</li>
+                                <li>ผังห้องยังแสดงอยู่ตามปกติ</li>
+                            </ul>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsStopModalOpen(false)}>
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="warning" 
+                            onPress={async () => {
+                                if (actionTarget) {
+                                    await handleStatusChange(actionTarget, 'paused');
+                                    setIsStopModalOpen(false);
+                                    setActionTarget(null);
+                                }
+                            }} 
+                            isLoading={isSubmitting}
+                            className="bg-amber-500 text-white"
+                        >
+                            หยุดรับคิว
                         </Button>
                     </ModalFooter>
                 </ModalContent>
