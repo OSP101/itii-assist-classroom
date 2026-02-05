@@ -1,4 +1,21 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: itii-dev-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - itii-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+      timeout: 3s
+    restart: always
+
   backend:
     build: 
       context: ./back-end
@@ -10,10 +27,15 @@ services:
       NODE_ENV: development
       DB_HOST: itii-mysql
       DB_PORT: 3306
+      REDIS_HOST: itii-dev-redis
+      REDIS_PORT: 6379
     ports:
       - "3001:3001"
     networks:
       - itii-network
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 10s
@@ -47,3 +69,6 @@ services:
 networks:
   itii-network:  
     external: true
+
+volumes:
+  redis-dev-data:
