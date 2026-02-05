@@ -841,6 +841,12 @@ export default function WorkerDashboardPage() {
                                                 <p className="text-lg font-semibold text-slate-800">
                                                     โต๊ะ {currentBooking.desk_number}
                                                 </p>
+                                                {currentBooking.zone && (
+                                                    <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                                        <Icon icon="solar:map-point-bold" className="text-base" />
+                                                        <span className="text-sm font-medium">{currentBooking.zone.name}</span>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             <div className="bg-white rounded-xl p-4 space-y-2">

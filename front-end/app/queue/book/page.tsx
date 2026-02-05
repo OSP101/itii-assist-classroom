@@ -52,6 +52,11 @@ interface BookingStatus {
     status: string;
     position_in_queue: number;
     completed_at?: string;
+    zone?: {
+        id: string;
+        name: string;
+        color?: string;
+    } | null;
     assignedWorker?: {
         id: number;
         full_name: string;
@@ -1017,7 +1022,14 @@ function BookQueueContent() {
                             <div className="bg-slate-50 rounded-xl p-4 space-y-3 text-left">
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-500">โต๊ะ</span>
-                                    <span className="font-semibold text-slate-800">{status.desk_number}</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-slate-800">{status.desk_number}</span>
+                                        {bookingStatus?.zone && (
+                                            <Chip size="sm" variant="flat" color="secondary">
+                                                {bookingStatus.zone.name}
+                                            </Chip>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-slate-500">ประเภท</span>
@@ -1055,7 +1067,7 @@ function BookQueueContent() {
                                 <>
                                     <div className="mt-4 p-3 bg-blue-50 text-blue-700 rounded-xl text-sm">
                                         <Icon icon="solar:info-circle-bold" className="inline mr-1" />
-                                        กรุณารออยู่ที่โต๊ะ {status.desk_number} ระบบจะแจ้งเตือนเมื่อถึงคิว
+                                        กรุณารออยู่ที่โต๊ะ {status.desk_number}{bookingStatus?.zone ? ` (${bookingStatus.zone.name})` : ""} ระบบจะแจ้งเตือนเมื่อถึงคิว
                                     </div>
                                     
                                     {/* Cancel Booking Button */}
@@ -1075,7 +1087,7 @@ function BookQueueContent() {
                             {isInProgress && (
                                 <div className="mt-4 p-3 bg-amber-50 text-amber-700 rounded-xl text-sm">
                                     <Icon icon="solar:bell-bold" className="inline mr-1" />
-                                    กำลังตรวจงานของคุณ กรุณารอ TA ที่โต๊ะ {status.desk_number}
+                                    กำลังตรวจงานของคุณ กรุณารอ TA ที่โต๊ะ {status.desk_number}{bookingStatus?.zone ? ` (${bookingStatus.zone.name})` : ""}
                                 </div>
                             )}
 

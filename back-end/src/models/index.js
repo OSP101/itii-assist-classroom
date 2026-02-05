@@ -10,6 +10,7 @@ const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
 const Desk = require('./Desk');
+const Zone = require('./Zone');
 const Feedback = require('./Feedback');
 const StudentGroup = require('./StudentGroup');
 const StudentGroupMember = require('./StudentGroupMember');
@@ -182,6 +183,17 @@ Classroom.hasMany(Desk, {
 });
 
 Desk.belongsTo(Classroom, {
+  foreignKey: 'classroom_id',
+  as: 'classroom',
+});
+
+// Classroom -> Zones
+Classroom.hasMany(Zone, {
+  foreignKey: 'classroom_id',
+  as: 'zones',
+});
+
+Zone.belongsTo(Classroom, {
   foreignKey: 'classroom_id',
   as: 'classroom',
 });
@@ -714,6 +726,7 @@ module.exports = {
   CourseSectionStudent,
   Classroom,
   Desk,
+  Zone,
   Feedback,
   StudentGroup,
   StudentGroupMember,

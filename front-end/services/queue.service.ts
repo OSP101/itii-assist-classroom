@@ -109,6 +109,11 @@ export interface QueueBooking {
         number: string;
         type: string;
     };
+    zone?: {
+        id: string;
+        name: string;
+        color?: string;
+    } | null;
     assignedWorker?: {
         id: number;
         full_name: string;
