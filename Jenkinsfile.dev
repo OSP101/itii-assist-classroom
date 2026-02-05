@@ -125,7 +125,7 @@ EOF
                 
                 # Stop and remove existing containers with same name (cleanup orphans)
                 echo "🧹 Cleaning up existing containers..."
-                docker rm -f itii-${ENV_NAME}-backend itii-${ENV_NAME}-frontend 2>/dev/null || true
+                docker rm -f itii-${ENV_NAME}-backend itii-${ENV_NAME}-frontend itii-${ENV_NAME}-redis 2>/dev/null || true
                 
                 docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down --remove-orphans
                 docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
@@ -136,6 +136,12 @@ EOF
                 if ! docker ps | grep -q itii-${ENV_NAME}-backend; then
                     echo "❌ Backend failed to start. Showing logs:"
                     docker logs itii-${ENV_NAME}-backend || true
+                    exit 1
+                fi
+                
+                if ! docker ps | grep -q itii-${ENV_NAME}-redis; then
+                    echo "❌ Redis failed to start. Showing logs:"
+                    docker logs itii-${ENV_NAME}-redis || true
                     exit 1
                 fi
                 """
@@ -151,6 +157,10 @@ EOF
                 echo ""
                 echo "📊 Backend logs:"
                 docker logs itii-${ENV_NAME}-backend --tail 20 || true
+                
+                echo ""
+                echo "📊 Redis status:"
+                docker exec itii-${ENV_NAME}-redis redis-cli ping || true
                 """
             }
         }
@@ -165,6 +175,9 @@ EOF
             sh """
             echo "📋 Backend logs:"
             docker logs itii-${ENV_NAME}-backend --tail 100 || true
+            echo ""
+            echo "📋 Redis logs:"
+            docker logs itii-${ENV_NAME}-redis --tail 50 || true
             echo ""
             echo "📋 Container status:"
             docker ps -a | grep itii || true

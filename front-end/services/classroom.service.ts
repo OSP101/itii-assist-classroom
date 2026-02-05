@@ -13,6 +13,16 @@ export interface Desk {
   is_enabled: boolean;
 }
 
+export interface ZoneData {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
 export interface Classroom {
   id: string;
   name: string;
@@ -24,6 +34,7 @@ export interface Classroom {
   created_at: string;
   updated_at: string;
   desks: Desk[];
+  zones?: ZoneData[];
   creator?: {
     id: number;
     full_name: string;
@@ -112,7 +123,7 @@ class ClassroomService {
   }
 
   /**
-   * Update classroom layout (desks)
+   * Update classroom layout (desks and zones)
    */
   async updateLayout(id: string, desks: {
     id?: string;
@@ -121,8 +132,16 @@ class ClassroomService {
     y: number;
     type: 'computer' | 'normal' | 'teacher';
     isEnabled: boolean;
+  }[], zones?: {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
   }[]) {
-    return apiService.put<Classroom>(`/classrooms/${id}/layout`, { desks });
+    return apiService.put<Classroom>(`/classrooms/${id}/layout`, { desks, zones });
   }
 
   /**

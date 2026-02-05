@@ -120,8 +120,13 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isStartModalOpen, setIsStartModalOpen] = useState(false);
+    const [isPauseModalOpen, setIsPauseModalOpen] = useState(false);
     const [editTarget, setEditTarget] = useState<QueueSession | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<QueueSession | null>(null);
+    const [startTarget, setStartTarget] = useState<QueueSession | null>(null);
+    const [pauseTarget, setPauseTarget] = useState<QueueSession | null>(null);
+    const [pauseAction, setPauseAction] = useState<'paused' | 'active'>('paused');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Options for selects
@@ -370,6 +375,71 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
     // Navigate to worker dashboard
     const handleGoToWorker = (session: QueueSession) => {
         window.open(`/classroom/${course.id}/queue/${session.id}/worker`, '_blank');
+    };
+
+    // Handle start queue with confirmation
+    const handleStartQueue = async () => {
+        if (!startTarget) return;
+        setIsSubmitting(true);
+        try {
+            await queueService.updateQueueSessionStatus(course.id, startTarget.id, 'active');
+            addToast({
+                title: "สำเร็จ",
+                description: "เริ่มการจองคิวเรียบร้อยแล้ว",
+                color: "success",
+            });
+            setIsStartModalOpen(false);
+            setStartTarget(null);
+            fetchSessions();
+        } catch (error: unknown) {
+            console.error("Error starting queue:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: error instanceof Error ? error.message : "ไม่สามารถเริ่มการจองคิวได้",
+                color: "danger",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Handle pause/resume queue with confirmation
+    const handlePauseResumeQueue = async () => {
+        if (!pauseTarget) return;
+        setIsSubmitting(true);
+        try {
+            await queueService.updateQueueSessionStatus(course.id, pauseTarget.id, pauseAction);
+            addToast({
+                title: "สำเร็จ",
+                description: pauseAction === 'paused' ? "หยุดรับคิวเรียบร้อยแล้ว" : "เปิดรับคิวเรียบร้อยแล้ว",
+                color: "success",
+            });
+            setIsPauseModalOpen(false);
+            setPauseTarget(null);
+            fetchSessions();
+        } catch (error: unknown) {
+            console.error("Error changing status:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนสถานะได้",
+                color: "danger",
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Open start modal
+    const handleOpenStartModal = (session: QueueSession) => {
+        setStartTarget(session);
+        setIsStartModalOpen(true);
+    };
+
+    // Open pause modal
+    const handleOpenPauseModal = (session: QueueSession, action: 'paused' | 'active') => {
+        setPauseTarget(session);
+        setPauseAction(action);
+        setIsPauseModalOpen(true);
     };
 
     console.log("formData:", formData);
@@ -633,16 +703,16 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                         </TableCell>
                                                         <TableCell>
                                                             <div className="flex items-center justify-center gap-1">
-                                                                {/* Status change buttons */}
+                                                                {/* Draft status: Start, Edit, Delete */}
                                                                 {session.status === 'draft' && (
                                                                     <>
-                                                                        <Tooltip content="เปิดใช้งาน">
+                                                                        <Tooltip content="เริ่มการจองคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="success"
-                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                                onPress={() => handleOpenStartModal(session)}
                                                                             >
                                                                                 <Icon icon="solar:play-bold" className="text-lg" />
                                                                             </Button>
@@ -674,6 +744,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                         </Tooltip>
                                                                     </>
                                                                 )}
+                                                                {/* Active status: Projector, Worker, Pause, Delete (only if no waiting) */}
                                                                 {session.status === 'active' && (
                                                                     <>
                                                                         <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
@@ -698,30 +769,37 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 <Icon icon="solar:user-check-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="หยุดชั่วคราว">
+                                                                        <Tooltip content="หยุดรับคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="warning"
-                                                                                onPress={() => handleStatusChange(session, 'paused')}
+                                                                                onPress={() => handleOpenPauseModal(session, 'paused')}
                                                                             >
                                                                                 <Icon icon="solar:pause-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="danger"
-                                                                                onPress={() => handleStatusChange(session, 'closed')}
-                                                                            >
-                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
+                                                                        {/* Delete only if no waiting queue */}
+                                                                        {(session.stats?.waiting || 0) === 0 && (
+                                                                            <Tooltip content="ลบ" color="danger">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="danger"
+                                                                                    onPress={() => {
+                                                                                        setDeleteTarget(session);
+                                                                                        setIsDeleteModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                        )}
                                                                     </>
                                                                 )}
+                                                                {/* Paused status: Projector, Worker, Resume, Delete (only if no waiting) */}
                                                                 {session.status === 'paused' && (
                                                                     <>
                                                                         <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
@@ -746,28 +824,34 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 <Icon icon="solar:user-check-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="เปิดใช้งานต่อ">
+                                                                        <Tooltip content="เปิดรับคิว">
                                                                             <Button
                                                                                 isIconOnly
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="success"
-                                                                                onPress={() => handleStatusChange(session, 'active')}
+                                                                                onPress={() => handleOpenPauseModal(session, 'active')}
                                                                             >
                                                                                 <Icon icon="solar:play-bold" className="text-lg" />
                                                                             </Button>
                                                                         </Tooltip>
-                                                                        <Tooltip content="ปิดการจองคิว" color="danger">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="danger"
-                                                                                onPress={() => handleStatusChange(session, 'closed')}
-                                                                            >
-                                                                                <Icon icon="solar:stop-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
+                                                                        {/* Delete only if no waiting queue */}
+                                                                        {(session.stats?.waiting || 0) === 0 && (
+                                                                            <Tooltip content="ลบ" color="danger">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="danger"
+                                                                                    onPress={() => {
+                                                                                        setDeleteTarget(session);
+                                                                                        setIsDeleteModalOpen(true);
+                                                                                    }}
+                                                                                >
+                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                        )}
                                                                     </>
                                                                 )}
                                                                 {session.status === 'closed' && (
@@ -1357,6 +1441,106 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                         </Button>
                         <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting} className="bg-red-500">
                             ลบ
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Start Queue Confirmation Modal */}
+            <Modal isOpen={isStartModalOpen} onClose={() => setIsStartModalOpen(false)}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-2">
+                        <Icon icon="solar:play-circle-bold" className="text-emerald-500 text-2xl" />
+                        <span>ยืนยันเริ่มการจองคิว</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p>คุณต้องการเริ่มการจองคิว <span className="font-semibold">{startTarget?.title}</span> ใช่หรือไม่?</p>
+                        <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:info-circle-bold" className="text-emerald-600 text-lg mt-0.5" />
+                                <div className="text-sm text-emerald-700">
+                                    <p>เมื่อเริ่มแล้ว:</p>
+                                    <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                        <li>นักศึกษาจะสามารถจองคิวได้</li>
+                                        <li>QR Code และ PIN จะเปิดใช้งาน</li>
+                                        <li>TA สามารถเข้าหน้ารับคิวได้</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsStartModalOpen(false)}>
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color="success" 
+                            onPress={handleStartQueue} 
+                            isLoading={isSubmitting}
+                            startContent={<Icon icon="solar:play-bold" />}
+                        >
+                            เริ่มการจองคิว
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Pause/Resume Confirmation Modal */}
+            <Modal isOpen={isPauseModalOpen} onClose={() => setIsPauseModalOpen(false)}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-2">
+                        <Icon 
+                            icon={pauseAction === 'paused' ? "solar:pause-circle-bold" : "solar:play-circle-bold"} 
+                            className={pauseAction === 'paused' ? "text-amber-500 text-2xl" : "text-emerald-500 text-2xl"} 
+                        />
+                        <span>{pauseAction === 'paused' ? 'ยืนยันหยุดรับคิว' : 'ยืนยันเปิดรับคิว'}</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        <p>
+                            คุณต้องการ{pauseAction === 'paused' ? 'หยุดรับคิว' : 'เปิดรับคิว'} 
+                            <span className="font-semibold"> {pauseTarget?.title}</span> ใช่หรือไม่?
+                        </p>
+                        {pauseAction === 'paused' ? (
+                            <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                                <div className="flex items-start gap-2">
+                                    <Icon icon="solar:info-circle-bold" className="text-amber-600 text-lg mt-0.5" />
+                                    <div className="text-sm text-amber-700">
+                                        <p>เมื่อหยุดรับคิว:</p>
+                                        <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                            <li>นักศึกษาจะไม่สามารถจองคิวใหม่ได้</li>
+                                            <li>QR Code และ PIN จะถูกซ่อน</li>
+                                            <li>คิวที่จองไว้แล้วยังสามารถทำงานต่อได้</li>
+                                            <li>สามารถเปิดรับคิวใหม่ได้ทุกเมื่อ</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-200">
+                                <div className="flex items-start gap-2">
+                                    <Icon icon="solar:info-circle-bold" className="text-emerald-600 text-lg mt-0.5" />
+                                    <div className="text-sm text-emerald-700">
+                                        <p>เมื่อเปิดรับคิว:</p>
+                                        <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                            <li>นักศึกษาจะสามารถจองคิวได้อีกครั้ง</li>
+                                            <li>QR Code และ PIN จะแสดงอีกครั้ง</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsPauseModalOpen(false)}>
+                            ยกเลิก
+                        </Button>
+                        <Button 
+                            color={pauseAction === 'paused' ? 'warning' : 'success'} 
+                            onPress={handlePauseResumeQueue} 
+                            isLoading={isSubmitting}
+                            startContent={<Icon icon={pauseAction === 'paused' ? "solar:pause-bold" : "solar:play-bold"} />}
+                        >
+                            {pauseAction === 'paused' ? 'หยุดรับคิว' : 'เปิดรับคิว'}
                         </Button>
                     </ModalFooter>
                 </ModalContent>

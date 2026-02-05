@@ -5,6 +5,14 @@ import { useParams } from "next/navigation";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
+import { Switch } from "@heroui/switch";
+import {
+    Modal,
+    ModalContent,
+    ModalHeader,
+    ModalBody,
+    ModalFooter,
+} from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import { io, Socket } from "socket.io-client";
@@ -15,6 +23,14 @@ import { Divider } from "@heroui/divider";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
 const FRONTEND_URL = process.env.NEXT_PUBLIC_FRONTEND_URL || "http://localhost:3000";
+
+interface DeskBooking {
+    id: number;
+    queue_number: number;
+    booking_type: 'grading' | 'help';
+    status: string;
+    student_name?: string;
+}
 
 interface DeskWithStatus {
     id: string;
@@ -28,6 +44,7 @@ interface DeskWithStatus {
         grading_status: "not_started" | "waiting" | "in_progress" | "completed";
         help_status: "none" | "waiting" | "in_progress";
     };
+    booking?: DeskBooking;
 }
 
 interface ProjectorViewData {
@@ -58,6 +75,14 @@ export default function ProjectorViewPage() {
     const [error, setError] = useState<string | null>(null);
     const [zoom, setZoom] = useState(1);
     const [isFullscreen, setIsFullscreen] = useState(false);
+    
+    // Desk action modal states
+    const [selectedDesk, setSelectedDesk] = useState<DeskWithStatus | null>(null);
+    const [isDeskModalOpen, setIsDeskModalOpen] = useState(false);
+    const [isCancelling, setIsCancelling] = useState(false);
+    
+    // Status toggle states
+    const [isTogglingStatus, setIsTogglingStatus] = useState(false);
 
     const socketRef = useRef<Socket | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -115,6 +140,10 @@ export default function ProjectorViewPage() {
             fetchData();
         });
 
+        socket.on("booking-cancelled", () => {
+            fetchData();
+        });
+
         socket.on("session-status-changed", (eventData: { status: string }) => {
             if (eventData.status === "closed") {
                 addToast({
@@ -146,6 +175,100 @@ export default function ProjectorViewPage() {
         } else {
             document.exitFullscreen();
             setIsFullscreen(false);
+        }
+    };
+
+    // Toggle queue session status (pause/resume)
+    const handleToggleStatus = async () => {
+        if (!data) return;
+        
+        const newStatus = data.session.status === 'active' ? 'paused' : 'active';
+        setIsTogglingStatus(true);
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/queue/sessions/${sessionId}/status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                addToast({
+                    title: newStatus === 'paused' ? "หยุดรับคิวแล้ว" : "เปิดรับคิวแล้ว",
+                    description: newStatus === 'paused' 
+                        ? "นักศึกษาจะไม่สามารถจองคิวใหม่ได้"
+                        : "นักศึกษาสามารถจองคิวได้อีกครั้ง",
+                    color: newStatus === 'paused' ? "warning" : "success",
+                });
+                fetchData();
+            } else {
+                addToast({
+                    title: "เกิดข้อผิดพลาด",
+                    description: result.error?.message || "ไม่สามารถเปลี่ยนสถานะได้",
+                    color: "danger",
+                });
+            }
+        } catch (error) {
+            console.error("Error toggling status:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: "ไม่สามารถเปลี่ยนสถานะได้",
+                color: "danger",
+            });
+        } finally {
+            setIsTogglingStatus(false);
+        }
+    };
+
+    // Handle desk click
+    const handleDeskClick = (desk: DeskWithStatus) => {
+        // Only open modal if desk has active booking
+        if (desk.booking && (desk.status.grading_status === 'waiting' || desk.status.grading_status === 'in_progress' || desk.status.help_status !== 'none')) {
+            setSelectedDesk(desk);
+            setIsDeskModalOpen(true);
+        }
+    };
+
+    // Cancel desk booking
+    const handleCancelDeskBooking = async () => {
+        if (!selectedDesk || !selectedDesk.booking) return;
+        
+        setIsCancelling(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/queue/bookings/${selectedDesk.booking.id}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                addToast({
+                    title: "ยกเลิกการจองสำเร็จ",
+                    description: `โต๊ะ ${selectedDesk.number} ถูกล้างแล้ว`,
+                    color: "success",
+                });
+                setIsDeskModalOpen(false);
+                setSelectedDesk(null);
+                fetchData();
+            } else {
+                addToast({
+                    title: "ยกเลิกไม่สำเร็จ",
+                    description: result.error?.message || "เกิดข้อผิดพลาด",
+                    color: "danger",
+                });
+            }
+        } catch (error) {
+            console.error("Error cancelling booking:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: "ไม่สามารถยกเลิกการจองได้",
+                color: "danger",
+            });
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -230,22 +353,18 @@ export default function ProjectorViewPage() {
         );
     }
 
-    if (data.session.status !== "active") {
+    // Only show full-screen message for "closed" status
+    // "paused" status will show the room layout but without QR/PIN
+    if (data.session.status === "closed") {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Icon 
-                        icon={data.session.status === "paused" ? "solar:pause-circle-bold" : "solar:stop-circle-bold"} 
-                        className={`text-8xl ${data.session.status === "paused" ? "text-amber-500" : "text-rose-500"} mb-4`} 
+                        icon="solar:stop-circle-bold" 
+                        className="text-8xl text-rose-500 mb-4" 
                     />
-                    <h2 className="text-2xl font-bold text-slate-800 mb-2">
-                        {data.session.status === "paused" ? "หยุดชั่วคราว" : "ปิดแล้ว"}
-                    </h2>
-                    <p className="text-slate-500">
-                        {data.session.status === "paused" 
-                            ? "การจองคิวถูกหยุดชั่วคราว" 
-                            : "การจองคิวถูกปิดแล้ว"}
-                    </p>
+                    <h2 className="text-2xl font-bold text-slate-800 mb-2">ปิดแล้ว</h2>
+                    <p className="text-slate-500">การจองคิวถูกปิดแล้ว</p>
                 </div>
             </div>
         );
@@ -258,15 +377,31 @@ export default function ProjectorViewPage() {
     const canvasWidth = maxX + 100; // Add padding
     const canvasHeight = maxY + 100;
 
+    // Check if queue is paused
+    const isPaused = data.session.status === "paused";
+
     return (
         <div ref={containerRef} className="min-h-screen bg-slate-100 p-4 flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between mb-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">{data.session.title}</h1>
-                    <p className="text-slate-500">
-                        {data.classroom.name} • {data.classroom.building}
-                    </p>
+                <div className="flex items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">{data.session.title}</h1>
+                        <p className="text-slate-500">
+                            {data.classroom.name} • {data.classroom.building}
+                        </p>
+                    </div>
+                    {/* Status indicator */}
+                    {isPaused && (
+                        <Chip 
+                            size="lg" 
+                            color="warning" 
+                            variant="flat"
+                            startContent={<Icon icon="solar:pause-circle-bold" />}
+                        >
+                            หยุดรับคิว
+                        </Chip>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4">
@@ -321,6 +456,27 @@ export default function ProjectorViewPage() {
                         </Button>
                     </div>
 
+                    {/* Toggle Queue Status */}
+                    <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 border border-slate-200 shadow-sm">
+                        <Switch
+                            isSelected={!isPaused}
+                            onValueChange={handleToggleStatus}
+                            isDisabled={isTogglingStatus}
+                            size="lg"
+                            color="success"
+                            thumbIcon={({ isSelected }) =>
+                                isSelected ? (
+                                    <Icon icon="solar:play-bold" className="text-xs" />
+                                ) : (
+                                    <Icon icon="solar:pause-bold" className="text-xs" />
+                                )
+                            }
+                        />
+                        <span className={`text-sm font-medium ${isPaused ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {isPaused ? 'หยุดรับคิว' : 'เปิดรับคิว'}
+                        </span>
+                    </div>
+
                     {/* Fullscreen */}
                     <Button
                         isIconOnly
@@ -352,13 +508,15 @@ export default function ProjectorViewPage() {
                         {/* Desks with absolute positioning */}
                         {desks.map((desk) => {
                             const isTeacher = desk.type === "teacher";
+                            const hasActiveBooking = desk.booking && (desk.status.grading_status === 'waiting' || desk.status.grading_status === 'in_progress' || desk.status.help_status !== 'none');
                             return (
                                 <div
                                     key={desk.id}
                                     className={`
                                         absolute flex items-center justify-center rounded-lg
                                         ${getDeskColor(desk)} ${getDeskBorder(desk)}
-                                        transition-all duration-300 cursor-default
+                                        transition-all duration-300 
+                                        ${hasActiveBooking ? 'cursor-pointer hover:ring-2 hover:ring-red-400 hover:ring-offset-2' : 'cursor-default'}
                                     `}
                                     style={{
                                         left: desk.x,
@@ -366,7 +524,8 @@ export default function ProjectorViewPage() {
                                         width: isTeacher ? 120 : 60,
                                         height: isTeacher ? 50 : 60,
                                     }}
-                                    title={isTeacher ? `โต๊ะอาจารย์ ${desk.number}` : `โต๊ะ ${desk.number}${desk.label ? ` (${desk.label})` : ""}`}
+                                    title={isTeacher ? `โต๊ะอาจารย์ ${desk.number}` : `โต๊ะ ${desk.number}${desk.label ? ` (${desk.label})` : ""}${hasActiveBooking ? ' - คลิกเพื่อจัดการ' : ''}`}
+                                    onClick={() => handleDeskClick(desk)}
                                 >
                                     <span className={`font-bold ${isTeacher ? "text-sm text-black" : "text-lg"} ${desk.status.grading_status === "not_started" && desk.status.help_status === "none" ? "text-slate-700" : "text-white"}`}>
                                         {isTeacher ? `อาจารย์ ${desk.number}` : desk.number}
@@ -393,32 +552,38 @@ export default function ProjectorViewPage() {
 
                 {/* Right Sidebar - QR Code & Legend */}
                 <div className="w-72 flex flex-col gap-4">
-                    {/* QR Code */}
-                    <div className="bg-white rounded-2xl p-6 text-center">
-                        <div className="mb-3">
-                            <QRCode
-                                value={getBookingUrl()}
-                                size={180}
-                                className="mx-auto"
-                            />
+                    {/* QR Code - Hide when paused */}
+                    {isPaused ? (
+                        <div className="bg-amber-50 rounded-2xl p-6 text-center border-2 border-amber-200">
+                            <Icon icon="solar:pause-circle-bold" className="text-6xl text-amber-500 mb-3" />
+                            <h3 className="text-lg font-bold text-amber-700 mb-1">หยุดรับคิว</h3>
+                            <p className="text-sm text-amber-600">
+                                ไม่รับการจองคิวใหม่ชั่วคราว
+                            </p>
+                            <p className="text-xs text-amber-500 mt-2">
+                                คิวที่จองไว้แล้วยังทำงานต่อได้
+                            </p>
                         </div>
-                        <p className="text-lg font-bold text-slate-800 mb-1">สแกนเพื่อจองคิว</p>
-                        <div className="bg-blue-100 rounded-xl px-4 py-2">
-                            <span className="text-sm text-slate-600">PIN Code</span>
-                           
-                            <div className="flex gap-2 px-3">
-                                {data.session.pin_code.split('').map((digit, index) => (
-                                    <span key={index} className="text-3xl font-bold text-white font-mono">
-                                        {digit}
-                                    </span>
-                                ))}
+                    ) : (
+                        <div className="bg-white rounded-2xl p-6 text-center">
+                            <div className="mb-3">
+                                <QRCode
+                                    value={getBookingUrl()}
+                                    size={180}
+                                    className="mx-auto"
+                                />
+                            </div>
+                            <div className="bg-blue-100 rounded-xl px-4 py-2">
+                                <span className="text-sm text-slate-600">PIN Code</span>
+                               
+                                <p className="text-4xl font-mono font-bold text-blue-700">{data.session.pin_code}</p>
+                            </div>
+                            <div>
+                                <Divider className="my-3" />
+                                <p className="font-mono text-slate-800">{`${process.env.NEXT_PUBLIC_FRONTEND_URL}/queue/book`}</p>
                             </div>
                         </div>
-                        <div>
-                            <Divider className="my-3" />
-                            <p className="font-mono text-slate-800">{`${process.env.NEXT_PUBLIC_FRONTEND_URL}/queue/book`}</p>
-                        </div>
-                    </div>
+                    )}
 
                     {/* Legend */}
                     <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm">
@@ -478,6 +643,73 @@ export default function ProjectorViewPage() {
                     </div> */}
                 </div>
             </div>
+
+            {/* Desk Action Modal */}
+            <Modal isOpen={isDeskModalOpen} onClose={() => setIsDeskModalOpen(false)}>
+                <ModalContent>
+                    <ModalHeader className="flex items-center gap-2">
+                        <Icon icon="solar:square-bold" className="text-blue-500 text-2xl" />
+                        <span>โต๊ะ {selectedDesk?.number}</span>
+                    </ModalHeader>
+                    <ModalBody>
+                        {selectedDesk?.booking && (
+                            <div className="space-y-4">
+                                <div className="bg-slate-50 rounded-xl p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-slate-600 text-sm">คิวที่</span>
+                                        <span className="text-2xl font-bold text-blue-600">
+                                            {selectedDesk.booking.queue_number}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-slate-600 text-sm">ประเภท</span>
+                                        <Chip 
+                                            size="sm" 
+                                            color={selectedDesk.booking.booking_type === 'grading' ? 'primary' : 'warning'}
+                                            variant="flat"
+                                        >
+                                            {selectedDesk.booking.booking_type === 'grading' ? 'ตรวจงาน' : 'ขอความช่วยเหลือ'}
+                                        </Chip>
+                                    </div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-slate-600 text-sm">สถานะ</span>
+                                        <span className="text-slate-800 font-medium">{selectedDesk.booking.status}</span>
+                                    </div>
+                                    {selectedDesk.booking.student_name && (
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-slate-600 text-sm">นักศึกษา</span>
+                                            <span className="text-slate-800">{selectedDesk.booking.student_name}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
+                                    <div className="flex items-start gap-2">
+                                        <Icon icon="solar:danger-triangle-bold" className="text-amber-600 text-lg mt-0.5" />
+                                        <div className="text-sm text-amber-700">
+                                            <p className="font-medium">ยกเลิกการจองนี้?</p>
+                                            <p className="mt-1">ใช้เมื่อมีปัญหาหรือข้อผิดพลาดเท่านั้น โต๊ะจะว่างและนักศึกษาสามารถจองใหม่ได้</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setIsDeskModalOpen(false)}>
+                            ปิด
+                        </Button>
+                        <Button 
+                            color="danger" 
+                            onPress={handleCancelDeskBooking}
+                            isLoading={isCancelling}
+                            startContent={<Icon icon="solar:trash-bin-trash-bold" />}
+                        >
+                            ยกเลิกการจอง
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
         </div>
     );
 }

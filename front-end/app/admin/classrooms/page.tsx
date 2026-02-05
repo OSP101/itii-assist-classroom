@@ -53,6 +53,16 @@ interface Desk {
     number: number;
 }
 
+interface Zone {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
+}
+
 interface Classroom {
     id: string;
     name: string;
@@ -102,6 +112,24 @@ const TEACHER_DESK_WIDTH = 180;
 const TEACHER_DESK_HEIGHT = 60;
 const GRID_SIZE = 20;
 
+// Logical canvas dimensions (the "room" coordinate space)
+const CANVAS_WIDTH = 2000;
+const CANVAS_HEIGHT = 1500;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 1.5;
+const ZOOM_STEP = 0.1;
+
+const ZONE_COLORS = [
+    "#6366f1", // indigo
+    "#f43f5e", // rose
+    "#14b8a6", // teal
+    "#f97316", // orange
+    "#8b5cf6", // violet
+    "#06b6d4", // cyan
+    "#ec4899", // pink
+    "#84cc16", // lime
+];
+
 // Table columns
 const columns = [
     { key: "name", label: "ชื่อห้อง", sortable: true },
@@ -127,6 +155,36 @@ export default function ClassroomsPage() {
     const [showDeletedOnly, setShowDeletedOnly] = useState(false);
     const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
     const containerRef = useRef<HTMLDivElement>(null);
+
+    // Multi-select state
+    const [selectedDeskIds, setSelectedDeskIds] = useState<Set<string>>(new Set());
+
+    // Edit classroom modal
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editFormData, setEditFormData] = useState({
+        name: "",
+        building: "",
+        floor: "",
+        description: "",
+    });
+    const [editingClassroomId, setEditingClassroomId] = useState<string | null>(null);
+
+    // Undo/Redo history (stores desk snapshots)
+    const [undoStack, setUndoStack] = useState<Desk[][]>([]);
+    const [redoStack, setRedoStack] = useState<Desk[][]>([]);
+    const MAX_HISTORY = 50;
+
+    // Bulk desk creation
+    const [bulkCount, setBulkCount] = useState(1);
+
+    // Zoom state
+    const [zoomLevel, setZoomLevel] = useState(0.5);
+
+    // Zone management
+    const [zones, setZones] = useState<Zone[]>([]);
+    const [showZoneModal, setShowZoneModal] = useState(false);
+    const [editingZone, setEditingZone] = useState<Zone | null>(null);
+    const [zoneForm, setZoneForm] = useState({ name: "" });
 
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState("");
@@ -193,7 +251,7 @@ export default function ClassroomsPage() {
                 const rect = containerRef.current.getBoundingClientRect();
                 setStageSize({
                     width: rect.width - 48,
-                    height: Math.max(800, window.innerHeight - 250),
+                    height: Math.max(600, window.innerHeight - 300),
                 });
             }
         };
@@ -207,6 +265,69 @@ export default function ClassroomsPage() {
     const snapToGrid = (value: number) => {
         return Math.round(value / GRID_SIZE) * GRID_SIZE;
     };
+
+    // ============ Undo/Redo helpers ============
+    const pushUndo = useCallback((desks: Desk[]) => {
+        setUndoStack((prev) => {
+            const next = [...prev, desks.map(d => ({ ...d }))];
+            return next.length > MAX_HISTORY ? next.slice(-MAX_HISTORY) : next;
+        });
+        setRedoStack([]);
+    }, []);
+
+    const handleUndo = useCallback(() => {
+        setUndoStack((prev) => {
+            if (prev.length === 0) return prev;
+            const newStack = [...prev];
+            const snapshot = newStack.pop()!;
+            setEditingClassroom((ec) => {
+                if (!ec) return ec;
+                setRedoStack((rs) => [...rs, ec.desks.map(d => ({ ...d }))]);
+                return { ...ec, desks: snapshot };
+            });
+            return newStack;
+        });
+    }, []);
+
+    const handleRedo = useCallback(() => {
+        setRedoStack((prev) => {
+            if (prev.length === 0) return prev;
+            const newStack = [...prev];
+            const snapshot = newStack.pop()!;
+            setEditingClassroom((ec) => {
+                if (!ec) return ec;
+                setUndoStack((us) => [...us, ec.desks.map(d => ({ ...d }))]);
+                return { ...ec, desks: snapshot };
+            });
+            return newStack;
+        });
+    }, []);
+
+    // Keyboard shortcuts for undo/redo
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if (!showLayoutModal) return;
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                handleUndo();
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                handleRedo();
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [showLayoutModal, handleUndo, handleRedo]);
+
+    // Helper: update desks with undo support
+    const updateDesksWithUndo = useCallback((updater: (desks: Desk[]) => Desk[]) => {
+        setEditingClassroom((prev) => {
+            if (!prev) return prev;
+            pushUndo(prev.desks);
+            return { ...prev, desks: updater(prev.desks) };
+        });
+    }, [pushUndo]);
 
     // Handle create classroom
     const handleCreate = async () => {
@@ -387,6 +508,22 @@ export default function ClassroomsPage() {
             }
             setEditingClassroom(transformClassroomFromAPI(response.data));
             setShowLayoutModal(true);
+            // Reset history
+            setUndoStack([]);
+            setRedoStack([]);
+            setSelectedDeskIds(new Set());
+            // Load zones from API
+            const apiZones = response.data.zones || [];
+            setZones(apiZones.map((z: any) => ({
+                id: z.id,
+                name: z.name,
+                x: z.x,
+                y: z.y,
+                width: z.width,
+                height: z.height,
+                color: z.color,
+            })));
+            setZoomLevel(0.5);
         } catch (error: any) {
             console.error("Failed to load classroom:", error);
             addToast({
@@ -397,50 +534,173 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Add new desk
-    const handleAddDesk = (type: "computer" | "normal" | "teacher") => {
+    // Open edit classroom modal
+    const openEditClassroom = (classroom: Classroom) => {
+        setEditingClassroomId(classroom.id);
+        setEditFormData({
+            name: classroom.name,
+            building: classroom.building,
+            floor: classroom.floor,
+            description: classroom.description || "",
+        });
+        setShowEditModal(true);
+    };
+
+    // Save edited classroom info
+    const handleEditClassroom = async () => {
+        if (!editingClassroomId || !editFormData.name || !editFormData.building || !editFormData.floor) {
+            addToast({ title: "ข้อมูลไม่ครบ", description: "กรุณากรอกข้อมูลให้ครบถ้วน", color: "warning" });
+            return;
+        }
+        try {
+            setIsSaving(true);
+            const response = await classroomService.updateClassroom(editingClassroomId, {
+                name: editFormData.name,
+                building: editFormData.building,
+                floor: editFormData.floor,
+                description: editFormData.description || undefined,
+            });
+            if (!response.success || !response.data) {
+                throw new Error(response.error || "Failed to update classroom");
+            }
+            const updated = transformClassroomFromAPI(response.data);
+            setClassrooms((prev) => prev.map((c) => (c.id === editingClassroomId ? updated : c)));
+            setShowEditModal(false);
+            addToast({ title: "สำเร็จ", description: "แก้ไขข้อมูลห้องเรียนแล้ว", color: "success" });
+        } catch (error: any) {
+            addToast({ title: "เกิดข้อผิดพลาด", description: error.message || "ไม่สามารถแก้ไขข้อมูลได้", color: "danger" });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Add new desk(s) - supports bulk creation
+    const handleAddDesk = (type: "computer" | "normal" | "teacher", count: number = 1) => {
         if (!editingClassroom) return;
 
-        // นับเลขแยกตามประเภท: โต๊ะอาจารย์นับแยก, โต๊ะนักศึกษา (computer/normal) นับรวมกัน
         const isTeacherDesk = type === "teacher";
         const sameTypeDesks = editingClassroom.desks.filter((d) =>
             isTeacherDesk ? d.type === "teacher" : d.type !== "teacher"
         );
-        const newDeskNumber = sameTypeDesks.length + 1;
-        
-        // โต๊ะใหม่จะอยู่ที่ตำแหน่งเดิมเสมอ ให้ผู้ใช้ลากจัดเรียงเอง
-        const newDesk: Desk = {
-            id: `desk_${Date.now()}`,
-            x: 100,
-            y: 100,
-            type,
-            isEnabled: true,
-            number: newDeskNumber,
-        };
+        let nextNumber = sameTypeDesks.length + 1;
 
-        setEditingClassroom((prev) =>
-            prev ? { ...prev, desks: [...prev.desks, newDesk] } : null
-        );
+        const deskW = isTeacherDesk ? TEACHER_DESK_WIDTH : DESK_WIDTH;
+        const deskH = isTeacherDesk ? TEACHER_DESK_HEIGHT : DESK_HEIGHT;
+        const cols = Math.max(1, Math.floor((CANVAS_WIDTH - 40) / (deskW + GRID_SIZE)));
+
+        const newDesks: Desk[] = [];
+        for (let i = 0; i < count; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            newDesks.push({
+                id: `desk_${Date.now()}_${i}`,
+                x: snapToGrid(20 + col * (deskW + GRID_SIZE)),
+                y: snapToGrid(20 + row * (deskH + GRID_SIZE)),
+                type,
+                isEnabled: true,
+                number: nextNumber++,
+            });
+        }
+
+        updateDesksWithUndo((desks) => [...desks, ...newDesks]);
     };
 
-    // Handle desk drag
+    // Handle single desk drag
     const handleDeskDragEnd = (deskId: string, e: any) => {
         if (!editingClassroom) return;
-
         const newX = snapToGrid(e.target.x());
         const newY = snapToGrid(e.target.y());
-
-        setEditingClassroom((prev) =>
-            prev
-                ? {
-                      ...prev,
-                      desks: prev.desks.map((d) =>
-                          d.id === deskId ? { ...d, x: newX, y: newY } : d
-                      ),
-                  }
-                : null
+        updateDesksWithUndo((desks) =>
+            desks.map((d) => (d.id === deskId ? { ...d, x: newX, y: newY } : d))
         );
     };
+
+    // Handle multi-desk drag end
+    const handleMultiDeskDragEnd = (moves: { id: string; x: number; y: number }[]) => {
+        if (!editingClassroom) return;
+        updateDesksWithUndo((desks) => {
+            const moveMap = new Map(moves.map((m) => [m.id, m]));
+            return desks.map((d) => {
+                const m = moveMap.get(d.id);
+                return m ? { ...d, x: m.x, y: m.y } : d;
+            });
+        });
+    };
+
+    // ============ Zoom handlers ============
+    const handleZoomIn = useCallback(() => {
+        setZoomLevel((prev) => Math.min(MAX_ZOOM, +(prev + ZOOM_STEP).toFixed(2)));
+    }, []);
+
+    const handleZoomOut = useCallback(() => {
+        setZoomLevel((prev) => Math.max(MIN_ZOOM, +(prev - ZOOM_STEP).toFixed(2)));
+    }, []);
+
+    const handleZoomReset = useCallback(() => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const fitScale = Math.min(
+                (rect.width - 48) / CANVAS_WIDTH,
+                (Math.max(600, window.innerHeight - 300)) / CANVAS_HEIGHT
+            );
+            setZoomLevel(+Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, fitScale)).toFixed(2));
+        } else {
+            setZoomLevel(0.5);
+        }
+    }, []);
+
+    const handleWheelZoom = useCallback((delta: number) => {
+        setZoomLevel((prev) => {
+            const step = delta > 0 ? ZOOM_STEP : -ZOOM_STEP;
+            return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, +(prev + step).toFixed(2)));
+        });
+    }, []);
+
+    // ============ Zone handlers ============
+    const handleAddZone = useCallback(() => {
+        const name = zoneForm.name.trim();
+        if (!name) return;
+        const color = ZONE_COLORS[zones.length % ZONE_COLORS.length];
+
+        if (editingZone) {
+            setZones((prev) => prev.map((z) =>
+                z.id === editingZone.id ? { ...z, name } : z
+            ));
+        } else {
+            const defaultW = 400;
+            const defaultH = 300;
+            const row = Math.floor(zones.length / 3);
+            const col = zones.length % 3;
+            const newZone: Zone = {
+                id: `zone_${Date.now()}`,
+                name,
+                x: snapToGrid(40 + col * (defaultW + 40)),
+                y: snapToGrid(40 + row * (defaultH + 60)),
+                width: defaultW,
+                height: defaultH,
+                color,
+            };
+            setZones((prev) => [...prev, newZone]);
+        }
+        setZoneForm({ name: "" });
+        setEditingZone(null);
+        setShowZoneModal(false);
+    }, [zoneForm, zones, editingZone, snapToGrid]);
+
+    const handleEditZone = useCallback((zone: Zone) => {
+        setEditingZone(zone);
+        setZoneForm({ name: zone.name });
+        setShowZoneModal(true);
+    }, []);
+
+    const handleDeleteZone = useCallback((zoneId: string) => {
+        setZones((prev) => prev.filter((z) => z.id !== zoneId));
+    }, []);
+
+    // Update zone position/size from canvas drag/resize
+    const handleZoneUpdate = useCallback((zoneId: string, update: Partial<Zone>) => {
+        setZones((prev) => prev.map((z) => z.id === zoneId ? { ...z, ...update } : z));
+    }, []);
 
     // Handle desk click (for editing)
     const handleDeskClick = (desk: Desk) => {
@@ -451,39 +711,22 @@ export default function ClassroomsPage() {
     // Update desk
     const handleUpdateDesk = () => {
         if (!editingClassroom || !selectedDesk) return;
-
-        setEditingClassroom((prev) =>
-            prev
-                ? {
-                      ...prev,
-                      desks: prev.desks.map((d) =>
-                          d.id === selectedDesk.id ? selectedDesk : d
-                      ),
-                  }
-                : null
+        updateDesksWithUndo((desks) =>
+            desks.map((d) => (d.id === selectedDesk.id ? selectedDesk : d))
         );
-
         setShowDeskModal(false);
         setSelectedDesk(null);
     };
 
-    // Delete desk
+    // Delete desk(s)
     const handleDeleteDesk = () => {
         if (!editingClassroom || !selectedDesk) return;
 
-        const deletedType = selectedDesk.type;
-        const isTeacher = deletedType === "teacher";
-
-        setEditingClassroom((prev) => {
-            if (!prev) return null;
-            
-            const remainingDesks = prev.desks.filter((d) => d.id !== selectedDesk.id);
-            
-            // Renumber แยกตามประเภท
+        updateDesksWithUndo((desks) => {
+            const remaining = desks.filter((d) => d.id !== selectedDesk.id);
             let teacherCount = 0;
             let studentCount = 0;
-            
-            const renumberedDesks = remainingDesks.map((d) => {
+            return remaining.map((d) => {
                 if (d.type === "teacher") {
                     teacherCount++;
                     return { ...d, number: teacherCount };
@@ -492,8 +735,6 @@ export default function ClassroomsPage() {
                     return { ...d, number: studentCount };
                 }
             });
-            
-            return { ...prev, desks: renumberedDesks };
         });
 
         setShowDeskModal(false);
@@ -516,8 +757,19 @@ export default function ClassroomsPage() {
                 type: desk.type,
                 isEnabled: desk.isEnabled,
             }));
+
+            // Transform zones to API format
+            const apiZones = zones.map(zone => ({
+                id: zone.id,
+                name: zone.name,
+                x: zone.x,
+                y: zone.y,
+                width: zone.width,
+                height: zone.height,
+                color: zone.color,
+            }));
             
-            await classroomService.updateLayout(editingClassroom.id, apiDesks);
+            await classroomService.updateLayout(editingClassroom.id, apiDesks, apiZones);
 
             // Update local state
             setClassrooms((prev) =>
@@ -682,6 +934,16 @@ export default function ClassroomsPage() {
                                             icon={classroom.isActive ? "solar:power-bold" : "solar:power-linear"} 
                                             className="text-lg" 
                                         />
+                                    </Button>
+                                </Tooltip>
+                                <Tooltip content="แก้ไขข้อมูล">
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="light"
+                                        onPress={() => openEditClassroom(classroom)}
+                                    >
+                                        <Icon icon="solar:pen-new-square-linear" className="text-lg text-default-500" />
                                     </Button>
                                 </Tooltip>
                                 <Tooltip content="จัดการผัง">
@@ -1077,6 +1339,11 @@ export default function ClassroomsPage() {
                 onClose={() => {
                     setShowLayoutModal(false);
                     setEditingClassroom(null);
+                    setSelectedDeskIds(new Set());
+                    setUndoStack([]);
+                    setRedoStack([]);
+                    setZones([]);
+                    setZoomLevel(0.5);
                 }}
                 size="full"
                 scrollBehavior="inside"
@@ -1099,10 +1366,51 @@ export default function ClassroomsPage() {
                                     </h3>
                                     <p className="text-xs sm:text-sm text-slate-500 font-normal hidden sm:block">
                                         ลากโต๊ะเพื่อจัดตำแหน่ง •
-                                        คลิกเพื่อแก้ไขข้อมูล
+                                        Ctrl+คลิก/ลากเลือกหลายโต๊ะ •
+                                        Scroll เพื่อซูม
                                     </p>
                                 </div>
                             </div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                {/* Undo/Redo */}
+                                <Tooltip content="ย้อนกลับ (Ctrl+Z)">
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="flat"
+                                        isDisabled={undoStack.length === 0}
+                                        onPress={handleUndo}
+                                    >
+                                        <Icon icon="solar:undo-left-round-bold" className="text-lg" />
+                                    </Button>
+                                </Tooltip>
+                                <Tooltip content="ทำซ้ำ (Ctrl+Y)">
+                                    <Button
+                                        isIconOnly
+                                        size="sm"
+                                        variant="flat"
+                                        isDisabled={redoStack.length === 0}
+                                        onPress={handleRedo}
+                                    >
+                                        <Icon icon="solar:undo-right-round-bold" className="text-lg" />
+                                    </Button>
+                                </Tooltip>
+                                <div className="h-5 w-px bg-slate-300 mx-1" />
+                                {/* Zoom Controls */}
+                                <Tooltip content="ซูมออก">
+                                    <Button isIconOnly size="sm" variant="flat" onPress={handleZoomOut} isDisabled={zoomLevel <= MIN_ZOOM}>
+                                        <Icon icon="solar:minimize-bold" className="text-lg" />
+                                    </Button>
+                                </Tooltip>
+                                <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-700 min-w-[48px] text-center cursor-pointer" onClick={handleZoomReset}>
+                                    {Math.round(zoomLevel * 100)}%
+                                </Chip>
+                                <Tooltip content="ซูมเข้า">
+                                    <Button isIconOnly size="sm" variant="flat" onPress={handleZoomIn} isDisabled={zoomLevel >= MAX_ZOOM}>
+                                        <Icon icon="solar:maximize-bold" className="text-lg" />
+                                    </Button>
+                                </Tooltip>
+                                <div className="h-5 w-px bg-slate-300 mx-1" />
                                 <Chip
                                     variant="flat"
                                     className="bg-emerald-50 text-emerald-600"
@@ -1111,6 +1419,16 @@ export default function ClassroomsPage() {
                                 >
                                     {editingClassroom?.desks.length || 0} โต๊ะ
                                 </Chip>
+                                {selectedDeskIds.size > 0 && (
+                                    <Chip
+                                        variant="flat"
+                                        className="bg-blue-50 text-blue-600"
+                                        size="sm"
+                                    >
+                                        เลือก {selectedDeskIds.size} โต๊ะ
+                                    </Chip>
+                                )}
+                            </div>
                         </div>
                     </ModalHeader>
                     <ModalBody className="p-0">
@@ -1118,27 +1436,39 @@ export default function ClassroomsPage() {
                             <div className="flex flex-col lg:flex-row h-full">
                                 {/* Toolbar - Hidden on mobile, shown as floating buttons instead */}
                                 <div className="hidden lg:flex w-72 bg-slate-50 border-r border-slate-200 p-4 flex-col">
-                                    <h4 className="font-semibold text-slate-800 mb-4">
+                                    <h4 className="font-semibold text-slate-800 mb-3">
                                         เพิ่มโต๊ะ
                                     </h4>
-                                    <div className="space-y-3">
+
+                                    {/* Bulk count */}
+                                    <div className="mb-3">
+                                        <Input
+                                            type="number"
+                                            label="จำนวน"
+                                            labelPlacement="outside"
+                                            size="sm"
+                                            min={1}
+                                            max={50}
+                                            value={String(bulkCount)}
+                                            onValueChange={(val) => setBulkCount(Math.max(1, Math.min(50, parseInt(val) || 1)))}
+                                            variant="bordered"
+                                            classNames={{ inputWrapper: "bg-white" }}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
                                         <Button
                                             color="primary"
                                             variant="flat"
                                             className="w-full justify-start"
                                             startContent={
                                                 <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                                                    <Icon
-                                                        icon="solar:monitor-bold"
-                                                        className="text-white"
-                                                    />
+                                                    <Icon icon="solar:monitor-bold" className="text-white" />
                                                 </div>
                                             }
-                                            onPress={() =>
-                                                handleAddDesk("computer")
-                                            }
+                                            onPress={() => handleAddDesk("computer", bulkCount)}
                                         >
-                                            โต๊ะคอม
+                                            โต๊ะคอม {bulkCount > 1 ? `x${bulkCount}` : ""}
                                         </Button>
                                         <Button
                                             color="success"
@@ -1146,17 +1476,12 @@ export default function ClassroomsPage() {
                                             className="w-full justify-start"
                                             startContent={
                                                 <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center">
-                                                    <Icon
-                                                        icon="solar:document-bold"
-                                                        className="text-white"
-                                                    />
+                                                    <Icon icon="solar:document-bold" className="text-white" />
                                                 </div>
                                             }
-                                            onPress={() =>
-                                                handleAddDesk("normal")
-                                            }
+                                            onPress={() => handleAddDesk("normal", bulkCount)}
                                         >
-                                            โต๊ะเรียน
+                                            โต๊ะเรียน {bulkCount > 1 ? `x${bulkCount}` : ""}
                                         </Button>
                                         <Button
                                             color="warning"
@@ -1164,18 +1489,82 @@ export default function ClassroomsPage() {
                                             className="w-full justify-start"
                                             startContent={
                                                 <div className="w-10 h-8 bg-amber-500 rounded-lg flex items-center justify-center">
-                                                    <Icon
-                                                        icon="solar:user-speak-bold"
-                                                        className="text-white"
-                                                    />
+                                                    <Icon icon="solar:user-speak-bold" className="text-white" />
                                                 </div>
                                             }
-                                            onPress={() =>
-                                                handleAddDesk("teacher")
-                                            }
+                                            onPress={() => handleAddDesk("teacher", bulkCount)}
                                         >
-                                            โต๊ะอาจารย์
+                                            โต๊ะอาจารย์ {bulkCount > 1 ? `x${bulkCount}` : ""}
                                         </Button>
+                                    </div>
+
+                                    {/* Delete selected */}
+                                    {selectedDeskIds.size > 0 && (
+                                        <div className="mt-4 pt-4 border-t border-slate-200">
+                                            <Button
+                                                color="danger"
+                                                variant="flat"
+                                                className="w-full"
+                                                startContent={<Icon icon="solar:trash-bin-trash-linear" />}
+                                                onPress={() => {
+                                                    updateDesksWithUndo((desks) => {
+                                                        const remaining = desks.filter((d) => !selectedDeskIds.has(d.id));
+                                                        let tc = 0, sc = 0;
+                                                        return remaining.map((d) => {
+                                                            if (d.type === "teacher") { tc++; return { ...d, number: tc }; }
+                                                            else { sc++; return { ...d, number: sc }; }
+                                                        });
+                                                    });
+                                                    setSelectedDeskIds(new Set());
+                                                }}
+                                            >
+                                                ลบที่เลือก ({selectedDeskIds.size})
+                                            </Button>
+                                        </div>
+                                    )}
+
+                                    {/* Zone Management */}
+                                    <div className="mt-6 pt-6 border-t border-slate-200">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h4 className="font-semibold text-slate-800">โซน</h4>
+                                            <Tooltip content="เพิ่มโซน">
+                                                <Button
+                                                    isIconOnly
+                                                    size="sm"
+                                                    variant="flat"
+                                                    color="primary"
+                                                    onPress={() => {
+                                                        setEditingZone(null);
+                                                        setZoneForm({ name: "" });
+                                                        setShowZoneModal(true);
+                                                    }}
+                                                >
+                                                    <Icon icon="solar:add-circle-bold" className="text-lg" />
+                                                </Button>
+                                            </Tooltip>
+                                        </div>
+                                        {zones.length === 0 ? (
+                                            <p className="text-xs text-slate-400">ยังไม่มีโซน กดปุ่ม + เพื่อเพิ่ม</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {zones.map((zone) => (
+                                                    <div key={zone.id} className="flex items-center gap-2 p-2 rounded-lg bg-white border border-slate-200">
+                                                        <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: zone.color }} />
+                                                        <span className="text-xs text-slate-700 flex-1 truncate">{zone.name}</span>
+                                                        <Tooltip content="แก้ไข">
+                                                            <Button isIconOnly size="sm" variant="light" onPress={() => handleEditZone(zone)}>
+                                                                <Icon icon="solar:pen-linear" className="text-sm text-slate-400" />
+                                                            </Button>
+                                                        </Tooltip>
+                                                        <Tooltip content="ลบ">
+                                                            <Button isIconOnly size="sm" variant="light" color="danger" onPress={() => handleDeleteZone(zone.id)}>
+                                                                <Icon icon="solar:trash-bin-trash-linear" className="text-sm" />
+                                                            </Button>
+                                                        </Tooltip>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Legend */}
@@ -1224,15 +1613,12 @@ export default function ClassroomsPage() {
                                                         Tips:
                                                     </p>
                                                     <ul className="space-y-1">
-                                                        <li>
-                                                            • ลากโต๊ะเพื่อย้ายตำแหน่ง
-                                                        </li>
-                                                        <li>
-                                                            • คลิกโต๊ะเพื่อแก้ไขหรือลบ
-                                                        </li>
-                                                        <li>
-                                                            • โต๊ะจะ snap ตาม grid
-                                                        </li>
+                                                        <li>• ลากโต๊ะเพื่อย้ายตำแหน่ง</li>
+                                                        <li>• คลิกโต๊ะเพื่อแก้ไขหรือลบ</li>
+                                                        <li>• Ctrl+คลิก เลือกหลายโต๊ะ</li>
+                                                        <li>• ลากพื้นที่ว่างเลือกกลุ่ม</li>
+                                                        <li>• เส้นแดง = แนวเดียวกับโต๊ะอื่น</li>
+                                                        <li>• Ctrl+Z / Ctrl+Y ย้อน/ทำซ้ำ</li>
                                                     </ul>
                                                 </div>
                                             </div>
@@ -1251,7 +1637,7 @@ export default function ClassroomsPage() {
                                             isIconOnly
                                             color="primary"
                                             size="sm"
-                                            onPress={() => handleAddDesk("computer")}
+                                            onPress={() => handleAddDesk("computer", bulkCount)}
                                         >
                                             <Icon icon="solar:monitor-bold" className="text-lg" />
                                         </Button>
@@ -1259,7 +1645,7 @@ export default function ClassroomsPage() {
                                             isIconOnly
                                             color="success"
                                             size="sm"
-                                            onPress={() => handleAddDesk("normal")}
+                                            onPress={() => handleAddDesk("normal", bulkCount)}
                                         >
                                             <Icon icon="solar:document-bold" className="text-lg" />
                                         </Button>
@@ -1267,24 +1653,43 @@ export default function ClassroomsPage() {
                                             isIconOnly
                                             color="warning"
                                             size="sm"
-                                            onPress={() => handleAddDesk("teacher")}
+                                            onPress={() => handleAddDesk("teacher", bulkCount)}
                                         >
                                             <Icon icon="solar:user-speak-bold" className="text-lg" />
                                         </Button>
+                                        <Tooltip content="ย้อนกลับ">
+                                            <Button isIconOnly size="sm" variant="flat" isDisabled={undoStack.length === 0} onPress={handleUndo}>
+                                                <Icon icon="solar:undo-left-round-bold" className="text-lg" />
+                                            </Button>
+                                        </Tooltip>
+                                        <Tooltip content="ทำซ้ำ">
+                                            <Button isIconOnly size="sm" variant="flat" isDisabled={redoStack.length === 0} onPress={handleRedo}>
+                                                <Icon icon="solar:undo-right-round-bold" className="text-lg" />
+                                            </Button>
+                                        </Tooltip>
                                     </div>
                                     
                                     <div className="bg-slate-100 rounded-xl border-2 border-dashed border-slate-300 overflow-auto">
                                         <CanvasEditor
                                             width={stageSize.width}
                                             height={stageSize.height}
+                                            canvasWidth={CANVAS_WIDTH}
+                                            canvasHeight={CANVAS_HEIGHT}
+                                            scale={zoomLevel}
                                             desks={editingClassroom.desks}
+                                            zones={zones}
                                             gridSize={GRID_SIZE}
                                             deskWidth={DESK_WIDTH}
                                             deskHeight={DESK_HEIGHT}
                                             teacherDeskWidth={TEACHER_DESK_WIDTH}
                                             teacherDeskHeight={TEACHER_DESK_HEIGHT}
+                                            selectedDeskIds={selectedDeskIds}
                                             onDeskDragEnd={handleDeskDragEnd}
+                                            onMultiDeskDragEnd={handleMultiDeskDragEnd}
                                             onDeskClick={handleDeskClick}
+                                            onSelectionChange={setSelectedDeskIds}
+                                            onZoom={handleWheelZoom}
+                                            onZoneUpdate={handleZoneUpdate}
                                         />
                                     </div>
                                 </div>
@@ -1297,6 +1702,11 @@ export default function ClassroomsPage() {
                             onPress={() => {
                                 setShowLayoutModal(false);
                                 setEditingClassroom(null);
+                                setSelectedDeskIds(new Set());
+                                setUndoStack([]);
+                                setRedoStack([]);
+                                setZones([]);
+                                setZoomLevel(0.5);
                             }}
                             isDisabled={isSaving}
                             size="sm"
@@ -1465,6 +1875,139 @@ export default function ClassroomsPage() {
                         </Button>
                         <Button color="primary" onPress={handleUpdateDesk}>
                             บันทึก
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Edit Classroom Info Modal */}
+            <Modal
+                isOpen={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                size="lg"
+                scrollBehavior="inside"
+                classNames={{ base: "mx-2 sm:mx-4" }}
+            >
+                <ModalContent>
+                    <ModalHeader>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
+                                <Icon icon="solar:pen-new-square-bold" className="text-xl sm:text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg sm:text-xl font-bold text-slate-800">แก้ไขข้อมูลห้องเรียน</h3>
+                                <p className="text-xs sm:text-sm text-slate-500 font-normal mt-1">แก้ไขชื่อ อาคาร ชั้น หรือรายละเอียดของห้องเรียน</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-4 sm:px-6 py-4">
+                        <div className="space-y-4">
+                            <Input
+                                label="ชื่อห้อง"
+                                labelPlacement="outside"
+                                placeholder="เช่น ห้อง 306"
+                                variant="bordered"
+                                value={editFormData.name}
+                                onValueChange={(val) => setEditFormData((prev) => ({ ...prev, name: val }))}
+                                isRequired
+                                startContent={<Icon icon="solar:display-linear" className="text-slate-400" />}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <Input
+                                    label="อาคาร"
+                                    labelPlacement="outside"
+                                    placeholder="เช่น อาคาร IT"
+                                    variant="bordered"
+                                    value={editFormData.building}
+                                    onValueChange={(val) => setEditFormData((prev) => ({ ...prev, building: val }))}
+                                    isRequired
+                                    startContent={<Icon icon="solar:buildings-2-linear" className="text-slate-400" />}
+                                />
+                                <Input
+                                    label="ชั้น"
+                                    labelPlacement="outside"
+                                    placeholder="เช่น 3"
+                                    variant="bordered"
+                                    value={editFormData.floor}
+                                    onValueChange={(val) => setEditFormData((prev) => ({ ...prev, floor: val }))}
+                                    isRequired
+                                    startContent={<Icon icon="solar:stairs-linear" className="text-slate-400" />}
+                                />
+                            </div>
+                            <Textarea
+                                label="รายละเอียดเพิ่มเติม"
+                                labelPlacement="outside"
+                                placeholder="ระบุข้อมูลเพิ่มเติมเกี่ยวกับห้องเรียน (ถ้ามี)"
+                                variant="bordered"
+                                value={editFormData.description}
+                                onValueChange={(val) => setEditFormData((prev) => ({ ...prev, description: val }))}
+                            />
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => setShowEditModal(false)} isDisabled={isSaving}>
+                            ยกเลิก
+                        </Button>
+                        <Button color="primary" onPress={handleEditClassroom} isLoading={isSaving}>
+                            บันทึก
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Zone Management Modal */}
+            <Modal
+                isOpen={showZoneModal}
+                onClose={() => {
+                    setShowZoneModal(false);
+                    setEditingZone(null);
+                    setZoneForm({ name: "" });
+                }}
+                size="sm"
+                classNames={{ base: "mx-2 sm:mx-4" }}
+            >
+                <ModalContent>
+                    <ModalHeader>
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl">
+                                <Icon icon="solar:widget-5-bold" className="text-xl text-white" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800">
+                                {editingZone ? "แก้ไขโซน" : "เพิ่มโซนใหม่"}
+                            </h3>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-4 sm:px-6 py-4">
+                        <div className="space-y-4">
+                            <Input
+                                label="ชื่อโซน"
+                                labelPlacement="outside"
+                                placeholder="เช่น โซน A, แถวหน้า"
+                                variant="bordered"
+                                value={zoneForm.name}
+                                onValueChange={(val) => setZoneForm((prev) => ({ ...prev, name: val }))}
+                                isRequired
+                                startContent={<Icon icon="solar:tag-linear" className="text-slate-400" />}
+                            />
+                            <Card className="bg-indigo-50 border-0">
+                                <CardBody className="p-3">
+                                    <div className="flex items-start gap-2">
+                                        <Icon icon="solar:info-circle-bold" className="text-indigo-500 text-lg mt-0.5" />
+                                        <p className="text-xs text-indigo-700">
+                                            โซนจะปรากฏเป็นกรอบเส้นปะบน Canvas
+                                            สามารถลากเพื่อย้ายตำแหน่ง และลากมุม/ขอบเพื่อปรับขนาดได้
+                                        </p>
+                                    </div>
+                                </CardBody>
+                            </Card>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button variant="light" onPress={() => { setShowZoneModal(false); setEditingZone(null); setZoneForm({ name: "" }); }}>
+                            ยกเลิก
+                        </Button>
+                        <Button color="primary" onPress={handleAddZone} isDisabled={!zoneForm.name.trim()}>
+                            {editingZone ? "บันทึก" : "เพิ่มโซน"}
                         </Button>
                     </ModalFooter>
                 </ModalContent>

@@ -1,6 +1,9 @@
 /**
  * Queue Controller
  * ระบบจองคิวตรวจงาน
+ * 
+ * REFACTORED: Real-time states now stored in Redis for performance.
+ * MySQL is used only for persistence of completed/cancelled bookings.
  */
 
 const { Op } = require('sequelize');
@@ -14,6 +17,7 @@ const {
     CourseSectionStudent,
     Classroom,
     Desk,
+    Zone,
     Assignment,
     AssignmentSubItem,
     AttendanceSession,
@@ -25,6 +29,52 @@ const {
 } = require('../models');
 const logger = require('../utils/logger');
 const fcmService = require('../utils/fcmService');
+
+/**
+ * Find which zone a desk belongs to based on its (x, y) position
+ * Returns the zone object if desk center is inside, or null
+ */
+const findZoneForDesk = async (desk, classroomId) => {
+    if (!desk || !classroomId) return null;
+    try {
+        const zones = await Zone.findAll({
+            where: { classroom_id: classroomId },
+            attributes: ['id', 'name', 'x', 'y', 'width', 'height', 'color'],
+        });
+        // Desk (x, y) is top-left corner, check if it falls within any zone
+        const deskX = desk.x || 0;
+        const deskY = desk.y || 0;
+        for (const zone of zones) {
+            if (
+                deskX >= zone.x &&
+                deskX < zone.x + zone.width &&
+                deskY >= zone.y &&
+                deskY < zone.y + zone.height
+            ) {
+                return { id: zone.id, name: zone.name, color: zone.color };
+            }
+        }
+        return null;
+    } catch (err) {
+        logger.error('Error finding zone for desk:', err);
+        return null;
+    }
+};
+
+/**
+ * Enrich a booking object with zone info from its desk
+ */
+const enrichBookingWithZone = async (booking, classroomId) => {
+    if (!booking || !booking.desk) return booking;
+    const zone = await findZoneForDesk(booking.desk, classroomId);
+    const plain = booking.toJSON ? booking.toJSON() : { ...booking };
+    plain.zone = zone;
+    return plain;
+};
+
+// Redis Queue Service - handles real-time states
+const redisQueue = require('../utils/redisQueueService');
+const { triggerAssignmentForSession } = require('../utils/queueAssignmentWorker');
 
 // ============================================
 // Queue Session Management (Instructor/TA)
@@ -498,6 +548,8 @@ const regeneratePIN = async (req, res) => {
 
 /**
  * Join as worker
+ * REFACTORED: Worker state is now stored in Redis for real-time availability.
+ * MySQL is updated for persistence only.
  */
 const joinAsWorker = async (req, res) => {
     try {
@@ -520,7 +572,7 @@ const joinAsWorker = async (req, res) => {
             });
         }
 
-        // Create or update worker record
+        // [MySQL] Create or update worker record for persistence
         const [worker, created] = await QueueWorker.findOrCreate({
             where: {
                 queue_session_id: sessionId,
@@ -543,9 +595,17 @@ const joinAsWorker = async (req, res) => {
             });
         }
 
+        // [Redis] Set worker state for real-time availability
+        await redisQueue.setWorkerState(sessionId, req.user.id, {
+            status: 'online',
+            acceptGrading: accept_grading !== false,
+            acceptHelp: accept_help !== false,
+            completedGrading: worker.total_grading_completed || 0,
+            completedHelp: worker.total_help_completed || 0,
+        });
+
         // Emit socket event
         const io = req.app.get('io');
-        let assignedBooking = null;
         
         if (io) {
             io.to(`queue-${sessionId}`).emit('worker-joined', {
@@ -553,15 +613,18 @@ const joinAsWorker = async (req, res) => {
                 userId: req.user.id,
                 userName: req.user.full_name,
             });
-
-            // Check for waiting bookings and try to assign one to this worker
-            assignedBooking = await tryAssignWaitingBookingToWorker(sessionId, req.user.id, worker, io);
         }
+
+        // [Background Worker] Trigger assignment check (non-blocking)
+        // This replaces the old tryAssignWaitingBookingToWorker call
+        triggerAssignmentForSession(sessionId).catch(err => {
+            logger.error('Error triggering assignment:', err);
+        });
 
         res.json({
             success: true,
             data: worker,
-            assignedBooking: assignedBooking, // Include any immediately assigned booking
+            // Note: assignedBooking is now handled asynchronously via socket
         });
     } catch (error) {
         console.error('Error joining as worker:', error);
@@ -574,11 +637,17 @@ const joinAsWorker = async (req, res) => {
 
 /**
  * Leave as worker (go offline)
+ * REFACTORED: Updates Redis state first for immediate effect,
+ * then persists to MySQL asynchronously.
  */
 const leaveAsWorker = async (req, res) => {
     try {
         const { sessionId } = req.params;
 
+        // [Redis] Check current worker state
+        const redisWorker = await redisQueue.getWorkerState(sessionId, req.user.id);
+        
+        // [MySQL] Also check for persistence and current_booking_id
         const worker = await QueueWorker.findOne({
             where: {
                 queue_session_id: sessionId,
@@ -586,30 +655,54 @@ const leaveAsWorker = async (req, res) => {
             },
         });
 
-        if (!worker) {
+        if (!worker && !redisWorker) {
             return res.status(404).json({
                 success: false,
                 error: { message: 'ไม่พบข้อมูล Worker' },
             });
         }
 
-        // Check if worker has active booking
-        if (worker.current_booking_id) {
-            return res.status(400).json({
-                success: false,
-                error: { message: 'กรุณาทำงานปัจจุบันให้เสร็จก่อน' },
+        // Check if worker has active booking (from Redis or MySQL)
+        const hasActiveBooking = redisWorker?.currentBookingId || worker?.current_booking_id;
+        
+        if (hasActiveBooking) {
+            // [Redis] Set to paused - worker will complete current task then go offline
+            await redisQueue.setWorkerPaused(sessionId, req.user.id);
+            
+            // [MySQL] Update for persistence
+            if (worker) {
+                await worker.update({ status: 'paused' });
+            }
+
+            // Emit socket event
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`queue-${sessionId}`).emit('worker-paused', {
+                    workerId: worker?.id,
+                    userId: req.user.id,
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: 'หยุดรับงานใหม่แล้ว กรุณาทำงานปัจจุบันให้เสร็จ',
+                data: { status: 'paused' },
             });
         }
 
-        await worker.update({
-            status: 'offline',
-        });
+        // [Redis] Set to offline
+        await redisQueue.setWorkerOffline(sessionId, req.user.id);
+        
+        // [MySQL] Update for persistence
+        if (worker) {
+            await worker.update({ status: 'offline' });
+        }
 
         // Emit socket event
         const io = req.app.get('io');
         if (io) {
             io.to(`queue-${sessionId}`).emit('worker-left', {
-                workerId: worker.id,
+                workerId: worker?.id,
                 userId: req.user.id,
             });
         }
@@ -695,7 +788,8 @@ const getWorkerCurrentBooking = async (req, res) => {
 
         logger.debug(`Current booking found: ${currentBooking ? currentBooking.id : 'null'}`);
 
-        // If there's a pending booking but worker is offline, re-set worker to online
+        // If there's a pending booking but worker is offline (not paused), re-set worker to online
+        // Don't change paused workers - they explicitly want to stop after current task
         if (currentBooking && worker && worker.status === 'offline') {
             await worker.update({
                 status: 'online',
@@ -705,11 +799,18 @@ const getWorkerCurrentBooking = async (req, res) => {
             logger.debug(`Worker status updated to online`);
         }
 
+        // Enrich booking with zone info
+        let enrichedBooking = currentBooking;
+        if (currentBooking) {
+            const session = await QueueSession.findByPk(sessionId, { attributes: ['classroom_id'] });
+            enrichedBooking = await enrichBookingWithZone(currentBooking, session?.classroom_id);
+        }
+
         res.json({
             success: true,
             data: {
                 worker: worker,
-                currentBooking: currentBooking,
+                currentBooking: enrichedBooking,
             },
         });
     } catch (error) {
@@ -1036,6 +1137,29 @@ const createBooking = async (req, res) => {
 
         logger.debug(`Booking created: id=${booking.id}, session=${session.id}`);
 
+        // [Redis] Add booking to waiting queue for background assignment
+        // This replaces the direct tryAssignBooking call
+        await redisQueue.addBookingToQueue(session.id, {
+            id: booking.id,
+            studentId: student.id,
+            deskId: desk.id,
+            deskNumber: desk_number,
+            bookingType: booking_type,
+            queueNumber: queueNumber,
+            note: note,
+            studentInfo: {
+                id: student.id,
+                studentId: student.student_id,
+                fullName: student.full_name,
+            },
+        });
+
+        // [Redis] Update desk status
+        await redisQueue.setDeskStatus(session.id, desk.id, {
+            [booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: 'waiting',
+            [booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: booking.id.toString(),
+        });
+
         // Emit socket event for real-time updates
         const io = req.app.get('io');
         logger.debug(`Socket.io instance: ${io ? 'available' : 'NOT AVAILABLE'}`);
@@ -1051,10 +1175,13 @@ const createBooking = async (req, res) => {
                     },
                 },
             });
-
-            // Try to assign to available worker
-            await tryAssignBooking(session.id, booking.id, io);
         }
+
+        // [Background Worker] Trigger assignment check (non-blocking)
+        // The background worker will handle assignment asynchronously
+        triggerAssignmentForSession(session.id).catch(err => {
+            logger.error('Error triggering assignment:', err);
+        });
 
         res.status(201).json({
             success: true,
@@ -1118,6 +1245,13 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
         if (availableWorker) {
             logger.info(`Found available worker: user_id=${availableWorker.user_id}, status=${availableWorker.status}`);
             
+            // Double-check worker is still online (in case they left between finding and now)
+            const freshWorker = await QueueWorker.findByPk(availableWorker.id);
+            if (!freshWorker || freshWorker.status !== 'online') {
+                logger.info(`Worker ${availableWorker.user_id} is no longer online (status: ${freshWorker?.status}), skipping assignment`);
+                return;
+            }
+            
             // Assign booking to worker
             await booking.update({
                 assigned_worker_id: availableWorker.user_id,
@@ -1126,7 +1260,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                 started_at: new Date(),
             });
 
-            await availableWorker.update({
+            await freshWorker.update({
                 status: 'busy',
                 current_booking_id: booking.id,
             });
@@ -1156,8 +1290,12 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                     ],
                 });
 
+                // Enrich with zone info
+                const session = await QueueSession.findByPk(sessionId, { attributes: ['classroom_id'] });
+                const enrichedBooking = await enrichBookingWithZone(fullBooking, session?.classroom_id);
+
                 io.to(`queue-${sessionId}`).emit('booking-assigned', {
-                    booking: fullBooking,
+                    booking: enrichedBooking,
                     workerId: availableWorker.user_id,
                 });
 
@@ -1170,7 +1308,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                 logger.info(`Sockets in room ${workerRoom}: ${roomSockets ? roomSockets.size : 0}`);
                 
                 io.to(workerRoom).emit('new-task', {
-                    booking: fullBooking,
+                    booking: enrichedBooking,
                 });
                 logger.info(`new-task event emitted successfully to room ${workerRoom}`);
 
@@ -1275,8 +1413,12 @@ const tryAssignWaitingBookingToWorker = async (sessionId, userId, worker, io) =>
         fcmService.notifyStudentYourTurn(waitingBooking, workerUser || { full_name: 'ผู้ช่วยสอน' })
             .catch(err => logger.error('FCM student notification error:', err));
 
+        // Enrich with zone info before returning
+        const sessionForZone = await QueueSession.findByPk(sessionId, { attributes: ['classroom_id'] });
+        const enrichedBooking = await enrichBookingWithZone(waitingBooking, sessionForZone?.classroom_id);
+
         // Return the assigned booking (socket emit to worker will be handled by response)
-        return waitingBooking;
+        return enrichedBooking;
 
     } catch (error) {
         logger.error('Error assigning waiting booking to worker:', error);
@@ -1296,7 +1438,7 @@ const getBookingStatus = async (req, res) => {
                 {
                     model: QueueSession,
                     as: 'session',
-                    attributes: ['id', 'title', 'status', 'linked_assignment_id'],
+                    attributes: ['id', 'title', 'status', 'linked_assignment_id', 'classroom_id'],
                     include: [
                         {
                             model: Assignment,
@@ -1316,6 +1458,11 @@ const getBookingStatus = async (req, res) => {
                     model: Student,
                     as: 'student',
                     attributes: ['id', 'student_id', 'full_name'],
+                },
+                {
+                    model: Desk,
+                    as: 'desk',
+                    attributes: ['id', 'number', 'x', 'y'],
                 },
                 {
                     model: User,
@@ -1421,10 +1568,19 @@ const getBookingStatus = async (req, res) => {
 
         logger.info(`getBookingStatus: Returning score_details: ${scoreDetails ? JSON.stringify(scoreDetails) : 'null'}`);
 
+        // Enrich with zone info
+        const bookingPlain = booking.toJSON();
+        if (bookingPlain.desk && booking.session?.classroom_id) {
+            const zone = await findZoneForDesk(bookingPlain.desk, booking.session.classroom_id);
+            bookingPlain.zone = zone;
+        } else {
+            bookingPlain.zone = null;
+        }
+
         res.json({
             success: true,
             data: {
-                ...booking.toJSON(),
+                ...bookingPlain,
                 position_in_queue: position + 1,
                 score_details: scoreDetails,
             },
@@ -1456,9 +1612,9 @@ const cancelBooking = async (req, res) => {
                     attributes: ['id', 'title', 'status'],
                 },
                 {
-                    model: ClassroomDesk,
+                    model: Desk,
                     as: 'desk',
-                    attributes: ['id', 'desk_number', 'status'],
+                    attributes: ['id', 'number'],
                 },
             ],
             transaction,
@@ -1490,23 +1646,44 @@ const cancelBooking = async (req, res) => {
             { transaction }
         );
 
-        // If booking had an assigned desk, release it
-        if (booking.desk) {
-            await booking.desk.update(
-                { status: 'available' },
-                { transaction }
-            );
+        // If booking had an assigned desk, reset the desk status in QueueDeskStatus
+        if (booking.desk_id) {
+            const deskStatus = await QueueDeskStatus.findOne({
+                where: {
+                    queue_session_id: booking.queue_session_id,
+                    desk_id: booking.desk_id,
+                },
+                transaction,
+            });
+
+            if (deskStatus) {
+                if (booking.booking_type === 'grading') {
+                    await deskStatus.update({ grading_status: 'not_started' }, { transaction });
+                } else {
+                    await deskStatus.update({ help_status: 'none' }, { transaction });
+                }
+            }
         }
 
         await transaction.commit();
 
+        // [Redis] Remove booking from waiting queue and update desk status
+        await redisQueue.removeBookingFromQueue(booking.queue_session_id, booking.id, booking.booking_type);
+        if (booking.desk_id) {
+            await redisQueue.setDeskStatus(booking.queue_session_id, booking.desk_id, {
+                [booking.booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: booking.booking_type === 'grading' ? 'not_started' : 'none',
+                [booking.booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: '',
+            });
+        }
+
         // Emit socket event for real-time update
-        const io = getIO();
+        const io = req.app.get('io');
         if (io) {
-            io.to(`session_${booking.queue_session_id}`).emit('queue:booking_cancelled', {
+            io.to(`queue-${booking.queue_session_id}`).emit('booking-cancelled', {
                 bookingId: booking.id,
                 queueNumber: booking.queue_number,
                 bookingType: booking.booking_type,
+                deskId: booking.desk_id,
             });
         }
 
@@ -1663,8 +1840,11 @@ const completeBooking = async (req, res) => {
         });
 
         if (worker) {
+            // If worker was paused, set to offline. Otherwise set to online.
+            const newStatus = worker.status === 'paused' ? 'offline' : 'online';
+            
             const updateData = {
-                status: 'online',
+                status: newStatus,
                 current_booking_id: null,
                 last_active_at: new Date(),
             };
@@ -1676,6 +1856,20 @@ const completeBooking = async (req, res) => {
             }
 
             await worker.update(updateData, { transaction });
+            
+            // [Redis] Update worker state
+            // Check current Redis state to handle pause correctly
+            const redisWorker = await redisQueue.getWorkerState(booking.queue_session_id, req.user.id);
+            const wasPaused = redisWorker?.status === 'paused' || worker.status === 'paused';
+            
+            if (wasPaused) {
+                await redisQueue.setWorkerOffline(booking.queue_session_id, req.user.id);
+            } else {
+                await redisQueue.setWorkerOnline(booking.queue_session_id, req.user.id);
+            }
+            
+            // [Redis] Increment completion count
+            await redisQueue.incrementWorkerCompletion(booking.queue_session_id, req.user.id, booking.booking_type);
         }
 
         // Save score to Score table if assignment is linked
@@ -1749,6 +1943,15 @@ const completeBooking = async (req, res) => {
 
         await transaction.commit();
 
+        // [Redis] Update desk status
+        const newDeskStatus = booking.booking_type === 'grading'
+            ? ((hasSubItems && !allSubItemsScored) ? 'not_started' : 'completed')
+            : 'none';
+        await redisQueue.setDeskStatus(booking.queue_session_id, booking.desk_id, {
+            [booking.booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: newDeskStatus,
+            [booking.booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: '',
+        });
+
         // Emit socket events
         const io = req.app.get('io');
         if (io) {
@@ -1772,10 +1975,13 @@ const completeBooking = async (req, res) => {
                 completedBookingType: booking.booking_type,
                 completedQueueNumber: booking.queue_number,
             });
-
-            // Try to assign next booking to this worker
-            await tryAssignNextBooking(booking.queue_session_id, req.user.id, io);
         }
+
+        // [Background Worker] Trigger assignment for next booking (non-blocking)
+        // This replaces the old tryAssignNextBooking call
+        triggerAssignmentForSession(booking.queue_session_id).catch(err => {
+            logger.error('Error triggering assignment:', err);
+        });
 
         res.json({
             success: true,
@@ -1921,18 +2127,33 @@ const skipBooking = async (req, res) => {
             transaction,
         });
 
+        // If worker was paused, set to offline. Otherwise set to online.
+        const wasPaused = worker && worker.status === 'paused';
         if (worker) {
             await worker.update(
                 {
-                    status: 'online',
+                    status: wasPaused ? 'offline' : 'online',
                     current_booking_id: null,
                     last_active_at: new Date(),
                 },
                 { transaction }
             );
+            
+            // [Redis] Update worker state
+            if (wasPaused) {
+                await redisQueue.setWorkerOffline(booking.queue_session_id, req.user.id);
+            } else {
+                await redisQueue.setWorkerOnline(booking.queue_session_id, req.user.id);
+            }
         }
 
         await transaction.commit();
+
+        // [Redis] Update desk status
+        await redisQueue.setDeskStatus(booking.queue_session_id, booking.desk_id, {
+            [booking.booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: booking.booking_type === 'grading' ? 'not_started' : 'none',
+            [booking.booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: '',
+        });
 
         // Emit socket events
         const io = req.app.get('io');
@@ -1941,10 +2162,13 @@ const skipBooking = async (req, res) => {
                 bookingId: booking.id,
                 deskNumber: booking.desk_number,
             });
-
-            // Try to assign next booking
-            await tryAssignNextBooking(booking.queue_session_id, req.user.id, io);
         }
+
+        // [Background Worker] Trigger assignment for next booking (non-blocking)
+        // This replaces the old tryAssignNextBooking call
+        triggerAssignmentForSession(booking.queue_session_id).catch(err => {
+            logger.error('Error triggering assignment:', err);
+        });
 
         res.json({
             success: true,
@@ -1983,7 +2207,7 @@ const getSessionBookings = async (req, res) => {
                 {
                     model: Desk,
                     as: 'desk',
-                    attributes: ['id', 'number', 'type'],
+                    attributes: ['id', 'number', 'type', 'x', 'y'],
                 },
                 {
                     model: User,
@@ -1994,9 +2218,35 @@ const getSessionBookings = async (req, res) => {
             order: [['queue_number', 'ASC']],
         });
 
+        // Enrich bookings with zone info
+        const session = await QueueSession.findByPk(sessionId, { attributes: ['classroom_id'] });
+        let zones = [];
+        if (session?.classroom_id) {
+            zones = await Zone.findAll({
+                where: { classroom_id: session.classroom_id },
+                attributes: ['id', 'name', 'x', 'y', 'width', 'height', 'color'],
+            });
+        }
+
+        const enrichedBookings = bookings.map(b => {
+            const plain = b.toJSON();
+            if (plain.desk && zones.length > 0) {
+                const deskX = plain.desk.x || 0;
+                const deskY = plain.desk.y || 0;
+                const zone = zones.find(z =>
+                    deskX >= z.x && deskX < z.x + z.width &&
+                    deskY >= z.y && deskY < z.y + z.height
+                );
+                plain.zone = zone ? { id: zone.id, name: zone.name, color: zone.color } : null;
+            } else {
+                plain.zone = null;
+            }
+            return plain;
+        });
+
         res.json({
             success: true,
-            data: bookings,
+            data: enrichedBookings,
         });
     } catch (error) {
         console.error('Error getting session bookings:', error);
@@ -2042,6 +2292,39 @@ const getDeskStatuses = async (req, res) => {
             where: { queue_session_id: sessionId },
         });
 
+        // Get active bookings for all desks in this session
+        const activeBookings = await QueueBooking.findAll({
+            where: {
+                queue_session_id: sessionId,
+                status: { [Op.in]: ['waiting', 'in_progress'] },
+                desk_id: { [Op.ne]: null },
+            },
+            include: [
+                {
+                    model: Student,
+                    as: 'student',
+                    attributes: ['id', 'student_id', 'full_name'],
+                },
+            ],
+            order: [['created_at', 'DESC']],
+        });
+
+        // Map bookings to desks (one booking per desk)
+        const bookingMap = {};
+        activeBookings.forEach((booking) => {
+            // Keep only the most recent booking for each desk
+            if (!bookingMap[booking.desk_id]) {
+                bookingMap[booking.desk_id] = {
+                    id: booking.id,
+                    queue_number: booking.queue_number,
+                    booking_type: booking.booking_type,
+                    status: booking.status,
+                    student_name: booking.student?.full_name || 'ไม่ระบุ',
+                    student_code: booking.student?.student_id || '',
+                };
+            }
+        });
+
         // Map desk statuses to desks
         const statusMap = {};
         deskStatuses.forEach((ds) => {
@@ -2054,6 +2337,7 @@ const getDeskStatuses = async (req, res) => {
                 grading_status: 'not_started',
                 help_status: 'none',
             },
+            booking: bookingMap[desk.id] || null,
         }));
 
         // Get queue statistics

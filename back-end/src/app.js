@@ -212,6 +212,10 @@ app.use(errorHandler);
 const http = require('http');
 const { initializeSocket } = require('./config/socket');
 
+// Import Redis and Queue Assignment Worker
+const { initializeRedis, closeRedis } = require('./config/redis');
+const { startAssignmentWorker, stopAssignmentWorker } = require('./utils/queueAssignmentWorker');
+
 // Create HTTP server
 const server = http.createServer(app);
 
@@ -226,6 +230,18 @@ const startServer = async () => {
   try {
     // Test database connection
     await testConnection();
+    
+    // Initialize Redis for queue management
+    try {
+      initializeRedis();
+      logger.info('🔴 Redis initialized for queue management');
+      
+      // Start background assignment worker
+      startAssignmentWorker();
+      logger.info('⚙️ Queue assignment worker started');
+    } catch (redisError) {
+      logger.warn('⚠️ Redis not available, queue system will use MySQL fallback:', redisError.message);
+    }
     
     // Start listening (use server instead of app for socket.io)
     server.listen(config.port, () => {
@@ -248,6 +264,27 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception:', error);
   process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully...');
+  stopAssignmentWorker();
+  await closeRedis();
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully...');
+  stopAssignmentWorker();
+  await closeRedis();
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });
 
 // Start the server
