@@ -593,11 +593,26 @@ const leaveAsWorker = async (req, res) => {
             });
         }
 
-        // Check if worker has active booking
+        // Check if worker has active booking - set to paused instead of returning error
         if (worker.current_booking_id) {
-            return res.status(400).json({
-                success: false,
-                error: { message: 'กรุณาทำงานปัจจุบันให้เสร็จก่อน' },
+            // Set to paused - worker will complete current task then go offline
+            await worker.update({
+                status: 'paused',
+            });
+
+            // Emit socket event
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`queue-${sessionId}`).emit('worker-paused', {
+                    workerId: worker.id,
+                    userId: req.user.id,
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: 'หยุดรับงานใหม่แล้ว กรุณาทำงานปัจจุบันให้เสร็จ',
+                data: { status: 'paused' },
             });
         }
 
@@ -695,7 +710,8 @@ const getWorkerCurrentBooking = async (req, res) => {
 
         logger.debug(`Current booking found: ${currentBooking ? currentBooking.id : 'null'}`);
 
-        // If there's a pending booking but worker is offline, re-set worker to online
+        // If there's a pending booking but worker is offline (not paused), re-set worker to online
+        // Don't change paused workers - they explicitly want to stop after current task
         if (currentBooking && worker && worker.status === 'offline') {
             await worker.update({
                 status: 'online',
@@ -1118,6 +1134,13 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
         if (availableWorker) {
             logger.info(`Found available worker: user_id=${availableWorker.user_id}, status=${availableWorker.status}`);
             
+            // Double-check worker is still online (in case they left between finding and now)
+            const freshWorker = await QueueWorker.findByPk(availableWorker.id);
+            if (!freshWorker || freshWorker.status !== 'online') {
+                logger.info(`Worker ${availableWorker.user_id} is no longer online (status: ${freshWorker?.status}), skipping assignment`);
+                return;
+            }
+            
             // Assign booking to worker
             await booking.update({
                 assigned_worker_id: availableWorker.user_id,
@@ -1126,7 +1149,7 @@ const tryAssignBooking = async (sessionId, bookingId, io) => {
                 started_at: new Date(),
             });
 
-            await availableWorker.update({
+            await freshWorker.update({
                 status: 'busy',
                 current_booking_id: booking.id,
             });
@@ -1456,9 +1479,9 @@ const cancelBooking = async (req, res) => {
                     attributes: ['id', 'title', 'status'],
                 },
                 {
-                    model: ClassroomDesk,
+                    model: Desk,
                     as: 'desk',
-                    attributes: ['id', 'desk_number', 'status'],
+                    attributes: ['id', 'number'],
                 },
             ],
             transaction,
@@ -1490,23 +1513,35 @@ const cancelBooking = async (req, res) => {
             { transaction }
         );
 
-        // If booking had an assigned desk, release it
-        if (booking.desk) {
-            await booking.desk.update(
-                { status: 'available' },
-                { transaction }
-            );
+        // If booking had an assigned desk, reset the desk status in QueueDeskStatus
+        if (booking.desk_id) {
+            const deskStatus = await QueueDeskStatus.findOne({
+                where: {
+                    queue_session_id: booking.queue_session_id,
+                    desk_id: booking.desk_id,
+                },
+                transaction,
+            });
+
+            if (deskStatus) {
+                if (booking.booking_type === 'grading') {
+                    await deskStatus.update({ grading_status: 'not_started' }, { transaction });
+                } else {
+                    await deskStatus.update({ help_status: 'none' }, { transaction });
+                }
+            }
         }
 
         await transaction.commit();
 
         // Emit socket event for real-time update
-        const io = getIO();
+        const io = req.app.get('io');
         if (io) {
-            io.to(`session_${booking.queue_session_id}`).emit('queue:booking_cancelled', {
+            io.to(`queue-${booking.queue_session_id}`).emit('booking-cancelled', {
                 bookingId: booking.id,
                 queueNumber: booking.queue_number,
                 bookingType: booking.booking_type,
+                deskId: booking.desk_id,
             });
         }
 
@@ -1663,8 +1698,11 @@ const completeBooking = async (req, res) => {
         });
 
         if (worker) {
+            // If worker was paused, set to offline. Otherwise set to online.
+            const newStatus = worker.status === 'paused' ? 'offline' : 'online';
+            
             const updateData = {
-                status: 'online',
+                status: newStatus,
                 current_booking_id: null,
                 last_active_at: new Date(),
             };
@@ -1921,10 +1959,12 @@ const skipBooking = async (req, res) => {
             transaction,
         });
 
+        // If worker was paused, set to offline. Otherwise set to online.
+        const wasPaused = worker && worker.status === 'paused';
         if (worker) {
             await worker.update(
                 {
-                    status: 'online',
+                    status: wasPaused ? 'offline' : 'online',
                     current_booking_id: null,
                     last_active_at: new Date(),
                 },
@@ -2042,6 +2082,39 @@ const getDeskStatuses = async (req, res) => {
             where: { queue_session_id: sessionId },
         });
 
+        // Get active bookings for all desks in this session
+        const activeBookings = await QueueBooking.findAll({
+            where: {
+                queue_session_id: sessionId,
+                status: { [Op.in]: ['waiting', 'in_progress'] },
+                desk_id: { [Op.ne]: null },
+            },
+            include: [
+                {
+                    model: Student,
+                    as: 'student',
+                    attributes: ['id', 'student_id', 'full_name'],
+                },
+            ],
+            order: [['created_at', 'DESC']],
+        });
+
+        // Map bookings to desks (one booking per desk)
+        const bookingMap = {};
+        activeBookings.forEach((booking) => {
+            // Keep only the most recent booking for each desk
+            if (!bookingMap[booking.desk_id]) {
+                bookingMap[booking.desk_id] = {
+                    id: booking.id,
+                    queue_number: booking.queue_number,
+                    booking_type: booking.booking_type,
+                    status: booking.status,
+                    student_name: booking.student?.full_name || 'ไม่ระบุ',
+                    student_code: booking.student?.student_id || '',
+                };
+            }
+        });
+
         // Map desk statuses to desks
         const statusMap = {};
         deskStatuses.forEach((ds) => {
@@ -2054,6 +2127,7 @@ const getDeskStatuses = async (req, res) => {
                 grading_status: 'not_started',
                 help_status: 'none',
             },
+            booking: bookingMap[desk.id] || null,
         }));
 
         // Get queue statistics

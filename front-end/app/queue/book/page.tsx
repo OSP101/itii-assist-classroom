@@ -496,6 +496,21 @@ function BookQueueContent() {
         }
     }, []);
 
+    // Cleanup previous polling/socket
+    const cleanupPolling = useCallback(() => {
+        if (socketRef.current) {
+            if (currentBookingIdRef.current) {
+                socketRef.current.emit("leave-booking", currentBookingIdRef.current);
+            }
+            socketRef.current.disconnect();
+            socketRef.current = null;
+        }
+        if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+        }
+    }, []);
+
     // Cancel booking
     const handleCancelBooking = async () => {
         if (!bookingResult) return;
@@ -543,21 +558,6 @@ function BookQueueContent() {
             setIsCancelling(false);
         }
     };
-
-    // Cleanup previous polling/socket
-    const cleanupPolling = useCallback(() => {
-        if (socketRef.current) {
-            if (currentBookingIdRef.current) {
-                socketRef.current.emit("leave-booking", currentBookingIdRef.current);
-            }
-            socketRef.current.disconnect();
-            socketRef.current = null;
-        }
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-    }, []);
 
     // Start status polling and socket connection
     const startStatusPolling = useCallback((bookingId: number, sessionId?: number) => {

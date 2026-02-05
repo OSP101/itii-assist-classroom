@@ -50,6 +50,7 @@ export default function WorkerDashboardPage() {
     const [currentBooking, setCurrentBooking] = useState<QueueBooking | null>(null);
     const [isJoining, setIsJoining] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
+    const [isPausedAfterComplete, setIsPausedAfterComplete] = useState(false); // Stop receiving after completing current
 
     // Complete booking modal
     const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
@@ -187,16 +188,30 @@ export default function WorkerDashboardPage() {
     // Poll for current booking (fallback if socket fails)
     // Use ref to track if we should skip polling (to avoid stale closure issues)
     const skipPollingRef = useRef(false);
+    // Ref to track paused state (to avoid stale closure issues)
+    const isPausedRef = useRef(false);
+    
+    // Keep ref in sync with state
+    useEffect(() => {
+        isPausedRef.current = isPausedAfterComplete;
+    }, [isPausedAfterComplete]);
     
     const pollForBooking = useCallback(async (force: boolean = false) => {
-        // Skip if not online or already have booking (unless forced)
+        // Skip if not online, already have booking, or paused (unless forced)
         if (!isWorkerOnline) return;
+        if (isPausedRef.current) return; // Don't poll for new tasks when paused
         if (!force && (currentBooking || skipPollingRef.current)) return;
         
         try {
             console.log("Polling for new booking...");
             const result = await queueService.getWorkerCurrentBooking(courseId, sessionId);
             if (result.currentBooking) {
+                // Double check - don't accept if paused
+                if (isPausedRef.current) {
+                    console.log("Polling found booking but worker is paused, ignoring");
+                    return;
+                }
+                
                 console.log("Polling found new booking:", result.currentBooking);
                 setCurrentBooking(result.currentBooking);
                 skipPollingRef.current = true;
@@ -239,6 +254,13 @@ export default function WorkerDashboardPage() {
         socket.on("new-task", (data: { booking: QueueBooking }) => {
             console.log("=== RECEIVED new-task event ===");
             console.log("Data:", JSON.stringify(data, null, 2));
+            
+            // Ignore if paused - we shouldn't receive this but just in case
+            if (isPausedRef.current) {
+                console.log("Ignoring new-task because worker is paused");
+                return;
+            }
+            
             setCurrentBooking(data.booking);
             addToast({
                 title: "มีงานใหม่!",
@@ -345,24 +367,28 @@ export default function WorkerDashboardPage() {
 
     // Leave as worker
     const handleLeaveAsWorker = async () => {
-        if (currentBooking) {
-            addToast({
-                title: "ไม่สามารถออกได้",
-                description: "กรุณาทำงานปัจจุบันให้เสร็จก่อน",
-                color: "warning",
-            });
-            return;
-        }
-
         setIsLeaving(true);
         try {
             await queueService.leaveAsWorker(courseId, sessionId);
-            setIsWorkerOnline(false);
-            addToast({
-                title: "สำเร็จ",
-                description: "ออกจากการรับงานเรียบร้อยแล้ว",
-                color: "success",
-            });
+            
+            if (currentBooking) {
+                // Has current booking - mark as paused, will fully leave after completing
+                setIsPausedAfterComplete(true);
+                addToast({
+                    title: "หยุดรับงานใหม่",
+                    description: "จะไม่ได้รับงานใหม่ กรุณาทำงานปัจจุบันให้เสร็จ",
+                    color: "warning",
+                });
+            } else {
+                // No current booking - leave immediately
+                setIsWorkerOnline(false);
+                setIsPausedAfterComplete(false);
+                addToast({
+                    title: "สำเร็จ",
+                    description: "ออกจากการรับงานเรียบร้อยแล้ว",
+                    color: "success",
+                });
+            }
         } catch (error: unknown) {
             console.error("Error leaving as worker:", error);
             addToast({
@@ -409,14 +435,28 @@ export default function WorkerDashboardPage() {
             });
 
             setCurrentBooking(null);
-            skipPollingRef.current = false; // Allow polling again
             setIsCompleteModalOpen(false);
             setCompleteForm({ score: "", score_comment: "", worker_note: "", sub_item_scores: [] });
             
-            // Poll immediately for new booking (don't wait for interval)
-            setTimeout(() => {
-                pollForBooking(true);
-            }, 500);
+            // Check if worker was paused - if so, fully leave now
+            // Use ref to avoid stale closure issues
+            if (isPausedRef.current) {
+                setIsWorkerOnline(false);
+                setIsPausedAfterComplete(false);
+                isPausedRef.current = false;
+                skipPollingRef.current = true;
+                addToast({
+                    title: "ออกจากการรับงานแล้ว",
+                    description: "คุณได้ออกจากการรับงานเรียบร้อยแล้ว",
+                    color: "success",
+                });
+            } else {
+                skipPollingRef.current = false; // Allow polling again
+                // Poll immediately for new booking (don't wait for interval)
+                setTimeout(() => {
+                    pollForBooking(true);
+                }, 500);
+            }
         } catch (error: unknown) {
             console.error("Error completing booking:", error);
             addToast({
@@ -617,15 +657,15 @@ export default function WorkerDashboardPage() {
                     </div>
                     <Chip
                         size="lg"
-                        color={isWorkerOnline ? "success" : "default"}
+                        color={isPausedAfterComplete ? "warning" : isWorkerOnline ? "success" : "default"}
                         variant="flat"
                         startContent={
                             <Icon 
-                                icon={isWorkerOnline ? "solar:check-circle-bold" : "solar:minus-circle-bold"} 
+                                icon={isPausedAfterComplete ? "solar:pause-bold" : isWorkerOnline ? "solar:check-circle-bold" : "solar:minus-circle-bold"} 
                             />
                         }
                     >
-                        {isWorkerOnline ? "กำลังรับงาน" : "ไม่ได้รับงาน"}
+                        {isPausedAfterComplete ? "รอเคลียร์งาน" : isWorkerOnline ? "กำลังรับงาน" : "ไม่ได้รับงาน"}
                     </Chip>
                 </div>
 
@@ -743,19 +783,30 @@ export default function WorkerDashboardPage() {
                                         </div>
                                     </div>
                                     <Button
-                                        color="danger"
+                                        color={isPausedAfterComplete ? "default" : "danger"}
                                         variant="flat"
                                         size="sm"
-                                        startContent={<Icon icon="solar:logout-2-bold" />}
+                                        startContent={<Icon icon={isPausedAfterComplete ? "solar:pause-bold" : "solar:logout-2-bold"} />}
                                         onPress={handleLeaveAsWorker}
                                         isLoading={isLeaving}
-                                        isDisabled={!!currentBooking}
+                                        isDisabled={isPausedAfterComplete}
                                     >
-                                        หยุดรับงาน
+                                        {isPausedAfterComplete ? "รอเครียร์งาน..." : "หยุดรับงาน"}
                                     </Button>
                                 </div>
                             </CardHeader>
                             <CardBody className="p-6">
+                                {/* Paused notification banner */}
+                                {isPausedAfterComplete && currentBooking && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                                        <div className="flex items-center gap-2 text-amber-700">
+                                            <Icon icon="solar:info-circle-bold" className="text-xl shrink-0" />
+                                            <p className="text-sm">
+                                                คุณหยุดรับงานใหม่แล้ว หลังจากทำงานนี้เสร็จจะออกจากการรับงานอัตโนมัติ
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
                                 {currentBooking ? (
                                     <div className="space-y-6">
                                         {/* Booking Info */}
@@ -828,7 +879,7 @@ export default function WorkerDashboardPage() {
                                                 startContent={<Icon icon="solar:check-circle-bold" className="text-xl" />}
                                                 onPress={initializeCompleteForm}
                                             >
-                                                ลงคะแนน
+                                                เสร็จสิ้น
                                             </Button>
                                             <Button
                                                 color="warning"

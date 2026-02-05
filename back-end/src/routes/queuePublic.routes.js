@@ -33,4 +33,10 @@ router.get('/bookings/:bookingId/status', queueController.getBookingStatus);
 // Get desk statuses for projector display
 router.get('/sessions/:sessionId/desk-statuses', queueController.getDeskStatuses);
 
+// Toggle session status (active/paused) - for projector toggle switch
+router.post('/sessions/:sessionId/status', queueController.updateQueueSessionStatus);
+
+// Cancel booking - for student and projector cancel
+router.post('/bookings/:bookingId/cancel', queueController.cancelBooking);
+
 module.exports = router;

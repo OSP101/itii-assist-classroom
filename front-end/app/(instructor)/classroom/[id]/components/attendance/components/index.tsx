@@ -1211,13 +1211,7 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                                 value={lateThresholdTime}
                                 onChange={(value) => value && setLateThresholdTime(value)}
                                 isRequired
-                                description={
-                                    lateThresholdMinutes > 0 
-                                        ? `(${lateThresholdMinutes} นาที หลังเวลาเริ่มต้น)` 
-                                        : lateThresholdMinutes < 0 
-                                            ? `(${Math.abs(lateThresholdMinutes)} นาที ก่อนเวลาเริ่มต้น)` 
-                                            : "(ตรงกับเวลาเริ่มต้น)"
-                                }
+                                description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
                                 classNames={{
                                     base: "w-full",
                                     selectorButton: "text-amber-500",
@@ -1487,13 +1481,7 @@ export const EditSessionModal = memo(function EditSessionModal({
                                 value={lateThresholdTime}
                                 onChange={(value) => value && setLateThresholdTime(value)}
                                 isRequired
-                                description={
-                                    lateThresholdMinutes > 0 
-                                        ? `(${lateThresholdMinutes} นาที หลังเวลาเริ่มต้น)` 
-                                        : lateThresholdMinutes < 0 
-                                            ? `(${Math.abs(lateThresholdMinutes)} นาที ก่อนเวลาเริ่มต้น)` 
-                                            : "(ตรงกับเวลาเริ่มต้น)"
-                                }
+                                description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
                                 classNames={{
                                     base: "w-full",
                                     selectorButton: "text-amber-500",
