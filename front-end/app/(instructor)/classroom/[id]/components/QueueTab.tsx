@@ -744,118 +744,147 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                         </Tooltip>
                                                                     </>
                                                                 )}
-                                                                {/* Active status: Projector, Worker, Pause, Delete (only if no waiting) */}
-                                                                {session.status === 'active' && (
-                                                                    <>
-                                                                        <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="secondary"
-                                                                                onPress={() => handleOpenProjector(session)}
-                                                                            >
-                                                                                <Icon icon="solar:monitor-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        <Tooltip content="เข้าหน้ารับคิว">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="primary"
-                                                                                onPress={() => handleGoToWorker(session)}
-                                                                            >
-                                                                                <Icon icon="solar:user-check-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        <Tooltip content="หยุดรับคิว">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="warning"
-                                                                                onPress={() => handleOpenPauseModal(session, 'paused')}
-                                                                            >
-                                                                                <Icon icon="solar:pause-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        {/* Delete only if no waiting queue */}
-                                                                        {(session.stats?.waiting || 0) === 0 && (
-                                                                            <Tooltip content="ลบ" color="danger">
+                                                                {/* Active status: Projector, Worker, Pause, Delete */}
+                                                                {session.status === 'active' && (() => {
+                                                                    const hasPending = (session.stats?.waiting || 0) > 0 || (session.stats?.in_progress || 0) > 0;
+                                                                    const deleteTooltip = hasPending
+                                                                        ? `ยังมีคิวค้างอยู่ (รอ ${session.stats?.waiting || 0} / กำลังตรวจ ${session.stats?.in_progress || 0})`
+                                                                        : "ต้องหยุดรับคิวก่อนจึงจะลบได้";
+                                                                    return (
+                                                                        <>
+                                                                            <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
                                                                                 <Button
                                                                                     isIconOnly
                                                                                     size="sm"
                                                                                     variant="light"
-                                                                                    color="danger"
-                                                                                    onPress={() => {
-                                                                                        setDeleteTarget(session);
-                                                                                        setIsDeleteModalOpen(true);
-                                                                                    }}
+                                                                                    color="secondary"
+                                                                                    onPress={() => handleOpenProjector(session)}
                                                                                 >
-                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                    <Icon icon="solar:monitor-bold" className="text-lg" />
                                                                                 </Button>
                                                                             </Tooltip>
-                                                                        )}
-                                                                    </>
-                                                                )}
-                                                                {/* Paused status: Projector, Worker, Resume, Delete (only if no waiting) */}
-                                                                {session.status === 'paused' && (
-                                                                    <>
-                                                                        <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="secondary"
-                                                                                onPress={() => handleOpenProjector(session)}
-                                                                            >
-                                                                                <Icon icon="solar:monitor-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        <Tooltip content="เข้าหน้ารับคิว">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="primary"
-                                                                                onPress={() => handleGoToWorker(session)}
-                                                                            >
-                                                                                <Icon icon="solar:user-check-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        <Tooltip content="เปิดรับคิว">
-                                                                            <Button
-                                                                                isIconOnly
-                                                                                size="sm"
-                                                                                variant="light"
-                                                                                color="success"
-                                                                                onPress={() => handleOpenPauseModal(session, 'active')}
-                                                                            >
-                                                                                <Icon icon="solar:play-bold" className="text-lg" />
-                                                                            </Button>
-                                                                        </Tooltip>
-                                                                        {/* Delete only if no waiting queue */}
-                                                                        {(session.stats?.waiting || 0) === 0 && (
-                                                                            <Tooltip content="ลบ" color="danger">
+                                                                            <Tooltip content="เข้าหน้ารับคิว">
                                                                                 <Button
                                                                                     isIconOnly
                                                                                     size="sm"
                                                                                     variant="light"
-                                                                                    color="danger"
-                                                                                    onPress={() => {
-                                                                                        setDeleteTarget(session);
-                                                                                        setIsDeleteModalOpen(true);
-                                                                                    }}
+                                                                                    color="primary"
+                                                                                    onPress={() => handleGoToWorker(session)}
                                                                                 >
-                                                                                    <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                    <Icon icon="solar:user-check-bold" className="text-lg" />
                                                                                 </Button>
                                                                             </Tooltip>
-                                                                        )}
-                                                                    </>
-                                                                )}
+                                                                            <Tooltip content="หยุดรับคิว">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="warning"
+                                                                                    onPress={() => handleOpenPauseModal(session, 'paused')}
+                                                                                >
+                                                                                    <Icon icon="solar:pause-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                            <Tooltip content={deleteTooltip} color="danger">
+                                                                                <span>
+                                                                                    <Button
+                                                                                        isIconOnly
+                                                                                        size="sm"
+                                                                                        variant="light"
+                                                                                        color="danger"
+                                                                                        isDisabled
+                                                                                    >
+                                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                    </Button>
+                                                                                </span>
+                                                                            </Tooltip>
+                                                                        </>
+                                                                    );
+                                                                })()}
+                                                                {/* Paused status: Projector, Worker, Resume, Delete */}
+                                                                {session.status === 'paused' && (() => {
+                                                                    const hasPending = (session.stats?.waiting || 0) > 0 || (session.stats?.in_progress || 0) > 0;
+                                                                    return (
+                                                                        <>
+                                                                            <Tooltip content="เปิดหน้าจอโปรเจคเตอร์">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="secondary"
+                                                                                    onPress={() => handleOpenProjector(session)}
+                                                                                >
+                                                                                    <Icon icon="solar:monitor-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                            <Tooltip content="เข้าหน้ารับคิว">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="primary"
+                                                                                    onPress={() => handleGoToWorker(session)}
+                                                                                >
+                                                                                    <Icon icon="solar:user-check-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                            <Tooltip content="เปิดรับคิว">
+                                                                                <Button
+                                                                                    isIconOnly
+                                                                                    size="sm"
+                                                                                    variant="light"
+                                                                                    color="success"
+                                                                                    onPress={() => handleOpenPauseModal(session, 'active')}
+                                                                                >
+                                                                                    <Icon icon="solar:play-bold" className="text-lg" />
+                                                                                </Button>
+                                                                            </Tooltip>
+                                                                            <Tooltip
+                                                                                content={hasPending
+                                                                                    ? `ยังมีคิวค้างอยู่ (รอ ${session.stats?.waiting || 0} / กำลังตรวจ ${session.stats?.in_progress || 0})`
+                                                                                    : "ลบ"
+                                                                                }
+                                                                                color={hasPending ? "warning" : "danger"}
+                                                                            >
+                                                                                <span>
+                                                                                    <Button
+                                                                                        isIconOnly
+                                                                                        size="sm"
+                                                                                        variant="light"
+                                                                                        color="danger"
+                                                                                        isDisabled={hasPending}
+                                                                                        onPress={() => {
+                                                                                            if (!hasPending) {
+                                                                                                setDeleteTarget(session);
+                                                                                                setIsDeleteModalOpen(true);
+                                                                                            }
+                                                                                        }}
+                                                                                    >
+                                                                                        <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                                    </Button>
+                                                                                </span>
+                                                                            </Tooltip>
+                                                                        </>
+                                                                    );
+                                                                })()}
                                                                 {session.status === 'closed' && (
-                                                                    <span className="text-slate-400 text-sm">ปิดแล้ว</span>
+                                                                    <>
+                                                                        <Chip size="sm" variant="flat" className="text-slate-400">ปิดแล้ว</Chip>
+                                                                        <Tooltip content="ลบ" color="danger">
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                variant="light"
+                                                                                color="danger"
+                                                                                onPress={() => {
+                                                                                    setDeleteTarget(session);
+                                                                                    setIsDeleteModalOpen(true);
+                                                                                }}
+                                                                            >
+                                                                                <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
+                                                                            </Button>
+                                                                        </Tooltip>
+                                                                    </>
                                                                 )}
                                                             </div>
                                                         </TableCell>

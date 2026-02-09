@@ -122,6 +122,13 @@ function AssignmentsTabViewComponent({
                         {assignment.subItems && assignment.subItems.length > 0 && (
                             <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600">{assignment.subItems.length} ข้อย่อย</Chip>
                         )}
+                        {assignment.is_score_visible === false && (
+                            <Tooltip content="ซ่อนคะแนนจากนักศึกษา">
+                                <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600 gap-1" startContent={<Icon icon="solar:eye-closed-linear" width={14} />}>
+                                    ซ่อน
+                                </Chip>
+                            </Tooltip>
+                        )}
                     </div>
 
                     {/* Footer Info */}
@@ -156,6 +163,13 @@ function AssignmentsTabViewComponent({
                                     <Chip size="sm" className={typeInfo.color}>{typeInfo.label}</Chip>
                                     {assignment.week_number && (
                                         <Chip size="sm" variant="flat" className="bg-blue-50 text-blue-600">W{assignment.week_number}</Chip>
+                                    )}
+                                    {assignment.is_score_visible === false && (
+                                        <Tooltip content="ซ่อนคะแนนจากนักศึกษา">
+                                            <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600 gap-1" startContent={<Icon icon="solar:eye-closed-linear" width={14} />}>
+                                                ซ่อน
+                                            </Chip>
+                                        </Tooltip>
                                     )}
                                 </div>
                             </div>

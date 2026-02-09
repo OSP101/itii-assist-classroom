@@ -20,6 +20,7 @@ const {
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
 const { cache, CACHE_TTL } = require('../utils/cache');
 const { 
   batchCount, 
@@ -374,6 +375,8 @@ const createCourse = asyncHandler(async (req, res) => {
     ],
   });
 
+  logCourseActivity({ courseId: course.id, actorUserId: req.user.id, action: 'create_course', category: 'course', targetType: 'course', targetId: course.id, targetName: `${code} - ${name}` });
+
   res.status(201).json({
     success: true,
     message: 'สร้างรายวิชาสำเร็จ',
@@ -513,6 +516,8 @@ const updateCourse = asyncHandler(async (req, res) => {
     ],
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'update_course', category: 'course', targetType: 'course', targetId: id, targetName: updatedCourse.name, detail: { fields: Object.keys(req.body) } });
+
   res.json({
     success: true,
     message: 'อัปเดตรายวิชาสำเร็จ',
@@ -533,6 +538,16 @@ const deleteCourse = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
   }
 
+  // Instructor can only delete their own courses
+  if (req.user.role === 'instructor') {
+    const isInstructor = await CourseInstructor.findOne({
+      where: { course_id: id, user_id: req.user.id },
+    });
+    if (!isInstructor) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์ลบรายวิชานี้ เฉพาะอาจารย์ผู้สอนของรายวิชาเท่านั้น');
+    }
+  }
+
   // Delete related data
   await CourseTA.destroy({ where: { course_id: id } });
   
@@ -549,7 +564,10 @@ const deleteCourse = asyncHandler(async (req, res) => {
   await CourseSection.destroy({ where: { course_id: id } });
   
   // Delete course
+  const courseName = course.name;
   await course.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'delete_course', category: 'course', targetType: 'course', targetId: id, targetName: courseName });
 
   res.json({
     success: true,
@@ -589,6 +607,8 @@ const toggleCourseStatus = asyncHandler(async (req, res) => {
   }
 
   await course.update({ is_active: willBeActive });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: willBeActive ? 'activate_course' : 'deactivate_course', category: 'course', targetType: 'course', targetId: id, targetName: course.name });
 
   res.json({
     success: true,
@@ -639,6 +659,8 @@ const addSection = asyncHandler(async (req, res) => {
     note: note || null,
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_section', category: 'course', targetType: 'section', targetId: section.id, targetName: `กลุ่ม ${section_no}` });
+
   res.status(201).json({
     success: true,
     message: 'เพิ่มกลุ่มเรียนสำเร็จ',
@@ -671,8 +693,11 @@ const removeSection = asyncHandler(async (req, res) => {
   // Delete students from section
   await CourseSectionStudent.destroy({ where: { course_section_id: sectionId } });
 
+  const sectionNo = section.section_no;
   // Delete section
   await section.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_section', category: 'course', targetType: 'section', targetId: sectionId, targetName: `กลุ่ม ${sectionNo}` });
 
   res.json({
     success: true,
@@ -725,6 +750,8 @@ const updateSection = asyncHandler(async (req, res) => {
     note: note || null,
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'update_section', category: 'course', targetType: 'section', targetId: sectionId, targetName: `กลุ่ม ${section_no}` });
+
   res.json({
     success: true,
     message: 'แก้ไขกลุ่มเรียนสำเร็จ',
@@ -774,6 +801,8 @@ const addTA = asyncHandler(async (req, res) => {
   }
 
   await CourseTA.create({ course_id: id, user_id });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_ta', category: 'member', targetType: 'ta', targetId: user_id, targetName: ta.full_name });
 
   res.status(201).json({
     success: true,
@@ -835,6 +864,8 @@ const bulkAddTAs = asyncHandler(async (req, res) => {
     newTAs.map(ta => ({ course_id: id, user_id: ta.id }))
   );
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_tas', category: 'member', targetType: 'ta', targetName: `${newTAs.length} คน`, detail: { added: newTAs.map(t => ({ id: t.id, name: t.full_name })) } });
+
   res.status(201).json({
     success: true,
     message: `เพิ่มผู้ช่วยสอน ${newTAs.length} คนสำเร็จ`,
@@ -868,6 +899,8 @@ const removeTA = asyncHandler(async (req, res) => {
   if (!deleted) {
     throw new ApiError(404, 'ไม่พบผู้ช่วยสอนในรายวิชานี้');
   }
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_ta', category: 'member', targetType: 'ta', targetId: userId });
 
   res.json({
     success: true,
@@ -928,6 +961,8 @@ const addInstructor = asyncHandler(async (req, res) => {
     user_id,
     is_primary: false, // New instructors added later are not primary
   });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_instructor', category: 'member', targetType: 'instructor', targetId: user_id, targetName: instructor.full_name });
 
   res.status(201).json({
     success: true,
@@ -999,6 +1034,8 @@ const bulkAddInstructors = asyncHandler(async (req, res) => {
       is_primary: false,
     }))
   );
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_instructors', category: 'member', targetType: 'instructor', targetName: `${newInstructors.length} คน`, detail: { added: newInstructors.map(i => ({ id: i.id, name: i.full_name })) } });
 
   res.status(201).json({
     success: true,
@@ -1082,6 +1119,8 @@ const removeInstructor = asyncHandler(async (req, res) => {
   }
 
   await instructorRecord.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_instructor', category: 'member', targetType: 'instructor', targetId: userId });
 
   res.json({
     success: true,
@@ -1183,6 +1222,8 @@ const addStudentToSection = asyncHandler(async (req, res) => {
     student_id,
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_student', category: 'member', targetType: 'student', targetId: student_id, targetName: student.full_name });
+
   res.status(201).json({
     success: true,
     message: 'เพิ่มนักศึกษาสำเร็จ',
@@ -1254,6 +1295,8 @@ const bulkAddStudentsToSection = asyncHandler(async (req, res) => {
 
   await CourseSectionStudent.bulkCreate(enrollments, { ignoreDuplicates: true });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_students', category: 'member', targetType: 'student', targetName: `${validStudentIds.length} คน`, detail: { sectionId: sectionId, count: validStudentIds.length } });
+
   res.status(201).json({
     success: true,
     message: `เพิ่มนักศึกษาสำเร็จ ${validStudentIds.length} คน`,
@@ -1286,6 +1329,8 @@ const removeStudentFromSection = asyncHandler(async (req, res) => {
   if (!deleted) {
     throw new ApiError(404, 'ไม่พบนักศึกษาในกลุ่มเรียนนี้');
   }
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_student', category: 'member', targetType: 'student', targetId: studentId });
 
   res.json({
     success: true,
@@ -1912,11 +1957,35 @@ const getCourseOverview = asyncHandler(async (req, res) => {
     // Get scores for this assignment from already-fetched data
     const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
     
-    // Calculate average score
-    const scores = assignmentScores.map(s => parseFloat(s.score) || 0);
-    const avgScore = scores.length > 0 
-      ? scores.reduce((a, b) => a + b, 0) / scores.length 
-      : null;
+    // Calculate average score per student/group (sum sub-item scores first)
+    let avgScore = null;
+    const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+    if (assignmentScores.length > 0) {
+      if (isGroupAssignment) {
+        // Group by group_id, sum scores per group
+        const groupTotals = new Map();
+        for (const s of assignmentScores) {
+          if (!s.group_id) continue;
+          groupTotals.set(s.group_id, (groupTotals.get(s.group_id) || 0) + (parseFloat(s.score) || 0));
+        }
+        if (groupTotals.size > 0) {
+          const totals = Array.from(groupTotals.values());
+          avgScore = totals.reduce((a, b) => a + b, 0) / totals.length;
+        }
+      } else {
+        // Group by student_id, sum scores per student
+        const studentTotals = new Map();
+        for (const s of assignmentScores) {
+          if (!s.student_id) continue;
+          studentTotals.set(s.student_id, (studentTotals.get(s.student_id) || 0) + (parseFloat(s.score) || 0));
+        }
+        if (studentTotals.size > 0) {
+          const totals = Array.from(studentTotals.values());
+          avgScore = totals.reduce((a, b) => a + b, 0) / totals.length;
+        }
+      }
+    }
 
     // Count unique students/groups scored
     let scoredCount = 0;
@@ -1953,6 +2022,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
       name: assignment.name,
       max_score: actualMaxScore,
       assignment_type: assignment.assignment_type,
+      is_score_visible: assignment.is_score_visible !== false, // default true
       avgScore: avgScore !== null ? Math.round(avgScore * 10) / 10 : null,
       scoredCount,
       notScoredCount,

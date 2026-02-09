@@ -2,6 +2,7 @@ const { Assignment, AssignmentSubItem, AssignmentAttendanceLink, Score, Course, 
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
 
 /**
  * Get all assignments for a course
@@ -206,6 +207,8 @@ const createAssignment = asyncHandler(async (req, res) => {
                 },
             ],
         });
+
+        logCourseActivity({ courseId: course_id, actorUserId: req.user.id, action: 'create_assignment', category: 'assignment', targetType: 'assignment', targetId: assignment.id, targetName: name, detail: { assignment_type: assignment_type || 'individual', max_score } });
 
         res.status(201).json({
             success: true,
@@ -433,6 +436,8 @@ const updateAssignment = asyncHandler(async (req, res) => {
             ],
         });
 
+        logCourseActivity({ courseId: updatedAssignment.course_id, actorUserId: req.user.id, action: 'update_assignment', category: 'assignment', targetType: 'assignment', targetId: id, targetName: updatedAssignment.name, detail: { fields: Object.keys(req.body) } });
+
         res.json({
             success: true,
             data: updatedAssignment,
@@ -458,6 +463,8 @@ const deleteAssignment = asyncHandler(async (req, res) => {
 
     // Soft delete by setting is_active to false
     await assignment.update({ is_active: false });
+
+    logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'delete_assignment', category: 'assignment', targetType: 'assignment', targetId: id, targetName: assignment.name });
 
     res.json({
         success: true,

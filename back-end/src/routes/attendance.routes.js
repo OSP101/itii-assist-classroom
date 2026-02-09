@@ -69,6 +69,20 @@ router.get('/:id', attendanceController.getAttendanceSession);
 router.put('/:id', attendanceController.updateAttendanceSession);
 
 /**
+ * @route   POST /api/attendance/:id/preview-time-change
+ * @desc    Preview impact of changing attendance time rules on existing check-ins
+ * @access  Instructor, TA
+ */
+router.post('/:id/preview-time-change', attendanceController.previewTimeChange);
+
+/**
+ * @route   POST /api/attendance/:id/apply-time-change
+ * @desc    Apply time change and re-evaluate all existing check-in records
+ * @access  Instructor, TA
+ */
+router.post('/:id/apply-time-change', attendanceController.applyTimeChange);
+
+/**
  * @route   DELETE /api/attendance/:id
  * @desc    Delete attendance session
  * @access  Instructor, TA

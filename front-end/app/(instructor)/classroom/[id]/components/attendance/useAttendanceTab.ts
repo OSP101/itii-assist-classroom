@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addToast } from "@heroui/toast";
 import { now, getLocalTimeZone, parseAbsolute, type DateValue } from "@internationalized/date";
-import attendanceService, { type AttendanceSession, type CreateAttendanceData } from "@/services/attendance.service";
+import attendanceService, { type AttendanceSession, type CreateAttendanceData, type TimeChangePreview } from "@/services/attendance.service";
 import { useSocket } from "@/contexts/SocketContext";
 import {
     type Course,
@@ -80,6 +80,13 @@ export interface UseAttendanceTabReturn {
     confirmCloseSession: () => Promise<void>;
     getCurrentLocation: () => void;
 
+    // Time Change Preview
+    timeChangePreview: TimeChangePreview | null;
+    isTimeChangePreviewOpen: boolean;
+    isApplyingTimeChange: boolean;
+    closeTimeChangePreview: () => void;
+    confirmApplyTimeChange: () => Promise<void>;
+
     // Context
     courseId: string;
 }
@@ -141,6 +148,12 @@ export function useAttendanceTab(
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+
+    // Time Change Preview State
+    const [timeChangePreview, setTimeChangePreview] = useState<TimeChangePreview | null>(null);
+    const [isTimeChangePreviewOpen, setIsTimeChangePreviewOpen] = useState(false);
+    const [isApplyingTimeChange, setIsApplyingTimeChange] = useState(false);
+    const pendingUpdateDataRef = useRef<Partial<CreateAttendanceData> | null>(null);
 
     const [editTarget, setEditTarget] = useState<AttendanceSession | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AttendanceSession | null>(null);
@@ -456,6 +469,54 @@ export function useAttendanceTab(
                 data.course_section_id = null;
             }
 
+            // Check if any time fields changed
+            const oldStart = new Date(editTarget.start_time).getTime();
+            const oldEnd = new Date(editTarget.end_time).getTime();
+            const newStart = startDate.getTime();
+            const newEnd = endDate.getTime();
+
+            // Compare late threshold
+            let oldLateMs: number;
+            if (editTarget.late_threshold_time) {
+                const sessionDate = new Date(editTarget.start_time);
+                const [h, m, s = 0] = editTarget.late_threshold_time.split(':').map(Number);
+                const lt = new Date(sessionDate);
+                lt.setHours(h, m, s, 0);
+                oldLateMs = lt.getTime();
+            } else {
+                const lt = new Date(editTarget.start_time);
+                lt.setMinutes(lt.getMinutes() + (editTarget.late_threshold_minutes || 15));
+                oldLateMs = lt.getTime();
+            }
+            const newLateMs = lateDate.getTime();
+
+            const timeChanged = oldStart !== newStart || oldEnd !== newEnd || oldLateMs !== newLateMs;
+
+            // If time fields changed AND session has potential check-ins → preview first
+            // checked_in = present + late + leave (anyone who actually checked in)
+            const checkedInCount = editTarget.stats
+                ? (editTarget.stats.checked_in ?? ((editTarget.stats.present || 0) + (editTarget.stats.late || 0) + (editTarget.stats.leave || 0)))
+                : 0;
+            if (timeChanged && checkedInCount > 0) {
+                // Call preview API
+                const preview = await attendanceService.previewTimeChange(editTarget.id, {
+                    start_time: data.start_time!,
+                    end_time: data.end_time!,
+                    late_threshold_time: data.late_threshold_time,
+                    late_threshold_minutes: data.late_threshold_minutes,
+                });
+
+                if (preview) {
+                    // Store pending data and show preview modal
+                    pendingUpdateDataRef.current = data;
+                    setTimeChangePreview(preview);
+                    setIsTimeChangePreviewOpen(true);
+                    setIsSubmitting(false);
+                    return; // Don't apply yet — wait for confirmation
+                }
+            }
+
+            // No time changes or no check-ins → direct update (original behavior)
             const result = await attendanceService.updateSession(editTarget.id, data);
             if (result) {
                 addToast({
@@ -476,7 +537,57 @@ export function useAttendanceTab(
         } finally {
             setIsSubmitting(false);
         }
-    }, [editTarget, formData, startDateTime, endDateTime, closeEditModal, fetchSessions]);
+    }, [editTarget, formData, startDateTime, endDateTime, lateThresholdTime, lateThresholdMinutes, closeEditModal, fetchSessions]);
+
+    /**
+     * Confirm and apply the time change after preview.
+     * Called when user clicks confirm in TimeChangePreviewModal.
+     */
+    const confirmApplyTimeChange = useCallback(async () => {
+        if (!editTarget || !pendingUpdateDataRef.current) return;
+
+        setIsApplyingTimeChange(true);
+        try {
+            const result = await attendanceService.applyTimeChange(editTarget.id, pendingUpdateDataRef.current);
+            if (result) {
+                const { impact } = result;
+                const parts: string[] = [];
+                if (impact.invalidated > 0) parts.push(`${impact.invalidated} ยกเลิก`);
+                if (impact.present_to_late > 0) parts.push(`${impact.present_to_late} เปลี่ยนเป็นสาย`);
+                if (impact.late_to_present > 0) parts.push(`${impact.late_to_present} เปลี่ยนเป็นตรงเวลา`);
+                if (impact.recovered > 0) parts.push(`${impact.recovered} กลับมาถูกต้อง`);
+
+                addToast({
+                    title: "บันทึกเรียบร้อย",
+                    description: parts.length > 0
+                        ? `แก้ไขเวลาและปรับปรุงสถานะ: ${parts.join(', ')}`
+                        : "แก้ไขรอบการเช็คชื่อเรียบร้อยแล้ว",
+                    color: "success",
+                });
+
+                setIsTimeChangePreviewOpen(false);
+                setTimeChangePreview(null);
+                pendingUpdateDataRef.current = null;
+                closeEditModal();
+                fetchSessions(false);
+            }
+        } catch (error: unknown) {
+            console.error("Error applying time change:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: error instanceof Error ? error.message : "ไม่สามารถบันทึกการเปลี่ยนแปลงได้",
+                color: "danger",
+            });
+        } finally {
+            setIsApplyingTimeChange(false);
+        }
+    }, [editTarget, closeEditModal, fetchSessions]);
+
+    const closeTimeChangePreview = useCallback(() => {
+        setIsTimeChangePreviewOpen(false);
+        setTimeChangePreview(null);
+        pendingUpdateDataRef.current = null;
+    }, []);
 
     const handleDeleteSession = useCallback(async () => {
         if (!deleteTarget) return;
@@ -673,6 +784,13 @@ export function useAttendanceTab(
         handleActivateSession,
         confirmCloseSession,
         getCurrentLocation,
+
+        // Time Change Preview
+        timeChangePreview,
+        isTimeChangePreviewOpen,
+        isApplyingTimeChange,
+        closeTimeChangePreview,
+        confirmApplyTimeChange,
 
         // Context
         courseId: course.id,

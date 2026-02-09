@@ -211,6 +211,7 @@ export interface OverviewAssignment {
   name: string;
   max_score: number;
   assignment_type: string;
+  is_score_visible?: boolean;
   avgScore: number | null;
   scoredCount: number;
   notScoredCount: number;
