@@ -19,6 +19,7 @@ const bonusScoreRoutes = require('./bonusScore.routes');
 const queueRoutes = require('./queue.routes');
 const queuePublicRoutes = require('./queuePublic.routes');
 const notificationRoutes = require('./notification.routes');
+const courseActivityLogRoutes = require('./courseActivityLog.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -29,6 +30,7 @@ router.use('/students', studentRoutes);
 router.use('/courses', courseRoutes);
 router.use('/courses/:id/teams', teamRoutes);
 router.use('/courses/:courseId/queue', queueRoutes);
+router.use('/courses/:courseId/activity-logs', courseActivityLogRoutes);
 router.use('/queue', queuePublicRoutes);  // Public queue routes (no courseId needed)
 router.use('/notifications', notificationRoutes);
 router.use('/classrooms', classroomRoutes);

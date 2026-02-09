@@ -444,7 +444,16 @@ function OverviewTabViewComponent({
                                                             </div>
                                                         </Tooltip>
                                                         <div>
-                                                            <p className="font-medium text-slate-800">{assignment.name}</p>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <p className="font-medium text-slate-800">{assignment.name}</p>
+                                                                {assignment.is_score_visible === false && (
+                                                                    <Tooltip content="คะแนนงานนี้ถูกซ่อนจากนักศึกษา">
+                                                                        <div className="flex items-center text-amber-500 cursor-help">
+                                                                            <Icon icon="solar:eye-closed-linear" width={16} />
+                                                                        </div>
+                                                                    </Tooltip>
+                                                                )}
+                                                            </div>
                                                             <div className="flex items-center gap-2 mt-0.5">
                                                                 <Chip 
                                                                     size="sm" 

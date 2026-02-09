@@ -2,6 +2,7 @@ const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, Stude
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
 
 /**
  * Check if student attended the linked attendance session(s)
@@ -420,6 +421,8 @@ const submitScore = asyncHandler(async (req, res) => {
         });
     }
 
+    logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_score', category: 'score', targetType: 'score', targetId: scoreRecord.id, targetName: assignment.name, detail: { student_id, score, sub_item_id: sub_item_id || null, created } });
+
     res.json({
         success: true,
         data: scoreRecord,
@@ -481,6 +484,8 @@ const submitBulkScores = asyncHandler(async (req, res) => {
         }
 
         await transaction.commit();
+
+        logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_bulk_scores', category: 'score', targetType: 'assignment', targetId: assignment_id, targetName: assignment.name, detail: { created: results.created, updated: results.updated } });
 
         res.json({
             success: true,
@@ -593,6 +598,8 @@ const submitGroupScore = asyncHandler(async (req, res) => {
 
         await transaction.commit();
 
+        logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_group_score', category: 'score', targetType: 'assignment', targetId: assignment_id, targetName: assignment.name, detail: { group_id, score, members: targetMembers.length, sub_item_id: sub_item_id || null } });
+
         res.json({
             success: true,
             message: `Score submitted for ${targetMembers.length} group members`,
@@ -637,6 +644,12 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
         reason,
         requested_by: req.user.id,
     });
+
+    // Log to course activity (need to find courseId via score -> assignment)
+    const relAssignment = await Assignment.findByPk(existingScore.assignment_id, { attributes: ['id', 'name', 'course_id'] });
+    if (relAssignment) {
+      logCourseActivity({ courseId: relAssignment.course_id, actorUserId: req.user.id, action: 'request_score_edit', category: 'score', targetType: 'score_edit_request', targetId: editRequest.id, targetName: relAssignment.name, detail: { score_id, old_score: existingScore.score, new_score, reason } });
+    }
 
     res.status(201).json({
         success: true,
@@ -743,6 +756,14 @@ const reviewEditRequest = asyncHandler(async (req, res) => {
         }
 
         await transaction.commit();
+
+        // Log to course activity (need courseId via score -> assignment)
+        if (editRequest.score?.assignment_id) {
+          const relAssignment2 = await Assignment.findByPk(editRequest.score.assignment_id, { attributes: ['id', 'name', 'course_id'] });
+          if (relAssignment2) {
+            logCourseActivity({ courseId: relAssignment2.course_id, actorUserId: req.user.id, action: status === 'approved' ? 'approve_score_edit' : 'reject_score_edit', category: 'score', targetType: 'score_edit_request', targetId: id, targetName: relAssignment2.name, detail: { status, review_comment } });
+          }
+        }
 
         res.json({
             success: true,

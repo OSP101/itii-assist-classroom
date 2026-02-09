@@ -29,6 +29,7 @@ const {
 } = require('../models');
 const logger = require('../utils/logger');
 const fcmService = require('../utils/fcmService');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
 
 /**
  * Find which zone a desk belongs to based on its (x, y) position
@@ -347,6 +348,8 @@ const createQueueSession = async (req, res) => {
             ],
         });
 
+        logCourseActivity({ courseId: courseId, actorUserId: req.user.id, action: 'create_queue_session', category: 'queue', targetType: 'queue_session', targetId: session.id, targetName: title });
+
         res.status(201).json({
             success: true,
             data: completeSession,
@@ -384,6 +387,8 @@ const updateQueueSession = async (req, res) => {
         }
 
         await session.update(updates);
+
+        logCourseActivity({ courseId: session.course_id, actorUserId: req.user.id, action: 'update_queue_session', category: 'queue', targetType: 'queue_session', targetId: sessionId, targetName: session.title, detail: { fields: Object.keys(updates) } });
 
         res.json({
             success: true,
@@ -442,6 +447,8 @@ const updateQueueSessionStatus = async (req, res) => {
 
         await session.update(updateData);
 
+        logCourseActivity({ courseId: session.course_id, actorUserId: req.user.id, action: `queue_session_${status}`, category: 'queue', targetType: 'queue_session', targetId: sessionId, targetName: session.title, detail: { status } });
+
         // Emit socket event for real-time updates
         const io = req.app.get('io');
         if (io) {
@@ -487,7 +494,11 @@ const deleteQueueSession = async (req, res) => {
             });
         }
 
+        const sessionTitle = session.title;
+        const sessionCourseId = session.course_id;
         await session.destroy();
+
+        logCourseActivity({ courseId: sessionCourseId, actorUserId: req.user.id, action: 'delete_queue_session', category: 'queue', targetType: 'queue_session', targetId: sessionId, targetName: sessionTitle });
 
         res.json({
             success: true,

@@ -34,6 +34,9 @@ const QueueDeskStatus = require('./QueueDeskStatus');
 const FcmToken = require('./FcmToken');
 const NotificationLog = require('./NotificationLog');
 
+// Activity Log
+const CourseActivityLog = require('./CourseActivityLog');
+
 // ============================================
 // Define Associations
 // ============================================;
@@ -196,6 +199,17 @@ Classroom.hasMany(Zone, {
 Zone.belongsTo(Classroom, {
   foreignKey: 'classroom_id',
   as: 'classroom',
+});
+
+// CourseActivityLog -> User, Course
+CourseActivityLog.belongsTo(User, {
+  foreignKey: 'actor_user_id',
+  as: 'actor',
+});
+
+CourseActivityLog.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
 });
 
 // Feedback -> User
@@ -747,4 +761,6 @@ module.exports = {
   // FCM Notification Models
   FcmToken,
   NotificationLog,
+  // Activity Log
+  CourseActivityLog,
 };

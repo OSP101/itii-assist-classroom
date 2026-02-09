@@ -12,6 +12,7 @@ import { Autocomplete, AutocompleteItem } from "@heroui/autocomplete";
 import { Select, SelectItem } from "@heroui/select";
 import { Spinner } from "@heroui/spinner";
 import { Divider } from "@heroui/divider";
+import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import scoreService, { type Student, type Group, type StudentScore, type ScoresData, type SubItemScoreData } from "@/services/score.service";
@@ -1035,7 +1036,16 @@ export default function ScoreModal({
                             <Icon icon={typeInfo.icon} className="text-2xl text-white" />
                         </div>
                         <div>
-                            <h3 className="text-xl font-bold text-slate-800">{assignment.name}</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-xl font-bold text-slate-800">{assignment.name}</h3>
+                                {assignment.is_score_visible === false && (
+                                    <Tooltip content="คะแนนงานนี้ถูกซ่อนจากนักศึกษา">
+                                        <Chip size="sm" variant="flat" className="bg-amber-50 text-amber-600 gap-1" startContent={<Icon icon="solar:eye-closed-linear" width={14} />}>
+                                            ซ่อนคะแนน
+                                        </Chip>
+                                    </Tooltip>
+                                )}
+                            </div>
                             <p className="text-sm text-slate-500 font-normal mt-1">
                                 คะแนนเต็ม {assignment.max_score} คะแนน
                                 {hasSubItems && ` • ${assignment.subItems?.length} ข้อย่อย`}

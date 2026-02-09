@@ -9,6 +9,7 @@ import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { InputOtp } from "@heroui/input-otp";
 import { Avatar } from "@heroui/avatar";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import { io, Socket } from "socket.io-client";
@@ -159,6 +160,19 @@ function BookQueueContent() {
     // Step states
     const [step, setStep] = useState<"pin" | "form" | "status">("pin");
     const [isInitializing, setIsInitializing] = useState(true);
+
+    // Desk notice modal
+    const [isDeskNoticeOpen, setIsDeskNoticeOpen] = useState(true);
+    const [deskNoticeCountdown, setDeskNoticeCountdown] = useState(3);
+
+    // Countdown timer for desk notice modal
+    useEffect(() => {
+        if (!isDeskNoticeOpen || deskNoticeCountdown <= 0) return;
+        const timer = setTimeout(() => {
+            setDeskNoticeCountdown((prev) => prev - 1);
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [isDeskNoticeOpen, deskNoticeCountdown]);
 
     // PIN verification
     const [pinCode, setPinCode] = useState(initialPin);
@@ -650,10 +664,51 @@ function BookQueueContent() {
         return statusMap[status] || { label: status, color: "default", icon: "solar:question-circle-bold" };
     };
 
+    // Desk notice modal element (rendered in all steps)
+    const deskNoticeModal = (
+        <Modal
+            isOpen={isDeskNoticeOpen}
+            hideCloseButton
+            isDismissable={false}
+            isKeyboardDismissDisabled
+            size="sm"
+            placement="center"
+            classNames={{ backdrop: "bg-black/60" }}
+        >
+            <ModalContent>
+                <ModalHeader className="flex flex-col items-center gap-2 pt-6 pb-2">
+                    <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center">
+                        <Icon icon="solar:monitor-bold-duotone" className="text-3xl text-amber-600" />
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800 text-center">แจ้งเตือนสำคัญ</h3>
+                </ModalHeader>
+                <ModalBody className="px-6 pb-2 pt-0">
+                    <p className="text-center text-slate-600 text-sm leading-relaxed">
+                        กรุณาดูเลขโต๊ะจากแผนผังที่แสดงบน
+                        <span className="font-semibold text-amber-700"> หน้าจอโปรเจกเตอร์ </span>
+                        เท่านั้น
+                    </p>
+                </ModalBody>
+                <ModalFooter className="justify-center pb-6">
+                    <Button
+                        color="primary"
+                        size="lg"
+                        className="w-full max-w-[200px] bg-gradient-to-r from-blue-400 to-indigo-500"
+                        isDisabled={deskNoticeCountdown > 0}
+                        onPress={() => setIsDeskNoticeOpen(false)}
+                    >
+                        {deskNoticeCountdown > 0 ? `ตกลง (${deskNoticeCountdown})` : "ตกลง"}
+                    </Button>
+                </ModalFooter>
+            </ModalContent>
+        </Modal>
+    );
+
     // Show loading while initializing
     if (isInitializing) {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
+                {deskNoticeModal}
                 <Card className="w-full max-w-md shadow-2xl">
                     <CardBody className="p-8">
                         <div className="text-center">
@@ -670,6 +725,7 @@ function BookQueueContent() {
     if (step === "pin") {
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
+                {deskNoticeModal}
                 <Card className="w-full max-w-md shadow-2xl">
                     <CardBody className="p-6">
                         {/* Header */}
@@ -734,6 +790,7 @@ function BookQueueContent() {
 
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
+                {deskNoticeModal}
                 <Card className="w-full max-w-md shadow-2xl">
                     <CardBody className="p-6">
                         {/* Session Info Header */}
@@ -963,6 +1020,7 @@ function BookQueueContent() {
 
         return (
             <div className="min-h-screen bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
+                {deskNoticeModal}
                 <Card className="w-full max-w-md shadow-2xl">
                     <CardBody className="p-6">
                         {/* Header */}

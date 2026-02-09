@@ -47,7 +47,7 @@ import {
     formatDate,
     formatTime,
 } from "../config";
-import { type AttendanceSession } from "@/services/attendance.service";
+import { type AttendanceSession, type TimeChangePreview, type TimeChangeRecord } from "@/services/attendance.service";
 
 // Lazy load LocationPicker
 const LocationPicker = lazy(() => import("@/components/map/LocationPicker"));
@@ -1706,6 +1706,337 @@ export const CloseSessionModal = memo(function CloseSessionModal({
                     <Button color="danger" onPress={onConfirm} isLoading={isSubmitting}>
                         <Icon icon="solar:stop-bold" className="text-lg" />
                         ปิดรอบเช็คชื่อ
+                    </Button>
+                </ModalFooter>
+            </ModalContent>
+        </Modal>
+    );
+});
+
+// ============================================================================
+// Time Change Preview Modal
+// Shows impact preview before applying attendance time changes
+// ============================================================================
+
+/**
+ * Format ISO date string to localized Thai short datetime
+ */
+const formatPreviewTime = (isoStr: string) => {
+    try {
+        return new Date(isoStr).toLocaleString('th-TH', {
+            day: '2-digit', month: 'short', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+        });
+    } catch {
+        return isoStr;
+    }
+};
+
+const CHANGE_TYPE_CONFIG: Record<string, { label: string; color: string; icon: string; bgClass: string }> = {
+    will_be_invalidated: { label: 'จะถูกยกเลิก', color: 'text-red-600', icon: 'solar:close-circle-bold', bgClass: 'bg-red-50' },
+    present_to_late: { label: 'มาตรงเวลา → สาย', color: 'text-amber-600', icon: 'solar:clock-circle-bold', bgClass: 'bg-amber-50' },
+    late_to_present: { label: 'สาย → มาตรงเวลา', color: 'text-emerald-600', icon: 'solar:check-circle-bold', bgClass: 'bg-emerald-50' },
+    recovered: { label: 'กลับมาถูกต้อง', color: 'text-blue-600', icon: 'solar:refresh-circle-bold', bgClass: 'bg-blue-50' },
+    already_invalid: { label: 'ยังคงอยู่นอกช่วงเวลา', color: 'text-slate-500', icon: 'solar:minus-circle-bold', bgClass: 'bg-slate-50' },
+};
+
+interface TimeChangePreviewModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    preview: TimeChangePreview | null;
+    isApplying: boolean;
+    onConfirm: () => Promise<void>;
+}
+
+export const TimeChangePreviewModal = memo(function TimeChangePreviewModal({
+    isOpen,
+    onClose,
+    preview,
+    isApplying,
+    onConfirm,
+}: TimeChangePreviewModalProps) {
+    if (!preview) return null;
+
+    const { summary, changes, timeChanges, hasDestructiveChanges, hasAnyImpact } = preview;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="2xl" scrollBehavior="inside" isDismissable={false}>
+            <ModalContent>
+                <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <div className="flex items-center gap-4">
+                        <div className={`p-3 rounded-xl shadow-lg ${hasDestructiveChanges ? 'bg-gradient-to-br from-red-500 to-rose-600' : hasAnyImpact ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 'bg-gradient-to-br from-blue-400 to-indigo-500'}`}>
+                            <Icon icon={hasDestructiveChanges ? 'solar:danger-triangle-bold' : hasAnyImpact ? 'solar:info-circle-bold' : 'solar:check-circle-bold'} className="text-2xl text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {hasDestructiveChanges ? 'คำเตือน: การเปลี่ยนแปลงนี้มีผลกระทบ' : hasAnyImpact ? 'ตรวจสอบผลกระทบก่อนบันทึก' : 'ไม่มีผลกระทบต่อข้อมูลที่มีอยู่'}
+                            </h3>
+                            <p className="text-sm text-slate-500 font-normal mt-1">
+                                {preview.session_title} — {summary.total_checked_in} รายการเช็คชื่อ
+                            </p>
+                        </div>
+                    </div>
+                </ModalHeader>
+
+                <ModalBody className="px-6 py-4 space-y-4">
+                    {/* Time Rules Diff */}
+                    <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <Icon icon="solar:clock-circle-bold" className="text-blue-500" />
+                            การเปลี่ยนแปลงเวลา
+                        </h4>
+                        <div className="grid gap-2">
+                            {timeChanges.start_time.changed && (
+                                <div className="flex items-center gap-2 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+                                    <Icon icon="solar:play-bold" className="text-blue-500" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-slate-500">เวลาเริ่มต้น</p>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-slate-500 line-through">{formatPreviewTime(timeChanges.start_time.old)}</span>
+                                            <Icon icon="solar:arrow-right-linear" className="text-slate-400" width={14} />
+                                            <span className="font-medium text-blue-700">{formatPreviewTime(timeChanges.start_time.new)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {timeChanges.late_threshold.changed && (
+                                <div className="flex items-center gap-2 p-2.5 bg-amber-50 rounded-lg border border-amber-100">
+                                    <Icon icon="solar:clock-circle-bold" className="text-amber-500" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-slate-500">เวลาตัดสาย</p>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-slate-500 line-through">{formatPreviewTime(timeChanges.late_threshold.old)}</span>
+                                            <Icon icon="solar:arrow-right-linear" className="text-slate-400" width={14} />
+                                            <span className="font-medium text-amber-700">{formatPreviewTime(timeChanges.late_threshold.new)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {timeChanges.end_time.changed && (
+                                <div className="flex items-center gap-2 p-2.5 bg-rose-50 rounded-lg border border-rose-100">
+                                    <Icon icon="solar:stop-bold" className="text-rose-500" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs text-slate-500">เวลาสิ้นสุด</p>
+                                        <div className="flex items-center gap-2 text-sm">
+                                            <span className="text-slate-500 line-through">{formatPreviewTime(timeChanges.end_time.old)}</span>
+                                            <Icon icon="solar:arrow-right-linear" className="text-slate-400" width={14} />
+                                            <span className="font-medium text-rose-700">{formatPreviewTime(timeChanges.end_time.new)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            {!timeChanges.start_time.changed && !timeChanges.late_threshold.changed && !timeChanges.end_time.changed && (
+                                <div className="flex items-center gap-2 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+                                    <Icon icon="solar:check-circle-bold" className="text-emerald-500" />
+                                    <span className="text-sm text-slate-600">ไม่มีการเปลี่ยนแปลงเวลา</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Impact Summary Cards */}
+                    {hasAnyImpact && (
+                        <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Icon icon="solar:chart-2-bold" className="text-indigo-500" />
+                                ผลกระทบต่อข้อมูลเช็คชื่อ
+                            </h4>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {summary.will_be_invalidated > 0 && (
+                                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-center">
+                                        <p className="text-2xl font-bold text-red-600">{summary.will_be_invalidated}</p>
+                                        <p className="text-xs text-red-500 mt-0.5">จะถูกยกเลิก</p>
+                                    </div>
+                                )}
+                                {summary.present_to_late > 0 && (
+                                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                                        <p className="text-2xl font-bold text-amber-600">{summary.present_to_late}</p>
+                                        <p className="text-xs text-amber-500 mt-0.5">ตรงเวลา → สาย</p>
+                                    </div>
+                                )}
+                                {summary.late_to_present > 0 && (
+                                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
+                                        <p className="text-2xl font-bold text-emerald-600">{summary.late_to_present}</p>
+                                        <p className="text-xs text-emerald-500 mt-0.5">สาย → ตรงเวลา</p>
+                                    </div>
+                                )}
+                                {summary.recovered > 0 && (
+                                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-center">
+                                        <p className="text-2xl font-bold text-blue-600">{summary.recovered}</p>
+                                        <p className="text-xs text-blue-500 mt-0.5">กลับมาถูกต้อง</p>
+                                    </div>
+                                )}
+                                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-center">
+                                    <p className="text-2xl font-bold text-slate-600">{summary.unchanged}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5">ไม่เปลี่ยนแปลง</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Scenario-specific Warnings */}
+                    {hasDestructiveChanges && (
+                        <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                            <div className="flex items-start gap-3">
+                                <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600 mt-0.5 shrink-0" />
+                                <div className="space-y-1.5">
+                                    <p className="font-semibold text-red-800">
+                                        การเช็คชื่อ {summary.will_be_invalidated} รายการจะถูกเปลี่ยนเป็น &quot;ขาด&quot;
+                                    </p>
+                                    <p className="text-sm text-red-600">
+                                        เนื่องจากเวลาเช็คอินอยู่นอกช่วงเวลาใหม่ ข้อมูลเวลาเช็คอินจะยังคงอยู่ แต่สถานะจะเปลี่ยน
+                                    </p>
+                                    <ul className="text-sm text-red-600 list-disc ml-4 space-y-0.5">
+                                        {timeChanges.start_time.changed && new Date(timeChanges.start_time.new) > new Date(timeChanges.start_time.old) && (
+                                            <li>เลื่อนเวลาเริ่มไปข้างหน้า — นักศึกษาที่เช็คชื่อก่อนเวลาเริ่มใหม่จะถูกนับเป็น &quot;ขาด&quot;</li>
+                                        )}
+                                        {timeChanges.end_time.changed && new Date(timeChanges.end_time.new) < new Date(timeChanges.end_time.old) && (
+                                            <li>เลื่อนเวลาสิ้นสุดให้เร็วขึ้น — นักศึกษาที่เช็คชื่อหลังเวลาสิ้นสุดใหม่จะถูกนับเป็น &quot;ขาด&quot;</li>
+                                        )}
+                                    </ul>
+                                    <p className="text-xs text-red-500 mt-1">
+                                        การดำเนินการนี้บันทึกลง Log เพื่อตรวจสอบย้อนหลังได้
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {summary.present_to_late > 0 && (
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
+                            <div className="flex items-start gap-3">
+                                <Icon icon="solar:clock-circle-bold" className="text-xl text-amber-600 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-medium text-amber-800">
+                                        {summary.present_to_late} คนจะเปลี่ยนจาก &quot;มาตรงเวลา&quot; เป็น &quot;สาย&quot;
+                                    </p>
+                                    <p className="text-sm text-amber-600 mt-0.5">
+                                        เนื่องจากเวลาตัดสายถูกขยับให้เร็วขึ้น นักศึกษาที่เคยมาก่อนเส้นตัดเดิมจะกลายเป็นสาย
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {summary.late_to_present > 0 && (
+                        <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                            <div className="flex items-start gap-3">
+                                <Icon icon="solar:check-circle-bold" className="text-xl text-emerald-600 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-medium text-emerald-800">
+                                        {summary.late_to_present} คนจะเปลี่ยนจาก &quot;สาย&quot; เป็น &quot;มาตรงเวลา&quot;
+                                    </p>
+                                    <p className="text-sm text-emerald-600 mt-0.5">
+                                        เนื่องจากเวลาตัดสายถูกขยับให้ช้าลง นักศึกษาที่เคยสายจะกลับมาเป็นมาตรงเวลา
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {summary.recovered > 0 && (
+                        <div className="p-3 bg-blue-50 rounded-xl border border-blue-200">
+                            <div className="flex items-start gap-3">
+                                <Icon icon="solar:refresh-circle-bold" className="text-xl text-blue-600 mt-0.5 shrink-0" />
+                                <div>
+                                    <p className="font-medium text-blue-800">
+                                        {summary.recovered} คนจะกลับมาถูกต้อง
+                                    </p>
+                                    <p className="text-sm text-blue-600 mt-0.5">
+                                        นักศึกษาที่เคยอยู่นอกช่วงเวลาเดิมจะกลับมาอยู่ในช่วงเวลาใหม่ และได้รับสถานะตามเวลาเช็คอิน
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Leave status note */}
+                    {hasAnyImpact && (
+                        <div className="p-2.5 bg-purple-50 rounded-lg border border-purple-100">
+                            <div className="flex items-center gap-2">
+                                <Icon icon="solar:shield-check-bold" className="text-purple-500 shrink-0" />
+                                <p className="text-xs text-purple-600">
+                                    นักศึกษาที่มีสถานะ &quot;ลา&quot; (กำหนดโดยอาจารย์) จะไม่ถูกเปลี่ยนแปลง — ข้อมูลจะถูกข้ามโดยอัตโนมัติ
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Affected Records Table */}
+                    {changes.length > 0 && (
+                        <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-slate-500" />
+                                รายละเอียดนักศึกษาที่ได้รับผลกระทบ ({changes.length} คน)
+                            </h4>
+                            <div className="overflow-x-auto">
+                                <Table removeWrapper aria-label="ผลกระทบ" classNames={{ th: "bg-slate-50 text-xs", td: "text-sm" }}>
+                                    <TableHeader>
+                                        <TableColumn>นักศึกษา</TableColumn>
+                                        <TableColumn align="center">เวลาเช็คอิน</TableColumn>
+                                        <TableColumn align="center">การเปลี่ยนแปลง</TableColumn>
+                                    </TableHeader>
+                                    <TableBody items={changes.slice(0, 20)}>
+                                        {(record: TimeChangeRecord) => {
+                                            const cfg = CHANGE_TYPE_CONFIG[record.change_type] || CHANGE_TYPE_CONFIG.already_invalid;
+                                            return (
+                                                <TableRow key={record.record_id}>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium text-slate-800">{record.student_name || '-'}</p>
+                                                            <p className="text-xs text-slate-400">{record.student_id || ''}</p>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-slate-600">
+                                                            {new Date(record.check_in_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip size="sm" variant="flat" className={`${cfg.bgClass} ${cfg.color} gap-1`} startContent={<Icon icon={cfg.icon} width={14} />}>
+                                                            {cfg.label}
+                                                        </Chip>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        }}
+                                    </TableBody>
+                                </Table>
+                                {changes.length > 20 && (
+                                    <p className="text-xs text-slate-400 text-center mt-2">
+                                        แสดง 20 จาก {changes.length} รายการ
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* No Impact */}
+                    {!hasAnyImpact && (
+                        <div className="text-center py-6">
+                            <div className="w-16 h-16 mx-auto mb-3 bg-emerald-100 rounded-full flex items-center justify-center">
+                                <Icon icon="solar:check-circle-bold" className="text-3xl text-emerald-500" />
+                            </div>
+                            <p className="font-medium text-slate-700">ไม่มีผลกระทบต่อข้อมูลเช็คชื่อ</p>
+                            <p className="text-sm text-slate-500 mt-1">
+                                การเปลี่ยนแปลงเวลาไม่ส่งผลกระทบต่อสถานะเช็คชื่อที่มีอยู่
+                            </p>
+                        </div>
+                    )}
+                </ModalBody>
+
+                <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                    <Button variant="light" onPress={onClose} isDisabled={isApplying}>
+                        ยกเลิก
+                    </Button>
+                    <Button
+                        color={hasDestructiveChanges ? 'danger' : 'primary'}
+                        onPress={onConfirm}
+                        isLoading={isApplying}
+                        className={hasDestructiveChanges ? 'bg-red-500' : 'bg-gradient-to-r from-amber-400 to-orange-500'}
+                        startContent={!isApplying ? <Icon icon={hasDestructiveChanges ? 'solar:shield-warning-bold' : 'solar:check-circle-bold'} /> : undefined}
+                    >
+                        {hasDestructiveChanges ? 'ยืนยันการเปลี่ยนแปลง' : 'บันทึกการแก้ไข'}
                     </Button>
                 </ModalFooter>
             </ModalContent>

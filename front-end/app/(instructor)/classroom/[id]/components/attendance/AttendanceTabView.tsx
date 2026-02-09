@@ -25,6 +25,7 @@ import {
     EditSessionModal,
     DeleteConfirmModal,
     CloseSessionModal,
+    TimeChangePreviewModal,
 } from "./components";
 import type { UseAttendanceTabReturn } from "./useAttendanceTab";
 
@@ -199,6 +200,13 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
         confirmCloseSession,
         getCurrentLocation,
 
+        // Time Change Preview
+        timeChangePreview,
+        isTimeChangePreviewOpen,
+        isApplyingTimeChange,
+        closeTimeChangePreview,
+        confirmApplyTimeChange,
+
         // Context
         courseId,
     } = hook;
@@ -286,6 +294,14 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
                 targetTitle={targets.closeTarget?.title}
                 isSubmitting={isSubmitting}
                 onConfirm={confirmCloseSession}
+            />
+
+            <TimeChangePreviewModal
+                isOpen={isTimeChangePreviewOpen}
+                onClose={closeTimeChangePreview}
+                preview={timeChangePreview}
+                isApplying={isApplyingTimeChange}
+                onConfirm={confirmApplyTimeChange}
             />
         </div>
     );

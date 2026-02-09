@@ -23,7 +23,7 @@ router.get('/:id', authorize('admin', 'instructor', 'ta'), courseController.getC
 router.get('/:id/overview', authorize('admin', 'instructor', 'ta'), courseController.getCourseOverview);
 router.post('/', authorize('admin', 'instructor'), courseController.createCourse);
 router.put('/:id', authorize('admin', 'instructor'), courseController.updateCourse);
-router.delete('/:id', authorize('admin'), courseController.deleteCourse);
+router.delete('/:id', authorize('admin', 'instructor'), courseController.deleteCourse);
 router.patch('/:id/toggle-status', authorize('admin', 'instructor'), courseController.toggleCourseStatus);
 
 // Section management (admin or course owner/TA)

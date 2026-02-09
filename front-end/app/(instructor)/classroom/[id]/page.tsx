@@ -127,6 +127,24 @@ const SettingsTab = dynamic(() => import("./components/SettingsTab"), {
     ssr: false,
 });
 
+const ActivityLogTab = dynamic(() => import("./components/ActivityLogTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
+const TAStatsTab = dynamic(() => import("./components/TAStatsTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
 export default function ClassroomDetailPage() {
     const params = useParams();
     const courseId = params.id as string;
@@ -877,7 +895,22 @@ export default function ClassroomDetailPage() {
             badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'เร็ว ๆ นี้', badgeColor: "warning" as const },
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'BETA', badgeColor: "warning" as const },
+        
+        ...(userRole === 'instructor' ? [{
+            key: "activity-log",
+            label: "บันทึกกิจกรรม",
+            icon: "solar:document-text-bold",
+            badge: 'ใหม่',
+            badgeColor: "success" as const,
+        }] : []),
+        ...(userRole === 'instructor' ? [{
+            key: "ta-stats",
+            label: "สถิติ TA",
+            icon: "solar:graph-new-up-bold",
+            badge: 'ใหม่',
+            badgeColor: "success" as const,
+        }] : []),
         ...(userRole === 'instructor' ? [{
             key: "settings",
             label: "ตั้งค่ารายวิชา",
@@ -1162,6 +1195,14 @@ export default function ClassroomDetailPage() {
 
                             {activeTab === "queue" && (
                                 <QueueTab course={course} isLoading={isOverviewLoading} />
+                            )}
+
+                            {activeTab === "activity-log" && userRole === "instructor" && (
+                                <ActivityLogTab courseId={courseId} />
+                            )}
+
+                            {activeTab === "ta-stats" && userRole === "instructor" && (
+                                <TAStatsTab courseId={courseId} />
                             )}
                             </>
                         )}
