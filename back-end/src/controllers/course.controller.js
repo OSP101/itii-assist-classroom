@@ -800,6 +800,23 @@ const addTA = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'ผู้ช่วยสอนนี้อยู่ในรายวิชาแล้ว');
   }
 
+  // Cross-role conflict: check if this TA's email matches a student enrolled in this course
+  if (ta.email) {
+    const studentWithSameEmail = await Student.findOne({ where: { email: ta.email } });
+    if (studentWithSameEmail) {
+      const sectionsInCourse = await CourseSection.findAll({ where: { course_id: id }, attributes: ['id'] });
+      const sectionIds = sectionsInCourse.map(s => s.id);
+      if (sectionIds.length > 0) {
+        const enrolledAsStudent = await CourseSectionStudent.findOne({
+          where: { course_section_id: { [Op.in]: sectionIds }, student_id: studentWithSameEmail.id },
+        });
+        if (enrolledAsStudent) {
+          throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${ta.full_name} (${ta.email}) เป็นนักศึกษาในรายวิชานี้อยู่แล้ว`);
+        }
+      }
+    }
+  }
+
   await CourseTA.create({ course_id: id, user_id });
 
   logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_ta', category: 'member', targetType: 'ta', targetId: user_id, targetName: ta.full_name });
@@ -857,6 +874,27 @@ const bulkAddTAs = asyncHandler(async (req, res) => {
 
   if (newTAs.length === 0) {
     throw new ApiError(400, 'ผู้ช่วยสอนที่เลือกทั้งหมดอยู่ในรายวิชาแล้ว');
+  }
+
+  // Cross-role conflict: check if any TA's email matches a student enrolled in this course
+  const taEmails = newTAs.map(t => t.email).filter(Boolean);
+  if (taEmails.length > 0) {
+    const studentsWithSameEmail = await Student.findAll({ where: { email: { [Op.in]: taEmails } } });
+    if (studentsWithSameEmail.length > 0) {
+      const sectionsInCourse = await CourseSection.findAll({ where: { course_id: id }, attributes: ['id'] });
+      const sectionIds = sectionsInCourse.map(s => s.id);
+      if (sectionIds.length > 0) {
+        const studentIds = studentsWithSameEmail.map(s => s.id);
+        const enrolledConflicts = await CourseSectionStudent.findAll({
+          where: { course_section_id: { [Op.in]: sectionIds }, student_id: { [Op.in]: studentIds } },
+          include: [{ model: Student, as: 'student', attributes: ['full_name', 'email'] }],
+        });
+        if (enrolledConflicts.length > 0) {
+          const names = enrolledConflicts.map(e => e.student?.full_name || 'ไม่ทราบชื่อ').join(', ');
+          throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${names} เป็นนักศึกษาในรายวิชานี้อยู่แล้ว`);
+        }
+      }
+    }
   }
 
   // Bulk create
@@ -1217,6 +1255,17 @@ const addStudentToSection = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'นักศึกษานี้อยู่ในรายวิชานี้แล้ว');
   }
 
+  // Cross-role conflict: check if this student's email matches a TA in this course
+  if (student.email) {
+    const taUser = await User.findOne({ where: { email: student.email, role: 'ta' } });
+    if (taUser) {
+      const isTA = await CourseTA.findOne({ where: { course_id: id, user_id: taUser.id } });
+      if (isTA) {
+        throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${student.full_name} (${student.email}) เป็นผู้ช่วยสอน (TA) ในรายวิชานี้อยู่แล้ว`);
+      }
+    }
+  }
+
   await CourseSectionStudent.create({
     course_section_id: sectionId,
     student_id,
@@ -1285,6 +1334,23 @@ const bulkAddStudentsToSection = asyncHandler(async (req, res) => {
   const students = await Student.findAll({
     where: { id: { [Op.in]: newStudentIds } },
   });
+
+  // Cross-role conflict: check if any student's email matches a TA in this course
+  const studentEmails = students.map(s => s.email).filter(Boolean);
+  if (studentEmails.length > 0) {
+    const taUsers = await User.findAll({ where: { email: { [Op.in]: studentEmails }, role: 'ta' } });
+    if (taUsers.length > 0) {
+      const taUserIds = taUsers.map(u => u.id);
+      const taConflicts = await CourseTA.findAll({ where: { course_id: id, user_id: { [Op.in]: taUserIds } } });
+      if (taConflicts.length > 0) {
+        const conflictEmails = new Set(taConflicts.map(tc => taUsers.find(u => u.id === tc.user_id)?.email));
+        const conflictStudents = students.filter(s => s.email && conflictEmails.has(s.email));
+        const names = conflictStudents.map(s => s.full_name).join(', ');
+        throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${names} เป็นผู้ช่วยสอน (TA) ในรายวิชานี้อยู่แล้ว`);
+      }
+    }
+  }
+
   const validStudentIds = students.map(s => s.id);
 
   // Bulk create enrollments

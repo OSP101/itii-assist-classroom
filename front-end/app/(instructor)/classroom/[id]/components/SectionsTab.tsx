@@ -15,6 +15,7 @@ import { useSectionsTab, SectionsTabView } from "./sections";
 
 interface SectionsTabProps {
     courseId: string;
+    isCourseActive?: boolean;
 }
 
 /**
@@ -31,7 +32,7 @@ interface SectionsTabProps {
  * - Reduced re-renders through React.memo in SectionsTabView
  * - Self-contained component - only needs courseId prop
  */
-export default function SectionsTab({ courseId }: SectionsTabProps) {
+export default function SectionsTab({ courseId, isCourseActive = true }: SectionsTabProps) {
     const hook = useSectionsTab(courseId);
     
     const {
@@ -157,6 +158,7 @@ export default function SectionsTab({ courseId }: SectionsTabProps) {
                 expandedSections={expandedSections}
                 isTeamsLoading={isTeamsLoading}
                 sectionStudents={sectionStudents}
+                isCourseActive={isCourseActive}
                 
                 // UI Handlers
                 onSubTabChange={onSubTabChange}

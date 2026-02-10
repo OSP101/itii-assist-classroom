@@ -4,6 +4,7 @@ import { useScoreSummaryTab, ScoreSummaryTabView } from "./score-summary";
 
 interface ScoreSummaryTabProps {
     courseId: string;
+    isCourseActive?: boolean;
 }
 
 /**
@@ -18,7 +19,7 @@ interface ScoreSummaryTabProps {
  * - Easier testing (can test hook and view separately)
  * - Reduced re-renders through React.memo in ScoreSummaryTabView
  */
-export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
+export default function ScoreSummaryTab({ courseId, isCourseActive = true }: ScoreSummaryTabProps) {
     const {
         // State
         selectedTab,
@@ -75,6 +76,7 @@ export default function ScoreSummaryTab({ courseId }: ScoreSummaryTabProps) {
             onSetHoverColKey={setHoverColKey}
             onScoreClick={handleScoreClick}
             onCloseScoreModal={closeScoreModal}
+            isCourseActive={isCourseActive}
         />
     );
 }

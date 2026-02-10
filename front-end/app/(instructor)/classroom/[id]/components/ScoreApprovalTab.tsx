@@ -10,15 +10,17 @@ import { Textarea } from "@heroui/input";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Divider } from "@heroui/divider";
 import { Accordion, AccordionItem } from "@heroui/accordion";
-import { Checkbox } from "@heroui/checkbox";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import scoreEditRequestService, { type ScoreEditRequest } from "@/services/scoreEditRequest.service";
 import { API_BASE_URL } from "@/config/api";
+import Image from "next/image";
 
 interface ScoreApprovalTabProps {
     courseId: string;
+    userRole?: string;
     onPendingCountChange?: (count: number) => void;
+    isCourseActive?: boolean;
 }
 
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
@@ -50,18 +52,22 @@ const formatDate = (dateStr: string): string => {
     });
 };
 
-// Get image URL helper
+// Get image URL helper — point directly to backend server
+// <img> tags load cross-origin images without CORS restrictions
 const getImageUrl = (imagePath: string): string => {
-    // Remove /api from base URL and construct image URL
-    const baseUrl = API_BASE_URL.replace('/api', '');
-    return `${baseUrl}/${imagePath}`;
+    // API_BASE_URL = "http://host:3001/api" → strip trailing "/api" to get server root
+    const backendRoot = API_BASE_URL.replace(/\/api\/?$/, '');
+    // imagePath format: "uploads/score-edit-requests/filename.jpg"
+    return `${backendRoot}/${imagePath}`;
 };
 
-export default function ScoreApprovalTab({ courseId, onPendingCountChange }: ScoreApprovalTabProps) {
+export default function ScoreApprovalTab({ courseId, userRole, onPendingCountChange, isCourseActive = true }: ScoreApprovalTabProps) {
     const [filterStatus, setFilterStatus] = useState<FilterStatus>("pending");
     const [requests, setRequests] = useState<ScoreEditRequest[]>([]);
     const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
     const [isLoading, setIsLoading] = useState(true);
+
+    const isReadOnly = userRole === 'ta' || !isCourseActive;
 
     // Action modal states
     const [actionModal, setActionModal] = useState<{
@@ -312,9 +318,22 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-800">อนุมัติการแก้ไขคะแนน</h2>
-                    <p className="text-sm text-slate-500">ตรวจสอบและอนุมัติคำร้องขอแก้ไขคะแนนจาก TA</p>
+                    <h2 className="text-lg font-semibold text-slate-800">
+                        {isReadOnly ? "สถานะคำร้องแก้ไขคะแนน" : "อนุมัติการแก้ไขคะแนน"}
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                        {isReadOnly
+                            ? "ติดตามสถานะคำร้องขอแก้ไขคะแนนที่คุณส่ง"
+                            : "ตรวจสอบและอนุมัติคำร้องขอแก้ไขคะแนนจาก TA"
+                        }
+                    </p>
                 </div>
+                {/* {isReadOnly && (
+                    <Chip size="sm" color="secondary" variant="flat" className="text-xs">
+                        <Icon icon="solar:eye-bold" className="mr-1" />
+                        ดูได้อย่างเดียว
+                    </Chip>
+                )} */}
             </div>
 
             {/* Filter Tabs */}
@@ -547,6 +566,11 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                                             src={getImageUrl(imagePath)}
                                                             alt={`รูปภาพ ${idx + 1}`}
                                                             className="w-20 h-20 object-cover rounded-lg border border-blue-200 hover:border-blue-400 transition-colors"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.style.display = 'none';
+                                                                target.parentElement!.innerHTML = '<div class="w-20 h-20 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center text-red-400 text-xs text-center p-1">ไม่พบรูป</div>';
+                                                            }}
                                                         />
                                                         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center">
                                                             <Icon icon="solar:eye-bold" className="text-white opacity-0 group-hover:opacity-100 text-xl" />
@@ -595,8 +619,8 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                             )}
                                         </div>
 
-                                        {/* Actions (only for pending) */}
-                                        {group.status === "pending" && (
+                                        {/* Actions (only for pending, instructor only) */}
+                                        {group.status === "pending" && !isReadOnly && (
                                             <div className="flex gap-2">
                                                 <Button
                                                     color="success"
@@ -791,8 +815,7 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                                             <span className="text-emerald-600 font-semibold">{req.new_score}</span>
                                                         </div>
                                                         {actionModal.selectedIds.includes(req.id) && (
-                                                            <Chip size="sm" color="primary" variant="flat" className="text-xs">
-                                                                <Icon icon="solar:check-circle-bold" className="mr-1 text-xs" />
+                                                            <Chip size="sm" color="primary" variant="flat" className="text-xs" startContent={<Icon icon="solar:check-circle-bold" className="mr-1 text-xs" />}>
                                                                 เลือกแล้ว
                                                             </Chip>
                                                         )}
@@ -871,6 +894,11 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                 src={previewImage}
                                 alt="Preview"
                                 className="max-w-full max-h-[80vh] object-contain mx-auto rounded-lg"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    target.insertAdjacentHTML('afterend', '<div class="text-white text-center py-20"><p class="text-xl">ไม่สามารถโหลดรูปภาพได้</p><p class="text-sm mt-2 text-white/60">ไฟล์รูปภาพอาจถูกลบหรือไม่พบบนเซิร์ฟเวอร์</p></div>');
+                                }}
                             />
                             <Button
                                 isIconOnly
@@ -881,6 +909,7 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                 <Icon icon="solar:close-circle-bold" className="text-xl" />
                             </Button>
                         </div>
+                        
                     )}
                 </ModalContent>
             </Modal>

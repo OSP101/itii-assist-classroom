@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const attendanceController = require('../controllers/attendance.controller');
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, checkCourseActive } = require('../middlewares/auth');
 
 // ============================================
 // Public Routes (for student check-in)
@@ -52,7 +52,7 @@ router.get('/', attendanceController.getAttendanceSessions);
  * @desc    Create new attendance session
  * @access  Instructor, TA
  */
-router.post('/', attendanceController.createAttendanceSession);
+router.post('/', checkCourseActive, attendanceController.createAttendanceSession);
 
 /**
  * @route   GET /api/attendance/:id

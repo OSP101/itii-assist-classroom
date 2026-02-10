@@ -23,13 +23,14 @@ interface AttendanceTabProps {
     course: Course;
     isLoading: boolean;
     onAttendanceChanged?: () => void;
+    isCourseActive?: boolean;
 }
 
-export default function AttendanceTab({ course, isLoading, onAttendanceChanged }: AttendanceTabProps) {
+export default function AttendanceTab({ course, isLoading, onAttendanceChanged, isCourseActive = true }: AttendanceTabProps) {
     // All state and logic handled by custom hook
     const hook = useAttendanceTab(course, onAttendanceChanged);
     
     // Render view with hook data
-    return <AttendanceTabView course={course} isLoading={isLoading} hook={hook} />;
+    return <AttendanceTabView course={course} isLoading={isLoading} hook={hook} isCourseActive={isCourseActive} />;
 }
 

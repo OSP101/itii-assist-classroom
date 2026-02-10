@@ -45,6 +45,7 @@ interface SectionsTabViewProps {
     expandedSections: number[];
     isTeamsLoading: boolean;
     sectionStudents: Record<number, SectionStudent[]>;
+    isCourseActive?: boolean;
 
     // Handlers
     onSubTabChange: (tab: SectionSubTab) => void;
@@ -75,6 +76,7 @@ interface SectionHeaderProps {
     sectionNo: string;
     studentCount: number;
     isExpanded: boolean;
+    isCourseActive?: boolean;
     onToggle: () => void;
     onAddStudent: () => void;
     onEdit: () => void;
@@ -85,6 +87,7 @@ const SectionHeader = React.memo(function SectionHeader({
     sectionNo,
     studentCount,
     isExpanded,
+    isCourseActive = true,
     onToggle,
     onAddStudent,
     onEdit,
@@ -120,6 +123,7 @@ const SectionHeader = React.memo(function SectionHeader({
                         isIconOnly
                         size="sm"
                         variant="flat"
+                        isDisabled={!isCourseActive}
                         className={isExpanded ? "bg-white/20 text-white" : ""}
                         onPress={onAddStudent}
                     >
@@ -131,6 +135,7 @@ const SectionHeader = React.memo(function SectionHeader({
                         isIconOnly
                         size="sm"
                         variant="flat"
+                        isDisabled={!isCourseActive}
                         className={isExpanded ? "bg-white/20 text-white" : "bg-amber-100 text-amber-600"}
                         onPress={onEdit}
                     >
@@ -142,6 +147,7 @@ const SectionHeader = React.memo(function SectionHeader({
                         isIconOnly
                         size="sm"
                         variant="flat"
+                        isDisabled={!isCourseActive}
                         className={isExpanded ? "bg-white/20 text-white hover:bg-red-500" : "bg-red-100 text-red-600"}
                         onPress={onRemove}
                     >
@@ -271,6 +277,7 @@ function SectionsTabViewComponent({
     expandedSections,
     isTeamsLoading,
     sectionStudents,
+    isCourseActive = true,
     onSubTabChange,
     onSearchQueryChange,
     onWeekChange,
@@ -369,6 +376,7 @@ function SectionsTabViewComponent({
                     sectionSearchQuery={sectionSearchQuery}
                     expandedSections={expandedSections}
                     sectionStudents={sectionStudents}
+                    isCourseActive={isCourseActive}
                     onSearchQueryChange={onSearchQueryChange}
                     onOpenAddSectionModal={onOpenAddSectionModal}
                     onToggleSection={onToggleSection}
@@ -386,6 +394,7 @@ function SectionsTabViewComponent({
                 <PermanentTeamsSubTab
                     permanentTeams={permanentTeams}
                     isTeamsLoading={isTeamsLoading}
+                    isCourseActive={isCourseActive}
                     onOpenCreateTeamModal={onOpenCreateTeamModal}
                     onOpenEditTeamModal={onOpenEditTeamModal}
                     onOpenDeleteTeamModal={onOpenDeleteTeamModal}
@@ -399,6 +408,7 @@ function SectionsTabViewComponent({
                     selectedWeek={selectedWeek}
                     totalWeeks={totalWeeks}
                     isTeamsLoading={isTeamsLoading}
+                    isCourseActive={isCourseActive}
                     onWeekChange={onWeekChange}
                     onOpenCreateTeamModal={onOpenCreateTeamModal}
                     onOpenEditTeamModal={onOpenEditTeamModal}
@@ -420,6 +430,7 @@ interface StudentsSubTabProps {
     sectionSearchQuery: string;
     expandedSections: number[];
     sectionStudents: Record<number, SectionStudent[]>;
+    isCourseActive?: boolean;
     onSearchQueryChange: (query: string) => void;
     onOpenAddSectionModal: () => void;
     onToggleSection: (sectionId: number) => void;
@@ -436,6 +447,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
     sectionSearchQuery,
     expandedSections,
     sectionStudents,
+    isCourseActive = true,
     onSearchQueryChange,
     onOpenAddSectionModal,
     onToggleSection,
@@ -472,6 +484,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
                             color="primary"
                             startContent={<Icon icon="solar:add-circle-bold" />}
                             onPress={onOpenAddSectionModal}
+                            isDisabled={!isCourseActive}
                             className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25 w-full sm:w-auto"
                         >
                             เพิ่มกลุ่มเรียน
@@ -489,6 +502,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
                                 sectionNo={section.section_no}
                                 studentCount={section.studentCount || 0}
                                 isExpanded={expandedSections.includes(section.id)}
+                                isCourseActive={isCourseActive}
                                 onToggle={() => onToggleSection(section.id)}
                                 onAddStudent={() => onOpenAddStudentModal(section.id)}
                                 onEdit={() => onOpenEditSectionModal(section.id)}
@@ -611,6 +625,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
                             size="md"
                             startContent={<Icon icon="solar:add-circle-bold" />}
                             onPress={onOpenAddSectionModal}
+                            isDisabled={!isCourseActive}
                             className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25"
                         >
                             เพิ่มกลุ่มเรียนแรก
@@ -629,6 +644,7 @@ const StudentsSubTab = React.memo(function StudentsSubTab({
 interface PermanentTeamsSubTabProps {
     permanentTeams: PermanentTeam[];
     isTeamsLoading: boolean;
+    isCourseActive?: boolean;
     onOpenCreateTeamModal: (type: TeamType, method: TeamFormationMethod) => void;
     onOpenEditTeamModal: (teamId: number, type: TeamType, weekNumber?: number) => void;
     onOpenDeleteTeamModal: (teamId: number, type: TeamType, weekNumber?: number) => void;
@@ -637,6 +653,7 @@ interface PermanentTeamsSubTabProps {
 const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
     permanentTeams,
     isTeamsLoading,
+    isCourseActive = true,
     onOpenCreateTeamModal,
     onOpenEditTeamModal,
     onOpenDeleteTeamModal,
@@ -697,7 +714,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                     onPress={() => onOpenCreateTeamModal("permanent", "random")}
                                     className="bg-purple-100 text-purple-700 flex-shrink-0 md:hidden"
                                     size="md"
-                                    isDisabled={isTeamsLoading}
+                                    isDisabled={isTeamsLoading || !isCourseActive}
                                 >
                                     <Icon icon="solar:shuffle-bold" className="text-lg" />
                                 </Button>
@@ -709,7 +726,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                 onPress={() => onOpenCreateTeamModal("permanent", "random")}
                                 className="bg-purple-100 text-purple-700 flex-shrink-0 hidden md:flex"
                                 size="md"
-                                isDisabled={isTeamsLoading}
+                                isDisabled={isTeamsLoading || !isCourseActive}
                             >
                                 สุ่มกลุ่ม
                             </Button>
@@ -720,7 +737,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                     onPress={() => onOpenCreateTeamModal("permanent", "manual")}
                                     className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 md:hidden"
                                     size="md"
-                                    isDisabled={isTeamsLoading}
+                                    isDisabled={isTeamsLoading || !isCourseActive}
                                 >
                                     <Icon icon="solar:add-circle-bold" className="text-lg" />
                                 </Button>
@@ -731,7 +748,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                 onPress={() => onOpenCreateTeamModal("permanent", "manual")}
                                 className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 hidden md:flex"
                                 size="md"
-                                isDisabled={isTeamsLoading}
+                                isDisabled={isTeamsLoading || !isCourseActive}
                             >
                                 สร้างกลุ่ม
                             </Button>
@@ -810,6 +827,7 @@ interface WeeklyTeamsSubTabProps {
     selectedWeek: number;
     totalWeeks: number;
     isTeamsLoading: boolean;
+    isCourseActive?: boolean;
     onWeekChange: (week: number) => void;
     onOpenCreateTeamModal: (type: TeamType, method: TeamFormationMethod) => void;
     onOpenEditTeamModal: (teamId: number, type: TeamType, weekNumber?: number) => void;
@@ -823,6 +841,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
     selectedWeek,
     totalWeeks,
     isTeamsLoading,
+    isCourseActive = true,
     onWeekChange,
     onOpenCreateTeamModal,
     onOpenEditTeamModal,
@@ -969,6 +988,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                     variant="flat"
                                     size="md"
                                     isIconOnly
+                                    isDisabled={!isCourseActive}
                                     onPress={() => onOpenCreateTeamModal("weekly", "random")}
                                     className="bg-emerald-100 text-emerald-700 flex-shrink-0 md:hidden"
                                 >
@@ -979,6 +999,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                 variant="flat"
                                 size="md"
                                 startContent={<Icon icon="solar:shuffle-bold" />}
+                                isDisabled={!isCourseActive}
                                 onPress={() => onOpenCreateTeamModal("weekly", "random")}
                                 className="bg-emerald-100 text-emerald-700 flex-shrink-0 hidden md:flex"
                             >
@@ -990,6 +1011,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                     color="primary"
                                     size="md"
                                     isIconOnly
+                                    isDisabled={!isCourseActive}
                                     onPress={() => onOpenCreateTeamModal("weekly", "manual")}
                                     className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 md:hidden"
                                 >
@@ -1000,6 +1022,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                 color="primary"
                                 size="md"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
+                                isDisabled={!isCourseActive}
                                 onPress={() => onOpenCreateTeamModal("weekly", "manual")}
                                 className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 hidden md:flex"
                             >

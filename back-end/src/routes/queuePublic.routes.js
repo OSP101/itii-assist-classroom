@@ -34,7 +34,7 @@ router.get('/bookings/:bookingId/status', queueController.getBookingStatus);
 router.get('/sessions/:sessionId/desk-statuses', queueController.getDeskStatuses);
 
 // Toggle session status (active/paused) - for projector toggle switch
-router.post('/sessions/:sessionId/status', queueController.updateQueueSessionStatus);
+router.post('/sessions/:sessionId/status', queueController.updateQueueSessionStatusPublic);
 
 // Cancel booking - for student and projector cancel
 router.post('/bookings/:bookingId/cancel', queueController.cancelBooking);

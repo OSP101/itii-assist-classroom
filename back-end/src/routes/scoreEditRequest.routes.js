@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const scoreEditRequestController = require('../controllers/scoreEditRequest.controller');
-const { authenticate, authorize } = require('../middlewares/auth');
+const { authenticate, authorize, checkCourseActive } = require('../middlewares/auth');
 const { handleScoreEditImageUpload } = require('../middlewares/upload');
 
 // All routes require authentication
@@ -14,21 +14,21 @@ router.get('/', scoreEditRequestController.getEditRequests);
 router.get('/pending-count', scoreEditRequestController.getPendingCount);
 
 // Create edit request (TA) - with optional image upload
-router.post('/', handleScoreEditImageUpload, scoreEditRequestController.createEditRequest);
+router.post('/', handleScoreEditImageUpload, checkCourseActive, scoreEditRequestController.createEditRequest);
 
 // Create batch edit request for group (TA) - with optional image upload
-router.post('/batch', handleScoreEditImageUpload, scoreEditRequestController.createBatchEditRequest);
+router.post('/batch', handleScoreEditImageUpload, checkCourseActive, scoreEditRequestController.createBatchEditRequest);
 
 // Batch approve edit requests (instructor only) - for group approval
-router.post('/batch-approve', scoreEditRequestController.batchApproveEditRequests);
+router.post('/batch-approve', checkCourseActive, scoreEditRequestController.batchApproveEditRequests);
 
 // Batch reject edit requests (instructor only) - for group rejection
-router.post('/batch-reject', scoreEditRequestController.batchRejectEditRequests);
+router.post('/batch-reject', checkCourseActive, scoreEditRequestController.batchRejectEditRequests);
 
 // Approve edit request (instructor only)
-router.post('/:id/approve', scoreEditRequestController.approveEditRequest);
+router.post('/:id/approve', checkCourseActive, scoreEditRequestController.approveEditRequest);
 
 // Reject edit request (instructor only)
-router.post('/:id/reject', scoreEditRequestController.rejectEditRequest);
+router.post('/:id/reject', checkCourseActive, scoreEditRequestController.rejectEditRequest);
 
 module.exports = router;

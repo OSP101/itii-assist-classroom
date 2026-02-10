@@ -6,13 +6,13 @@
 const express = require('express');
 const router = express.Router();
 const bonusScoreController = require('../controllers/bonusScore.controller');
-const { authenticate, authorize } = require('../middlewares/auth');
+const { authenticate, authorize, checkCourseActive } = require('../middlewares/auth');
 
 // All routes require authentication
 router.use(authenticate);
 
 // Give bonus score (instructor/ta only)
-router.post('/', authorize('instructor', 'ta'), bonusScoreController.giveBonusScore);
+router.post('/', authorize('instructor', 'ta'), checkCourseActive, bonusScoreController.giveBonusScore);
 
 // Get enrolled students for bonus score selection
 router.get('/course/:courseId/students', authorize('instructor', 'ta'), bonusScoreController.getEnrolledStudentsForBonus);
@@ -27,6 +27,6 @@ router.get('/course/:courseId/summary', authorize('instructor', 'ta'), bonusScor
 router.get('/course/:courseId/student/:studentId', authorize('instructor', 'ta'), bonusScoreController.getStudentBonusHistory);
 
 // Delete bonus score record
-router.delete('/:id', authorize('instructor', 'ta'), bonusScoreController.deleteBonusScore);
+router.delete('/:id', authorize('instructor', 'ta'), checkCourseActive, bonusScoreController.deleteBonusScore);
 
 module.exports = router;
