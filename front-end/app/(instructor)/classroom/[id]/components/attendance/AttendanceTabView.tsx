@@ -37,6 +37,7 @@ interface AttendanceTabViewProps {
     course: Course;
     isLoading: boolean;
     hook: UseAttendanceTabReturn;
+    isCourseActive?: boolean;
 }
 
 // ============================================================================
@@ -45,9 +46,10 @@ interface AttendanceTabViewProps {
 
 interface HeaderProps {
     onCreateClick: () => void;
+    isCourseActive?: boolean;
 }
 
-const Header = memo(function Header({ onCreateClick }: HeaderProps) {
+const Header = memo(function Header({ onCreateClick, isCourseActive = true }: HeaderProps) {
     return (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
@@ -58,6 +60,7 @@ const Header = memo(function Header({ onCreateClick }: HeaderProps) {
                 color="primary"
                 startContent={<Icon icon="solar:add-circle-bold" />}
                 onPress={onCreateClick}
+                isDisabled={!isCourseActive}
                 className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
             >
                 สร้างรอบเช็คชื่อ
@@ -150,7 +153,7 @@ const Content = memo(function Content({
 // Main View Component
 // ============================================================================
 
-function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabViewProps) {
+function AttendanceTabViewComponent({ course, isLoading, hook, isCourseActive = true }: AttendanceTabViewProps) {
     const {
         // Data
         sessions,
@@ -215,7 +218,7 @@ function AttendanceTabViewComponent({ course, isLoading, hook }: AttendanceTabVi
 
     return (
         <div className="space-y-4">
-            <Header onCreateClick={openCreateModal} />
+            <Header onCreateClick={openCreateModal} isCourseActive={isCourseActive} />
 
             {showLoading ? (
                 <LoadingState />

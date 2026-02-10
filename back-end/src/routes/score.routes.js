@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const scoreController = require('../controllers/score.controller');
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, checkCourseActive } = require('../middlewares/auth');
 
 // All routes require authentication
 router.use(authenticate);
@@ -22,16 +22,16 @@ router.get('/students/search', scoreController.searchStudents);
 router.get('/groups', scoreController.getGroupsForAssignment);
 
 // POST /api/scores - Submit single score
-router.post('/', scoreController.submitScore);
+router.post('/', checkCourseActive, scoreController.submitScore);
 
 // POST /api/scores/bulk - Submit bulk scores
-router.post('/bulk', scoreController.submitBulkScores);
+router.post('/bulk', checkCourseActive, scoreController.submitBulkScores);
 
 // POST /api/scores/group - Submit group score
-router.post('/group', scoreController.submitGroupScore);
+router.post('/group', checkCourseActive, scoreController.submitGroupScore);
 
 // POST /api/scores/edit-request - Request score edit
-router.post('/edit-request', scoreController.requestScoreEdit);
+router.post('/edit-request', checkCourseActive, scoreController.requestScoreEdit);
 
 // GET /api/scores/edit-requests - Get pending edit requests
 router.get('/edit-requests', scoreController.getPendingEditRequests);

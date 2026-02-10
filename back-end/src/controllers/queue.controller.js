@@ -486,11 +486,18 @@ const deleteQueueSession = async (req, res) => {
             });
         }
 
-        // Can only delete draft sessions
-        if (session.status !== 'draft') {
+        // Can only delete if no pending bookings (waiting/in_progress)
+        const pendingCount = await QueueBooking.count({
+            where: {
+                queue_session_id: sessionId,
+                status: { [Op.in]: ['waiting', 'in_progress'] },
+            },
+        });
+
+        if (pendingCount > 0) {
             return res.status(400).json({
                 success: false,
-                error: { message: 'สามารถลบได้เฉพาะ Session ที่ยังไม่เปิดใช้งาน' },
+                error: { message: `ยังมีคิวค้างอยู่ ${pendingCount} รายการ ไม่สามารถลบได้` },
             });
         }
 
@@ -2790,6 +2797,82 @@ const checkExistingBooking = async (req, res) => {
     }
 };
 
+/**
+ * Update queue session status (Public - for projector view)
+ * Only allows pause/resume transitions (active ↔ paused)
+ * Does not require authentication — safe because it only toggles pause state.
+ */
+const updateQueueSessionStatusPublic = async (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const { status } = req.body;
+
+        // Only allow pause/resume from projector
+        if (!['active', 'paused'].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: { message: 'ใช้ได้เฉพาะ active หรือ paused เท่านั้น' },
+            });
+        }
+
+        const session = await QueueSession.findByPk(sessionId);
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                error: { message: 'ไม่พบ Queue Session' },
+            });
+        }
+
+        // Validate: only active↔paused allowed
+        const validTransitions = {
+            active: ['paused'],
+            paused: ['active'],
+        };
+
+        if (!validTransitions[session.status] || !validTransitions[session.status].includes(status)) {
+            return res.status(400).json({
+                success: false,
+                error: {
+                    message: `ไม่สามารถเปลี่ยนสถานะจาก ${session.status} เป็น ${status}`,
+                },
+            });
+        }
+
+        await session.update({ status });
+
+        logCourseActivity({
+            courseId: session.course_id,
+            actorUserId: req.user?.id || null,
+            action: `queue_session_${status}`,
+            category: 'queue',
+            targetType: 'queue_session',
+            targetId: sessionId,
+            targetName: session.title,
+            detail: { status, source: 'projector' },
+        });
+
+        // Emit socket event for real-time updates
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`queue-${sessionId}`).emit('session-status-changed', {
+                sessionId,
+                status,
+            });
+        }
+
+        res.json({
+            success: true,
+            data: session,
+        });
+    } catch (error) {
+        console.error('Error updating queue session status (projector):', error);
+        res.status(500).json({
+            success: false,
+            error: { message: error.message },
+        });
+    }
+};
+
 module.exports = {
     // Session management
     getQueueSessions,
@@ -2816,6 +2899,7 @@ module.exports = {
 
     // Projector view
     getDeskStatuses,
+    updateQueueSessionStatusPublic,
 
     // Public
     verifyPIN,

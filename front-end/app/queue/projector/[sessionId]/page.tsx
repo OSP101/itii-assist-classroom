@@ -186,6 +186,7 @@ export default function ProjectorViewPage() {
         setIsTogglingStatus(true);
         
         try {
+            // Use public projector-status endpoint (no auth required)
             const response = await fetch(`${API_BASE_URL}/queue/sessions/${sessionId}/status`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

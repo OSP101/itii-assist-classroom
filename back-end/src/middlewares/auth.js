@@ -74,9 +74,38 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
+/**
+ * Check if the course is active before allowing write operations
+ * Looks for courseId from multiple sources: params, query, body
+ * If course is inactive (is_active === false), returns 403 error
+ */
+const checkCourseActive = async (req, res, next) => {
+  try {
+    const courseId = req.params.id || req.params.courseId ||
+                     req.query.course_id || req.body.course_id ||
+                     req.query.courseId || req.body.courseId;
+
+    if (!courseId) {
+      return next(); // No courseId found, let controller handle validation
+    }
+
+    const { Course } = require('../models');
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'is_active'] });
+
+    if (course && !course.is_active) {
+      return next(ApiError.forbidden('รายวิชานี้ปิดใช้งานอยู่ กรุณาเปิดใช้งานก่อนทำการแก้ไข'));
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   authenticate,
   authorize,
   optionalAuth,
   isAdmin,
+  checkCourseActive,
 };

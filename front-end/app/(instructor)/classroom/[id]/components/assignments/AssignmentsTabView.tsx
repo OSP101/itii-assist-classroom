@@ -52,6 +52,7 @@ interface AssignmentsTabViewProps {
     // Score modal actions
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
+    isCourseActive?: boolean;
 }
 
 function AssignmentsTabViewComponent({
@@ -84,6 +85,7 @@ function AssignmentsTabViewComponent({
     onAssignmentSaved,
     onOpenScoreModal,
     onOpenBonusScoreModal,
+    isCourseActive = true,
 }: AssignmentsTabViewProps) {
     // Render grid card view
     const renderGridCard = (assignment: AssignmentType) => {
@@ -352,6 +354,7 @@ function AssignmentsTabViewComponent({
                                             startContent={<Icon icon="solar:star-bold" />}
                                             onPress={onOpenBonusScoreModal}
                                             className="hidden sm:flex"
+                                            isDisabled={!isCourseActive}
                                         >
                                             คะแนนพิเศษ
                                         </Button>
@@ -362,6 +365,7 @@ function AssignmentsTabViewComponent({
                                         startContent={<Icon icon="solar:add-circle-bold" />}
                                         onPress={onOpenCreateModal}
                                         className="bg-linear-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25 w-full sm:w-auto"
+                                        isDisabled={!isCourseActive}
                                     >
                                         <span className="hidden sm:inline">สร้างงานใหม่</span>
                                         <span className="sm:hidden">สร้างงาน</span>
@@ -422,6 +426,7 @@ function AssignmentsTabViewComponent({
                                             startContent={<Icon icon="solar:add-circle-bold" />}
                                             onPress={onOpenCreateModal}
                                             className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25"
+                                            isDisabled={!isCourseActive}
                                         >
                                             สร้างงานแรก
                                         </Button>

@@ -887,9 +887,9 @@ export default function ClassroomDetailPage() {
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        ...(userRole === 'instructor' ? [{
+        ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
-            label: "อนุมัติคะแนน",
+            label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
             icon: "solar:clipboard-check-bold",
             badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
             badgeColor: "warning" as const,
@@ -1119,6 +1119,36 @@ export default function ClassroomDetailPage() {
                         {/* Content - Only show when course is loaded */}
                         {course && (
                             <>
+                    {/* Closed course banner */}
+                    {!course.is_active && (
+                        <div className="mb-4 rounded-xl border border-warning-200 bg-warning-50 dark:border-warning-700 dark:bg-warning-900/30 p-4">
+                            <div className="flex items-center gap-3">
+                                <div className="flex-shrink-0">
+                                    <Icon icon="solar:lock-keyhole-bold" className="text-warning-600 dark:text-warning-400" width={24} />
+                                </div>
+                                <div className="flex-1">
+                                    <p className="font-semibold text-warning-800 dark:text-warning-300">
+                                        รายวิชานี้ปิดใช้งานอยู่
+                                    </p>
+                                    <p className="text-sm text-warning-600 dark:text-warning-400">
+                                        สามารถดูข้อมูลได้อย่างเดียว ต้องเปิดใช้งานรายวิชาก่อนถึงจะแก้ไขได้
+                                    </p>
+                                </div>
+                                {userRole === "instructor" && (
+                                    <Button
+                                        size="sm"
+                                        color="warning"
+                                        variant="flat"
+                                        onPress={() => setActiveTab("settings")}
+                                        startContent={<Icon icon="solar:settings-linear" width={16} />}
+                                    >
+                                        ไปที่ตั้งค่า
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     {activeTab === "overview" && (
                                 <OverviewTab
                                     course={course}
@@ -1131,7 +1161,7 @@ export default function ClassroomDetailPage() {
                             )}
 
                             {activeTab === "sections" && (
-                                <SectionsTab courseId={courseId} />
+                                <SectionsTab courseId={courseId} isCourseActive={course.is_active} />
                             )}
 
                             {activeTab === "people" && (
@@ -1145,6 +1175,7 @@ export default function ClassroomDetailPage() {
                                     onRemoveInstructor={handleRemoveInstructor}
                                     userRole={userRole}
                                     currentUserId={currentUserId}
+                                    isCourseActive={course.is_active}
                                 />
                             )}
 
@@ -1164,17 +1195,20 @@ export default function ClassroomDetailPage() {
                                         fetchAssignments(true);
                                         fetchOverview(true);
                                     }}
+                                    isCourseActive={course.is_active}
                                 />
                             )}
 
                             {activeTab === "scores" && (
-                                <ScoresTab courseId={courseId} />
+                                <ScoresTab courseId={courseId} isCourseActive={course.is_active} />
                             )}
 
-                            {activeTab === "approval" && userRole === "instructor" && (
+                            {activeTab === "approval" && (userRole === "instructor" || userRole === "ta") && (
                                 <ScoreApprovalTab
                                     courseId={courseId}
+                                    userRole={userRole}
                                     onPendingCountChange={setPendingApprovalCount}
+                                    isCourseActive={course.is_active}
                                 />
                             )}
 
@@ -1183,6 +1217,7 @@ export default function ClassroomDetailPage() {
                                     course={course}
                                     isLoading={isOverviewLoading}
                                     onAttendanceChanged={() => fetchOverview(true)}
+                                    isCourseActive={course.is_active}
                                 />
                             )}
 
@@ -1194,7 +1229,7 @@ export default function ClassroomDetailPage() {
                             )}
 
                             {activeTab === "queue" && (
-                                <QueueTab course={course} isLoading={isOverviewLoading} />
+                                <QueueTab course={course} isLoading={isOverviewLoading} isCourseActive={course.is_active} />
                             )}
 
                             {activeTab === "activity-log" && userRole === "instructor" && (

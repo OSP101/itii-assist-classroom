@@ -52,6 +52,7 @@ interface Course {
 interface QueueTabProps {
     course: Course;
     isLoading: boolean;
+    isCourseActive?: boolean;
 }
 
 // Loading Skeleton
@@ -109,7 +110,7 @@ const statusDisplay: Record<string, { label: string; color: "default" | "primary
     closed: { label: "ปิดแล้ว", color: "danger", icon: "solar:stop-circle-bold" },
 };
 
-export default function QueueTab({ course, isLoading }: QueueTabProps) {
+export default function QueueTab({ course, isLoading, isCourseActive = true }: QueueTabProps) {
     const router = useRouter();
     const [sessions, setSessions] = useState<QueueSession[]>([]);
     const [isSessionsLoading, setIsSessionsLoading] = useState(true);
@@ -455,6 +456,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                     color="primary"
                     startContent={<Icon icon="solar:add-circle-bold" />}
                     onPress={handleOpenCreateModal}
+                    isDisabled={!isCourseActive}
                     className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                 >
                     สร้างการจองคิว
@@ -601,6 +603,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                     color="primary"
                                     startContent={<Icon icon="solar:add-circle-bold" />}
                                     onPress={handleOpenCreateModal}
+                                    isDisabled={!isCourseActive}
                                     className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                                 >
                                     สร้างการจองคิวแรก
@@ -643,6 +646,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                             size="sm"
                                                             className="mt-3"
                                                             onPress={handleOpenCreateModal}
+                                                            isDisabled={!isCourseActive}
                                                         >
                                                             สร้างการจองคิวแรก
                                                         </Button>
@@ -734,6 +738,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="danger"
+                                                                                isDisabled={!isCourseActive}
                                                                                 onPress={() => {
                                                                                     setDeleteTarget(session);
                                                                                     setIsDeleteModalOpen(true);
@@ -852,7 +857,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                         size="sm"
                                                                                         variant="light"
                                                                                         color="danger"
-                                                                                        isDisabled={hasPending}
+                                                                                        isDisabled={hasPending || !isCourseActive}
                                                                                         onPress={() => {
                                                                                             if (!hasPending) {
                                                                                                 setDeleteTarget(session);
@@ -876,6 +881,7 @@ export default function QueueTab({ course, isLoading }: QueueTabProps) {
                                                                                 size="sm"
                                                                                 variant="light"
                                                                                 color="danger"
+                                                                                isDisabled={!isCourseActive}
                                                                                 onPress={() => {
                                                                                     setDeleteTarget(session);
                                                                                     setIsDeleteModalOpen(true);

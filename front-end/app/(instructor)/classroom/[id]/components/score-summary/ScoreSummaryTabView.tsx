@@ -74,6 +74,7 @@ interface ScoreSummaryTabViewProps {
         scoreData: { score: number | null; max_score: number; sub_item_name?: string; graded_by?: string | null; graded_at?: string | null; updated_at?: string | null } | undefined
     ) => void;
     onCloseScoreModal: () => void;
+    isCourseActive?: boolean;
 }
 
 const ScoreSummaryTabView = memo(function ScoreSummaryTabView({
@@ -100,6 +101,7 @@ const ScoreSummaryTabView = memo(function ScoreSummaryTabView({
     onSetHoverColKey,
     onScoreClick,
     onCloseScoreModal,
+    isCourseActive = true,
 }: ScoreSummaryTabViewProps) {
     return (
         <div className="space-y-4">
@@ -348,7 +350,8 @@ const ScoreSummaryTabView = memo(function ScoreSummaryTabView({
                                                         >
                                                             <button
                                                                 onClick={() => onScoreClick(student, col, scoreData)}
-                                                                className={`inline-flex items-center justify-center min-w-[40px] h-7 px-2 rounded-md text-sm font-medium transition-all hover:scale-105 hover:shadow-sm ${color.bg} ${color.text}`}
+                                                                disabled={!isCourseActive}
+                                                                className={`inline-flex items-center justify-center min-w-[40px] h-7 px-2 rounded-md text-sm font-medium transition-all ${!isCourseActive ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 hover:shadow-sm'} ${color.bg} ${color.text}`}
                                                             >
                                                                 {fmtScore(score)}
                                                             </button>

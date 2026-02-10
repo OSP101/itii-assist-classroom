@@ -6,23 +6,23 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const queueController = require('../controllers/queue.controller');
-const { authenticate, authorize } = require('../middlewares/auth');
+const { authenticate, authorize, checkCourseActive } = require('../middlewares/auth');
 
 // ============================================
 // Public Routes (for students)
 // ============================================
 
 // Verify PIN code
-router.post('/verify-pin', queueController.verifyPIN);
+router.post('/verify-pin', checkCourseActive, queueController.verifyPIN);
 
 // Create booking (student)
-router.post('/bookings', queueController.createBooking);
+router.post('/bookings', checkCourseActive, queueController.createBooking);
 
 // Get booking status
 router.get('/bookings/:bookingId/status', queueController.getBookingStatus);
 
 // Cancel booking (student) - only for waiting status
-router.post('/bookings/:bookingId/cancel', queueController.cancelBooking);
+router.post('/bookings/:bookingId/cancel', checkCourseActive, queueController.cancelBooking);
 
 // ============================================
 // Projector View (public for display)
@@ -46,6 +46,7 @@ router.post(
     '/sessions',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.createQueueSession
 );
 
@@ -61,6 +62,7 @@ router.put(
     '/sessions/:sessionId',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.updateQueueSession
 );
 
@@ -68,6 +70,7 @@ router.post(
     '/sessions/:sessionId/status',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.updateQueueSessionStatus
 );
 
@@ -75,6 +78,7 @@ router.delete(
     '/sessions/:sessionId',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.deleteQueueSession
 );
 
@@ -82,6 +86,7 @@ router.post(
     '/sessions/:sessionId/regenerate-pin',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.regeneratePIN
 );
 
@@ -93,6 +98,7 @@ router.post(
     '/sessions/:sessionId/workers/join',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.joinAsWorker
 );
 
@@ -100,6 +106,7 @@ router.post(
     '/sessions/:sessionId/workers/leave',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.leaveAsWorker
 );
 
@@ -133,6 +140,7 @@ router.post(
     '/sessions/:sessionId/bookings/:bookingId/complete',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.completeBooking
 );
 
@@ -140,6 +148,7 @@ router.post(
     '/sessions/:sessionId/bookings/:bookingId/skip',
     authenticate,
     authorize('admin', 'instructor', 'ta'),
+    checkCourseActive,
     queueController.skipBooking
 );
 

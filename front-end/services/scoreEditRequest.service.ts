@@ -57,6 +57,7 @@ export interface ScoreEditRequestsResponse {
         approved: number;
         rejected: number;
     };
+    role?: 'instructor' | 'ta';
 }
 
 export interface PendingCountResponse {

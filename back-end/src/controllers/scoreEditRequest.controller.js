@@ -1,33 +1,47 @@
-const { ScoreEditRequest, Score, Assignment, AssignmentSubItem, Student, User, Course, CourseSection, CourseSectionStudent, sequelize } = require('../models');
+const { ScoreEditRequest, Score, Assignment, AssignmentSubItem, Student, User, Course, CourseSection, CourseSectionStudent, CourseTA, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
 /**
- * Get all score edit requests for a course (instructor only)
+ * Get all score edit requests for a course (instructor or TA of this course)
+ * - Instructor: sees all requests
+ * - TA: sees only their own requests (requested_by = userId)
  */
 const getEditRequests = asyncHandler(async (req, res) => {
     const { course_id, status } = req.query;
     const userId = req.user.id;
+    const userRole = req.user.role;
 
     if (!course_id) {
         throw new ApiError(400, 'course_id is required');
     }
 
-    // Verify user is instructor of this course
+    // Verify user is instructor or TA of this course
     const course = await Course.findByPk(course_id);
     if (!course) {
         throw new ApiError(404, 'Course not found');
     }
 
-    if (String(course.instructor_id) !== String(userId)) {
-        throw new ApiError(403, 'Only instructor can view edit requests');
+    const isInstructor = String(course.instructor_id) === String(userId);
+    let isTA = false;
+    if (!isInstructor) {
+        const taRecord = await CourseTA.findOne({ where: { course_id, user_id: userId } });
+        isTA = !!taRecord;
+    }
+
+    if (!isInstructor && !isTA) {
+        throw new ApiError(403, 'Only instructor or TA can view edit requests');
     }
 
     // Build where clause
     const whereClause = {};
     if (status) {
         whereClause.status = status;
+    }
+    // TA can only see their own requests
+    if (isTA && !isInstructor) {
+        whereClause.requested_by = userId;
     }
 
     // Get all edit requests for assignments in this course
@@ -118,7 +132,9 @@ const getEditRequests = asyncHandler(async (req, res) => {
         } : null,
     }));
 
-    // Count by status
+    // Count by status (TA sees only their own counts)
+    const countWhereBase = isTA && !isInstructor ? { requested_by: userId } : {};
+
     const pendingCount = await ScoreEditRequest.count({
         include: [{
             model: Score,
@@ -130,7 +146,7 @@ const getEditRequests = asyncHandler(async (req, res) => {
                 where: { course_id },
             }]
         }],
-        where: { status: 'pending' },
+        where: { ...countWhereBase, status: 'pending' },
     });
 
     const approvedCount = await ScoreEditRequest.count({
@@ -144,7 +160,7 @@ const getEditRequests = asyncHandler(async (req, res) => {
                 where: { course_id },
             }]
         }],
-        where: { status: 'approved' },
+        where: { ...countWhereBase, status: 'approved' },
     });
 
     const rejectedCount = await ScoreEditRequest.count({
@@ -158,7 +174,7 @@ const getEditRequests = asyncHandler(async (req, res) => {
                 where: { course_id },
             }]
         }],
-        where: { status: 'rejected' },
+        where: { ...countWhereBase, status: 'rejected' },
     });
 
     res.json({
@@ -169,11 +185,14 @@ const getEditRequests = asyncHandler(async (req, res) => {
             approved: approvedCount,
             rejected: rejectedCount,
         },
+        role: isInstructor ? 'instructor' : 'ta',
     });
 });
 
 /**
  * Get pending count for a course (for badge)
+ * - Instructor: count of all pending requests
+ * - TA: count of their own pending requests
  */
 const getPendingCount = asyncHandler(async (req, res) => {
     const { course_id } = req.query;
@@ -183,14 +202,27 @@ const getPendingCount = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'course_id is required');
     }
 
-    // Verify user is instructor of this course
+    // Verify user is instructor or TA of this course
     const course = await Course.findByPk(course_id);
     if (!course) {
         throw new ApiError(404, 'Course not found');
     }
 
-    if (course.instructor_id !== userId) {
-        throw new ApiError(403, 'Only instructor can view pending count');
+    const isInstructor = String(course.instructor_id) === String(userId);
+    let isTA = false;
+    if (!isInstructor) {
+        const taRecord = await CourseTA.findOne({ where: { course_id, user_id: userId } });
+        isTA = !!taRecord;
+    }
+
+    if (!isInstructor && !isTA) {
+        throw new ApiError(403, 'Only instructor or TA can view pending count');
+    }
+
+    // TA can only see count of their own requests
+    const countWhere = { status: 'pending' };
+    if (isTA && !isInstructor) {
+        countWhere.requested_by = userId;
     }
 
     const count = await ScoreEditRequest.count({
@@ -204,7 +236,7 @@ const getPendingCount = asyncHandler(async (req, res) => {
                 where: { course_id },
             }]
         }],
-        where: { status: 'pending' },
+        where: countWhere,
     });
 
     res.json({

@@ -1,8 +1,18 @@
-const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, AssignmentAttendanceLink, sequelize } = require('../models');
+const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, AssignmentAttendanceLink, Course, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { logCourseActivity } = require('../utils/courseActivityLogger');
+
+/**
+ * Helper: check if course is active, throw 403 if not
+ */
+const ensureCourseActive = async (courseId) => {
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'is_active'] });
+    if (course && !course.is_active) {
+        throw new ApiError(403, 'รายวิชานี้ปิดใช้งานอยู่ กรุณาเปิดใช้งานก่อนทำการแก้ไข');
+    }
+};
 
 /**
  * Check if student attended the linked attendance session(s)
@@ -362,6 +372,9 @@ const submitScore = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
+
     // Check attendance if assignment is linked to attendance session
     const attendanceCheck = await checkStudentAttendance(assignment_id, student_id);
     if (!attendanceCheck.attended) {
@@ -445,6 +458,9 @@ const submitBulkScores = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
+
     const transaction = await sequelize.transaction();
     const results = { created: 0, updated: 0 };
 
@@ -518,6 +534,9 @@ const submitGroupScore = asyncHandler(async (req, res) => {
     if (!assignment) {
         throw new ApiError(404, 'Assignment not found');
     }
+
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
 
     let maxScore = parseFloat(assignment.max_score);
     if (sub_item_id) {
@@ -623,6 +642,12 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
     const existingScore = await Score.findByPk(score_id);
     if (!existingScore) {
         throw new ApiError(404, 'Score not found');
+    }
+
+    // Check if course is active (via score -> assignment)
+    const scoreAssignment = await Assignment.findByPk(existingScore.assignment_id, { attributes: ['id', 'course_id'] });
+    if (scoreAssignment) {
+        await ensureCourseActive(scoreAssignment.course_id);
     }
 
     // Check if there's a pending request already
