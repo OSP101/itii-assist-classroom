@@ -5,9 +5,9 @@ services:
     image: mysql:8.0
     container_name: itii-mysql
     restart: unless-stopped
-
-    env_file:
-      - ./.env.db.prod
+    environment:
+      MYSQL_ROOT_PASSWORD: osp101-database@admin
+      MYSQL_DATABASE: project_ta_prod
 
     volumes:
       - mysql_data_prod:/var/lib/mysql
