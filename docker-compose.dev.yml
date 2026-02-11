@@ -1,4 +1,36 @@
 services:
+
+  traefik:
+    image: traefik:v3.0
+    container_name: itii-dev-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.devresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.devresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.devresolver.acme.email=your@email.com"
+      - "--certificatesresolvers.devresolver.acme.storage=/letsencrypt/acme.json"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-dev/acme.json:/letsencrypt/acme.json
+    networks:
+      - itii-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik-dev.osp101.dev`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=devresolver"
   redis:
     image: redis:7-alpine
     container_name: itii-dev-redis
@@ -43,6 +75,12 @@ services:
       timeout: 5s
       start_period: 30s
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.osp101.dev`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=devresolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
 
   frontend:
     build: 
@@ -65,6 +103,12 @@ services:
     networks: 
       - itii-network
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`itii.osp101.dev`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=devresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
 networks:
   itii-network:  

@@ -27,7 +27,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin:latest
-    container_name: itii-phpmyadmin
+    container_name: itii-dev-phpmyadmin
     restart: unless-stopped
 
     environment:
@@ -36,15 +36,23 @@ services:
       PMA_ARBITRARY: 0
       UPLOAD_LIMIT: 100M
 
-    ports:
-      - "8088:80"
-
     depends_on:
       db:
         condition: service_healthy
 
     networks:
       - itii-network
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pma.rule=Host(`database.osp101.dev`)"
+      - "traefik.http.routers.pma.entrypoints=websecure"
+      - "traefik.http.routers.pma.tls.certresolver=devresolver"
+      - "traefik.http.services.pma.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.pma-auth.basicauth.users=admin:$apr1$lydYMqG0$AbMOMkXB8gaiEmeg0ie1y"
+      - "traefik.http.routers.pma.middlewares=pma-auth"
+
+
 
 volumes:
   mysql_data_prod:

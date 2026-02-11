@@ -119,34 +119,36 @@ EOF
         }
 
         stage('🚀 Deploy') {
-            steps {
-                sh """
-                docker network create ${DOCKER_NETWORK} || true
-                
-                # Stop and remove existing containers with same name (cleanup orphans)
-                echo "🧹 Cleaning up existing containers..."
-                docker rm -f itii-${ENV_NAME}-backend itii-${ENV_NAME}-frontend itii-${ENV_NAME}-redis 2>/dev/null || true
-                
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} down --remove-orphans
-                docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d
-                
-                echo "⏳ Waiting for containers to start..."
-                sleep 5
-                
-                if ! docker ps | grep -q itii-${ENV_NAME}-backend; then
-                    echo "❌ Backend failed to start. Showing logs:"
-                    docker logs itii-${ENV_NAME}-backend || true
-                    exit 1
-                fi
-                
-                if ! docker ps | grep -q itii-${ENV_NAME}-redis; then
-                    echo "❌ Redis failed to start. Showing logs:"
-                    docker logs itii-${ENV_NAME}-redis || true
-                    exit 1
-                fi
-                """
-            }
-        }
+    steps {
+        sh """
+        docker network create ${DOCKER_NETWORK} || true
+
+        echo "🚀 Deploying with rolling update style..."
+
+        docker compose -p ${COMPOSE_PROJECT} -f ${COMPOSE_FILE} up -d --build --remove-orphans
+
+        echo "⏳ Waiting for services to stabilize..."
+        sleep 8
+
+        echo "🔍 Checking backend container..."
+        if ! docker ps --format '{{.Names}}' | grep -q itii-${ENV_NAME}-backend; then
+            echo "❌ Backend failed to start. Showing logs:"
+            docker logs itii-${ENV_NAME}-backend --tail 100 || true
+            exit 1
+        fi
+
+        echo "🔍 Checking redis container..."
+        if ! docker ps --format '{{.Names}}' | grep -q itii-${ENV_NAME}-redis; then
+            echo "❌ Redis failed to start. Showing logs:"
+            docker logs itii-${ENV_NAME}-redis --tail 50 || true
+            exit 1
+        fi
+
+        echo "✅ Deploy completed successfully"
+        """
+    }
+}
+
 
         stage('🏥 Health Check') {
             steps {
