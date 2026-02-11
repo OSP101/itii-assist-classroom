@@ -11,7 +11,7 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--certificatesresolvers.devresolver.acme.httpchallenge=true"
       - "--certificatesresolvers.devresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.devresolver.acme.email=your@email.com"
+      - "--certificatesresolvers.devresolver.acme.email=supphitan.p@kkumail.com"
       - "--certificatesresolvers.devresolver.acme.storage=/letsencrypt/acme.json"
       - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
       - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
