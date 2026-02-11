@@ -31,6 +31,7 @@ services:
       - "traefik.http.routers.dashboard.service=api@internal"
       - "traefik.http.routers.dashboard.entrypoints=websecure"
       - "traefik.http.routers.dashboard.tls.certresolver=devresolver"
+      - "traefik.enable=false"
   redis:
     image: redis:7-alpine
     container_name: itii-dev-redis
