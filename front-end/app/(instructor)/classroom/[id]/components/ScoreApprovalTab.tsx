@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardBody } from "@heroui/card";
 import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
@@ -13,13 +13,32 @@ import { Accordion, AccordionItem } from "@heroui/accordion";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import scoreEditRequestService, { type ScoreEditRequest } from "@/services/scoreEditRequest.service";
+import { API_BASE_URL } from "@/config/api";
+import Image from "next/image";
 
 interface ScoreApprovalTabProps {
     courseId: string;
+    userRole?: string;
     onPendingCountChange?: (count: number) => void;
+    isCourseActive?: boolean;
 }
 
 type FilterStatus = "pending" | "approved" | "rejected" | "all";
+
+// Group of related requests (same assignment, same new_score, same reason, same time)
+interface RequestGroup {
+    key: string;
+    requests: ScoreEditRequest[];
+    assignment: ScoreEditRequest["assignment"];
+    sub_item: ScoreEditRequest["sub_item"];
+    new_score: number;
+    old_score: number | null;
+    reason: string | null;
+    images: string[] | null;
+    requester: ScoreEditRequest["requester"];
+    created_at: string;
+    status: string;
+}
 
 // Format date helper
 const formatDate = (dateStr: string): string => {
@@ -33,20 +52,95 @@ const formatDate = (dateStr: string): string => {
     });
 };
 
-export default function ScoreApprovalTab({ courseId, onPendingCountChange }: ScoreApprovalTabProps) {
+// Get image URL helper — point directly to backend server
+// <img> tags load cross-origin images without CORS restrictions
+const getImageUrl = (imagePath: string): string => {
+    // API_BASE_URL = "http://host:3001/api" → strip trailing "/api" to get server root
+    const backendRoot = API_BASE_URL.replace(/\/api\/?$/, '');
+    // imagePath format: "uploads/score-edit-requests/filename.jpg"
+    return `${backendRoot}/${imagePath}`;
+};
+
+export default function ScoreApprovalTab({ courseId, userRole, onPendingCountChange, isCourseActive = true }: ScoreApprovalTabProps) {
     const [filterStatus, setFilterStatus] = useState<FilterStatus>("pending");
     const [requests, setRequests] = useState<ScoreEditRequest[]>([]);
     const [counts, setCounts] = useState({ pending: 0, approved: 0, rejected: 0 });
     const [isLoading, setIsLoading] = useState(true);
+
+    const isReadOnly = userRole === 'ta' || !isCourseActive;
 
     // Action modal states
     const [actionModal, setActionModal] = useState<{
         isOpen: boolean;
         type: "approve" | "reject";
         request: ScoreEditRequest | null;
-    }>({ isOpen: false, type: "approve", request: null });
+        group: RequestGroup | null;
+        selectedIds: number[];
+    }>({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
     const [actionComment, setActionComment] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Image preview modal
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+    // Group requests by assignment + new_score + reason + created_at (within 1 minute)
+    const groupedRequests = useMemo(() => {
+        const groups: RequestGroup[] = [];
+        const processed = new Set<number>();
+
+        for (const req of requests) {
+            if (processed.has(req.id)) continue;
+
+            // Find related requests (same assignment, same new_score, same reason, similar time)
+            const related = requests.filter(r => {
+                if (processed.has(r.id)) return false;
+                if (r.assignment.id !== req.assignment.id) return false;
+                if (r.new_score !== req.new_score) return false;
+                if (r.reason !== req.reason) return false;
+                if (r.status !== req.status) return false;
+                if (r.sub_item?.id !== req.sub_item?.id) return false;
+                // Check if created within 1 minute of each other
+                const timeDiff = Math.abs(new Date(r.created_at).getTime() - new Date(req.created_at).getTime());
+                return timeDiff < 60000; // 1 minute
+            });
+
+            related.forEach(r => processed.add(r.id));
+
+            if (related.length > 1) {
+                // This is a group
+                groups.push({
+                    key: `group-${req.id}`,
+                    requests: related,
+                    assignment: req.assignment,
+                    sub_item: req.sub_item,
+                    new_score: req.new_score,
+                    old_score: req.old_score,
+                    reason: req.reason,
+                    images: req.images,
+                    requester: req.requester,
+                    created_at: req.created_at,
+                    status: req.status,
+                });
+            } else {
+                // Single request
+                groups.push({
+                    key: `single-${req.id}`,
+                    requests: [req],
+                    assignment: req.assignment,
+                    sub_item: req.sub_item,
+                    new_score: req.new_score,
+                    old_score: req.old_score,
+                    reason: req.reason,
+                    images: req.images,
+                    requester: req.requester,
+                    created_at: req.created_at,
+                    status: req.status,
+                });
+            }
+        }
+
+        return groups;
+    }, [requests]);
 
     // Fetch requests
     const fetchRequests = useCallback(async () => {
@@ -80,17 +174,28 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
 
     // Handle approve
     const handleApprove = async () => {
-        if (!actionModal.request) return;
-
+        const { request, group, selectedIds } = actionModal;
+        
         setIsSubmitting(true);
         try {
-            await scoreEditRequestService.approveEditRequest(actionModal.request.id, actionComment || undefined);
-            addToast({
-                title: "อนุมัติสำเร็จ",
-                description: "อนุมัติการแก้ไขคะแนนเรียบร้อยแล้ว",
-                color: "success",
-            });
-            setActionModal({ isOpen: false, type: "approve", request: null });
+            if (group && selectedIds.length > 0) {
+                // Batch approve
+                await scoreEditRequestService.batchApproveEditRequests(selectedIds, actionComment || undefined);
+                addToast({
+                    title: "อนุมัติสำเร็จ",
+                    description: `อนุมัติการแก้ไขคะแนน ${selectedIds.length} รายการเรียบร้อยแล้ว`,
+                    color: "success",
+                });
+            } else if (request) {
+                // Single approve
+                await scoreEditRequestService.approveEditRequest(request.id, actionComment || undefined);
+                addToast({
+                    title: "อนุมัติสำเร็จ",
+                    description: "อนุมัติการแก้ไขคะแนนเรียบร้อยแล้ว",
+                    color: "success",
+                });
+            }
+            setActionModal({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
             setActionComment("");
             fetchRequests();
         } catch (error) {
@@ -106,7 +211,7 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
 
     // Handle reject
     const handleReject = async () => {
-        if (!actionModal.request) return;
+        const { request, group, selectedIds } = actionModal;
 
         if (!actionComment.trim()) {
             addToast({
@@ -119,13 +224,24 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
 
         setIsSubmitting(true);
         try {
-            await scoreEditRequestService.rejectEditRequest(actionModal.request.id, actionComment);
-            addToast({
-                title: "ปฏิเสธสำเร็จ",
-                description: "ปฏิเสธการแก้ไขคะแนนเรียบร้อยแล้ว",
-                color: "success",
-            });
-            setActionModal({ isOpen: false, type: "reject", request: null });
+            if (group && selectedIds.length > 0) {
+                // Batch reject
+                await scoreEditRequestService.batchRejectEditRequests(selectedIds, actionComment);
+                addToast({
+                    title: "ปฏิเสธสำเร็จ",
+                    description: `ปฏิเสธการแก้ไขคะแนน ${selectedIds.length} รายการเรียบร้อยแล้ว`,
+                    color: "success",
+                });
+            } else if (request) {
+                // Single reject
+                await scoreEditRequestService.rejectEditRequest(request.id, actionComment);
+                addToast({
+                    title: "ปฏิเสธสำเร็จ",
+                    description: "ปฏิเสธการแก้ไขคะแนนเรียบร้อยแล้ว",
+                    color: "success",
+                });
+            }
+            setActionModal({ isOpen: false, type: "reject", request: null, group: null, selectedIds: [] });
             setActionComment("");
             fetchRequests();
         } catch (error) {
@@ -137,6 +253,50 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
         } finally {
             setIsSubmitting(false);
         }
+    };
+
+    // Open action modal for group
+    const openGroupActionModal = (type: "approve" | "reject", group: RequestGroup) => {
+        // Default select all pending requests in the group
+        const pendingIds = group.requests.filter(r => r.status === "pending").map(r => r.id);
+        setActionModal({
+            isOpen: true,
+            type,
+            request: null,
+            group,
+            selectedIds: pendingIds,
+        });
+    };
+
+    // Open action modal for single request
+    const openSingleActionModal = (type: "approve" | "reject", request: ScoreEditRequest) => {
+        setActionModal({
+            isOpen: true,
+            type,
+            request,
+            group: null,
+            selectedIds: [request.id],
+        });
+    };
+
+    // Toggle selection of a request in group
+    const toggleRequestSelection = (id: number) => {
+        setActionModal(prev => ({
+            ...prev,
+            selectedIds: prev.selectedIds.includes(id)
+                ? prev.selectedIds.filter(i => i !== id)
+                : [...prev.selectedIds, id],
+        }));
+    };
+
+    // Select/deselect all requests in group
+    const toggleAllSelection = (selectAll: boolean) => {
+        if (!actionModal.group) return;
+        const pendingIds = actionModal.group.requests.filter(r => r.status === "pending").map(r => r.id);
+        setActionModal(prev => ({
+            ...prev,
+            selectedIds: selectAll ? pendingIds : [],
+        }));
     };
 
     // Get status chip
@@ -158,9 +318,22 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-slate-800">อนุมัติการแก้ไขคะแนน</h2>
-                    <p className="text-sm text-slate-500">ตรวจสอบและอนุมัติคำร้องขอแก้ไขคะแนนจาก TA</p>
+                    <h2 className="text-lg font-semibold text-slate-800">
+                        {isReadOnly ? "สถานะคำร้องแก้ไขคะแนน" : "อนุมัติการแก้ไขคะแนน"}
+                    </h2>
+                    <p className="text-sm text-slate-500">
+                        {isReadOnly
+                            ? "ติดตามสถานะคำร้องขอแก้ไขคะแนนที่คุณส่ง"
+                            : "ตรวจสอบและอนุมัติคำร้องขอแก้ไขคะแนนจาก TA"
+                        }
+                    </p>
                 </div>
+                {/* {isReadOnly && (
+                    <Chip size="sm" color="secondary" variant="flat" className="text-xs">
+                        <Icon icon="solar:eye-bold" className="mr-1" />
+                        ดูได้อย่างเดียว
+                    </Chip>
+                )} */}
             </div>
 
             {/* Filter Tabs */}
@@ -224,7 +397,7 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                 <div className="flex items-center justify-center py-20">
                     <Spinner size="lg" color="primary" />
                 </div>
-            ) : requests.length === 0 ? (
+            ) : groupedRequests.length === 0 ? (
                 <Card className="shadow-sm">
                     <CardBody className="py-16">
                         <div className="text-center">
@@ -255,141 +428,231 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                         content: "px-4 pb-4",
                     }}
                 >
-                    {requests.map((request) => (
-                        <AccordionItem
-                            key={request.id}
-                            aria-label={`${request.assignment.name} - ${request.student.full_name}`}
-                            startContent={
-                                <div className="flex items-center gap-3">
-                                    {getStatusChip(request.status)}
-                                    {/* <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <Icon icon="solar:user-bold" className="text-blue-600 text-sm" />
-                                    </div> */}
-                                </div>
-                            }
-                            title={
-                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                                    <span className="font-medium text-slate-800">{request.student.full_name}</span>
-                                    <span className="text-slate-800 font-medium">{request.student.student_id}</span>
-                                </div>
-                            }
-                            subtitle={
-                                <div className="flex flex-wrap items-center gap-2 mt-1">
-                                    <span className="text-slate-600">{request.assignment.name}</span>
-                                    {request.sub_item && (
-                                        <span className="text-slate-400">• {request.sub_item.name}</span>
-                                    )}
-                                    <span className="text-slate-400">•</span>
-                                    <span className="font-medium">
-                                        <span className="text-slate-500">{request.old_score ?? "-"}</span>
-                                        <span className="mx-1 text-slate-400">→</span>
-                                        <span className="text-emerald-600">{request.new_score}</span>
-                                        <span className="text-slate-400 text-xs">/{request.sub_item?.max_score ?? request.assignment.max_score}</span>
-                                    </span>
-                                </div>
-                            }
-                        >
-                            <div className="space-y-4">
-                                {/* Score Change Details */}
-                                <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg">
-                                    <div className="text-center flex-1">
-                                        <p className="text-xs text-slate-500 mb-1">คะแนนเดิม</p>
-                                        <p className="text-2xl font-bold text-slate-600">
-                                            {request.old_score ?? "-"}
-                                        </p>
+                    {groupedRequests.map((group) => {
+                        const isGroup = group.requests.length > 1;
+                        const firstRequest = group.requests[0];
+                        
+                        return (
+                            <AccordionItem
+                                key={group.key}
+                                aria-label={`${group.assignment.name}`}
+                                startContent={
+                                    <div className="flex items-center gap-2">
+                                        {getStatusChip(group.status)}
+                                        {isGroup && (
+                                            <Chip size="sm" color="secondary" variant="flat">
+                                                <Icon icon="solar:users-group-rounded-bold" className="mr-1" />
+                                                {group.requests.length} คน
+                                            </Chip>
+                                        )}
                                     </div>
-                                    <Icon icon="solar:arrow-right-linear" className="text-2xl text-slate-300" />
-                                    <div className="text-center flex-1">
-                                        <p className="text-xs text-slate-500 mb-1">คะแนนใหม่</p>
-                                        <p className="text-2xl font-bold text-emerald-600">
-                                            {request.new_score}
-                                        </p>
-                                    </div>
-                                    <div className="text-center flex-1 pl-4 border-l border-slate-200">
-                                        <p className="text-xs text-slate-500 mb-1">คะแนนเต็ม</p>
-                                        <p className="text-2xl font-medium text-slate-400">
-                                            {request.sub_item?.max_score ?? request.assignment.max_score}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Reason */}
-                                {request.reason && (
-                                    <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
-                                        <p className="text-xs text-amber-600 font-medium mb-1">
-                                            <Icon icon="solar:chat-round-line-bold" className="inline mr-1" />
-                                            เหตุผลการแก้ไข
-                                        </p>
-                                        <p className="text-sm text-slate-700">{request.reason}</p>
-                                    </div>
-                                )}
-
-                                {/* Review Comment (for approved/rejected) */}
-                                {request.review_comment && request.status !== "pending" && (
-                                    <div className={`p-3 rounded-lg border ${request.status === "approved"
-                                        ? "bg-emerald-50 border-emerald-100"
-                                        : "bg-red-50 border-red-100"
-                                        }`}>
-                                        <p className={`text-xs font-medium mb-1 ${request.status === "approved" ? "text-emerald-600" : "text-red-600"
-                                            }`}>
-                                            <Icon icon={request.status === "approved" ? "solar:check-circle-bold" : "solar:close-circle-bold"} className="inline mr-1" />
-                                            {request.status === "approved" ? "หมายเหตุการอนุมัติ" : "เหตุผลการปฏิเสธ"}
-                                        </p>
-                                        <p className="text-sm text-slate-700">{request.review_comment}</p>
-                                    </div>
-                                )}
-
-                                {/* Meta Info & Actions */}
-                                <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
-                                    <div className="flex flex-wrap gap-4 text-xs text-slate-500">
-                                        <div className="flex items-center gap-1">
-                                            <Icon icon="solar:user-linear" />
-                                            <span>ร้องขอโดย: {request.requester.full_name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1">
-                                            <Icon icon="solar:calendar-linear" />
-                                            <span>{formatDate(request.created_at)}</span>
-                                        </div>
-                                        {request.reviewer && request.reviewed_at && (
-                                            <div className="flex items-center gap-1">
-                                                <Icon icon="solar:check-read-linear" />
-                                                <span className="mr-2">
-                                                    {request.status === "approved" ? "อนุมัติ" : "ปฏิเสธ"}โดย: {request.reviewer.full_name}
-
+                                }
+                                title={
+                                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                                        {isGroup ? (
+                                            <>
+                                                <span className="font-medium text-slate-800">งานกลุ่ม</span>
+                                                <span className="text-slate-500 text-sm">
+                                                    ({group.requests.map(r => r.student.full_name).join(", ")})
                                                 </span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="font-medium text-slate-800">{firstRequest.student.full_name}</span>
+                                                <span className="text-slate-500">{firstRequest.student.student_id}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                }
+                                subtitle={
+                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                        <span className="text-slate-600">{group.assignment.name}</span>
+                                        {group.sub_item && (
+                                            <span className="text-slate-400">• {group.sub_item.name}</span>
+                                        )}
+                                        <span className="text-slate-400">•</span>
+                                        <span className="font-medium">
+                                            <span className="text-slate-500">{group.old_score ?? "-"}</span>
+                                            <span className="mx-1 text-slate-400">→</span>
+                                            <span className="text-emerald-600">{group.new_score}</span>
+                                            <span className="text-slate-400 text-xs">/{group.sub_item?.max_score ?? group.assignment.max_score}</span>
+                                        </span>
+                                        {group.images && group.images.length > 0 && (
+                                            <>
+                                                <span className="text-slate-400">•</span>
+                                                <span className="text-blue-500 text-xs flex items-center gap-1">
+                                                    <Icon icon="solar:gallery-bold" />
+                                                    {group.images.length} รูป
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                }
+                            >
+                                <div className="space-y-4">
+                                    {/* Group Members List (for group requests) */}
+                                    {isGroup && (
+                                        <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
+                                            <p className="text-xs text-purple-600 font-medium mb-2">
+                                                <Icon icon="solar:users-group-rounded-bold" className="inline mr-1" />
+                                                สมาชิกในกลุ่ม ({group.requests.length} คน)
+                                            </p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {group.requests.map(req => (
+                                                    <div key={req.id} className="flex items-center gap-2 text-sm">
+                                                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center">
+                                                            <Icon icon="solar:user-bold" className="text-purple-600 text-xs" />
+                                                        </div>
+                                                        <span className="text-slate-700">{req.student.full_name}</span>
+                                                        <span className="text-slate-400 text-xs">{req.student.student_id}</span>
+                                                        <span className="text-slate-400 text-xs ml-auto">
+                                                            {req.old_score ?? "-"} → {req.new_score}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Score Change Details */}
+                                    <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg">
+                                        <div className="text-center flex-1">
+                                            <p className="text-xs text-slate-500 mb-1">คะแนนเดิม</p>
+                                            <p className="text-2xl font-bold text-slate-600">
+                                                {group.old_score ?? "-"}
+                                            </p>
+                                        </div>
+                                        <Icon icon="solar:arrow-right-linear" className="text-2xl text-slate-300" />
+                                        <div className="text-center flex-1">
+                                            <p className="text-xs text-slate-500 mb-1">คะแนนใหม่</p>
+                                            <p className="text-2xl font-bold text-emerald-600">
+                                                {group.new_score}
+                                            </p>
+                                        </div>
+                                        <div className="text-center flex-1 pl-4 border-l border-slate-200">
+                                            <p className="text-xs text-slate-500 mb-1">คะแนนเต็ม</p>
+                                            <p className="text-2xl font-medium text-slate-400">
+                                                {group.sub_item?.max_score ?? group.assignment.max_score}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Reason */}
+                                    {group.reason && (
+                                        <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                            <p className="text-xs text-amber-600 font-medium mb-1">
+                                                <Icon icon="solar:chat-round-line-bold" className="inline mr-1" />
+                                                เหตุผลการแก้ไข
+                                            </p>
+                                            <p className="text-sm text-slate-700">{group.reason}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Attached Images */}
+                                    {group.images && group.images.length > 0 && (
+                                        <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                            <p className="text-xs text-blue-600 font-medium mb-2">
+                                                <Icon icon="solar:gallery-bold" className="inline mr-1" />
+                                                รูปภาพประกอบ ({group.images.length} รูป)
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {group.images.map((imagePath, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => setPreviewImage(getImageUrl(imagePath))}
+                                                        className="relative group cursor-pointer"
+                                                    >
+                                                        <img
+                                                            src={getImageUrl(imagePath)}
+                                                            alt={`รูปภาพ ${idx + 1}`}
+                                                            className="w-20 h-20 object-cover rounded-lg border border-blue-200 hover:border-blue-400 transition-colors"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.style.display = 'none';
+                                                                target.parentElement!.innerHTML = '<div class="w-20 h-20 rounded-lg border border-red-200 bg-red-50 flex items-center justify-center text-red-400 text-xs text-center p-1">ไม่พบรูป</div>';
+                                                            }}
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors flex items-center justify-center">
+                                                            <Icon icon="solar:eye-bold" className="text-white opacity-0 group-hover:opacity-100 text-xl" />
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Review Comment (for approved/rejected) */}
+                                    {firstRequest.review_comment && firstRequest.status !== "pending" && (
+                                        <div className={`p-3 rounded-lg border ${firstRequest.status === "approved"
+                                            ? "bg-emerald-50 border-emerald-100"
+                                            : "bg-red-50 border-red-100"
+                                            }`}>
+                                            <p className={`text-xs font-medium mb-1 ${firstRequest.status === "approved" ? "text-emerald-600" : "text-red-600"
+                                                }`}>
+                                                <Icon icon={firstRequest.status === "approved" ? "solar:check-circle-bold" : "solar:close-circle-bold"} className="inline mr-1" />
+                                                {firstRequest.status === "approved" ? "หมายเหตุการอนุมัติ" : "เหตุผลการปฏิเสธ"}
+                                            </p>
+                                            <p className="text-sm text-slate-700">{firstRequest.review_comment}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Meta Info & Actions */}
+                                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
+                                        <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                                            <div className="flex items-center gap-1">
+                                                <Icon icon="solar:user-linear" />
+                                                <span>ร้องขอโดย: {group.requester.full_name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1">
                                                 <Icon icon="solar:calendar-linear" />
-                                                <span> {formatDate(request.reviewed_at)}</span>
+                                                <span>{formatDate(group.created_at)}</span>
+                                            </div>
+                                            {firstRequest.reviewer && firstRequest.reviewed_at && (
+                                                <div className="flex items-center gap-1">
+                                                    <Icon icon="solar:check-read-linear" />
+                                                    <span className="mr-2">
+                                                        {firstRequest.status === "approved" ? "อนุมัติ" : "ปฏิเสธ"}โดย: {firstRequest.reviewer.full_name}
+                                                    </span>
+                                                    <Icon icon="solar:calendar-linear" />
+                                                    <span> {formatDate(firstRequest.reviewed_at)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Actions (only for pending, instructor only) */}
+                                        {group.status === "pending" && !isReadOnly && (
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    color="success"
+                                                    variant="flat"
+                                                    size="sm"
+                                                    startContent={<Icon icon="solar:check-circle-bold" />}
+                                                    onPress={() => isGroup 
+                                                        ? openGroupActionModal("approve", group)
+                                                        : openSingleActionModal("approve", firstRequest)
+                                                    }
+                                                >
+                                                    {isGroup ? `อนุมัติ (${group.requests.length} คน)` : "อนุมัติ"}
+                                                </Button>
+                                                <Button
+                                                    color="danger"
+                                                    variant="flat"
+                                                    size="sm"
+                                                    startContent={<Icon icon="solar:close-circle-bold" />}
+                                                    onPress={() => isGroup 
+                                                        ? openGroupActionModal("reject", group)
+                                                        : openSingleActionModal("reject", firstRequest)
+                                                    }
+                                                >
+                                                    {isGroup ? `ปฏิเสธ (${group.requests.length} คน)` : "ปฏิเสธ"}
+                                                </Button>
                                             </div>
                                         )}
                                     </div>
-
-                                    {/* Actions (only for pending) */}
-                                    {request.status === "pending" && (
-                                        <div className="flex gap-2">
-                                            <Button
-                                                color="success"
-                                                variant="flat"
-                                                size="sm"
-                                                startContent={<Icon icon="solar:check-circle-bold" />}
-                                                onPress={() => setActionModal({ isOpen: true, type: "approve", request })}
-                                            >
-                                                อนุมัติ
-                                            </Button>
-                                            <Button
-                                                color="danger"
-                                                variant="flat"
-                                                size="sm"
-                                                startContent={<Icon icon="solar:close-circle-bold" />}
-                                                onPress={() => setActionModal({ isOpen: true, type: "reject", request })}
-                                            >
-                                                ปฏิเสธ
-                                            </Button>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
-                        </AccordionItem>
-                    ))}
+                            </AccordionItem>
+                        );
+                    })}
                 </Accordion>
             )}
 
@@ -397,10 +660,10 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
             <Modal
                 isOpen={actionModal.isOpen}
                 onClose={() => {
-                    setActionModal({ isOpen: false, type: "approve", request: null });
+                    setActionModal({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
                     setActionComment("");
                 }}
-                size="md"
+                size="lg"
             >
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
@@ -414,7 +677,8 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                     </ModalHeader>
                     <Divider />
                     <ModalBody className="py-4">
-                        {actionModal.request && (
+                        {/* Single Request */}
+                        {actionModal.request && !actionModal.group && (
                             <div className="space-y-4">
                                 {/* Request Summary */}
                                 <div className="p-3 bg-slate-50 rounded-lg space-y-2">
@@ -453,13 +717,148 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                                 />
                             </div>
                         )}
+
+                        {/* Group Request */}
+                        {actionModal.group && (
+                            <div className="space-y-4">
+                                {/* Group Summary */}
+                                <div className="p-3 bg-slate-50 rounded-lg space-y-2">
+                                    <p className="text-sm">
+                                        <span className="text-slate-500">งาน:</span>{" "}
+                                        <span className="font-medium">{actionModal.group.assignment.name}</span>
+                                        {actionModal.group.sub_item && (
+                                            <span className="text-slate-500"> - {actionModal.group.sub_item.name}</span>
+                                        )}
+                                    </p>
+                                    <p className="text-sm">
+                                        <span className="text-slate-500">คะแนน:</span>{" "}
+                                        <span className="text-slate-600">{actionModal.group.old_score ?? "-"}</span>
+                                        <span className="mx-2">→</span>
+                                        <span className="font-bold text-emerald-600">{actionModal.group.new_score}</span>
+                                        <span className="text-slate-400"> / {actionModal.group.sub_item?.max_score ?? actionModal.group.assignment.max_score}</span>
+                                    </p>
+                                </div>
+
+                                {/* Member Selection */}
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                                            <Icon icon="solar:users-group-two-rounded-bold" className="text-blue-500" />
+                                            เลือกสมาชิกที่ต้องการ{actionModal.type === "approve" ? "อนุมัติ" : "ปฏิเสธ"}
+                                        </p>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                size="sm"
+                                                variant="flat"
+                                                color="primary"
+                                                onPress={() => toggleAllSelection(true)}
+                                                className="text-xs h-7 px-2"
+                                            >
+                                                เลือกทั้งหมด
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="flat"
+                                                color="default"
+                                                onPress={() => toggleAllSelection(false)}
+                                                className="text-xs h-7 px-2"
+                                            >
+                                                ยกเลิกทั้งหมด
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="bg-white rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-64 overflow-y-auto">
+                                        {actionModal.group.requests
+                                            .filter(r => r.status === "pending")
+                                            .map(req => (
+                                                <div
+                                                    key={req.id}
+                                                    className={`flex items-center justify-between p-3 cursor-pointer transition-all ${
+                                                        actionModal.selectedIds.includes(req.id)
+                                                            ? 'bg-blue-50/70'
+                                                            : 'hover:bg-slate-50'
+                                                    }`}
+                                                    onClick={() => toggleRequestSelection(req.id)}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                                                            actionModal.selectedIds.includes(req.id)
+                                                                ? 'bg-blue-500 border-blue-500 shadow-sm'
+                                                                : 'border-slate-300 bg-white hover:border-blue-300'
+                                                        }`}>
+                                                            {actionModal.selectedIds.includes(req.id) && (
+                                                                <Icon icon="solar:check-bold" className="text-white text-xs" />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${
+                                                                actionModal.selectedIds.includes(req.id)
+                                                                    ? 'bg-blue-100 text-blue-600'
+                                                                    : 'bg-slate-100 text-slate-600'
+                                                            }`}>
+                                                                <Icon icon="solar:user-bold" className="text-sm" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium text-slate-700">
+                                                                    {req.student.full_name}
+                                                                </p>
+                                                                <p className="text-xs text-slate-500">
+                                                                    {req.student.student_id}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="text-sm">
+                                                            <span className="text-slate-500">{req.old_score ?? "-"}</span>
+                                                            <span className="mx-1 text-slate-400">→</span>
+                                                            <span className="text-emerald-600 font-semibold">{req.new_score}</span>
+                                                        </div>
+                                                        {actionModal.selectedIds.includes(req.id) && (
+                                                            <Chip size="sm" color="primary" variant="flat" className="text-xs" startContent={<Icon icon="solar:check-circle-bold" className="mr-1 text-xs" />}>
+                                                                เลือกแล้ว
+                                                            </Chip>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                    <div className="flex items-center justify-between text-xs">
+                                        <p className="text-slate-500 flex items-center gap-1">
+                                            <Icon icon="solar:user-check-bold" className="text-blue-500" />
+                                            เลือกแล้ว {actionModal.selectedIds.length} / {actionModal.group.requests.filter(r => r.status === "pending").length} คน
+                                        </p>
+                                        {actionModal.selectedIds.length === 0 && (
+                                            <p className="text-amber-600 flex items-center gap-1">
+                                                <Icon icon="solar:danger-triangle-bold" />
+                                                กรุณาเลือกอย่างน้อย 1 คน
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Comment Input */}
+                                <Textarea
+                                    label={actionModal.type === "approve" ? "หมายเหตุ (ไม่บังคับ)" : "เหตุผลการปฏิเสธ *"}
+                                    placeholder={actionModal.type === "approve"
+                                        ? "ระบุหมายเหตุเพิ่มเติม (ถ้ามี)..."
+                                        : "กรุณาระบุเหตุผลในการปฏิเสธ..."
+                                    }
+                                    value={actionComment}
+                                    onValueChange={setActionComment}
+                                    variant="bordered"
+                                    minRows={3}
+                                    isRequired={actionModal.type === "reject"}
+                                />
+                            </div>
+                        )}
                     </ModalBody>
                     <Divider />
                     <ModalFooter>
                         <Button
                             variant="light"
                             onPress={() => {
-                                setActionModal({ isOpen: false, type: "approve", request: null });
+                                setActionModal({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
                                 setActionComment("");
                             }}
                         >
@@ -468,11 +867,50 @@ export default function ScoreApprovalTab({ courseId, onPendingCountChange }: Sco
                         <Button
                             color={actionModal.type === "approve" ? "success" : "danger"}
                             isLoading={isSubmitting}
+                            isDisabled={actionModal.group ? actionModal.selectedIds.length === 0 : false}
                             onPress={actionModal.type === "approve" ? handleApprove : handleReject}
                         >
                             {actionModal.type === "approve" ? "อนุมัติ" : "ปฏิเสธ"}
+                            {actionModal.group && actionModal.selectedIds.length > 0 && ` (${actionModal.selectedIds.length} คน)`}
                         </Button>
                     </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Image Preview Modal */}
+            <Modal
+                isOpen={!!previewImage}
+                onClose={() => setPreviewImage(null)}
+                size="4xl"
+                classNames={{
+                    backdrop: "bg-black/80",
+                    base: "bg-transparent shadow-none",
+                }}
+            >
+                <ModalContent>
+                    {previewImage && (
+                        <div className="relative">
+                            <img
+                                src={previewImage}
+                                alt="Preview"
+                                className="max-w-full max-h-[80vh] object-contain mx-auto rounded-lg"
+                                onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.style.display = 'none';
+                                    target.insertAdjacentHTML('afterend', '<div class="text-white text-center py-20"><p class="text-xl">ไม่สามารถโหลดรูปภาพได้</p><p class="text-sm mt-2 text-white/60">ไฟล์รูปภาพอาจถูกลบหรือไม่พบบนเซิร์ฟเวอร์</p></div>');
+                                }}
+                            />
+                            <Button
+                                isIconOnly
+                                variant="flat"
+                                className="absolute top-2 right-2 bg-black/50 text-white"
+                                onPress={() => setPreviewImage(null)}
+                            >
+                                <Icon icon="solar:close-circle-bold" className="text-xl" />
+                            </Button>
+                        </div>
+                        
+                    )}
                 </ModalContent>
             </Modal>
         </div>

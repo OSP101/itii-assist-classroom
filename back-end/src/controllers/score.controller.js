@@ -1,7 +1,18 @@
-const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, AssignmentAttendanceLink, sequelize } = require('../models');
+const { Score, Assignment, AssignmentSubItem, Student, User, StudentGroup, StudentGroupMember, CourseSectionStudent, CourseSection, ScoreEditRequest, AttendanceSession, AttendanceRecord, BonusScore, AssignmentAttendanceLink, Course, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
+
+/**
+ * Helper: check if course is active, throw 403 if not
+ */
+const ensureCourseActive = async (courseId) => {
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'is_active'] });
+    if (course && !course.is_active) {
+        throw new ApiError(403, 'รายวิชานี้ปิดใช้งานอยู่ กรุณาเปิดใช้งานก่อนทำการแก้ไข');
+    }
+};
 
 /**
  * Check if student attended the linked attendance session(s)
@@ -122,12 +133,14 @@ const getScores = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'assignment_id is required');
     }
 
+    // ✅ OPTIMIZED: Only select needed attributes
     const assignment = await Assignment.findByPk(assignment_id, {
+        attributes: ['id', 'course_id', 'name', 'max_score', 'assignment_type', 'linked_attendance_session_id', 'attendance_condition'],
         include: [
             {
                 model: AssignmentSubItem,
                 as: 'subItems',
-                order: [['order_index', 'ASC']],
+                attributes: ['id', 'name', 'max_score', 'order_index'],
             },
             {
                 model: AttendanceSession,
@@ -147,30 +160,25 @@ const getScores = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
-    // Get all students in the course
-    const sections = await CourseSection.findAll({
-        where: { course_id: assignment.course_id },
-        include: [
-            {
-                model: Student,
-                as: 'students',
-                through: { attributes: [] },
-            },
-        ],
+    // ✅ OPTIMIZED: Get all students in single query with raw SQL for better performance
+    const [studentsResult] = await sequelize.query(`
+        SELECT DISTINCT s.id, s.student_id, s.full_name, s.email
+        FROM students s
+        INNER JOIN course_section_students css ON s.id = css.student_id
+        INNER JOIN course_sections cs ON css.course_section_id = cs.id
+        WHERE cs.course_id = ?
+        ORDER BY s.student_id
+    `, {
+        replacements: [assignment.course_id],
     });
+    
+    const uniqueStudents = studentsResult;
 
-    const allStudents = sections.flatMap(section => section.students);
-    const uniqueStudents = [...new Map(allStudents.map(s => [s.id, s])).values()];
-
-    // Get existing scores (including sub-item scores)
+    // ✅ OPTIMIZED: Get existing scores with minimal attributes
     const scores = await Score.findAll({
         where: { assignment_id },
+        attributes: ['id', 'student_id', 'sub_item_id', 'score', 'comment', 'status', 'graded_by', 'graded_at'],
         include: [
-            {
-                model: Student,
-                as: 'student',
-                attributes: ['id', 'student_id', 'full_name'],
-            },
             {
                 model: User,
                 as: 'grader',
@@ -364,6 +372,9 @@ const submitScore = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Assignment not found');
     }
 
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
+
     // Check attendance if assignment is linked to attendance session
     const attendanceCheck = await checkStudentAttendance(assignment_id, student_id);
     if (!attendanceCheck.attended) {
@@ -423,6 +434,8 @@ const submitScore = asyncHandler(async (req, res) => {
         });
     }
 
+    logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_score', category: 'score', targetType: 'score', targetId: scoreRecord.id, targetName: assignment.name, detail: { student_id, score, sub_item_id: sub_item_id || null, created } });
+
     res.json({
         success: true,
         data: scoreRecord,
@@ -444,6 +457,9 @@ const submitBulkScores = asyncHandler(async (req, res) => {
     if (!assignment) {
         throw new ApiError(404, 'Assignment not found');
     }
+
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
 
     const transaction = await sequelize.transaction();
     const results = { created: 0, updated: 0 };
@@ -485,6 +501,8 @@ const submitBulkScores = asyncHandler(async (req, res) => {
 
         await transaction.commit();
 
+        logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_bulk_scores', category: 'score', targetType: 'assignment', targetId: assignment_id, targetName: assignment.name, detail: { created: results.created, updated: results.updated } });
+
         res.json({
             success: true,
             message: `${results.created} scores created, ${results.updated} scores updated`,
@@ -496,10 +514,10 @@ const submitBulkScores = asyncHandler(async (req, res) => {
 });
 
 /**
- * Submit group score (applies to all members, with optional sub_item_id)
+ * Submit group score (applies to all members or selected members, with optional sub_item_id)
  */
 const submitGroupScore = asyncHandler(async (req, res) => {
-    const { assignment_id, group_id, score, comment, sub_item_id } = req.body;
+    const { assignment_id, group_id, score, comment, sub_item_id, student_ids } = req.body;
 
     if (!assignment_id || !group_id || score === undefined) {
         throw new ApiError(400, 'assignment_id, group_id and score are required');
@@ -516,6 +534,9 @@ const submitGroupScore = asyncHandler(async (req, res) => {
     if (!assignment) {
         throw new ApiError(404, 'Assignment not found');
     }
+
+    // Check if course is active
+    await ensureCourseActive(assignment.course_id);
 
     let maxScore = parseFloat(assignment.max_score);
     if (sub_item_id) {
@@ -540,10 +561,22 @@ const submitGroupScore = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'No members found in this group');
     }
 
+    // Filter members if student_ids is provided (for selective grading)
+    let targetMembers = groupMembers;
+    if (student_ids && Array.isArray(student_ids) && student_ids.length > 0) {
+        // Validate that all provided student_ids are members of the group
+        const memberIds = groupMembers.map(m => m.student_id);
+        const invalidIds = student_ids.filter(id => !memberIds.includes(id));
+        if (invalidIds.length > 0) {
+            throw new ApiError(400, `Students ${invalidIds.join(', ')} are not members of this group`);
+        }
+        targetMembers = groupMembers.filter(m => student_ids.includes(m.student_id));
+    }
+
     const transaction = await sequelize.transaction();
 
     try {
-        for (const member of groupMembers) {
+        for (const member of targetMembers) {
             // Build where clause for finding existing score
             const whereClause = {
                 assignment_id,
@@ -584,9 +617,11 @@ const submitGroupScore = asyncHandler(async (req, res) => {
 
         await transaction.commit();
 
+        logCourseActivity({ courseId: assignment.course_id, actorUserId: req.user.id, action: 'submit_group_score', category: 'score', targetType: 'assignment', targetId: assignment_id, targetName: assignment.name, detail: { group_id, score, members: targetMembers.length, sub_item_id: sub_item_id || null } });
+
         res.json({
             success: true,
-            message: `Score submitted for ${groupMembers.length} group members`,
+            message: `Score submitted for ${targetMembers.length} group members`,
         });
     } catch (error) {
         await transaction.rollback();
@@ -609,6 +644,12 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
         throw new ApiError(404, 'Score not found');
     }
 
+    // Check if course is active (via score -> assignment)
+    const scoreAssignment = await Assignment.findByPk(existingScore.assignment_id, { attributes: ['id', 'course_id'] });
+    if (scoreAssignment) {
+        await ensureCourseActive(scoreAssignment.course_id);
+    }
+
     // Check if there's a pending request already
     const pendingRequest = await ScoreEditRequest.findOne({
         where: {
@@ -628,6 +669,12 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
         reason,
         requested_by: req.user.id,
     });
+
+    // Log to course activity (need to find courseId via score -> assignment)
+    const relAssignment = await Assignment.findByPk(existingScore.assignment_id, { attributes: ['id', 'name', 'course_id'] });
+    if (relAssignment) {
+      logCourseActivity({ courseId: relAssignment.course_id, actorUserId: req.user.id, action: 'request_score_edit', category: 'score', targetType: 'score_edit_request', targetId: editRequest.id, targetName: relAssignment.name, detail: { score_id, old_score: existingScore.score, new_score, reason } });
+    }
 
     res.status(201).json({
         success: true,
@@ -734,6 +781,14 @@ const reviewEditRequest = asyncHandler(async (req, res) => {
         }
 
         await transaction.commit();
+
+        // Log to course activity (need courseId via score -> assignment)
+        if (editRequest.score?.assignment_id) {
+          const relAssignment2 = await Assignment.findByPk(editRequest.score.assignment_id, { attributes: ['id', 'name', 'course_id'] });
+          if (relAssignment2) {
+            logCourseActivity({ courseId: relAssignment2.course_id, actorUserId: req.user.id, action: status === 'approved' ? 'approve_score_edit' : 'reject_score_edit', category: 'score', targetType: 'score_edit_request', targetId: id, targetName: relAssignment2.name, detail: { status, review_comment } });
+          }
+        }
 
         res.json({
             success: true,
@@ -855,13 +910,21 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Build assignment type filter
     let assignmentTypeFilter = {};
+    console.log(`[getScoreSummaryMatrix] assignment_type param: "${assignment_type}"`);
+    
     if (assignment_type === 'individual') {
+        // Lab assignments (individual work done in class)
         assignmentTypeFilter = { assignment_type: 'individual' };
+    } else if (assignment_type === 'assignment') {
+        // Assignment/homework (individual work done at home)
+        assignmentTypeFilter = { assignment_type: 'assignment' };
     } else if (assignment_type === 'group') {
         assignmentTypeFilter = { 
             assignment_type: { [Op.in]: ['permanent_group', 'weekly_group'] } 
         };
     }
+    
+    console.log(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
 
     // Get all assignments for this course
     const assignments = await Assignment.findAll({
@@ -879,6 +942,8 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         ],
         order: [['order_index', 'ASC']],
     });
+
+    console.log(`[getScoreSummaryMatrix] Found ${assignments.length} assignments with filter`);
 
     // Get all scores for these students and assignments
     const studentIds = studentsWithSection.map(s => s.id);
@@ -925,6 +990,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             graded_by: score.grader?.full_name || null,
             graded_at: score.graded_at || score.createdAt,
             updated_at: score.updatedAt,
+            comment: score.comment || null,
         };
     }
 
@@ -965,6 +1031,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                         graded_by: scoreObj?.graded_by || null,
                         graded_at: scoreObj?.graded_at || null,
                         updated_at: scoreObj?.updated_at || null,
+                        comment: scoreObj?.comment || null,
                     };
 
                     if (scoreObj?.score !== undefined) {
@@ -989,6 +1056,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                     graded_by: scoreObj?.graded_by || null,
                     graded_at: scoreObj?.graded_at || null,
                     updated_at: scoreObj?.updated_at || null,
+                    comment: scoreObj?.comment || null,
                 };
 
                 if (scoreObj?.score !== undefined) {
@@ -1073,34 +1141,32 @@ const searchStudents = asyncHandler(async (req, res) => {
         throw new ApiError(400, 'course_id is required');
     }
 
-    // Get students in this course
-    const sections = await CourseSection.findAll({
-        where: { course_id },
-        include: [
-            {
-                model: Student,
-                as: 'students',
-                through: { attributes: [] },
-                where: query ? {
-                    [Op.or]: [
-                        { student_id: { [Op.like]: `%${query}%` } },
-                        { full_name: { [Op.like]: `%${query}%` } },
-                    ],
-                } : {},
-            },
-        ],
-    });
+    // ✅ OPTIMIZED: Use raw SQL for better performance and reliability
+    // Previous Sequelize include with where: {} had issues when some sections had no students
+    let sql = `
+        SELECT DISTINCT s.id, s.student_id, s.full_name, s.email
+        FROM students s
+        INNER JOIN course_section_students css ON s.id = css.student_id
+        INNER JOIN course_sections cs ON css.course_section_id = cs.id
+        WHERE cs.course_id = ?
+    `;
+    const replacements = [course_id];
 
-    const allStudents = sections.flatMap(section => section.students);
-    const uniqueStudents = [...new Map(allStudents.map(s => [s.id, s])).values()];
+    // Add search filter if query provided
+    if (query && query.trim()) {
+        sql += ` AND (s.student_id LIKE ? OR s.full_name LIKE ?)`;
+        const searchPattern = `%${query.trim()}%`;
+        replacements.push(searchPattern, searchPattern);
+    }
 
-    // Sort by student_id for consistent ordering
-    uniqueStudents.sort((a, b) => a.student_id.localeCompare(b.student_id));
+    sql += ` ORDER BY s.student_id`;
+
+    const [students] = await sequelize.query(sql, { replacements });
 
     res.json({
         success: true,
-        data: uniqueStudents, // Return all students (filter in frontend)
-        total: uniqueStudents.length,
+        data: students,
+        total: students.length,
     });
 });
 

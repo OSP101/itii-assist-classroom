@@ -15,10 +15,20 @@ const {
   Score,
   AttendanceSession,
   AttendanceRecord,
+  sequelize,
 } = require('../models');
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
+const { cache, CACHE_TTL } = require('../utils/cache');
+const { 
+  batchCount, 
+  batchCountByStatus,
+  getStudentCountsByCourse,
+  getAttendanceStatsBatch,
+  getScoreStatsBatch,
+} = require('../utils/queryHelpers');
 
 /**
  * Check if user has access to course (is admin, instructor, or TA of course)
@@ -133,25 +143,21 @@ const getCourses = asyncHandler(async (req, res) => {
     ],
   });
 
-  // Get TA count for each course
-  const coursesWithCounts = await Promise.all(
-    courses.map(async (course) => {
-      const taCount = await CourseTA.count({ where: { course_id: course.id } });
-      const studentCount = await CourseSectionStudent.count({
-        include: [{
-          model: CourseSection,
-          as: 'section',
-          where: { course_id: course.id },
-          attributes: [],
-        }],
-      });
-      return {
-        ...course.toJSON(),
-        taCount,
-        studentCount,
-      };
-    })
-  );
+  // ✅ OPTIMIZED: Batch count instead of N+1 queries
+  const courseIds = courses.map(c => c.id);
+  
+  // Get TA counts in single query
+  const taCounts = await batchCount(CourseTA, 'course_id', courseIds);
+  
+  // Get student counts in single query (optimized with raw SQL)
+  const studentCounts = await getStudentCountsByCourse(courseIds);
+
+  // Map counts to courses (no additional queries needed)
+  const coursesWithCounts = courses.map(course => ({
+    ...course.toJSON(),
+    taCount: taCounts[course.id] || 0,
+    studentCount: studentCounts[course.id] || 0,
+  }));
 
   // Calculate pagination info
   const totalPages = Math.ceil(count / parseInt(limit));
@@ -369,6 +375,8 @@ const createCourse = asyncHandler(async (req, res) => {
     ],
   });
 
+  logCourseActivity({ courseId: course.id, actorUserId: req.user.id, action: 'create_course', category: 'course', targetType: 'course', targetId: course.id, targetName: `${code} - ${name}` });
+
   res.status(201).json({
     success: true,
     message: 'สร้างรายวิชาสำเร็จ',
@@ -508,6 +516,8 @@ const updateCourse = asyncHandler(async (req, res) => {
     ],
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'update_course', category: 'course', targetType: 'course', targetId: id, targetName: updatedCourse.name, detail: { fields: Object.keys(req.body) } });
+
   res.json({
     success: true,
     message: 'อัปเดตรายวิชาสำเร็จ',
@@ -528,6 +538,16 @@ const deleteCourse = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'ไม่พบข้อมูลรายวิชา');
   }
 
+  // Instructor can only delete their own courses
+  if (req.user.role === 'instructor') {
+    const isInstructor = await CourseInstructor.findOne({
+      where: { course_id: id, user_id: req.user.id },
+    });
+    if (!isInstructor) {
+      throw new ApiError(403, 'คุณไม่มีสิทธิ์ลบรายวิชานี้ เฉพาะอาจารย์ผู้สอนของรายวิชาเท่านั้น');
+    }
+  }
+
   // Delete related data
   await CourseTA.destroy({ where: { course_id: id } });
   
@@ -544,7 +564,10 @@ const deleteCourse = asyncHandler(async (req, res) => {
   await CourseSection.destroy({ where: { course_id: id } });
   
   // Delete course
+  const courseName = course.name;
   await course.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'delete_course', category: 'course', targetType: 'course', targetId: id, targetName: courseName });
 
   res.json({
     success: true,
@@ -584,6 +607,8 @@ const toggleCourseStatus = asyncHandler(async (req, res) => {
   }
 
   await course.update({ is_active: willBeActive });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: willBeActive ? 'activate_course' : 'deactivate_course', category: 'course', targetType: 'course', targetId: id, targetName: course.name });
 
   res.json({
     success: true,
@@ -634,6 +659,8 @@ const addSection = asyncHandler(async (req, res) => {
     note: note || null,
   });
 
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_section', category: 'course', targetType: 'section', targetId: section.id, targetName: `กลุ่ม ${section_no}` });
+
   res.status(201).json({
     success: true,
     message: 'เพิ่มกลุ่มเรียนสำเร็จ',
@@ -666,12 +693,69 @@ const removeSection = asyncHandler(async (req, res) => {
   // Delete students from section
   await CourseSectionStudent.destroy({ where: { course_section_id: sectionId } });
 
+  const sectionNo = section.section_no;
   // Delete section
   await section.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_section', category: 'course', targetType: 'section', targetId: sectionId, targetName: `กลุ่ม ${sectionNo}` });
 
   res.json({
     success: true,
     message: 'ลบกลุ่มเรียนสำเร็จ',
+  });
+});
+
+/**
+ * Update section
+ * @route PUT /api/courses/:id/sections/:sectionId
+ */
+const updateSection = asyncHandler(async (req, res) => {
+  const { id, sectionId } = req.params;
+  const { section_no, note } = req.body;
+  const currentUser = req.user;
+
+  // Check course access
+  const hasAccess = await checkCourseAccess(id, currentUser);
+  if (!hasAccess) {
+    throw new ApiError(403, 'คุณไม่มีสิทธิ์เข้าถึงรายวิชานี้');
+  }
+
+  const section = await CourseSection.findOne({
+    where: { id: sectionId, course_id: id },
+  });
+
+  if (!section) {
+    throw new ApiError(404, 'ไม่พบกลุ่มเรียน');
+  }
+
+  if (!section_no || !section_no.trim()) {
+    throw new ApiError(400, 'กรุณาระบุหมายเลขกลุ่มเรียน');
+  }
+
+  // Check duplicate (exclude current section)
+  const existingSection = await CourseSection.findOne({
+    where: { 
+      course_id: id, 
+      section_no: section_no.trim(),
+      id: { [Op.ne]: sectionId }
+    },
+  });
+  
+  if (existingSection) {
+    throw new ApiError(400, `หมายเลขกลุ่มเรียน ${section_no} มีอยู่แล้ว`);
+  }
+
+  await section.update({
+    section_no: section_no.trim(),
+    note: note || null,
+  });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'update_section', category: 'course', targetType: 'section', targetId: sectionId, targetName: `กลุ่ม ${section_no}` });
+
+  res.json({
+    success: true,
+    message: 'แก้ไขกลุ่มเรียนสำเร็จ',
+    data: section,
   });
 });
 
@@ -716,7 +800,26 @@ const addTA = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'ผู้ช่วยสอนนี้อยู่ในรายวิชาแล้ว');
   }
 
+  // Cross-role conflict: check if this TA's email matches a student enrolled in this course
+  if (ta.email) {
+    const studentWithSameEmail = await Student.findOne({ where: { email: ta.email } });
+    if (studentWithSameEmail) {
+      const sectionsInCourse = await CourseSection.findAll({ where: { course_id: id }, attributes: ['id'] });
+      const sectionIds = sectionsInCourse.map(s => s.id);
+      if (sectionIds.length > 0) {
+        const enrolledAsStudent = await CourseSectionStudent.findOne({
+          where: { course_section_id: { [Op.in]: sectionIds }, student_id: studentWithSameEmail.id },
+        });
+        if (enrolledAsStudent) {
+          throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${ta.full_name} (${ta.email}) เป็นนักศึกษาในรายวิชานี้อยู่แล้ว`);
+        }
+      }
+    }
+  }
+
   await CourseTA.create({ course_id: id, user_id });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_ta', category: 'member', targetType: 'ta', targetId: user_id, targetName: ta.full_name });
 
   res.status(201).json({
     success: true,
@@ -773,10 +876,33 @@ const bulkAddTAs = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'ผู้ช่วยสอนที่เลือกทั้งหมดอยู่ในรายวิชาแล้ว');
   }
 
+  // Cross-role conflict: check if any TA's email matches a student enrolled in this course
+  const taEmails = newTAs.map(t => t.email).filter(Boolean);
+  if (taEmails.length > 0) {
+    const studentsWithSameEmail = await Student.findAll({ where: { email: { [Op.in]: taEmails } } });
+    if (studentsWithSameEmail.length > 0) {
+      const sectionsInCourse = await CourseSection.findAll({ where: { course_id: id }, attributes: ['id'] });
+      const sectionIds = sectionsInCourse.map(s => s.id);
+      if (sectionIds.length > 0) {
+        const studentIds = studentsWithSameEmail.map(s => s.id);
+        const enrolledConflicts = await CourseSectionStudent.findAll({
+          where: { course_section_id: { [Op.in]: sectionIds }, student_id: { [Op.in]: studentIds } },
+          include: [{ model: Student, as: 'student', attributes: ['full_name', 'email'] }],
+        });
+        if (enrolledConflicts.length > 0) {
+          const names = enrolledConflicts.map(e => e.student?.full_name || 'ไม่ทราบชื่อ').join(', ');
+          throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${names} เป็นนักศึกษาในรายวิชานี้อยู่แล้ว`);
+        }
+      }
+    }
+  }
+
   // Bulk create
   await CourseTA.bulkCreate(
     newTAs.map(ta => ({ course_id: id, user_id: ta.id }))
   );
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_tas', category: 'member', targetType: 'ta', targetName: `${newTAs.length} คน`, detail: { added: newTAs.map(t => ({ id: t.id, name: t.full_name })) } });
 
   res.status(201).json({
     success: true,
@@ -811,6 +937,8 @@ const removeTA = asyncHandler(async (req, res) => {
   if (!deleted) {
     throw new ApiError(404, 'ไม่พบผู้ช่วยสอนในรายวิชานี้');
   }
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_ta', category: 'member', targetType: 'ta', targetId: userId });
 
   res.json({
     success: true,
@@ -871,6 +999,8 @@ const addInstructor = asyncHandler(async (req, res) => {
     user_id,
     is_primary: false, // New instructors added later are not primary
   });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_instructor', category: 'member', targetType: 'instructor', targetId: user_id, targetName: instructor.full_name });
 
   res.status(201).json({
     success: true,
@@ -942,6 +1072,8 @@ const bulkAddInstructors = asyncHandler(async (req, res) => {
       is_primary: false,
     }))
   );
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_instructors', category: 'member', targetType: 'instructor', targetName: `${newInstructors.length} คน`, detail: { added: newInstructors.map(i => ({ id: i.id, name: i.full_name })) } });
 
   res.status(201).json({
     success: true,
@@ -1025,6 +1157,8 @@ const removeInstructor = asyncHandler(async (req, res) => {
   }
 
   await instructorRecord.destroy();
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_instructor', category: 'member', targetType: 'instructor', targetId: userId });
 
   res.json({
     success: true,
@@ -1121,10 +1255,23 @@ const addStudentToSection = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'นักศึกษานี้อยู่ในรายวิชานี้แล้ว');
   }
 
+  // Cross-role conflict: check if this student's email matches a TA in this course
+  if (student.email) {
+    const taUser = await User.findOne({ where: { email: student.email, role: 'ta' } });
+    if (taUser) {
+      const isTA = await CourseTA.findOne({ where: { course_id: id, user_id: taUser.id } });
+      if (isTA) {
+        throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${student.full_name} (${student.email}) เป็นผู้ช่วยสอน (TA) ในรายวิชานี้อยู่แล้ว`);
+      }
+    }
+  }
+
   await CourseSectionStudent.create({
     course_section_id: sectionId,
     student_id,
   });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'add_student', category: 'member', targetType: 'student', targetId: student_id, targetName: student.full_name });
 
   res.status(201).json({
     success: true,
@@ -1187,6 +1334,23 @@ const bulkAddStudentsToSection = asyncHandler(async (req, res) => {
   const students = await Student.findAll({
     where: { id: { [Op.in]: newStudentIds } },
   });
+
+  // Cross-role conflict: check if any student's email matches a TA in this course
+  const studentEmails = students.map(s => s.email).filter(Boolean);
+  if (studentEmails.length > 0) {
+    const taUsers = await User.findAll({ where: { email: { [Op.in]: studentEmails }, role: 'ta' } });
+    if (taUsers.length > 0) {
+      const taUserIds = taUsers.map(u => u.id);
+      const taConflicts = await CourseTA.findAll({ where: { course_id: id, user_id: { [Op.in]: taUserIds } } });
+      if (taConflicts.length > 0) {
+        const conflictEmails = new Set(taConflicts.map(tc => taUsers.find(u => u.id === tc.user_id)?.email));
+        const conflictStudents = students.filter(s => s.email && conflictEmails.has(s.email));
+        const names = conflictStudents.map(s => s.full_name).join(', ');
+        throw new ApiError(400, `ไม่สามารถเพิ่มได้ — ${names} เป็นผู้ช่วยสอน (TA) ในรายวิชานี้อยู่แล้ว`);
+      }
+    }
+  }
+
   const validStudentIds = students.map(s => s.id);
 
   // Bulk create enrollments
@@ -1196,6 +1360,8 @@ const bulkAddStudentsToSection = asyncHandler(async (req, res) => {
   }));
 
   await CourseSectionStudent.bulkCreate(enrollments, { ignoreDuplicates: true });
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'bulk_add_students', category: 'member', targetType: 'student', targetName: `${validStudentIds.length} คน`, detail: { sectionId: sectionId, count: validStudentIds.length } });
 
   res.status(201).json({
     success: true,
@@ -1229,6 +1395,8 @@ const removeStudentFromSection = asyncHandler(async (req, res) => {
   if (!deleted) {
     throw new ApiError(404, 'ไม่พบนักศึกษาในกลุ่มเรียนนี้');
   }
+
+  logCourseActivity({ courseId: id, actorUserId: req.user.id, action: 'remove_student', category: 'member', targetType: 'student', targetId: studentId });
 
   res.json({
     success: true,
@@ -1695,10 +1863,11 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   let totalReceivedScores = 0;
 
   assignments.forEach(assignment => {
-    const isGroupAssignment = assignment.assignment_type !== 'individual';
+    // individual and assignment types are both individual work
+    const isGroupAssignment = assignment.assignment_type !== 'individual' && assignment.assignment_type !== 'assignment';
     
     if (!isGroupAssignment) {
-      // For individual assignments
+      // For individual assignments (Lab and Assignment/Homework)
       const studentsWithScores = new Set(
         allScores
           .filter(s => s.assignment_id === assignment.id && s.student_id)
@@ -1714,70 +1883,77 @@ const getCourseOverview = asyncHandler(async (req, res) => {
     : 0;
 
   // ========================================
-  // Calculate TA activity
+  // ✅ OPTIMIZED: Calculate TA activity with batch queries
   // ========================================
-  const taActivity = await Promise.all((course.tas || []).map(async (ta) => {
-    // Count scores graded by this TA
-    const gradedCount = assignmentIds.length > 0 ? await Score.count({
-      where: {
-        assignment_id: { [Op.in]: assignmentIds },
-        graded_by: ta.id,
-        score: { [Op.not]: null },
-      },
-    }) : 0;
-
-    // Get last grading time
-    const lastGrade = assignmentIds.length > 0 ? await Score.findOne({
-      where: {
-        assignment_id: { [Op.in]: assignmentIds },
-        graded_by: ta.id,
-        score: { [Op.not]: null },
-      },
-      order: [['graded_at', 'DESC']],
-      attributes: ['graded_at'],
-    }) : null;
-
-    return {
+  let taActivity = [];
+  if ((course.tas || []).length > 0 && assignmentIds.length > 0) {
+    const taIds = course.tas.map(ta => ta.id);
+    
+    // Single query for all TA grading counts
+    const [taGradingStats] = await sequelize.query(`
+      SELECT 
+        graded_by,
+        COUNT(*) as graded_count,
+        MAX(graded_at) as last_graded_at
+      FROM scores
+      WHERE assignment_id IN (?)
+        AND graded_by IN (?)
+        AND score IS NOT NULL
+      GROUP BY graded_by
+    `, {
+      replacements: [assignmentIds, taIds],
+    });
+    
+    const taStatsMap = {};
+    taGradingStats.forEach(row => {
+      taStatsMap[row.graded_by] = {
+        gradedCount: parseInt(row.graded_count),
+        lastActive: row.last_graded_at,
+      };
+    });
+    
+    taActivity = course.tas.map(ta => ({
       id: ta.id,
       full_name: ta.full_name,
       email: ta.email,
       avatar: ta.avatar,
       assignedAt: ta.CourseTA?.assigned_at,
-      gradedCount,
-      lastActive: lastGrade?.graded_at || null,
-    };
-  }));
-
-  // Sort TA by graded count
-  taActivity.sort((a, b) => b.gradedCount - a.gradedCount);
+      gradedCount: taStatsMap[ta.id]?.gradedCount || 0,
+      lastActive: taStatsMap[ta.id]?.lastActive || null,
+    }));
+    
+    // Sort TA by graded count
+    taActivity.sort((a, b) => b.gradedCount - a.gradedCount);
+  }
 
   // ========================================
-  // Get attendance statistics
+  // ✅ OPTIMIZED: Get attendance statistics with single query
   // ========================================
   let attendanceRate = 0;
   let totalAttendanceSessions = 0;
   
-  const attendanceSessions = await AttendanceSession.findAll({
-    where: { course_id: id },
-    attributes: ['id'],
+  // Single query for both session count and attendance stats
+  const [attendanceStats] = await sequelize.query(`
+    SELECT 
+      COUNT(DISTINCT ats.id) as total_sessions,
+      SUM(CASE WHEN ar.status IN ('present', 'late') THEN 1 ELSE 0 END) as present_count,
+      COUNT(ar.id) as total_records
+    FROM attendance_sessions ats
+    LEFT JOIN attendance_records ar ON ats.id = ar.attendance_session_id
+    WHERE ats.course_id = ?
+  `, {
+    replacements: [id],
   });
   
-  totalAttendanceSessions = attendanceSessions.length;
-
-  if (totalAttendanceSessions > 0 && totalStudents > 0) {
-    const sessionIds = attendanceSessions.map(s => s.id);
-    const presentCount = await AttendanceRecord.count({
-      where: {
-        attendance_session_id: { [Op.in]: sessionIds },
-        status: ['present', 'late'],
-      },
-    });
+  if (attendanceStats && attendanceStats[0]) {
+    totalAttendanceSessions = parseInt(attendanceStats[0].total_sessions) || 0;
+    const presentCount = parseInt(attendanceStats[0].present_count) || 0;
     const totalExpected = totalAttendanceSessions * totalStudents;
-    attendanceRate = Math.round((presentCount / totalExpected) * 100);
+    attendanceRate = totalExpected > 0 ? Math.round((presentCount / totalExpected) * 100) : 0;
   }
 
   // ========================================
-  // Get recent activities (last 10)
+  // ✅ OPTIMIZED: Get recent activities with limit (last 10)
   // ========================================
   const recentScores = assignmentIds.length > 0 ? await Score.findAll({
     where: {
@@ -1838,47 +2014,138 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   });
 
   // ========================================
-  // Assignment statistics for table
+  // ✅ OPTIMIZED: Assignment statistics for table - no additional queries
   // ========================================
-  const assignmentStats = await Promise.all(assignments.slice(0, 10).map(async (assignment) => {
-    const isGroupAssignment = assignment.assignment_type !== 'individual';
+  const assignmentStats = assignments.slice(0, 10).map(assignment => {
+    // individual and assignment types are both individual work
+    const isGroupAssignment = assignment.assignment_type !== 'individual' && assignment.assignment_type !== 'assignment';
     
-    // Get scores for this assignment
+    // Get scores for this assignment from already-fetched data
     const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
     
-    // Calculate average score
-    const scores = assignmentScores.map(s => parseFloat(s.score) || 0);
-    const avgScore = scores.length > 0 
-      ? scores.reduce((a, b) => a + b, 0) / scores.length 
-      : null;
+    // Calculate average score per student/group (sum sub-item scores first)
+    let avgScore = null;
+    const hasSubItems = assignment.subItems && assignment.subItems.length > 0;
+
+    if (assignmentScores.length > 0) {
+      if (isGroupAssignment) {
+        // Group by group_id, sum scores per group
+        const groupTotals = new Map();
+        for (const s of assignmentScores) {
+          if (!s.group_id) continue;
+          groupTotals.set(s.group_id, (groupTotals.get(s.group_id) || 0) + (parseFloat(s.score) || 0));
+        }
+        if (groupTotals.size > 0) {
+          const totals = Array.from(groupTotals.values());
+          avgScore = totals.reduce((a, b) => a + b, 0) / totals.length;
+        }
+      } else {
+        // Group by student_id, sum scores per student
+        const studentTotals = new Map();
+        for (const s of assignmentScores) {
+          if (!s.student_id) continue;
+          studentTotals.set(s.student_id, (studentTotals.get(s.student_id) || 0) + (parseFloat(s.score) || 0));
+        }
+        if (studentTotals.size > 0) {
+          const totals = Array.from(studentTotals.values());
+          avgScore = totals.reduce((a, b) => a + b, 0) / totals.length;
+        }
+      }
+    }
 
     // Count unique students/groups scored
     let scoredCount = 0;
+    let totalExpected = 0;
+    
     if (isGroupAssignment) {
       scoredCount = new Set(assignmentScores.filter(s => s.group_id).map(s => s.group_id)).size;
+      // For group assignments, we need to count total groups
+      // This is approximate - ideally we'd query the groups table
+      totalExpected = scoredCount; // Can't calculate not scored for groups easily
     } else {
       scoredCount = new Set(assignmentScores.filter(s => s.student_id).map(s => s.student_id)).size;
+      totalExpected = totalStudents;
     }
 
     const notScoredCount = isGroupAssignment 
       ? 0
-      : totalStudents - scoredCount;
+      : Math.max(0, totalStudents - scoredCount);
 
     const submittedRate = isGroupAssignment 
-      ? 0 
+      ? (scoredCount > 0 ? 100 : 0) // Show 100% if any group scored
       : (totalStudents > 0 ? Math.round((scoredCount / totalStudents) * 100) : 0);
+
+    // Calculate actual max score (considering sub-items)
+    let actualMaxScore = 0;
+    if (assignment.subItems && assignment.subItems.length > 0) {
+      actualMaxScore = assignment.subItems.reduce((sum, item) => sum + (parseFloat(item.max_score) || 0), 0);
+    } else {
+      actualMaxScore = parseFloat(assignment.max_score) || 0;
+    }
 
     return {
       id: assignment.id,
       name: assignment.name,
-      max_score: assignment.max_score,
+      max_score: actualMaxScore,
       assignment_type: assignment.assignment_type,
+      is_score_visible: assignment.is_score_visible !== false, // default true
       avgScore: avgScore !== null ? Math.round(avgScore * 10) / 10 : null,
       scoredCount,
-      notScoredCount: Math.max(0, notScoredCount),
+      notScoredCount,
       submittedRate,
+      hasSubItems: assignment.subItems && assignment.subItems.length > 0,
+      subItemsCount: assignment.subItems ? assignment.subItems.length : 0,
     };
-  }));
+  });  // ✅ Changed from async Promise.all to sync map
+
+  // ========================================
+  // Assignment statistics by type (NEW)
+  // ========================================
+  const assignmentStatsByType = {};
+  assignments.forEach(assignment => {
+    const type = assignment.assignment_type || 'individual';
+    if (!assignmentStatsByType[type]) {
+      assignmentStatsByType[type] = {
+        count: 0,
+        totalMaxScore: 0,
+        totalScored: 0,
+        totalExpected: 0,
+      };
+    }
+    
+    // Calculate actual max score for this assignment
+    let assignmentMaxScore = 0;
+    if (assignment.subItems && assignment.subItems.length > 0) {
+      assignmentMaxScore = assignment.subItems.reduce((sum, item) => sum + (parseFloat(item.max_score) || 0), 0);
+    } else {
+      assignmentMaxScore = parseFloat(assignment.max_score) || 0;
+    }
+    
+    assignmentStatsByType[type].count += 1;
+    assignmentStatsByType[type].totalMaxScore += assignmentMaxScore;
+    
+    // Count scored for this assignment
+    const isGroupAssignment = type !== 'individual' && type !== 'assignment';
+    const assignmentScores = allScores.filter(s => s.assignment_id === assignment.id);
+    
+    if (isGroupAssignment) {
+      const groupsScored = new Set(assignmentScores.filter(s => s.group_id).map(s => s.group_id)).size;
+      assignmentStatsByType[type].totalScored += groupsScored > 0 ? 1 : 0; // Count assignment as scored if any group scored
+      assignmentStatsByType[type].totalExpected += 1;
+    } else {
+      const studentsScored = new Set(assignmentScores.filter(s => s.student_id).map(s => s.student_id)).size;
+      assignmentStatsByType[type].totalScored += studentsScored;
+      assignmentStatsByType[type].totalExpected += totalStudents;
+    }
+  });
+
+  // Calculate progress percentage for each type
+  Object.keys(assignmentStatsByType).forEach(type => {
+    const stats = assignmentStatsByType[type];
+    stats.progressRate = stats.totalExpected > 0 
+      ? Math.round((stats.totalScored / stats.totalExpected) * 100) 
+      : 0;
+  });
 
   // ========================================
   // Course summary
@@ -1907,6 +2174,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
       lowPerformers,
       taActivity,
       assignments: assignmentStats,
+      assignmentStatsByType,
       recentActivities,
       scoreDistribution,
     },
@@ -1925,6 +2193,7 @@ module.exports = {
   deleteCourse,
   toggleCourseStatus,
   addSection,
+  updateSection,
   removeSection,
   addTA,
   bulkAddTAs,

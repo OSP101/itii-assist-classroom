@@ -211,6 +211,7 @@ export interface OverviewAssignment {
   name: string;
   max_score: number;
   assignment_type: string;
+  is_score_visible?: boolean;
   avgScore: number | null;
   scoredCount: number;
   notScoredCount: number;
@@ -237,6 +238,14 @@ export interface ScoreDistribution {
   poor: number;
 }
 
+export interface AssignmentTypeStats {
+  count: number;
+  totalMaxScore: number;
+  totalScored: number;
+  totalExpected: number;
+  progressRate: number;
+}
+
 export interface CourseOverviewSummary {
   totalStudents: number;
   totalSections: number;
@@ -257,6 +266,7 @@ export interface CourseOverview {
   lowPerformers: OverviewStudent[];
   taActivity: TAActivity[];
   assignments: OverviewAssignment[];
+  assignmentStatsByType?: Record<string, AssignmentTypeStats>;
   recentActivities: RecentActivity[];
   scoreDistribution: ScoreDistribution;
 }
@@ -369,6 +379,13 @@ class CourseService {
    */
   async addSection(courseId: string, data: { section_no: string; note?: string }) {
     return apiService.post<CourseSection>(API_ENDPOINTS.COURSES.ADD_SECTION(courseId), data);
+  }
+
+  /**
+   * Update section
+   */
+  async updateSection(courseId: string, sectionId: number, data: { section_no: string; note?: string }) {
+    return apiService.put<CourseSection>(`/courses/${courseId}/sections/${sectionId}`, data);
   }
 
   /**

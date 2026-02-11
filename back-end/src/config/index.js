@@ -28,6 +28,14 @@ module.exports = {
     password: process.env.DB_PASSWORD || '',
   },
 
+  // Redis - for real-time queue states
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: parseInt(process.env.REDIS_DB, 10) || 0,
+  },
+
   // JWT
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET || 'default-access-secret',

@@ -6,7 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const attendanceController = require('../controllers/attendance.controller');
-const { authenticate } = require('../middlewares/auth');
+const { authenticate, checkCourseActive } = require('../middlewares/auth');
 
 // ============================================
 // Public Routes (for student check-in)
@@ -52,7 +52,7 @@ router.get('/', attendanceController.getAttendanceSessions);
  * @desc    Create new attendance session
  * @access  Instructor, TA
  */
-router.post('/', attendanceController.createAttendanceSession);
+router.post('/', checkCourseActive, attendanceController.createAttendanceSession);
 
 /**
  * @route   GET /api/attendance/:id
@@ -67,6 +67,20 @@ router.get('/:id', attendanceController.getAttendanceSession);
  * @access  Instructor, TA
  */
 router.put('/:id', attendanceController.updateAttendanceSession);
+
+/**
+ * @route   POST /api/attendance/:id/preview-time-change
+ * @desc    Preview impact of changing attendance time rules on existing check-ins
+ * @access  Instructor, TA
+ */
+router.post('/:id/preview-time-change', attendanceController.previewTimeChange);
+
+/**
+ * @route   POST /api/attendance/:id/apply-time-change
+ * @desc    Apply time change and re-evaluate all existing check-in records
+ * @access  Instructor, TA
+ */
+router.post('/:id/apply-time-change', attendanceController.applyTimeChange);
 
 /**
  * @route   DELETE /api/attendance/:id

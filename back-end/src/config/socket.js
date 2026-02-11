@@ -22,9 +22,11 @@ io = new Server(httpServer, {
       const allowedOrigins = [
         config.frontendUrl,
         "http://localhost:3000",
+        "http://localhost:3010",
         "http://127.0.0.1:3000",
         "http://10.199.10.10:3000",
         "https://itii.osp101.dev",
+        "https://itii-mid.osp101.com",
       ];
       
       // Check if origin is in allowed list
@@ -151,6 +153,52 @@ io = new Server(httpServer, {
       console.log(`🌐 Socket ${socket.id} left global updates room`);
     });
 
+    // ========== Queue System Rooms ==========
+    // Join queue session room (for students and instructors)
+    socket.on('join-queue', (sessionId) => {
+      const room = `queue-${sessionId}`;
+      socket.join(room);
+      console.log(`📋 Socket ${socket.id} joined queue room: ${room}`);
+    });
+
+    // Leave queue session room
+    socket.on('leave-queue', (sessionId) => {
+      const room = `queue-${sessionId}`;
+      socket.leave(room);
+      console.log(`📋 Socket ${socket.id} left queue room: ${room}`);
+    });
+
+    // Join worker room (for receiving new tasks)
+    socket.on('join-worker', (userId) => {
+      // Ensure userId is string for consistent room naming
+      const room = `worker-${String(userId)}`;
+      socket.join(room);
+      console.log(`👷 Worker ${socket.id} joined room: ${room}`);
+      // Also store the userId on socket for debugging
+      socket.userId = String(userId);
+    });
+
+    // Leave worker room
+    socket.on('leave-worker', (userId) => {
+      const room = `worker-${String(userId)}`;
+      socket.leave(room);
+      console.log(`👷 Worker ${socket.id} left room: ${room}`);
+    });
+
+    // Join booking room (for students to receive updates on their booking)
+    socket.on('join-booking', (bookingId) => {
+      const room = `booking-${bookingId}`;
+      socket.join(room);
+      console.log(`🎫 Socket ${socket.id} joined booking room: ${room}`);
+    });
+
+    // Leave booking room
+    socket.on('leave-booking', (bookingId) => {
+      const room = `booking-${bookingId}`;
+      socket.leave(room);
+      console.log(`🎫 Socket ${socket.id} left booking room: ${room}`);
+    });
+
     // ========== Generic Data Change Event ==========
     // Handle any data change and broadcast to all clients
     socket.on('data-change', (data) => {
@@ -264,6 +312,7 @@ const emitDataUpdate = (resource, action, id = null, data = null) => {
 module.exports = {
   initializeSocket,
   getIO,
+  // Attendance
   emitToAttendance,
   emitToInstructor,
   emitCourseUpdate,

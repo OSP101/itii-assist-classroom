@@ -24,6 +24,9 @@ router.put('/:id', authorize('admin', 'instructor'), classroomController.updateC
 // Update classroom layout (desks)
 router.put('/:id/layout', authorize('admin', 'instructor'), classroomController.updateLayout);
 
+// Toggle classroom active status
+router.patch('/:id/toggle-status', authorize('admin', 'instructor'), classroomController.toggleStatus);
+
 // Restore soft-deleted classroom
 router.post('/:id/restore', authorize('admin'), classroomController.restoreClassroom);
 

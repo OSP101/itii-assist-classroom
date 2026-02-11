@@ -2,7 +2,7 @@
  * Classroom Controller - Handle classroom and desk management
  */
 
-const { Classroom, Desk, User } = require('../models');
+const { Classroom, Desk, Zone, User } = require('../models');
 const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 const ApiError = require('../utils/ApiError');
@@ -70,6 +70,11 @@ const getClassrooms = asyncHandler(async (req, res) => {
         attributes: ['id', 'number', 'x', 'y', 'type', 'is_enabled'],
       },
       {
+        model: Zone,
+        as: 'zones',
+        attributes: ['id', 'name', 'x', 'y', 'width', 'height', 'color'],
+      },
+      {
         model: User,
         as: 'creator',
         attributes: ['id', 'full_name', 'email'],
@@ -108,6 +113,11 @@ const getClassroomById = asyncHandler(async (req, res) => {
         as: 'desks',
         attributes: ['id', 'number', 'x', 'y', 'type', 'is_enabled'],
         order: [['number', 'ASC']],
+      },
+      {
+        model: Zone,
+        as: 'zones',
+        attributes: ['id', 'name', 'x', 'y', 'width', 'height', 'color'],
       },
       {
         model: User,
@@ -249,7 +259,7 @@ const restoreClassroom = asyncHandler(async (req, res) => {
  */
 const updateLayout = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { desks } = req.body;
+  const { desks, zones } = req.body;
 
   const classroom = await Classroom.findByPk(id);
 
@@ -265,6 +275,7 @@ const updateLayout = asyncHandler(async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
+    // ============ DESKS ============
     // Get existing desks
     const existingDesks = await Desk.findAll({
       where: { classroom_id: id },
@@ -316,15 +327,76 @@ const updateLayout = asyncHandler(async (req, res) => {
       }
     }
 
+    // ============ ZONES ============
+    if (Array.isArray(zones)) {
+      // Get existing zones
+      const existingZones = await Zone.findAll({
+        where: { classroom_id: id },
+        transaction,
+      });
+
+      const existingZoneIds = existingZones.map(z => z.id);
+      const newZoneIds = zones.filter(z => z.id && !z.id.startsWith('zone_')).map(z => z.id);
+
+      // Delete removed zones
+      const zonesToDelete = existingZoneIds.filter(zid => !newZoneIds.includes(zid));
+      if (zonesToDelete.length > 0) {
+        await Zone.destroy({
+          where: { id: zonesToDelete },
+          transaction,
+        });
+      }
+
+      // Update or create zones
+      for (const zone of zones) {
+        if (zone.id && existingZoneIds.includes(zone.id)) {
+          // Update existing zone
+          await Zone.update(
+            {
+              name: zone.name,
+              x: zone.x,
+              y: zone.y,
+              width: zone.width,
+              height: zone.height,
+              color: zone.color,
+            },
+            {
+              where: { id: zone.id },
+              transaction,
+            }
+          );
+        } else {
+          // Create new zone
+          await Zone.create(
+            {
+              classroom_id: id,
+              name: zone.name,
+              x: zone.x || 0,
+              y: zone.y || 0,
+              width: zone.width || 400,
+              height: zone.height || 300,
+              color: zone.color || 'rgba(99,102,241,0.15)',
+            },
+            { transaction }
+          );
+        }
+      }
+    }
+
     await transaction.commit();
 
-    // Fetch updated classroom with desks
+    // Fetch updated classroom with desks and zones
     const updatedClassroom = await Classroom.findByPk(id, {
       include: [
         {
           model: Desk,
           as: 'desks',
           attributes: ['id', 'number', 'x', 'y', 'type', 'is_enabled'],
+        },
+        {
+          model: Zone,
+          as: 'zones',
+          attributes: ['id', 'name', 'x', 'y', 'width', 'height', 'color'],
         },
       ],
     });
@@ -341,63 +413,108 @@ const updateLayout = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Toggle classroom active status
+ * @route PATCH /api/classrooms/:id/toggle-status
+ */
+const toggleStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const classroom = await Classroom.findByPk(id);
+  if (!classroom) {
+    res.status(404);
+    throw new Error('ไม่พบห้องเรียนที่ระบุ');
+  }
+
+  // Toggle the is_active status
+  classroom.is_active = !classroom.is_active;
+  await classroom.save();
+
+  res.json({
+    success: true,
+    message: classroom.is_active ? 'เปิดใช้งานห้องเรียนแล้ว' : 'ปิดใช้งานห้องเรียนแล้ว',
+    data: classroom,
+  });
+});
+
+/**
  * Get classroom statistics
  * @route GET /api/classrooms/stats
+ * Optimized: Uses Promise.all for parallel queries
  */
 const getStats = asyncHandler(async (req, res) => {
-  const totalClassrooms = await Classroom.count({
-    where: { is_deleted: false },
-  });
-
-  const deletedClassrooms = await Classroom.count({
-    where: { is_deleted: true },
-  });
-
-  const totalDesks = await Desk.count({
-    include: [{
-      model: Classroom,
-      as: 'classroom',
+  // Execute all count queries in parallel for better performance
+  const [
+    totalClassrooms,
+    deletedClassrooms,
+    totalDesks,
+    computerDesks,
+    normalDesks,
+    teacherDesks,
+    enabledDesks,
+    buildings,
+  ] = await Promise.all([
+    // Classroom counts
+    Classroom.count({ where: { is_deleted: false } }),
+    Classroom.count({ where: { is_deleted: true } }),
+    
+    // Desk counts - use subquery approach for better performance
+    Desk.count({
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'computer' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'normal' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { type: 'teacher' },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    Desk.count({
+      where: { is_enabled: true },
+      include: [{
+        model: Classroom,
+        as: 'classroom',
+        where: { is_deleted: false },
+        attributes: [],
+        required: true,
+      }],
+    }),
+    
+    // Unique buildings
+    Classroom.findAll({
       where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const computerDesks = await Desk.count({
-    where: { type: 'computer' },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const teacherDesks = await Desk.count({
-    where: { type: 'teacher' },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  const enabledDesks = await Desk.count({
-    where: { is_enabled: true },
-    include: [{
-      model: Classroom,
-      as: 'classroom',
-      where: { is_deleted: false },
-      attributes: [],
-    }],
-  });
-
-  // Get unique buildings
-  const buildings = await Classroom.findAll({
-    where: { is_deleted: false },
-    attributes: [[sequelize.fn('DISTINCT', sequelize.col('building')), 'building']],
-    raw: true,
-  });
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('building')), 'building']],
+      raw: true,
+    }),
+  ]);
 
   res.json({
     success: true,
@@ -406,7 +523,7 @@ const getStats = asyncHandler(async (req, res) => {
       deletedClassrooms,
       totalDesks,
       computerDesks,
-      normalDesks: totalDesks - computerDesks - teacherDesks,
+      normalDesks,
       teacherDesks,
       enabledDesks,
       disabledDesks: totalDesks - enabledDesks,
@@ -423,5 +540,6 @@ module.exports = {
   deleteClassroom,
   restoreClassroom,
   updateLayout,
+  toggleStatus,
   getStats,
 };

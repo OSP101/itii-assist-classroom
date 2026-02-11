@@ -1,4 +1,53 @@
 services:
+
+  traefik:
+    image: traefik:v3.0
+    container_name: itii-dev-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.devresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.devresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.devresolver.acme.email=your@email.com"
+      - "--certificatesresolvers.devresolver.acme.storage=/letsencrypt/acme.json"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik-dev/acme.json:/letsencrypt/acme.json
+    networks:
+      - itii-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik-dev.osp101.dev`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=devresolver"
+  redis:
+    image: redis:7-alpine
+    container_name: itii-dev-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - itii-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 5
+      timeout: 3s
+    restart: always
+
   backend:
     build: 
       context: ./back-end
@@ -10,10 +59,15 @@ services:
       NODE_ENV: development
       DB_HOST: itii-mysql
       DB_PORT: 3306
+      REDIS_HOST: itii-dev-redis
+      REDIS_PORT: 6379
     ports:
       - "3001:3001"
     networks:
       - itii-network
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
       interval: 10s
@@ -21,12 +75,22 @@ services:
       timeout: 5s
       start_period: 30s
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.backend.rule=Host(`api.osp101.dev`)"
+      - "traefik.http.routers.backend.entrypoints=websecure"
+      - "traefik.http.routers.backend.tls.certresolver=devresolver"
+      - "traefik.http.services.backend.loadbalancer.server.port=3001"
 
   frontend:
     build: 
       context: ./front-end
       args:
-        NEXT_PUBLIC_API_URL:  ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_SOCKET_URL: ${NEXT_PUBLIC_SOCKET_URL}
+        NEXT_PUBLIC_FRONTEND_URL: ${NEXT_PUBLIC_FRONTEND_URL}
+        NEXT_PUBLIC_CLOUD: ${NEXT_PUBLIC_CLOUD}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
     image: itii-frontend:dev
     container_name:  itii-dev-frontend
     env_file:
@@ -39,7 +103,16 @@ services:
     networks: 
       - itii-network
     restart: always
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`itii.osp101.dev`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=devresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
 
 networks:
   itii-network:  
     external: true
+
+volumes:
+  redis-dev-data:

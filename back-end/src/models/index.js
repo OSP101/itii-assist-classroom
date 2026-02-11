@@ -10,6 +10,7 @@ const CourseTA = require('./CourseTA');
 const CourseSectionStudent = require('./CourseSectionStudent');
 const Classroom = require('./Classroom');
 const Desk = require('./Desk');
+const Zone = require('./Zone');
 const Feedback = require('./Feedback');
 const StudentGroup = require('./StudentGroup');
 const StudentGroupMember = require('./StudentGroupMember');
@@ -22,6 +23,19 @@ const AttendanceSession = require('./AttendanceSession');
 const AttendanceSessionSection = require('./AttendanceSessionSection');
 const AttendanceRecord = require('./AttendanceRecord');
 const BonusScore = require('./BonusScore');
+
+// Queue System Models
+const QueueSession = require('./QueueSession');
+const QueueWorker = require('./QueueWorker');
+const QueueBooking = require('./QueueBooking');
+const QueueDeskStatus = require('./QueueDeskStatus');
+
+// FCM Notification Models
+const FcmToken = require('./FcmToken');
+const NotificationLog = require('./NotificationLog');
+
+// Activity Log
+const CourseActivityLog = require('./CourseActivityLog');
 
 // ============================================
 // Define Associations
@@ -174,6 +188,28 @@ Classroom.hasMany(Desk, {
 Desk.belongsTo(Classroom, {
   foreignKey: 'classroom_id',
   as: 'classroom',
+});
+
+// Classroom -> Zones
+Classroom.hasMany(Zone, {
+  foreignKey: 'classroom_id',
+  as: 'zones',
+});
+
+Zone.belongsTo(Classroom, {
+  foreignKey: 'classroom_id',
+  as: 'classroom',
+});
+
+// CourseActivityLog -> User, Course
+CourseActivityLog.belongsTo(User, {
+  foreignKey: 'actor_user_id',
+  as: 'actor',
+});
+
+CourseActivityLog.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
 });
 
 // Feedback -> User
@@ -494,6 +530,201 @@ User.hasMany(BonusScore, {
 });
 
 // ============================================
+// Queue System Associations
+// ============================================
+
+// QueueSession -> Course
+QueueSession.belongsTo(Course, {
+  foreignKey: 'course_id',
+  as: 'course',
+});
+
+Course.hasMany(QueueSession, {
+  foreignKey: 'course_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> Classroom
+QueueSession.belongsTo(Classroom, {
+  foreignKey: 'classroom_id',
+  as: 'classroom',
+});
+
+Classroom.hasMany(QueueSession, {
+  foreignKey: 'classroom_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> Assignment (linked)
+QueueSession.belongsTo(Assignment, {
+  foreignKey: 'linked_assignment_id',
+  as: 'linkedAssignment',
+});
+
+Assignment.hasMany(QueueSession, {
+  foreignKey: 'linked_assignment_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> AttendanceSession (linked)
+QueueSession.belongsTo(AttendanceSession, {
+  foreignKey: 'linked_attendance_session_id',
+  as: 'linkedAttendanceSession',
+});
+
+AttendanceSession.hasMany(QueueSession, {
+  foreignKey: 'linked_attendance_session_id',
+  as: 'queueSessions',
+});
+
+// QueueSession -> User (creator)
+QueueSession.belongsTo(User, {
+  foreignKey: 'created_by',
+  as: 'creator',
+});
+
+User.hasMany(QueueSession, {
+  foreignKey: 'created_by',
+  as: 'createdQueueSessions',
+});
+
+// QueueWorker -> QueueSession
+QueueWorker.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'session',
+});
+
+QueueSession.hasMany(QueueWorker, {
+  foreignKey: 'queue_session_id',
+  as: 'workers',
+});
+
+// QueueWorker -> User
+QueueWorker.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+User.hasMany(QueueWorker, {
+  foreignKey: 'user_id',
+  as: 'queueWorkerAssignments',
+});
+
+// QueueBooking -> QueueSession
+QueueBooking.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'session',
+});
+
+QueueSession.hasMany(QueueBooking, {
+  foreignKey: 'queue_session_id',
+  as: 'bookings',
+});
+
+// QueueBooking -> Student
+QueueBooking.belongsTo(Student, {
+  foreignKey: 'student_id',
+  as: 'student',
+});
+
+Student.hasMany(QueueBooking, {
+  foreignKey: 'student_id',
+  as: 'queueBookings',
+});
+
+// QueueBooking -> Desk
+QueueBooking.belongsTo(Desk, {
+  foreignKey: 'desk_id',
+  as: 'desk',
+});
+
+Desk.hasMany(QueueBooking, {
+  foreignKey: 'desk_id',
+  as: 'queueBookings',
+});
+
+// QueueBooking -> User (assigned worker)
+QueueBooking.belongsTo(User, {
+  foreignKey: 'assigned_worker_id',
+  as: 'assignedWorker',
+});
+
+User.hasMany(QueueBooking, {
+  foreignKey: 'assigned_worker_id',
+  as: 'assignedBookings',
+});
+
+// QueueDeskStatus -> QueueSession
+QueueDeskStatus.belongsTo(QueueSession, {
+  foreignKey: 'queue_session_id',
+  as: 'session',
+});
+
+QueueSession.hasMany(QueueDeskStatus, {
+  foreignKey: 'queue_session_id',
+  as: 'deskStatuses',
+});
+
+// QueueDeskStatus -> Desk
+QueueDeskStatus.belongsTo(Desk, {
+  foreignKey: 'desk_id',
+  as: 'desk',
+});
+
+Desk.hasMany(QueueDeskStatus, {
+  foreignKey: 'desk_id',
+  as: 'queueStatuses',
+});
+
+// ============================================
+// FCM Token Associations
+// ============================================
+
+// FcmToken -> User (for workers)
+FcmToken.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+User.hasMany(FcmToken, {
+  foreignKey: 'user_id',
+  as: 'fcmTokens',
+});
+
+// FcmToken -> QueueSession (for workers)
+FcmToken.belongsTo(QueueSession, {
+  foreignKey: 'session_id',
+  as: 'queueSession',
+});
+
+QueueSession.hasMany(FcmToken, {
+  foreignKey: 'session_id',
+  as: 'fcmTokens',
+});
+
+// FcmToken -> QueueBooking (for students)
+FcmToken.belongsTo(QueueBooking, {
+  foreignKey: 'booking_id',
+  as: 'booking',
+});
+
+QueueBooking.hasMany(FcmToken, {
+  foreignKey: 'booking_id',
+  as: 'fcmTokens',
+});
+
+// NotificationLog -> FcmToken
+NotificationLog.belongsTo(FcmToken, {
+  foreignKey: 'fcm_token_id',
+  as: 'fcmToken',
+});
+
+FcmToken.hasMany(NotificationLog, {
+  foreignKey: 'fcm_token_id',
+  as: 'notificationLogs',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -509,6 +740,7 @@ module.exports = {
   CourseSectionStudent,
   Classroom,
   Desk,
+  Zone,
   Feedback,
   StudentGroup,
   StudentGroupMember,
@@ -521,4 +753,14 @@ module.exports = {
   AttendanceSessionSection,
   AttendanceRecord,
   BonusScore,
+  // Queue System Models
+  QueueSession,
+  QueueWorker,
+  QueueBooking,
+  QueueDeskStatus,
+  // FCM Notification Models
+  FcmToken,
+  NotificationLog,
+  // Activity Log
+  CourseActivityLog,
 };

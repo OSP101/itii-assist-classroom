@@ -362,6 +362,7 @@ export default function AttendanceSummaryPage() {
                             startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                             className="w-full sm:w-48"
                             size="sm"
+                            isClearable
                         />
                         <Select
                             placeholder="สถานะ"

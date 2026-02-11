@@ -13,16 +13,28 @@ export interface Desk {
   is_enabled: boolean;
 }
 
+export interface ZoneData {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
 export interface Classroom {
   id: string;
   name: string;
   building: string;
   floor: string;
   description?: string;
+  is_active: boolean;
   is_deleted: boolean;
   created_at: string;
   updated_at: string;
   desks: Desk[];
+  zones?: ZoneData[];
   creator?: {
     id: number;
     full_name: string;
@@ -111,7 +123,7 @@ class ClassroomService {
   }
 
   /**
-   * Update classroom layout (desks)
+   * Update classroom layout (desks and zones)
    */
   async updateLayout(id: string, desks: {
     id?: string;
@@ -120,8 +132,16 @@ class ClassroomService {
     y: number;
     type: 'computer' | 'normal' | 'teacher';
     isEnabled: boolean;
+  }[], zones?: {
+    id: string;
+    name: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    color: string;
   }[]) {
-    return apiService.put<Classroom>(`/classrooms/${id}/layout`, { desks });
+    return apiService.put<Classroom>(`/classrooms/${id}/layout`, { desks, zones });
   }
 
   /**
@@ -137,6 +157,13 @@ class ClassroomService {
    */
   async restoreClassroom(id: string) {
     return apiService.post<Classroom>(`/classrooms/${id}/restore`);
+  }
+
+  /**
+   * Toggle classroom active status
+   */
+  async toggleStatus(id: string) {
+    return apiService.patch<{ success: boolean; message: string; data: Classroom }>(`/classrooms/${id}/toggle-status`);
   }
 
   /**

@@ -1,0 +1,335 @@
+================================================================================
+                    ระบบจองคิวตรวจงาน (Queue Booking System)
+                              ITII Assist Classroom
+================================================================================
+
+สารบัญ:
+1. ภาพรวมของระบบ
+2. โครงสร้างข้อมูล (Database Models)
+3. User Roles และสิทธิ์
+4. Flow การทำงาน
+5. Socket Events (Real-time)
+6. API Endpoints
+7. Worker Pause Feature
+
+================================================================================
+1. ภาพรวมของระบบ
+================================================================================
+
+ระบบจองคิวตรวจงานเป็นระบบ Real-time ที่ช่วยจัดการคิวสำหรับการตรวจงาน (Grading) 
+และการขอความช่วยเหลือ (Help) ระหว่างนักศึกษากับผู้ช่วยสอน (TA/Worker)
+
+องค์ประกอบหลัก:
+- Queue Session: เซสชันคิวที่สร้างโดยอาจารย์/TA
+- Queue Worker: ผู้ช่วยสอนที่รับงาน
+- Queue Booking: การจองคิวของนักศึกษา
+- Queue Desk Status: สถานะของโต๊ะในห้องเรียน
+
+================================================================================
+2. โครงสร้างข้อมูล (Database Models)
+================================================================================
+
+2.1 QueueSession
+----------------
+- id: Primary key
+- course_id: FK to Course
+- classroom_id: FK to Classroom (ห้องเรียนที่ใช้)
+- linked_assignment_id: FK to Assignment (งานที่เชื่อมโยง, optional)
+- linked_attendance_session_id: FK to AttendanceSession (optional)
+- title: ชื่อเซสชัน
+- pin_code: รหัส PIN สำหรับนักศึกษาใช้จอง (6 หลัก)
+- status: draft | active | paused | completed
+- created_by: FK to User (ผู้สร้างเซสชัน)
+- created_at, updated_at
+
+2.2 QueueWorker
+---------------
+- id: Primary key
+- queue_session_id: FK to QueueSession
+- user_id: FK to User (TA/อาจารย์)
+- status: online | busy | paused | offline
+  * online: พร้อมรับงานใหม่
+  * busy: กำลังดำเนินการกับงานปัจจุบัน
+  * paused: กำลังทำงานปัจจุบันให้เสร็จ แต่จะไม่รับงานใหม่
+  * offline: ไม่รับงาน
+- accept_grading: boolean (รับงานตรวจ)
+- accept_help: boolean (รับงานช่วยเหลือ)
+- current_booking_id: FK to QueueBooking (งานที่กำลังทำอยู่)
+- total_grading_completed: จำนวนงานตรวจที่ทำเสร็จ
+- total_help_completed: จำนวนงานช่วยเหลือที่ทำเสร็จ
+- last_active_at: timestamp
+
+2.3 QueueBooking
+----------------
+- id: Primary key
+- queue_session_id: FK to QueueSession
+- student_id: FK to Student
+- desk_id: FK to Desk (โต๊ะที่นักศึกษานั่ง)
+- desk_number: หมายเลขโต๊ะ
+- booking_type: grading | help
+- queue_number: หมายเลขคิว (ลำดับที่จองในแต่ละประเภท)
+- status: waiting | in_progress | completed | cancelled | no_show
+  * waiting: รอ Worker รับงาน
+  * in_progress: กำลังดำเนินการ
+  * completed: เสร็จสิ้น
+  * cancelled: นักศึกษายกเลิก
+  * no_show: ไม่พบนักศึกษา (Worker skip)
+- note: หมายเหตุจากนักศึกษา
+- assigned_worker_id: FK to User (TA ที่รับงาน)
+- assigned_at: เวลาที่ได้รับมอบหมาย
+- started_at: เวลาเริ่มทำงาน
+- completed_at: เวลาเสร็จ
+- score: คะแนน (กรณีตรวจงาน)
+- score_comment: คอมเมนต์คะแนน
+- worker_note: หมายเหตุจาก Worker
+
+2.4 QueueDeskStatus
+-------------------
+- id: Primary key
+- queue_session_id: FK to QueueSession
+- desk_id: FK to Desk
+- grading_status: not_started | waiting | in_progress | completed
+- help_status: none | waiting | in_progress
+- grading_booking_id: FK to current grading booking
+- help_booking_id: FK to current help booking
+
+================================================================================
+3. User Roles และสิทธิ์
+================================================================================
+
+3.1 Instructor/TA (ผู้สร้างเซสชัน)
+- สร้าง/แก้ไข/ลบ Queue Session
+- เปิด/ปิด Session
+- ดูสถิติและรายงาน
+- เข้าร่วมเป็น Worker ได้
+
+3.2 Worker (ผู้รับงาน - TA/Instructor)
+- เข้าร่วม/ออกจากการรับงาน
+- รับงานอัตโนมัติตามลำดับคิว
+- ให้คะแนน/comment งาน
+- Skip นักศึกษาที่ไม่พบ
+- หยุดรับงานใหม่ (Pause)
+
+3.3 Student (นักศึกษา)
+- จองคิวด้วย PIN code
+- ดูสถานะคิวของตัวเอง
+- ยกเลิกคิว (เฉพาะ status = waiting)
+- ดูผลคะแนนหลังตรวจเสร็จ
+
+================================================================================
+4. Flow การทำงาน
+================================================================================
+
+4.1 การสร้างและเปิดเซสชัน
+--------------------------
+1. Instructor สร้าง Queue Session โดยเลือก:
+   - ห้องเรียน (Classroom)
+   - งานที่เชื่อมโยง (Assignment - optional)
+   - Attendance Session (optional)
+2. ระบบ Generate PIN code 6 หลัก
+3. Instructor เปลี่ยน status เป็น 'active' เพื่อเปิดรับการจอง
+
+4.2 การเข้าร่วมเป็น Worker
+---------------------------
+1. TA/Instructor เรียก API joinAsWorker
+2. ระบบสร้าง/อัพเดท QueueWorker record:
+   - status = 'online'
+   - accept_grading, accept_help ตามที่เลือก
+3. Socket join room: `worker-{userId}`
+4. ระบบเช็คว่ามี waiting booking ไหม
+   - ถ้ามี → assign ให้ Worker ทันที
+
+4.3 การจองคิว (Student)
+------------------------
+1. นักศึกษาใส่ PIN code และเลือกประเภท (grading/help)
+2. ระบบตรวจสอบ:
+   - PIN ถูกต้อง และ Session active
+   - มี Attendance record (ถ้า require_attendance = true)
+   - ยังไม่มี active booking
+   - โต๊ะใช้งานได้ (ไม่ใช่โต๊ะอาจารย์)
+   - (กรณี grading) ยังไม่ตรวจครบทุกข้อ
+3. สร้าง QueueBooking:
+   - status = 'waiting'
+   - queue_number = ลำดับถัดไป
+4. อัพเดท QueueDeskStatus
+5. Socket emit: 'new-booking' to queue room
+6. ระบบพยายาม assign ให้ Worker ที่ว่าง
+
+4.4 การ Assign Booking ให้ Worker
+----------------------------------
+Function: tryAssignBooking(sessionId, bookingId, io)
+
+1. หา Worker ที่:
+   - status = 'online' (ไม่ใช่ busy/paused/offline)
+   - accept_grading/accept_help ตรงกับ booking_type
+2. เลือก Worker ที่ทำงานน้อยที่สุด (load balancing)
+3. Double-check: Worker ยัง online อยู่จริง
+4. Update Booking:
+   - status = 'in_progress'
+   - assigned_worker_id = worker.user_id
+   - assigned_at, started_at = now
+5. Update Worker:
+   - status = 'busy'
+   - current_booking_id = booking.id
+6. Update DeskStatus: in_progress
+7. Socket emit:
+   - 'booking-assigned' to queue room
+   - 'new-task' to worker room
+8. FCM Push notification to Worker
+
+4.5 การทำงานเสร็จ (Complete Booking)
+------------------------------------
+Function: completeBooking(bookingId, { score, sub_item_scores, ... })
+
+1. ตรวจสอบสิทธิ์ (assigned_worker_id === current user)
+2. Update Booking:
+   - status = 'completed'
+   - completed_at = now
+   - score, score_comment
+3. Update DeskStatus:
+   - กรณีมี sub-items และยังไม่ตรวจครบ → 'not_started' (ให้จองใหม่ได้)
+   - กรณีตรวจครบ → 'completed'
+4. Update Worker:
+   - ถ้า status === 'paused' → เปลี่ยนเป็น 'offline' (ออกจากการรับงาน)
+   - ถ้า status !== 'paused' → เปลี่ยนเป็น 'online' (พร้อมรับงานใหม่)
+   - current_booking_id = null
+   - เพิ่ม total_grading_completed/total_help_completed
+5. บันทึก Score (ถ้ามี linked_assignment)
+6. Socket emit:
+   - 'booking-completed' to queue room
+   - 'your-booking-completed' to booking room (student)
+7. พยายาม assign งานถัดไปให้ Worker (ถ้ายัง online)
+
+4.6 การ Skip Booking (No Show)
+------------------------------
+Function: skipBooking(bookingId, { reason })
+
+1. Update Booking:
+   - status = 'no_show'
+   - worker_note = reason
+2. Reset DeskStatus: not_started / none
+3. Update Worker (เหมือน complete):
+   - ถ้า paused → offline
+   - ถ้าไม่ → online
+4. Socket emit: 'booking-skipped'
+5. พยายาม assign งานถัดไป
+
+4.7 การยกเลิกคิว (Student Cancel)
+---------------------------------
+Function: cancelBooking(bookingId)
+
+1. ตรวจสอบ status === 'waiting' (ยังไม่ถูก assign)
+2. Update Booking: status = 'cancelled'
+3. Reset DeskStatus: not_started / none
+4. Socket emit: 'booking-cancelled'
+
+================================================================================
+5. Socket Events (Real-time)
+================================================================================
+
+5.1 Socket Rooms
+----------------
+- queue-{sessionId}: สำหรับ Projector/Dashboard ดูภาพรวม
+- worker-{userId}: สำหรับ Worker รับ task ใหม่
+- booking-{bookingId}: สำหรับ Student ติดตามสถานะ booking
+
+5.2 Client → Server Events
+--------------------------
+- join-queue(sessionId): เข้าร่วม queue room
+- leave-queue(sessionId): ออกจาก queue room
+- join-worker(userId): เข้าร่วม worker room (รับ new-task)
+- leave-worker(userId): ออกจาก worker room
+- join-booking(bookingId): เข้าร่วม booking room
+- leave-booking(bookingId): ออกจาก booking room
+
+5.3 Server → Client Events
+--------------------------
+Queue Room (queue-{sessionId}):
+- session-status-changed: { sessionId, status }
+- pin-changed: { sessionId, pin_code }
+- worker-joined: { workerId, userId, userName }
+- worker-paused: { workerId, userId }
+- worker-left: { workerId, userId }
+- new-booking: { booking }
+- booking-assigned: { booking, workerId }
+- booking-completed: { bookingId, deskNumber, bookingType }
+- booking-skipped: { bookingId, deskNumber }
+- booking-cancelled: { bookingId, queueNumber, bookingType, deskId }
+
+Worker Room (worker-{userId}):
+- new-task: { booking } - งานใหม่ที่ได้รับมอบหมาย
+
+Booking Room (booking-{bookingId}):
+- booking-assigned: { booking } - เมื่อถึงคิว
+- your-booking-completed: { booking, score_details } - เมื่อตรวจเสร็จ
+
+================================================================================
+6. API Endpoints
+================================================================================
+
+6.1 Queue Session Management
+----------------------------
+GET    /api/queue/sessions/:courseId         - รายการ sessions
+GET    /api/queue/sessions/:sessionId/detail - รายละเอียด session
+POST   /api/queue/sessions                   - สร้าง session
+PUT    /api/queue/sessions/:sessionId        - แก้ไข session
+PUT    /api/queue/sessions/:sessionId/status - เปลี่ยน status
+DELETE /api/queue/sessions/:sessionId        - ลบ (draft only)
+POST   /api/queue/sessions/:sessionId/regenerate-pin - สร้าง PIN ใหม่
+
+6.2 Worker Management
+---------------------
+POST   /api/queue/sessions/:sessionId/join-worker            - เข้าร่วมรับงาน
+POST   /api/queue/sessions/:sessionId/leave-worker           - ออกจากการรับงาน
+GET    /api/queue/sessions/:sessionId/workers                - รายการ Workers
+GET    /api/queue/sessions/:sessionId/worker/current-booking - งานปัจจุบัน
+
+6.3 Booking Management
+----------------------
+POST   /api/queue/sessions/:sessionId/book         - นักศึกษาจองคิว
+GET    /api/queue/bookings/:bookingId/status       - สถานะการจอง
+POST   /api/queue/bookings/:bookingId/cancel       - ยกเลิกการจอง
+POST   /api/queue/bookings/:bookingId/complete     - Worker ทำเสร็จ
+POST   /api/queue/bookings/:bookingId/skip         - Worker skip (no show)
+GET    /api/queue/sessions/:sessionId/bookings     - รายการ bookings
+
+6.4 Dashboard
+-------------
+GET    /api/queue/sessions/:sessionId/dashboard    - สถิติสำหรับ Projector
+
+================================================================================
+7. Worker Pause Feature
+================================================================================
+
+เมื่อ Worker ต้องการหยุดรับงานใหม่แต่ยังมีงานที่กำลังทำอยู่:
+
+7.1 การ Pause
+-------------
+1. Worker เรียก leaveAsWorker API
+2. ถ้ามี current_booking_id:
+   - Worker status → 'paused'
+   - ไม่ได้รับ booking ใหม่
+   - ยังคงทำงานปัจจุบันต่อได้
+3. ถ้าไม่มี current_booking_id:
+   - Worker status → 'offline' ทันที
+
+7.2 หลังจาก Complete/Skip งาน
+-----------------------------
+1. ระบบเช็ค worker.status
+2. ถ้า status === 'paused':
+   - เปลี่ยนเป็น 'offline'
+   - ไม่พยายาม assign งานใหม่
+3. ถ้า status !== 'paused':
+   - เปลี่ยนเป็น 'online'
+   - พยายาม assign งานถัดไป (ถ้ามี waiting)
+
+7.3 Frontend Guards
+-------------------
+- ถ้า isPausedRef.current === true:
+  - ไม่แสดง new-task ที่ได้รับจาก socket
+  - ไม่ poll หา booking ใหม่
+  - ออกจากระบบหลังทำงานปัจจุบันเสร็จ
+
+================================================================================
+                              End of Documentation
+================================================================================

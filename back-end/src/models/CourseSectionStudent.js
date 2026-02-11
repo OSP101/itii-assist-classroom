@@ -15,6 +15,12 @@ const CourseSectionStudent = sequelize.define('CourseSectionStudent', {
     type: DataTypes.BIGINT,
     allowNull: false,
   },
+  // Note: status column removed - add it back when database has this column
+  // status: {
+  //   type: DataTypes.ENUM('enrolled', 'dropped', 'withdrawn'),
+  //   allowNull: false,
+  //   defaultValue: 'enrolled',
+  // },
 }, {
   tableName: 'course_section_students',
   timestamps: true,

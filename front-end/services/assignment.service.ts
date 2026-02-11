@@ -26,7 +26,7 @@ export interface Assignment {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null;
     linkedAttendanceSession?: LinkedAttendanceSession | null;
@@ -36,6 +36,7 @@ export interface Assignment {
     due_date?: string;
     order_index: number;
     is_active: boolean;
+    is_score_visible?: boolean; // Whether students can see their scores
     created_by?: number;
     created_at?: string;
     updated_at?: string;
@@ -50,7 +51,7 @@ export interface CreateAssignmentData {
     course_id: string; // nanoid format
     name: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null; // Legacy single session
     linked_attendance_session_ids?: number[]; // New: array of session IDs
@@ -58,18 +59,19 @@ export interface CreateAssignmentData {
     max_score?: number;
     sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
     due_date?: string;
+    is_score_visible?: boolean; // Whether students can see their scores
 }
 
 export interface UpdateAssignmentData {
     name?: string;
     description?: string;
-    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group';
+    assignment_type?: 'individual' | 'permanent_group' | 'weekly_group' | 'assignment';
     week_number?: number;
     linked_attendance_session_id?: number | null; // Legacy single session
     linked_attendance_session_ids?: number[]; // New: array of session IDs
     attendance_condition?: 'and' | 'or'; // New: 'and' = must attend all, 'or' = must attend at least one
     max_score?: number;
-    sub_items?: Omit<AssignmentSubItem, 'id' | 'assignment_id'>[];
+    sub_items?: Omit<AssignmentSubItem, 'assignment_id'>[]; // Include id for existing sub-items to preserve scores
     due_date?: string;
 }
 

@@ -1,7 +1,6 @@
 // Export all components
 export { default as OverviewTab } from './OverviewTab';
 export { default as AssignmentsTab } from './AssignmentsTab';
-export { default as ScoresTab } from './ScoresTab';
 export { default as ScoreSummaryTab } from './ScoreSummaryTab';
 export { default as ScoreApprovalTab } from './ScoreApprovalTab';
 export { default as PeopleTab } from './PeopleTab';

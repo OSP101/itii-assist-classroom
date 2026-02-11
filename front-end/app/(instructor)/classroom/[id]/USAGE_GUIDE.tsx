@@ -20,7 +20,6 @@ import {
     SectionsTab,
     PeopleTab,
     AssignmentsTab,
-    ScoresTab,
     OverviewSkeleton,
 } from "./components";
 

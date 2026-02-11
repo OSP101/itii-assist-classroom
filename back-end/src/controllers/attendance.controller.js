@@ -18,6 +18,7 @@ const {
 const { emitToAttendance, emitToInstructor } = require('../config/socket');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
+const { logCourseActivity } = require('../utils/courseActivityLogger');
 
 /**
  * Calculate distance between two coordinates (Haversine formula)
@@ -134,45 +135,55 @@ const getAttendanceSessions = asyncHandler(async (req, res) => {
     order: [['created_at', 'DESC']],
   });
 
-  // Get statistics for each session and add computed status
-  const sessionsWithStats = await Promise.all(
-    sessions.map(async (session) => {
-      const stats = await AttendanceRecord.findAll({
-        where: { attendance_session_id: session.id },
-        attributes: [
-          'status',
-          [sequelize.fn('COUNT', sequelize.col('status')), 'count'],
-        ],
-        group: ['status'],
-      });
+  // ✅ OPTIMIZED: Get statistics for ALL sessions in a single query
+  const sessionIds = sessions.map(s => s.id);
+  
+  // Single batch query for all session stats
+  const allStats = sessionIds.length > 0 ? await AttendanceRecord.findAll({
+    where: { attendance_session_id: { [Op.in]: sessionIds } },
+    attributes: [
+      'attendance_session_id',
+      'status',
+      [sequelize.fn('COUNT', sequelize.col('status')), 'count'],
+    ],
+    group: ['attendance_session_id', 'status'],
+    raw: true,
+  }) : [];
 
-      const statusCounts = {
-        present: 0,
-        late: 0,
-        leave: 0,
-        absent: 0,
-        total: 0,
-      };
+  // Build stats map: session_id -> { present, late, leave, absent, checked_in, total }
+  const statsMap = {};
+  sessionIds.forEach(id => {
+    statsMap[id] = { present: 0, late: 0, leave: 0, absent: 0, checked_in: 0, total: 0 };
+  });
+  allStats.forEach(row => {
+    const sessionId = row.attendance_session_id;
+    const status = row.status;
+    const count = parseInt(row.count);
+    if (statsMap[sessionId]) {
+      statsMap[sessionId][status] = count;
+      statsMap[sessionId].total += count;
+      // checked_in = everyone except absent
+      if (status !== 'absent') {
+        statsMap[sessionId].checked_in += count;
+      }
+    }
+  });
 
-      stats.forEach((s) => {
-        statusCounts[s.status] = parseInt(s.get('count'));
-        statusCounts.total += parseInt(s.get('count'));
-      });
-
-      // Add computed status based on time
-      const sessionData = addComputedStatus(session);
-      
-      // Add course_section_ids for frontend compatibility
-      const sectionIds = session.sections?.map(s => s.id) || 
-        (session.course_section_id ? [session.course_section_id] : []);
-      
-      return {
-        ...sessionData,
-        course_section_ids: sectionIds,
-        stats: statusCounts,
-      };
-    })
-  );
+  // Map sessions with stats (no additional queries)
+  const sessionsWithStats = sessions.map(session => {
+    // Add computed status based on time
+    const sessionData = addComputedStatus(session);
+    
+    // Add course_section_ids for frontend compatibility
+    const sectionIds = session.sections?.map(s => s.id) || 
+      (session.course_section_id ? [session.course_section_id] : []);
+    
+    return {
+      ...sessionData,
+      course_section_ids: sectionIds,
+      stats: statsMap[session.id] || { present: 0, late: 0, leave: 0, absent: 0, checked_in: 0, total: 0 },
+    };
+  });
 
   res.json({
     success: true,
@@ -280,6 +291,7 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
     start_time,
     end_time,
     late_threshold_minutes,
+    late_threshold_time, // Absolute time for late check (e.g., "08:15:00")
   } = req.body;
 
   if (!course_id || !title || !start_time || !end_time) {
@@ -315,6 +327,7 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
       start_time,
       end_time,
       late_threshold_minutes: late_threshold_minutes || 15,
+      late_threshold_time: late_threshold_time || null, // Absolute time for late check
       status: 'draft', // Default value, but will be computed from time when queried
       created_by: req.user.id,
     }, { transaction });
@@ -370,10 +383,371 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
       course_section_ids: sectionIds, // Include selected section IDs in response
     };
 
+    logCourseActivity({ courseId: course_id, actorUserId: req.user.id, action: 'create_attendance', category: 'attendance', targetType: 'attendance_session', targetId: session.id, targetName: title, detail: { session_type: session_type || 'lecture', students: records.length } });
+
     res.status(201).json({
       success: true,
       data: responseData,
       message: `Created attendance session with ${records.length} student records`,
+    });
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+});
+
+// ============================================
+// Time Change Impact Preview & Apply
+// ============================================
+
+/**
+ * Compute the late threshold Date from session fields.
+ * Handles both absolute late_threshold_time ("HH:MM:SS") and
+ * relative late_threshold_minutes.
+ */
+const computeLateThreshold = (startTime, lateThresholdTime, lateThresholdMinutes) => {
+  if (lateThresholdTime) {
+    const sessionDate = new Date(startTime);
+    const [h, m, s = 0] = lateThresholdTime.split(':').map(Number);
+    const lt = new Date(sessionDate);
+    lt.setHours(h, m, s, 0);
+    return lt;
+  }
+  const lt = new Date(startTime);
+  lt.setMinutes(lt.getMinutes() + (lateThresholdMinutes || 15));
+  return lt;
+};
+
+/**
+ * Classify a single check-in record against given time rules.
+ * @returns {'present'|'late'|'invalid'} deterministic status
+ */
+const classifyCheckIn = (checkInTime, startTime, endTime, lateThreshold) => {
+  const t = new Date(checkInTime);
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  // Outside the valid window → invalid
+  if (t < start || t > end) return 'invalid';
+  // Within window → check late threshold
+  return t > lateThreshold ? 'late' : 'present';
+};
+
+/**
+ * Preview Time Change Impact
+ * POST /api/attendance/:id/preview-time-change
+ *
+ * Compares existing check-in records against proposed new time rules
+ * WITHOUT modifying any data. Returns a classification of every affected record.
+ *
+ * Request body: { start_time, end_time, late_threshold_time?, late_threshold_minutes? }
+ */
+const previewTimeChange = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { start_time, end_time, late_threshold_time, late_threshold_minutes } = req.body;
+
+  const session = await AttendanceSession.findByPk(id);
+  if (!session) throw new ApiError(404, 'ไม่พบรอบการเช็คชื่อ');
+
+  // Fetch all records that have actually checked in (non-null check_in_time)
+  // Exclude 'leave' status — those are instructor manual overrides that should NOT be re-evaluated
+  const records = await AttendanceRecord.findAll({
+    where: {
+      attendance_session_id: id,
+      check_in_time: { [Op.not]: null },
+      status: { [Op.ne]: 'leave' },
+    },
+    include: [{
+      model: Student,
+      as: 'student',
+      attributes: ['id', 'student_id', 'full_name'],
+    }],
+  });
+
+  // Old time rules (from current session)
+  const oldStart = new Date(session.start_time);
+  const oldEnd = new Date(session.end_time);
+  const oldLate = computeLateThreshold(session.start_time, session.late_threshold_time, session.late_threshold_minutes);
+
+  // New time rules (from request)
+  const newStart = new Date(start_time);
+  const newEnd = new Date(end_time);
+  const newLate = computeLateThreshold(start_time, late_threshold_time, late_threshold_minutes);
+
+  // Classify each record under old and new rules
+  const changes = [];
+  const summary = {
+    total_checked_in: records.length,
+    will_be_invalidated: 0,   // was valid → now outside window
+    present_to_late: 0,        // was present → now late
+    late_to_present: 0,        // was late → now present
+    unchanged: 0,              // same status
+    already_invalid: 0,        // was already outside window (edge case)
+    recovered: 0,              // was invalid → now valid again
+  };
+
+  for (const record of records) {
+    const checkIn = new Date(record.check_in_time);
+    const oldStatus = classifyCheckIn(checkIn, oldStart, oldEnd, oldLate);
+    const newStatus = classifyCheckIn(checkIn, newStart, newEnd, newLate);
+
+    let changeType = 'unchanged';
+
+    if (oldStatus === 'invalid' && newStatus === 'invalid') {
+      changeType = 'already_invalid';
+      summary.already_invalid++;
+    } else if (oldStatus !== 'invalid' && newStatus === 'invalid') {
+      changeType = 'will_be_invalidated';
+      summary.will_be_invalidated++;
+    } else if (oldStatus === 'invalid' && newStatus !== 'invalid') {
+      changeType = 'recovered';
+      summary.recovered++;
+    } else if (oldStatus === 'present' && newStatus === 'late') {
+      changeType = 'present_to_late';
+      summary.present_to_late++;
+    } else if (oldStatus === 'late' && newStatus === 'present') {
+      changeType = 'late_to_present';
+      summary.late_to_present++;
+    } else {
+      summary.unchanged++;
+    }
+
+    // Only include records that actually change (+ always include invalidated)
+    if (changeType !== 'unchanged') {
+      changes.push({
+        record_id: record.id,
+        student_id: record.student?.student_id || null,
+        student_name: record.student?.full_name || null,
+        check_in_time: record.check_in_time,
+        old_status: oldStatus,
+        new_status: newStatus,
+        change_type: changeType,
+      });
+    }
+  }
+
+  // What specifically changed in the time rules (for display)
+  const timeChanges = {
+    start_time: { old: session.start_time, new: start_time, changed: oldStart.getTime() !== newStart.getTime() },
+    end_time: { old: session.end_time, new: end_time, changed: oldEnd.getTime() !== newEnd.getTime() },
+    late_threshold: { old: oldLate.toISOString(), new: newLate.toISOString(), changed: oldLate.getTime() !== newLate.getTime() },
+  };
+
+  const hasDestructiveChanges = summary.will_be_invalidated > 0;
+  const hasAnyImpact = summary.will_be_invalidated > 0
+    || summary.present_to_late > 0
+    || summary.late_to_present > 0
+    || summary.recovered > 0;
+
+  res.json({
+    success: true,
+    data: {
+      session_id: parseInt(id),
+      session_title: session.title,
+      summary,
+      changes,
+      timeChanges,
+      hasDestructiveChanges,
+      hasAnyImpact,
+    },
+  });
+});
+
+/**
+ * Apply Time Change with Record Re-evaluation
+ * POST /api/attendance/:id/apply-time-change
+ *
+ * 1. Updates session time fields
+ * 2. Re-evaluates ALL check-in records against new time rules
+ * 3. Marks out-of-window records as 'absent' (preserves check_in_time for audit)
+ * 4. Updates present↔late transitions
+ * 5. Writes detailed audit log
+ *
+ * Request body: same as updateAttendanceSession (full update payload)
+ *
+ * Idempotent: safe to retry — produces same result regardless of current record statuses.
+ */
+const applyTimeChange = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = { ...req.body };
+
+  const session = await AttendanceSession.findByPk(id);
+  if (!session) throw new ApiError(404, 'ไม่พบรอบการเช็คชื่อ');
+
+  // Snapshot old times for audit log
+  const oldTimes = {
+    start_time: session.start_time,
+    end_time: session.end_time,
+    late_threshold_time: session.late_threshold_time,
+    late_threshold_minutes: session.late_threshold_minutes,
+  };
+
+  // Extract new time fields
+  const newStartTime = updateData.start_time || session.start_time;
+  const newEndTime = updateData.end_time || session.end_time;
+  const newLateThresholdTime = updateData.late_threshold_time !== undefined ? updateData.late_threshold_time : session.late_threshold_time;
+  const newLateThresholdMinutes = updateData.late_threshold_minutes !== undefined ? updateData.late_threshold_minutes : session.late_threshold_minutes;
+  const newLate = computeLateThreshold(newStartTime, newLateThresholdTime, newLateThresholdMinutes);
+
+  // Remove status from updateData — status is computed from time
+  delete updateData.status;
+
+  // Handle PIN regeneration
+  if (updateData.regenerate_pin) {
+    updateData.pin_code = generatePIN();
+    delete updateData.regenerate_pin;
+  }
+
+  // Handle course_section_ids (multi-select)
+  let sectionIds = null;
+  if (updateData.course_section_ids !== undefined) {
+    sectionIds = updateData.course_section_ids;
+    updateData.course_section_id = sectionIds.length === 1 ? sectionIds[0] : null;
+    delete updateData.course_section_ids;
+  }
+
+  // Fetch all checked-in records
+  // Exclude 'leave' status — those are instructor manual overrides that should NOT be re-evaluated
+  const records = await AttendanceRecord.findAll({
+    where: {
+      attendance_session_id: id,
+      check_in_time: { [Op.not]: null },
+      status: { [Op.ne]: 'leave' },
+    },
+    include: [{
+      model: Student,
+      as: 'student',
+      attributes: ['id', 'student_id', 'full_name'],
+    }],
+  });
+
+  const transaction = await sequelize.transaction();
+
+  try {
+    // Step 1: Update session fields
+    await session.update(updateData, { transaction });
+
+    // Step 2: Update junction table if section IDs provided
+    if (sectionIds !== null) {
+      await AttendanceSessionSection.destroy({
+        where: { attendance_session_id: id },
+        transaction,
+      });
+      if (sectionIds.length > 0) {
+        const sectionLinks = sectionIds.map(sId => ({
+          attendance_session_id: parseInt(id),
+          course_section_id: sId,
+        }));
+        await AttendanceSessionSection.bulkCreate(sectionLinks, { transaction });
+      }
+    }
+
+    // Step 3: Re-evaluate every check-in record
+    const auditDetails = [];
+    let invalidatedCount = 0;
+    let presentToLate = 0;
+    let lateToPresent = 0;
+    let recoveredCount = 0;
+    let unchangedCount = 0;
+
+    for (const record of records) {
+      const checkIn = new Date(record.check_in_time);
+      const newStatus = classifyCheckIn(checkIn, newStartTime, newEndTime, newLate);
+
+      // For records outside the window: mark as 'absent' but preserve check_in_time
+      // This keeps the audit trail — we know they DID check in, but it's now out-of-range
+      const dbStatus = newStatus === 'invalid' ? 'absent' : newStatus;
+
+      const oldRecordStatus = record.status;
+      if (dbStatus !== oldRecordStatus) {
+        await record.update({
+          status: dbStatus,
+          updated_by: req.user.id,
+          note: newStatus === 'invalid'
+            ? `[ระบบ] สถานะเปลี่ยนจาก ${oldRecordStatus} → ขาด เนื่องจากเวลาเช็คอินอยู่นอกช่วงเวลาใหม่`
+            : `[ระบบ] สถานะเปลี่ยนจาก ${oldRecordStatus} → ${dbStatus} เนื่องจากปรับเวลาเช็คชื่อ`,
+        }, { transaction });
+
+        auditDetails.push({
+          record_id: record.id,
+          student_id: record.student?.student_id,
+          student_name: record.student?.full_name,
+          check_in_time: record.check_in_time,
+          old_status: oldRecordStatus,
+          new_status: dbStatus,
+        });
+
+        if (newStatus === 'invalid') invalidatedCount++;
+        else if (oldRecordStatus === 'present' && dbStatus === 'late') presentToLate++;
+        else if (oldRecordStatus === 'late' && dbStatus === 'present') lateToPresent++;
+        else if (oldRecordStatus === 'absent' && (dbStatus === 'present' || dbStatus === 'late')) recoveredCount++;
+      } else {
+        unchangedCount++;
+      }
+    }
+
+    await transaction.commit();
+
+    // Step 4: Write audit log via existing course activity logger
+    logCourseActivity({
+      courseId: session.course_id,
+      actorUserId: req.user.id,
+      action: 'update_attendance_times',
+      category: 'attendance',
+      targetType: 'attendance_session',
+      targetId: id,
+      targetName: session.title,
+      detail: {
+        oldTimes,
+        newTimes: {
+          start_time: newStartTime,
+          end_time: newEndTime,
+          late_threshold_time: newLateThresholdTime,
+          late_threshold_minutes: newLateThresholdMinutes,
+        },
+        impact: {
+          total_records: records.length,
+          invalidated: invalidatedCount,
+          present_to_late: presentToLate,
+          late_to_present: lateToPresent,
+          recovered: recoveredCount,
+          unchanged: unchangedCount,
+        },
+        affected_records: auditDetails,
+      },
+    });
+
+    // Step 5: Fetch updated session and emit
+    const updatedSession = await AttendanceSession.findByPk(id, {
+      include: [{
+        model: CourseSection,
+        as: 'sections',
+        attributes: ['id', 'section_no'],
+        through: { attributes: [] },
+      }],
+    });
+
+    const sessionWithStatus = addComputedStatus(updatedSession);
+    const responseSectionIds = updatedSession.sections?.map(s => s.id) || [];
+
+    emitToAttendance(id, 'session-updated', sessionWithStatus);
+
+    res.json({
+      success: true,
+      data: {
+        session: {
+          ...sessionWithStatus,
+          course_section_ids: responseSectionIds,
+        },
+        impact: {
+          total_records: records.length,
+          invalidated: invalidatedCount,
+          present_to_late: presentToLate,
+          late_to_present: lateToPresent,
+          recovered: recoveredCount,
+          unchanged: unchangedCount,
+          details: auditDetails,
+        },
+      },
     });
   } catch (error) {
     await transaction.rollback();
@@ -456,6 +830,8 @@ const updateAttendanceSession = asyncHandler(async (req, res) => {
     // Emit update to connected clients
     emitToAttendance(id, 'session-updated', sessionWithStatus);
 
+    logCourseActivity({ courseId: updatedSession.course_id, actorUserId: req.user.id, action: 'update_attendance', category: 'attendance', targetType: 'attendance_session', targetId: id, targetName: updatedSession.title, detail: { fields: Object.keys(req.body) } });
+
     res.json({
       success: true,
       data: {
@@ -493,6 +869,8 @@ const activateSession = asyncHandler(async (req, res) => {
   const sessionWithStatus = addComputedStatus(session);
   emitToAttendance(id, 'session-activated', { session_id: id });
 
+  logCourseActivity({ courseId: session.course_id, actorUserId: req.user.id, action: 'activate_attendance', category: 'attendance', targetType: 'attendance_session', targetId: id, targetName: session.title });
+
   res.json({
     success: true,
     message: 'Session activated',
@@ -520,6 +898,8 @@ const closeSession = asyncHandler(async (req, res) => {
   const sessionWithStatus = addComputedStatus(session);
   emitToAttendance(id, 'session-closed', { session_id: id });
 
+  logCourseActivity({ courseId: session.course_id, actorUserId: req.user.id, action: 'close_attendance', category: 'attendance', targetType: 'attendance_session', targetId: id, targetName: session.title });
+
   res.json({
     success: true,
     message: 'Session closed',
@@ -544,7 +924,11 @@ const deleteAttendanceSession = asyncHandler(async (req, res) => {
     where: { attendance_session_id: id },
   });
 
+  const sessionTitle = session.title;
+  const sessionCourseId = session.course_id;
   await session.destroy();
+
+  logCourseActivity({ courseId: sessionCourseId, actorUserId: req.user.id, action: 'delete_attendance', category: 'attendance', targetType: 'attendance_session', targetId: id, targetName: sessionTitle });
 
   res.json({
     success: true,
@@ -765,8 +1149,19 @@ const studentCheckIn = asyncHandler(async (req, res) => {
   }
 
   // Determine status (present or late)
-  const lateThreshold = new Date(session.start_time);
-  lateThreshold.setMinutes(lateThreshold.getMinutes() + session.late_threshold_minutes);
+  // Use late_threshold_time if available, otherwise calculate from late_threshold_minutes
+  let lateThreshold;
+  if (session.late_threshold_time) {
+    // Parse the absolute time (e.g., "08:15:00") and combine with session date
+    const sessionDate = new Date(session.start_time);
+    const [hours, minutes, seconds = 0] = session.late_threshold_time.split(':').map(Number);
+    lateThreshold = new Date(sessionDate);
+    lateThreshold.setHours(hours, minutes, seconds, 0);
+  } else {
+    // Fallback to relative minutes
+    lateThreshold = new Date(session.start_time);
+    lateThreshold.setMinutes(lateThreshold.getMinutes() + session.late_threshold_minutes);
+  }
 
   const status = now > lateThreshold ? 'late' : 'present';
 
@@ -875,6 +1270,8 @@ module.exports = {
   getAttendanceSession,
   createAttendanceSession,
   updateAttendanceSession,
+  previewTimeChange,
+  applyTimeChange,
   activateSession,
   closeSession,
   deleteAttendanceSession,

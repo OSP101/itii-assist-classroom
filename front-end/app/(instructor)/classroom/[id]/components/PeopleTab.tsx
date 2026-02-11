@@ -52,6 +52,7 @@ interface PeopleTabProps {
     onRemoveInstructor: (instructorId: number) => void;
     userRole: string;
     currentUserId: number | null;
+    isCourseActive?: boolean;
 }
 
 // Loading Skeleton
@@ -86,11 +87,12 @@ export default function PeopleTab({
     onRemoveInstructor,
     userRole,
     currentUserId,
+    isCourseActive = true,
 }: PeopleTabProps) {
     // Get instructors count - use instructors array if available, otherwise fallback to single instructor
     const instructorsCount = course.instructors?.length || (course.instructor ? 1 : 0);
     const instructorsList = course.instructors || (course.instructor ? [course.instructor] : []);
-    
+
     return (
         <div className="space-y-4">
             {/* Header */}
@@ -99,29 +101,32 @@ export default function PeopleTab({
                     <h2 className="text-lg font-semibold text-slate-800">บุคลากรในรายวิชา</h2>
                     <p className="text-sm text-slate-500">จัดการอาจารย์ผู้สอนและผู้ช่วยสอน (TA)</p>
                 </div>
-                <div className="flex gap-2">
-                    {userRole === "instructor" && (
+
+                {userRole === "instructor" && (
+                    <div className="flex gap-2">
                         <Button
                             color="secondary"
                             variant="flat"
                             startContent={<Icon icon="solar:user-plus-bold" />}
                             onPress={onOpenAddInstructorModal}
-                            isDisabled={isPeopleLoading}
+                            isDisabled={isPeopleLoading || !isCourseActive}
                             className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
                         >
                             เพิ่มอาจารย์
                         </Button>
-                    )}
-                    <Button
-                        color="primary"
-                        startContent={<Icon icon="solar:user-plus-bold" />}
-                        onPress={onOpenAddTAModal}
-                        isDisabled={isPeopleLoading}
-                        className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
-                    >
-                        เพิ่มผู้ช่วยสอน
-                    </Button>
-                </div>
+                        <Button
+                            color="primary"
+                            startContent={<Icon icon="solar:user-plus-bold" />}
+                            onPress={onOpenAddTAModal}
+                            isDisabled={isPeopleLoading || !isCourseActive}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                        >
+                            เพิ่มผู้ช่วยสอน
+                        </Button>
+                    </div>
+                )}
+
+
             </div>
 
             {/* Loading state */}
@@ -245,7 +250,7 @@ export default function PeopleTab({
                                                             name={person.full_name}
                                                             src={person.avatar || undefined}
                                                             size="sm"
-                                                            className={person.type === 'instructor' 
+                                                            className={person.type === 'instructor'
                                                                 ? "bg-gradient-to-br from-blue-500 to-indigo-500"
                                                                 : "bg-gradient-to-br from-emerald-500 to-teal-500"
                                                             }
@@ -306,6 +311,7 @@ export default function PeopleTab({
                                                                         size="sm"
                                                                         variant="light"
                                                                         color="danger"
+                                                                        isDisabled={!isCourseActive}
                                                                         onPress={() => onRemoveInstructor(person.personId)}
                                                                     >
                                                                         <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
@@ -333,6 +339,7 @@ export default function PeopleTab({
                                                                         size="sm"
                                                                         variant="light"
                                                                         color="danger"
+                                                                        isDisabled={!isCourseActive}
                                                                         onPress={() => onRemoveTA(person.personId)}
                                                                     >
                                                                         <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />

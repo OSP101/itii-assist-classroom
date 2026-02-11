@@ -27,6 +27,12 @@ const ScoreEditRequest = sequelize.define('ScoreEditRequest', {
         type: DataTypes.TEXT,
         allowNull: true,
     },
+    images: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null,
+        comment: 'JSON array of image file paths',
+    },
     status: {
         type: DataTypes.ENUM('pending', 'approved', 'rejected'),
         allowNull: true,

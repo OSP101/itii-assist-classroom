@@ -19,6 +19,7 @@ export interface AttendanceSession {
     start_time: string;
     end_time: string;
     late_threshold_minutes: number;
+    late_threshold_time?: string | null; // New: absolute time for late threshold (e.g. "08:15:00")
     status: 'draft' | 'active' | 'closed';
     created_by: number;
     created_at: string;
@@ -91,6 +92,7 @@ export interface CreateAttendanceData {
     start_time: string;
     end_time: string;
     late_threshold_minutes?: number;
+    late_threshold_time?: string | null; // New: absolute time for late threshold (e.g. "08:15:00")
 }
 
 export interface StudentCheckInData {
@@ -99,6 +101,67 @@ export interface StudentCheckInData {
     google_id: string;
     location_lat?: number;
     location_lng?: number;
+}
+
+// ============================================
+// Time Change Preview Types
+// ============================================
+
+export interface TimeChangeRecord {
+    record_id: number;
+    student_id: string | null;
+    student_name: string | null;
+    check_in_time: string;
+    old_status: 'present' | 'late' | 'invalid';
+    new_status: 'present' | 'late' | 'invalid';
+    change_type: 'will_be_invalidated' | 'present_to_late' | 'late_to_present' | 'already_invalid' | 'recovered' | 'unchanged';
+}
+
+export interface TimeChangeSummary {
+    total_checked_in: number;
+    will_be_invalidated: number;
+    present_to_late: number;
+    late_to_present: number;
+    unchanged: number;
+    already_invalid: number;
+    recovered: number;
+}
+
+export interface TimeChangeField {
+    old: string;
+    new: string;
+    changed: boolean;
+}
+
+export interface TimeChangePreview {
+    session_id: number;
+    session_title: string;
+    summary: TimeChangeSummary;
+    changes: TimeChangeRecord[];
+    timeChanges: {
+        start_time: TimeChangeField;
+        end_time: TimeChangeField;
+        late_threshold: TimeChangeField;
+    };
+    hasDestructiveChanges: boolean;
+    hasAnyImpact: boolean;
+}
+
+export interface TimeChangeImpact {
+    total_records: number;
+    invalidated: number;
+    present_to_late: number;
+    late_to_present: number;
+    recovered: number;
+    unchanged: number;
+    details: Array<{
+        record_id: number;
+        student_id: string;
+        student_name: string;
+        check_in_time: string;
+        old_status: string;
+        new_status: string;
+    }>;
 }
 
 const attendanceService = {
@@ -249,6 +312,40 @@ const attendanceService = {
             throw new Error(errorResponse.error?.message || 'ไม่พบข้อมูลนักศึกษา');
         }
         
+        return response.data || null;
+    },
+
+    // ============================================
+    // Time Change Preview & Apply
+    // ============================================
+
+    /**
+     * Preview impact of changing attendance session times.
+     * Does NOT modify any data — safe to call repeatedly.
+     */
+    async previewTimeChange(
+        sessionId: number,
+        data: { start_time: string; end_time: string; late_threshold_time?: string | null; late_threshold_minutes?: number }
+    ): Promise<TimeChangePreview | null> {
+        const response = await api.post<TimeChangePreview>(
+            `/attendance/${sessionId}/preview-time-change`,
+            data
+        );
+        return response.data || null;
+    },
+
+    /**
+     * Apply time change and re-evaluate all check-in records.
+     * This IS destructive — updates record statuses and writes audit log.
+     */
+    async applyTimeChange(
+        sessionId: number,
+        data: Partial<CreateAttendanceData>
+    ): Promise<{ session: AttendanceSession; impact: TimeChangeImpact } | null> {
+        const response = await api.post<{ session: AttendanceSession; impact: TimeChangeImpact }>(
+            `/attendance/${sessionId}/apply-time-change`,
+            data
+        );
         return response.data || null;
     },
 };

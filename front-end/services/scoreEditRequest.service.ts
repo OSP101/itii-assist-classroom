@@ -34,6 +34,7 @@ export interface ScoreEditRequest {
     old_score: number | null;
     new_score: number;
     reason: string | null;
+    images: string[] | null;
     review_comment: string | null;
     created_at: string;
     reviewed_at: string | null;
@@ -56,6 +57,7 @@ export interface ScoreEditRequestsResponse {
         approved: number;
         rejected: number;
     };
+    role?: 'instructor' | 'ta';
 }
 
 export interface PendingCountResponse {
@@ -104,6 +106,28 @@ const scoreEditRequestService = {
     approveEditRequest: async (requestId: number, comment?: string): Promise<{ success: boolean; message: string }> => {
         const response = await api.post<{ success: boolean; message: string }>(`/score-edit-requests/${requestId}/approve`, { comment });
         return response as unknown as { success: boolean; message: string };
+    },
+
+    /**
+     * Approve multiple edit requests at once (instructor only) - for batch/group approval
+     */
+    batchApproveEditRequests: async (requestIds: number[], comment?: string): Promise<{ success: boolean; message: string; count: number }> => {
+        const response = await api.post<{ success: boolean; message: string; count: number }>('/score-edit-requests/batch-approve', { 
+            request_ids: requestIds,
+            comment 
+        });
+        return response as unknown as { success: boolean; message: string; count: number };
+    },
+
+    /**
+     * Reject multiple edit requests at once (instructor only) - for batch/group rejection
+     */
+    batchRejectEditRequests: async (requestIds: number[], comment: string): Promise<{ success: boolean; message: string; count: number }> => {
+        const response = await api.post<{ success: boolean; message: string; count: number }>('/score-edit-requests/batch-reject', { 
+            request_ids: requestIds,
+            comment 
+        });
+        return response as unknown as { success: boolean; message: string; count: number };
     },
 
     /**
