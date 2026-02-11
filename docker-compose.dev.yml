@@ -1,7 +1,7 @@
 services:
 
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.6.7
     container_name: itii-dev-traefik
     command:
       - "--api.dashboard=true"
