@@ -285,7 +285,7 @@ export default function PermissionsPage() {
                     </div>
                     <h1 className="text-2xl font-bold text-slate-800">ตั้งค่าการอนุญาต</h1>
                     <p className="text-slate-500 mt-2">
-                        กรุณาอนุญาตสิทธิ์เหล่านี้เพื่อการใช้งานที่สมบูรณ์
+                        กรุณาอนุญาตสิทธิ์เหล่านี้เพื่อการใช้งานที่สมบูรณ์(ไม่ใช่การเช็คชื่อจริง)
                     </p>
                 </div>
 

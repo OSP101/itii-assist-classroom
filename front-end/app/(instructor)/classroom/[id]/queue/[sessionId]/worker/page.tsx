@@ -610,23 +610,14 @@ export default function WorkerDashboardPage() {
         );
     }
 
-    if (session.status !== "active") {
+    if (session.status === "draft") {
         return (
             <div className="min-h-screen bg-slate-100 flex items-center justify-center">
                 <Card className="max-w-md">
                     <CardBody className="p-8 text-center">
-                        <Icon 
-                            icon={session.status === "paused" ? "solar:pause-circle-bold" : "solar:stop-circle-bold"} 
-                            className={`text-6xl ${session.status === "paused" ? "text-amber-400" : "text-rose-400"} mx-auto mb-4`} 
-                        />
-                        <h2 className="text-xl font-bold text-slate-700 mb-2">
-                            {session.status === "paused" ? "Session หยุดชั่วคราว" : "Session ปิดแล้ว"}
-                        </h2>
-                        <p className="text-slate-500 mb-4">
-                            {session.status === "paused" 
-                                ? "Session นี้ถูกหยุดชั่วคราว กรุณารอผู้ดูแลเปิดใช้งานอีกครั้ง" 
-                                : "Session นี้ถูกปิดแล้ว"}
-                        </p>
+                        <Icon icon="solar:document-bold" className="text-6xl text-slate-300 mx-auto mb-4" />
+                        <h2 className="text-xl font-bold text-slate-700 mb-2">Session ยังไม่เปิดใช้งาน</h2>
+                        <p className="text-slate-500 mb-4">Session นี้ยังเป็นแบบร่าง กรุณาเปิดใช้งานก่อน</p>
                         <Button color="primary" onPress={() => router.back()}>
                             กลับ
                         </Button>
@@ -639,6 +630,33 @@ export default function WorkerDashboardPage() {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 p-4 md:p-6">
             <div className="max-w-4xl mx-auto space-y-6">
+                {/* Session paused/closed banner */}
+                {session.status === "paused" && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-amber-100 shrink-0">
+                                <Icon icon="solar:pause-circle-bold" className="text-amber-600 text-xl" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="font-semibold text-amber-800">ปิดรับการจองคิวชั่วคราว</h3>
+                                <p className="text-sm text-amber-600">ไม่รับการจองคิวใหม่ แต่ยังสามารถจัดการคิวที่มีอยู่ได้</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {session.status === "closed" && (
+                    <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 rounded-xl bg-rose-100 shrink-0">
+                                <Icon icon="solar:stop-circle-bold" className="text-rose-600 text-xl" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="font-semibold text-rose-800">Session ปิดแล้ว</h3>
+                                <p className="text-sm text-rose-600">Session นี้ถูกปิดแล้ว แต่ยังสามารถจัดการคิวที่ค้างอยู่ได้</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <div>

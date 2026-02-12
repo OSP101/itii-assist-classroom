@@ -582,8 +582,8 @@ const joinAsWorker = async (req, res) => {
             });
         }
 
-        // Check if session is active
-        if (session.status !== 'active') {
+        // Check if session is active or paused (workers can join to handle existing bookings)
+        if (session.status !== 'active' && session.status !== 'paused') {
             return res.status(400).json({
                 success: false,
                 error: { message: 'Session ยังไม่เปิดใช้งาน' },
@@ -855,7 +855,7 @@ const createBooking = async (req, res) => {
 
         // Find session by PIN
         const session = await QueueSession.findOne({
-            where: { pin_code, status: 'active' },
+            where: { pin_code, status: { [Op.in]: ['active', 'paused'] } },
             include: [
                 {
                     model: Classroom,
@@ -870,6 +870,18 @@ const createBooking = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: { message: 'ไม่พบการจองคิวที่เปิดอยู่ หรือ PIN ไม่ถูกต้อง' },
+            });
+        }
+
+        // If session is paused, reject new bookings
+        if (session.status === 'paused') {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                error: { 
+                    message: 'ปิดรับการจองคิวชั่วคราว กรุณารอสักครู่',
+                    code: 'SESSION_PAUSED',
+                },
             });
         }
 
@@ -1095,11 +1107,10 @@ const createBooking = async (req, res) => {
             }
         }
 
-        // Get next queue number
+        // Get next queue number (global sequence across all booking types)
         const lastBooking = await QueueBooking.findOne({
             where: {
                 queue_session_id: session.id,
-                booking_type,
             },
             order: [['queue_number', 'DESC']],
             transaction,
@@ -1497,13 +1508,12 @@ const getBookingStatus = async (req, res) => {
             });
         }
 
-        // Get position in queue
+        // Get position in queue (count all waiting bookings created before this one)
         const position = await QueueBooking.count({
             where: {
                 queue_session_id: booking.queue_session_id,
-                booking_type: booking.booking_type,
                 status: 'waiting',
-                queue_number: { [Op.lt]: booking.queue_number },
+                created_at: { [Op.lt]: booking.created_at },
             },
         });
 
@@ -2058,10 +2068,7 @@ const tryAssignNextBooking = async (sessionId, workerId, io) => {
 
         const nextBooking = await QueueBooking.findOne({
             where: whereCondition,
-            order: [
-                ['booking_type', 'ASC'], // Grading first
-                ['queue_number', 'ASC'],
-            ],
+            order: [['created_at', 'ASC']], // FIFO - oldest first regardless of booking type
         });
 
         logger.info(`Next booking: ${nextBooking ? `id=${nextBooking.id}, type=${nextBooking.booking_type}, queue=${nextBooking.queue_number}` : 'none'}`);
@@ -2233,7 +2240,7 @@ const getSessionBookings = async (req, res) => {
                     attributes: ['id', 'full_name'],
                 },
             ],
-            order: [['queue_number', 'ASC']],
+            order: [['created_at', 'ASC']], // FIFO ordering
         });
 
         // Enrich bookings with zone info
@@ -2407,7 +2414,7 @@ const verifyPIN = async (req, res) => {
         const { pin_code } = req.body;
 
         const session = await QueueSession.findOne({
-            where: { pin_code, status: 'active' },
+            where: { pin_code, status: { [Op.in]: ['active', 'paused'] } },
             include: [
                 {
                     model: Classroom,
@@ -2426,6 +2433,17 @@ const verifyPIN = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: { message: 'PIN ไม่ถูกต้อง หรือไม่มีการเปิดรับจองคิว' },
+            });
+        }
+
+        // If session is paused, return specific error
+        if (session.status === 'paused') {
+            return res.status(400).json({
+                success: false,
+                error: { 
+                    message: 'ปิดรับการจองคิวชั่วคราว กรุณารอสักครู่',
+                    code: 'SESSION_PAUSED',
+                },
             });
         }
 
@@ -2461,7 +2479,7 @@ const validateBookingInfo = async (req, res) => {
 
         // Find session by PIN
         const session = await QueueSession.findOne({
-            where: { pin_code, status: 'active' },
+            where: { pin_code, status: { [Op.in]: ['active', 'paused'] } },
             include: [
                 {
                     model: Course,
@@ -2480,6 +2498,17 @@ const validateBookingInfo = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: { message: 'PIN ไม่ถูกต้อง หรือไม่มีการเปิดรับจองคิว' },
+            });
+        }
+
+        // If session is paused, reject validation
+        if (session.status === 'paused') {
+            return res.status(400).json({
+                success: false,
+                error: { 
+                    message: 'ปิดรับการจองคิวชั่วคราว กรุณารอสักครู่',
+                    code: 'SESSION_PAUSED',
+                },
             });
         }
 
@@ -2764,13 +2793,12 @@ const checkExistingBooking = async (req, res) => {
             });
         }
 
-        // Get position in queue
+        // Get position in queue (count all waiting bookings created before this one)
         const waitingAhead = await QueueBooking.count({
             where: {
                 queue_session_id: session.id,
-                booking_type: booking.booking_type,
                 status: 'waiting',
-                queue_number: { [Op.lt]: booking.queue_number },
+                created_at: { [Op.lt]: booking.created_at },
             },
         });
 
