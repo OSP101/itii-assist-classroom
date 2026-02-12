@@ -416,7 +416,7 @@ export default function MyScorePage() {
                 }
             >
 
-                <div className="bg-white">
+                <div className="bg-white overflow-x-auto">
                     <Tabs
                         aria-label="Course tabs"
                         color="primary"

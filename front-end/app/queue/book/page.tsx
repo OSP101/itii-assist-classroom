@@ -369,10 +369,11 @@ function BookQueueContent() {
                 setSessionInfo(result.data);
                 setStep("form");
             } else {
+                const isPaused = result.error?.code === "SESSION_PAUSED";
                 addToast({
-                    title: "PIN ไม่ถูกต้อง",
+                    title: isPaused ? "ปิดรับการจองคิว" : "PIN ไม่ถูกต้อง",
                     description: result.error?.message || "ไม่พบการจองคิวที่เปิดอยู่",
-                    color: "danger",
+                    color: isPaused ? "warning" : "danger",
                 });
             }
         } catch (error) {
@@ -479,10 +480,11 @@ function BookQueueContent() {
                 // Start polling status with session ID for real-time position updates
                 startStatusPolling(result.data.id, sessionInfo?.session_id);
             } else {
+                const isPaused = result.error?.code === "SESSION_PAUSED";
                 addToast({
-                    title: "จองคิวไม่สำเร็จ",
+                    title: isPaused ? "ปิดรับการจองคิว" : "จองคิวไม่สำเร็จ",
                     description: result.error?.message || "เกิดข้อผิดพลาด",
-                    color: "danger",
+                    color: isPaused ? "warning" : "danger",
                 });
             }
         } catch (error) {
