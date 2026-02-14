@@ -230,7 +230,7 @@ const getTAStats = asyncHandler(async (req, res) => {
   // Get all TAs for this course
   const tas = await CourseTA.findAll({
     where: { course_id: courseId },
-    include: [{ model: User, as: 'taUser', attributes: ['id', 'full_name', 'email'] }],
+    include: [{ model: User, as: 'taUser', attributes: ['id', 'full_name', 'email', 'avatar'] }],
   });
 
   // Get all assignments for this course
@@ -384,6 +384,7 @@ const getTAStats = asyncHandler(async (req, res) => {
       userId: taId,
       fullName: ta.taUser?.full_name || 'Unknown',
       email: ta.taUser?.email || '',
+      avatar: ta.taUser?.avatar || null,
       totalScoresGraded: taScoreList.length,
       assignmentsGraded: perAssignment.length,
       perAssignment,
@@ -455,9 +456,12 @@ const getTAStats = asyncHandler(async (req, res) => {
     const kpiWorkload = Math.min(workloadRatio * 100, 100);
 
     // KPI 2: Assignment Coverage (15%)
-    const kpiCoverage = assignmentsWithScores.length > 0
-      ? (ta.assignmentsGraded / assignmentsWithScores.length) * 100
-      : 0;
+    const kpiCoverage = Math.min(
+      assignmentsWithScores.length > 0
+        ? (ta.assignmentsGraded / assignmentsWithScores.length) * 100
+        : 0,
+      100
+    );
 
     // KPI 3: Grading Consistency (25%) — uses overallStatsMap O(1) lookup
     let consistencySum = 0;
@@ -469,7 +473,7 @@ const getTAStats = asyncHandler(async (req, res) => {
       consistencySum += Math.max(0, 1 - deviation);
       consistencyCount++;
     }
-    const kpiConsistency = consistencyCount > 0 ? (consistencySum / consistencyCount) * 100 : 50;
+    const kpiConsistency = Math.min(consistencyCount > 0 ? (consistencySum / consistencyCount) * 100 : 50, 100);
 
     // KPI 4: Score Spread (10%) — uses scoresByTAAssignment O(1) lookup + overallStdDevMap
     let spreadSum = 0;
@@ -553,15 +557,15 @@ const getTAStats = asyncHandler(async (req, res) => {
     }
     const kpiAnomaly = Math.max(0, 100 - anomalyCount * 25);
 
-    // Weighted final score
-    const performanceScore = parseFloat((
+    // Weighted final score (capped at 0-100)
+    const performanceScore = Math.min(Math.max(parseFloat((
       kpiWorkload * 0.30 +
       kpiCoverage * 0.15 +
       kpiConsistency * 0.25 +
       kpiSpread * 0.10 +
       kpiQueue * 0.15 +
       kpiAnomaly * 0.05
-    ).toFixed(1));
+    ).toFixed(1)), 0), 100);
 
     // Confidence level based on sample size
     const confidenceLevel = ta.totalScoresGraded >= 20 ? 'high'

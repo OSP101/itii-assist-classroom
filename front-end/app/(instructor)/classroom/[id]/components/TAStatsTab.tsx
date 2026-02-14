@@ -16,6 +16,7 @@ import {
   TableRow,
   TableCell,
 } from "@heroui/table";
+import { Pagination } from "@heroui/pagination";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
@@ -667,30 +668,17 @@ function TADetailView({
 
               {/* Pagination */}
               {detail && detail.pagination.totalPages > 1 && (
-                <div className="flex justify-center gap-2 pt-4 pb-2">
-                  <Button
+                <div className="flex justify-center py-4">
+                  <Pagination
+                    total={detail.pagination.totalPages}
+                    page={page}
+                    onChange={setPage}
+                    showControls
                     size="sm"
-                    variant="flat"
-                    isDisabled={page <= 1}
-                    onPress={() => setPage(page - 1)}
-                    startContent={<Icon icon="solar:arrow-left-linear" width={16} />}
-                    className="bg-slate-100 text-slate-600"
-                  >
-                    ก่อนหน้า
-                  </Button>
-                  <Chip variant="flat" size="sm" className="bg-slate-100 text-slate-600">
-                    หน้า {page} / {detail.pagination.totalPages}
-                  </Chip>
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    isDisabled={page >= detail.pagination.totalPages}
-                    onPress={() => setPage(page + 1)}
-                    endContent={<Icon icon="solar:arrow-right-linear" width={16} />}
-                    className="bg-slate-100 text-slate-600"
-                  >
-                    ถัดไป
-                  </Button>
+                    classNames={{
+                      cursor: "bg-blue-500",
+                    }}
+                  />
                 </div>
               )}
             </>
@@ -767,9 +755,9 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
     const tas = data.taStats;
     const n = tas.length;
 
-    // Average performance score across all TAs
-    const perfScores = tas.map(t => t.performanceScore ?? 0);
-    const avgScore = parseFloat((perfScores.reduce((a, b) => a + b, 0) / n).toFixed(1));
+    // Average performance score across all TAs (capped at 100)
+    const perfScores = tas.map(t => Math.min(t.performanceScore ?? 0, 100));
+    const avgScore = Math.min(parseFloat((perfScores.reduce((a, b) => a + b, 0) / n).toFixed(1)), 100);
 
     // Workload fairness index: 1 - CV (coefficient of variation)
     // 100 = perfectly equal distribution, 0 = highly unequal

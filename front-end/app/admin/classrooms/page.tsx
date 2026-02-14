@@ -350,7 +350,10 @@ export default function ClassroomsPage() {
             });
 
             if (!response.success || !response.data) {
-                throw new Error(response.error || "Failed to create classroom");
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || "Failed to create classroom";
+                throw new Error(errorMessage);
             }
 
             const newClassroom = transformClassroomFromAPI(response.data);
@@ -504,7 +507,10 @@ export default function ClassroomsPage() {
             // Fetch full classroom with desks
             const response = await classroomService.getClassroom(classroom.id);
             if (!response.success || !response.data) {
-                throw new Error(response.error || "Failed to load classroom");
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || "Failed to load classroom";
+                throw new Error(errorMessage);
             }
             setEditingClassroom(transformClassroomFromAPI(response.data));
             setShowLayoutModal(true);
@@ -561,7 +567,10 @@ export default function ClassroomsPage() {
                 description: editFormData.description || undefined,
             });
             if (!response.success || !response.data) {
-                throw new Error(response.error || "Failed to update classroom");
+                const errorMessage = typeof response.error === 'object' && response.error !== null
+                    ? (response.error as { message?: string }).message
+                    : response.error || "Failed to update classroom";
+                throw new Error(errorMessage);
             }
             const updated = transformClassroomFromAPI(response.data);
             setClassrooms((prev) => prev.map((c) => (c.id === editingClassroomId ? updated : c)));

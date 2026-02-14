@@ -885,31 +885,35 @@ export default function ClassroomDetailPage() {
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
-        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
+        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold"
+            // , badge: assignments.length > 0 ? assignments.length : undefined 
+        },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
             icon: "solar:clipboard-check-bold",
-            badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
-            badgeColor: "warning" as const,
+            // badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
+            // badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'BETA', badgeColor: "warning" as const },
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", 
+            // badge: 'BETA', badgeColor: "warning" as const 
+        },
         
         ...(userRole === 'instructor' ? [{
             key: "activity-log",
             label: "บันทึกกิจกรรม",
             icon: "solar:document-text-bold",
-            badge: 'ใหม่',
-            badgeColor: "success" as const,
+            // badge: 'ใหม่',
+            // badgeColor: "success" as const,
         }] : []),
         ...(userRole === 'instructor' ? [{
             key: "ta-stats",
             label: "สถิติ TA",
             icon: "solar:graph-new-up-bold",
-            badge: 'ใหม่',
-            badgeColor: "success" as const,
+            // badge: 'ใหม่',
+            // badgeColor: "success" as const,
         }] : []),
         ...(userRole === 'instructor' ? [{
             key: "settings",
@@ -1030,7 +1034,7 @@ export default function ClassroomDetailPage() {
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
-                                    {item.badge && (
+                                    {/* {item.badge && (
                                         <Chip 
                                             size="sm" 
                                             variant="flat" 
@@ -1039,7 +1043,7 @@ export default function ClassroomDetailPage() {
                                         >
                                             {item.badge}
                                         </Chip>
-                                    )}
+                                    )} */}
                                 </button>
                             ))}
                         </nav>
@@ -1068,7 +1072,7 @@ export default function ClassroomDetailPage() {
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
-                                {item.badge && (
+                                {/* {item.badge && (
                                     <Chip 
                                         size="sm" 
                                         variant="flat" 
@@ -1077,7 +1081,7 @@ export default function ClassroomDetailPage() {
                                     >
                                         {item.badge}
                                     </Chip>
-                                )}
+                                )} */}
                             </button>
                         ))}
                     </nav>
@@ -1338,10 +1342,10 @@ export default function ClassroomDetailPage() {
                 isOpen={modals.taModal.isOpen} 
                 onClose={modals.taModal.reset} 
                 size="2xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-2">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-xl shadow-lg">
                                 <Icon icon="solar:user-hands-bold" className="text-2xl text-white" />
@@ -1354,7 +1358,7 @@ export default function ClassroomDetailPage() {
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
                         {/* Stats */}
-                        <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-1 flex items-center justify-between">
                             <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <Icon icon="solar:users-group-rounded-bold" className="text-blue-500" />
                                 <span>ผู้ช่วยสอนในระบบ <span className="font-semibold text-blue-600">{tasList.length}</span> คน</span>
@@ -1383,7 +1387,7 @@ export default function ClassroomDetailPage() {
                                 modals.taModal.searchQuery && (
                                     <Button
                                         isIconOnly
-                                        size="sm"
+                                        size="md"
                                         variant="light"
                                         onPress={() => modals.taModal.setSearchQuery("")}
                                     >
@@ -1392,12 +1396,12 @@ export default function ClassroomDetailPage() {
                                 )
                             }
                             classNames={{
-                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                             }}
                         />
 
                         {/* Quick Actions */}
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="flex items-center gap-2 mt-1">
                             <Button
                                 size="sm"
                                 variant="flat"
@@ -1421,8 +1425,8 @@ export default function ClassroomDetailPage() {
                         </div>
                         
                         {/* TA List */}
-                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-                            <div className="max-h-[300px] overflow-y-auto">
+                        <div className="mt-1 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="h-[300px] overflow-y-auto">
                                 {(() => {
                                     const existingTAIds = course?.tas?.map(ta => ta.id) || [];
                                     const filteredTAs = tasList.filter(ta => {
@@ -1489,7 +1493,7 @@ export default function ClassroomDetailPage() {
                         
                         {/* Selected TAs Preview */}
                         {modals.taModal.selectedIds.length > 0 && (
-                            <div className="mt-4">
+                            <div className="mt-2">
                                 <p className="text-sm font-medium text-slate-600 mb-2">ผู้ช่วยสอนที่เลือก ({modals.taModal.selectedIds.length} คน)</p>
                                 <div className="flex flex-wrap gap-2">
                                     {modals.taModal.selectedIds.map(taId => {
@@ -1537,13 +1541,13 @@ export default function ClassroomDetailPage() {
                 isOpen={modals.instructorModal.isOpen} 
                 onClose={modals.instructorModal.reset}
                 size="2xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-2">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-xl shadow-lg">
-                                <Icon icon="solar:user-rounded-bold" className="text-2xl text-white" />
+                                <Icon icon="solar:user-hands-bold" className="text-2xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">เพิ่มอาจารย์ผู้สอน</h3>
@@ -1553,7 +1557,7 @@ export default function ClassroomDetailPage() {
                     </ModalHeader>
                     <ModalBody className="px-6 py-4">
                         {/* Stats */}
-                        <div className="mb-4 flex items-center justify-between">
+                        <div className="mb-1 flex items-center justify-between">
                             <div className="flex items-center gap-2 text-sm text-slate-600">
                                 <Icon icon="solar:users-group-rounded-bold" className="text-indigo-500" />
                                 <span>อาจารย์ในระบบ <span className="font-semibold text-indigo-600">{instructorsList.length}</span> คน</span>
@@ -1569,7 +1573,7 @@ export default function ClassroomDetailPage() {
                         <Input
                             placeholder="ค้นหาด้วยชื่อหรืออีเมล..."
                             variant="bordered"
-                            size="lg"
+                            size="md"
                             value={modals.instructorModal.searchQuery}
                             onValueChange={modals.instructorModal.setSearchQuery}
                             startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
@@ -1586,12 +1590,12 @@ export default function ClassroomDetailPage() {
                                 )
                             }
                             classNames={{
-                                inputWrapper: "h-12 bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
+                                inputWrapper: "bg-white border-slate-200 hover:border-indigo-300 focus-within:!border-indigo-400",
                             }}
                         />
 
                         {/* Quick Actions */}
-                        <div className="flex items-center gap-2 mt-3">
+                        <div className="flex items-center gap-2 mt-2">
                             <Button
                                 size="sm"
                                 variant="flat"
@@ -1615,8 +1619,8 @@ export default function ClassroomDetailPage() {
                         </div>
                         
                         {/* Instructor List */}
-                        <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
-                            <div className="max-h-[300px] overflow-y-auto">
+                        <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="h-[300px] overflow-y-auto">
                                 {filteredInstructors.length === 0 ? (
                                     <div className="p-8 text-center text-slate-500">
                                         <Icon icon="solar:user-cross-linear" className="text-4xl mb-2" />
@@ -1673,7 +1677,7 @@ export default function ClassroomDetailPage() {
                         
                         {/* Selected Instructors Preview */}
                         {modals.instructorModal.selectedIds.length > 0 && (
-                            <div className="mt-4">
+                            <div className="mt-2">
                                 <p className="text-sm font-medium text-slate-600 mb-2">อาจารย์ที่เลือก ({modals.instructorModal.selectedIds.length} คน)</p>
                                 <div className="flex flex-wrap gap-2">
                                     {modals.instructorModal.selectedIds.map(instructorId => {

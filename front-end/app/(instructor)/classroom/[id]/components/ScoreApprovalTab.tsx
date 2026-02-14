@@ -84,6 +84,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
     // Group requests by assignment + new_score + reason + created_at (within 1 minute)
+    // ONLY group if it's a group assignment (is_group_assignment === true)
+    // Individual assignments are always shown separately
     const groupedRequests = useMemo(() => {
         const groups: RequestGroup[] = [];
         const processed = new Set<number>();
@@ -91,14 +93,39 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
         for (const req of requests) {
             if (processed.has(req.id)) continue;
 
-            // Find related requests (same assignment, same new_score, same reason, similar time)
+            // Only group requests for actual group assignments
+            const isGroupAssignment = req.assignment.is_group_assignment === true;
+            
+            if (!isGroupAssignment) {
+                // Individual assignment - always show as single request
+                processed.add(req.id);
+                groups.push({
+                    key: `single-${req.id}`,
+                    requests: [req],
+                    assignment: req.assignment,
+                    sub_item: req.sub_item,
+                    new_score: req.new_score,
+                    old_score: req.old_score,
+                    reason: req.reason,
+                    images: req.images,
+                    requester: req.requester,
+                    created_at: req.created_at,
+                    status: req.status,
+                });
+                continue;
+            }
+
+            // Group assignment - find related requests (same assignment, same new_score, same reason, same requester, similar time)
             const related = requests.filter(r => {
                 if (processed.has(r.id)) return false;
                 if (r.assignment.id !== req.assignment.id) return false;
+                if (r.assignment.is_group_assignment !== true) return false;
                 if (r.new_score !== req.new_score) return false;
                 if (r.reason !== req.reason) return false;
                 if (r.status !== req.status) return false;
                 if (r.sub_item?.id !== req.sub_item?.id) return false;
+                // Must be from the same requester (same TA)
+                if (r.requester.id !== req.requester.id) return false;
                 // Check if created within 1 minute of each other
                 const timeDiff = Math.abs(new Date(r.created_at).getTime() - new Date(req.created_at).getTime());
                 return timeDiff < 60000; // 1 minute
@@ -537,6 +564,34 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                         </div>
                                     </div>
 
+                                    {/* Grader vs Requester Info */}
+                                    <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                                    <Icon icon="solar:pen-bold" className="text-indigo-600" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-indigo-500">ผู้ให้คะแนนเดิม</p>
+                                                    <p className="text-sm font-medium text-indigo-700">
+                                                        {firstRequest.original_grader?.full_name || "-"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                                                    <Icon icon="solar:pen-new-square-bold" className="text-amber-600" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs text-amber-500">ผู้ขอแก้ไข</p>
+                                                    <p className="text-sm font-medium text-amber-700">
+                                                        {group.requester.full_name}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Reason */}
                                     {group.reason && (
                                         <div className="p-3 bg-amber-50 rounded-lg border border-amber-100">
@@ -599,9 +654,16 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                     {/* Meta Info & Actions */}
                                     <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
                                         <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                                            {/* Original grader (who gave the old score) */}
+                                            {firstRequest.original_grader && (
+                                                <div className="flex items-center gap-1">
+                                                    <Icon icon="solar:pen-bold" className="text-indigo-500" />
+                                                    <span>ผู้ให้คะแนนเดิม: <span className="font-medium text-indigo-600">{firstRequest.original_grader.full_name}</span></span>
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-1">
                                                 <Icon icon="solar:user-linear" />
-                                                <span>ร้องขอโดย: {group.requester.full_name}</span>
+                                                <span>ผู้ขอแก้ไข: <span className="font-medium text-amber-600">{group.requester.full_name}</span></span>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <Icon icon="solar:calendar-linear" />

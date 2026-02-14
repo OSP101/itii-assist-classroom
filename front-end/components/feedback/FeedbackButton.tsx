@@ -348,13 +348,11 @@ export function FeedbackButton({ userEmail, position = "bottom-right" }: Feedbac
         <>
             <button
                 onClick={() => setIsOpen(true)}
-                className={`fixed bottom-4 sm:bottom-6 ${positionClasses[position]} z-50 p-3 sm:p-4 bg-gradient-to-r from-blue-400 to-indigo-500 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 group`}
+                className={`fixed bottom-4 sm:bottom-6 ${positionClasses[position]} z-50 p-2 sm:p-3 bg-gradient-to-r from-blue-400 to-indigo-500 text-white rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 group`}
                 title="ส่ง Feedback"
             >
-                <Icon icon="solar:chat-round-like-bold" className="text-xl sm:text-2xl" />
-                <span className="absolute right-full mr-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-default-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block">
-                    ส่ง Feedback
-                </span>
+                <Icon icon="solar:chat-round-like-bold" className="text-lg sm:text-xl" />
+                
             </button>
 
             <FeedbackModal

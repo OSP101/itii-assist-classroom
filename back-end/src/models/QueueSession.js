@@ -103,4 +103,36 @@ QueueSession.generatePIN = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+/**
+ * Generate unique PIN among active/paused sessions
+ * PIN จะไม่ซ้ำกันในเซสชันที่กำลังใช้งาน (active หรือ paused)
+ * เซสชันที่เป็น draft หรือ closed จะปล่อย PIN ให้ใช้ซ้ำได้
+ * @param {number} maxAttempts - จำนวนครั้งสูงสุดที่จะลอง
+ * @returns {Promise<string>} - PIN 6 หลักที่ไม่ซ้ำ
+ */
+QueueSession.generateUniquePIN = async (maxAttempts = 10) => {
+    const { Op } = require('sequelize');
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const pin = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Check if PIN exists in active or paused sessions
+        const existingSession = await QueueSession.findOne({
+            where: {
+                pin_code: pin,
+                status: {
+                    [Op.in]: ['active', 'paused'],
+                },
+            },
+        });
+        
+        if (!existingSession) {
+            return pin;
+        }
+    }
+    
+    // Fallback: return random PIN (very unlikely to be reached)
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
 module.exports = QueueSession;

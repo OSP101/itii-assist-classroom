@@ -14,6 +14,8 @@ export interface ScoreEditRequestAssignment {
     id: number;
     name: string;
     max_score: number;
+    assignment_type?: string;
+    is_group_assignment?: boolean;
 }
 
 export interface ScoreEditRequestSubItem {
@@ -41,7 +43,9 @@ export interface ScoreEditRequest {
     score: {
         id: number;
         current_score: number | null;
+        graded_at: string | null;
     };
+    original_grader: ScoreEditRequestUser | null;
     assignment: ScoreEditRequestAssignment;
     sub_item: ScoreEditRequestSubItem | null;
     student: ScoreEditRequestStudent;

@@ -659,7 +659,7 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
     });
 
     if (pendingRequest) {
-        throw new ApiError(400, 'There is already a pending edit request for this score');
+        throw new ApiError(400, 'มีคำร้องขอแก้ไขคะแนนรออนุมัติอยู่แล้ว กรุณารอให้อาจารย์พิจารณาก่อนจึงจะขอแก้ไขได้อีกครั้ง');
     }
 
     const editRequest = await ScoreEditRequest.create({

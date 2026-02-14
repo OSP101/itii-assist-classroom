@@ -16,6 +16,7 @@ import {
   TableRow,
   TableCell,
 } from "@heroui/table";
+import { Pagination } from "@heroui/pagination";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
@@ -24,7 +25,7 @@ import {
   getActivityStats,
   getActivityFilters,
   type ActivityLog,
-  type Pagination,
+  type Pagination as PaginationData,
   type ActivityLogFilters,
   type ActivityLogStats,
 } from "@/services/courseActivityLog.service";
@@ -135,7 +136,7 @@ function getDetailText(detail: Record<string, unknown> | null | undefined): stri
 
 export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 30, totalPages: 0 });
+  const [pagination, setPagination] = useState<PaginationData>({ total: 0, page: 1, limit: 30, totalPages: 0 });
   const [stats, setStats] = useState<ActivityLogStats | null>(null);
   const [filters, setFilters] = useState<ActivityLogFilters | null>(null);
   const [loading, setLoading] = useState(true);
@@ -485,30 +486,17 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
 
           {/* Pagination */}
           {pagination.totalPages > 1 && (
-            <div className="flex justify-center gap-2 pt-2">
-              <Button
+            <div className="flex justify-center py-4">
+              <Pagination
+                total={pagination.totalPages}
+                page={pagination.page}
+                onChange={(page) => fetchLogs(page)}
+                showControls
                 size="sm"
-                variant="flat"
-                isDisabled={pagination.page <= 1}
-                onPress={() => fetchLogs(pagination.page - 1)}
-                startContent={<Icon icon="solar:arrow-left-linear" width={16} />}
-                className="bg-slate-100 text-slate-600"
-              >
-                ก่อนหน้า
-              </Button>
-              <Chip variant="flat" size="sm" className="bg-slate-100 text-slate-600">
-                หน้า {pagination.page} / {pagination.totalPages} (ทั้งหมด {pagination.total})
-              </Chip>
-              <Button
-                size="sm"
-                variant="flat"
-                isDisabled={pagination.page >= pagination.totalPages}
-                onPress={() => fetchLogs(pagination.page + 1)}
-                endContent={<Icon icon="solar:arrow-right-linear" width={16} />}
-                className="bg-slate-100 text-slate-600"
-              >
-                ถัดไป
-              </Button>
+                classNames={{
+                  cursor: "bg-blue-500",
+                }}
+              />
             </div>
           )}
         </div>

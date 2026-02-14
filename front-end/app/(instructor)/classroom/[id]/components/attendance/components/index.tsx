@@ -5,7 +5,7 @@
 
 "use client";
 
-import React, { memo, Suspense, lazy, useState } from "react";
+import React, { memo, Suspense, lazy, useState, useMemo } from "react";
 import Link from "next/link";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -14,8 +14,8 @@ import { Tooltip } from "@heroui/tooltip";
 import { Skeleton } from "@heroui/skeleton";
 import { Input } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
-import { DatePicker } from "@heroui/date-picker";
 import { Divider } from "@heroui/divider";
+import { Pagination } from "@heroui/pagination";
 import { addToast } from "@heroui/toast";
 import {
     Table,
@@ -33,7 +33,7 @@ import {
     ModalFooter,
 } from "@heroui/modal";
 import { Icon } from "@iconify/react";
-import { type DateValue } from "@internationalized/date";
+import { type DateValue, getLocalTimeZone, parseDateTime, CalendarDateTime } from "@internationalized/date";
 import { QRCodeSVG } from "qrcode.react";
 
 import {
@@ -51,6 +51,91 @@ import { type AttendanceSession, type TimeChangePreview, type TimeChangeRecord }
 
 // Lazy load LocationPicker
 const LocationPicker = lazy(() => import("@/components/map/LocationPicker"));
+
+// ============================================================================
+// Custom DateTime Input (Native HTML styled like HeroUI)
+// ============================================================================
+
+interface DateTimeInputProps {
+    label: string;
+    value: DateValue;
+    onChange: (value: DateValue) => void;
+    description?: string;
+    isRequired?: boolean;
+    colorScheme?: "blue" | "amber";
+}
+
+const DateTimeInput = memo(function DateTimeInput({
+    label,
+    value,
+    onChange,
+    description,
+    isRequired = false,
+    colorScheme = "blue",
+}: DateTimeInputProps) {
+    // Convert DateValue to datetime-local format (YYYY-MM-DDTHH:MM)
+    const toDateTimeLocal = (dateValue: DateValue): string => {
+        try {
+            const date = dateValue.toDate(getLocalTimeZone());
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, "0");
+            const day = String(date.getDate()).padStart(2, "0");
+            const hours = String(date.getHours()).padStart(2, "0");
+            const minutes = String(date.getMinutes()).padStart(2, "0");
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        } catch {
+            return "";
+        }
+    };
+
+    // Convert datetime-local string to DateValue
+    const fromDateTimeLocal = (dateTimeStr: string): DateValue | null => {
+        if (!dateTimeStr) return null;
+        try {
+            // dateTimeStr format: "YYYY-MM-DDTHH:MM"
+            const [datePart, timePart] = dateTimeStr.split("T");
+            const [year, month, day] = datePart.split("-").map(Number);
+            const [hour, minute] = timePart.split(":").map(Number);
+            return new CalendarDateTime(year, month, day, hour, minute);
+        } catch {
+            return null;
+        }
+    };
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newValue = fromDateTimeLocal(e.target.value);
+        if (newValue) {
+            onChange(newValue);
+        }
+    };
+
+    const borderColor = colorScheme === "amber" 
+        ? "border-slate-200 hover:border-amber-300 focus:border-amber-500 focus:ring-amber-500/20" 
+        : "border-slate-200 hover:border-blue-300 focus:border-blue-500 focus:ring-blue-500/20";
+
+    return (
+        <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+                {label}
+                {isRequired && <span className="text-red-500 ml-1">*</span>}
+            </label>
+            <input
+                type="datetime-local"
+                value={toDateTimeLocal(value)}
+                onChange={handleChange}
+                className={`w-full px-3 py-2.5 rounded-xl bg-white border-2 ${borderColor} 
+                    text-slate-800 text-sm transition-all duration-200
+                    focus:outline-none focus:ring-4
+                    placeholder:text-slate-400`}
+            />
+            {description && (
+                <p className={`text-xs font-medium ${colorScheme === "amber" ? "text-amber-600" : "text-slate-500"}`}>
+                    {description}
+                </p>
+            )}
+        </div>
+    );
+});
 
 // ============================================================================
 // Loading Skeleton
@@ -139,7 +224,7 @@ export const StatsCards = memo(function StatsCards({ stats }: StatsCardsProps) {
     ];
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="hidden md:grid grid-cols-2 md:grid-cols-4 gap-3">
             {items.map((item) => (
                 <Card key={item.label} className="shadow-sm border border-slate-200">
                     <CardBody className="p-4">
@@ -559,17 +644,7 @@ const SessionRowActions = memo(function SessionRowActions({
                     <Icon icon="solar:chart-bold" className="text-lg" />
                 </Link>
             </Tooltip>
-            <Tooltip content="แก้ไข/ขยายเวลา">
-                <Button
-                    isIconOnly
-                    size="sm"
-                    variant="light"
-                    color="primary"
-                    onPress={() => onEdit(session)}
-                >
-                    <Icon icon="solar:pen-bold" className="text-lg" />
-                </Button>
-            </Tooltip>
+            
             <Tooltip content="ลบ" color="danger">
                 <Button
                     isIconOnly
@@ -610,6 +685,16 @@ export const SessionsTable = memo(function SessionsTable({
 }: SessionsTableProps) {
     // QR Preview Modal State
     const [qrPreviewSession, setQRPreviewSession] = useState<SessionWithComputedStatus | null>(null);
+    
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const ITEMS_PER_PAGE = 10;
+    
+    const totalPages = Math.ceil(sessions.length / ITEMS_PER_PAGE);
+    const paginatedSessions = useMemo(() => {
+        const start = (currentPage - 1) * ITEMS_PER_PAGE;
+        return sessions.slice(start, start + ITEMS_PER_PAGE);
+    }, [sessions, currentPage]);
 
     return (
         <>
@@ -653,7 +738,7 @@ export const SessionsTable = memo(function SessionsTable({
                                     </div>
                                 }
                             >
-                                {sessions.map((session) => (
+                                {paginatedSessions.map((session) => (
                                     <TableRow key={session.id}>
                                         <TableCell>
                                             <div className="flex items-center gap-3">
@@ -759,6 +844,25 @@ export const SessionsTable = memo(function SessionsTable({
                             </TableBody>
                         </Table>
                     </div>
+                    
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex justify-center py-4 border-t border-slate-100">
+                            <Pagination
+                                total={totalPages}
+                                page={currentPage}
+                                onChange={setCurrentPage}
+                                showControls
+                                size="sm"
+                                color="primary"
+                                classNames={{
+                                    wrapper: "gap-1",
+                                    item: "bg-transparent",
+                                    cursor: "bg-blue-500 text-white shadow-md",
+                                }}
+                            />
+                        </div>
+                    )}
                 </CardBody>
             </Card>
 
@@ -1138,100 +1242,31 @@ export const CreateSessionModal = memo(function CreateSessionModal({
 
                         {/* Date Time */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาเริ่มต้น"
-                                variant="bordered"
-                                labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
                                 value={startDateTime}
-                                onChange={(value) => value && setStartDateTime(value)}
+                                onChange={setStartDateTime}
                                 isRequired
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-blue-500",
-                                    label: "text-slate-800 font-medium text-sm",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
+                                colorScheme="blue"
                             />
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาสิ้นสุด"
-                                variant="bordered"
-                                labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
                                 value={endDateTime}
-                                onChange={(value) => value && setEndDateTime(value)}
+                                onChange={setEndDateTime}
                                 isRequired
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-blue-500",
-                                    label: "text-slate-800 font-medium text-sm",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
+                                colorScheme="blue"
                             />
                         </div>
 
                         {/* Late Threshold Time */}
                         <div className="">
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาตัดสาย"
-                                variant="bordered"
-                                labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
                                 value={lateThresholdTime}
-                                onChange={(value) => value && setLateThresholdTime(value)}
+                                onChange={setLateThresholdTime}
                                 isRequired
+                                colorScheme="amber"
                                 description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-amber-500",
-                                    label: "text-slate-800 font-medium text-sm",
-                                    description: "text-amber-600 font-medium",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
                             />
                         </div>
 
@@ -1412,96 +1447,31 @@ export const EditSessionModal = memo(function EditSessionModal({
 
                         {/* Time Settings */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาเริ่มต้น"
                                 value={startDateTime}
-                                onChange={(value) => value && setStartDateTime(value)}
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
-                                labelPlacement="outside"
-                                variant="bordered"
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-amber-500",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "pt-4 bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
+                                onChange={setStartDateTime}
+                                isRequired
+                                colorScheme="amber"
                             />
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาสิ้นสุด"
                                 value={endDateTime}
-                                onChange={(value) => value && setEndDateTime(value)}
-                                granularity="minute"
-                                hideTimeZone
-                                showMonthAndYearPickers
-                                labelPlacement="outside"
-                                variant="bordered"
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-amber-500",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "pt-4 bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
+                                onChange={setEndDateTime}
+                                isRequired
+                                colorScheme="amber"
                             />
                         </div>
 
                         {/* Late Threshold Time */}
                         <div className="">
-                            <DatePicker
+                            <DateTimeInput
                                 label="เวลาตัดสาย"
-                                variant="bordered"
-                                labelPlacement="outside"
-                                granularity="minute"
-                                hideTimeZone
                                 value={lateThresholdTime}
-                                onChange={(value) => value && setLateThresholdTime(value)}
+                                onChange={setLateThresholdTime}
                                 isRequired
+                                colorScheme="amber"
                                 description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
-                                classNames={{
-                                    base: "w-full",
-                                    selectorButton: "text-amber-500",
-                                    label: "text-slate-800 font-medium text-sm",
-                                    description: "text-amber-600 font-medium",
-                                }}
-                                popoverProps={{
-                                    placement: "bottom",
-                                    classNames: { content: "z-[9999]" },
-                                }}
-                                calendarProps={{
-                                    classNames: {
-                                        base: "bg-white shadow-xl",
-                                        headerWrapper: "pt-4 bg-white",
-                                        prevButton: "border-1 border-default-200 rounded-small",
-                                        nextButton: "border-1 border-default-200 rounded-small",
-                                        gridHeader: "bg-white shadow-none",
-                                        cellButton: ["data-[today=true]:bg-primary-100 data-[selected=true]:bg-primary"],
-                                    },
-                                }}
                             />
                         </div>
 
@@ -1629,21 +1599,38 @@ export const DeleteConfirmModal = memo(function DeleteConfirmModal({
     return (
         <Modal isOpen={isOpen} onClose={onClose} size="sm">
             <ModalContent>
-                <ModalHeader>ยืนยันการลบ</ModalHeader>
+                <ModalHeader className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-red-100 rounded-lg">
+                            <Icon icon="solar:trash-bin-trash-bold" className="text-xl text-red-600" />
+                        </div>
+                        <span>ยืนยันการลบรอบเช็คชื่อ</span>
+                    </div>
+                </ModalHeader>
                 <ModalBody>
                     <p>
-                        คุณต้องการลบรอบการเช็คชื่อ <strong>{targetTitle}</strong> หรือไม่?
+                        คุณต้องการลบรอบการเช็คชื่อ <strong className="text-red-600">{targetTitle}</strong> หรือไม่?
                     </p>
-                    <p className="text-sm text-slate-500 mt-2">
-                        การดำเนินการนี้ไม่สามารถย้อนกลับได้
-                    </p>
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex items-start gap-2">
+                            <Icon icon="solar:danger-triangle-bold" className="text-red-500 text-lg mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-red-700">
+                                <p className="font-bold">คำเตือน: การลบจะไม่สามารถกู้คืนได้!</p>
+                                <ul className="list-disc list-inside mt-2 space-y-1">
+                                    <li>ข้อมูลการเช็คชื่อทั้งหมดจะ<strong>หายไปถาวร</strong></li>
+                                    <li>ผลการเช็คชื่อของนักศึกษาจะถูกลบ</li>
+                                    <li>ไม่สามารถกู้คืนข้อมูลได้</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
                 </ModalBody>
                 <ModalFooter>
                     <Button variant="light" onPress={onClose}>
                         ยกเลิก
                     </Button>
                     <Button color="danger" onPress={onConfirm} isLoading={isSubmitting}>
-                        ลบ
+                        ลบถาวร
                     </Button>
                 </ModalFooter>
             </ModalContent>
@@ -1692,8 +1679,8 @@ export const CloseSessionModal = memo(function CloseSessionModal({
                                 <p className="font-medium">หลังจากปิดแล้ว:</p>
                                 <ul className="list-disc list-inside mt-1 space-y-1">
                                     <li>นักศึกษาจะไม่สามารถเช็คชื่อได้อีก</li>
-                                    <li>สถานะจะเปลี่ยนเป็น &quot;ปิดแล้ว&quot;</li>
-                                    <li>สามารถเปิดใหม่ได้โดยการขยายเวลา</li>
+                                    <li>ไม่สามารถแก้ไขรอบเช็คชื่อได้</li>
+                                    <li>รหัส PIN จะถูกปล่อยให้รอบอื่นใช้งานได้</li>
                                 </ul>
                             </div>
                         </div>

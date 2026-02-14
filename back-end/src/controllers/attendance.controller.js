@@ -39,10 +39,18 @@ const calculateDistance = (lat1, lng1, lat2, lng2) => {
 };
 
 /**
- * Generate random 6-digit PIN
+ * Generate random 6-digit PIN (simple - for backward compatibility)
  */
 const generatePIN = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
+ * Generate unique PIN that doesn't conflict with active sessions
+ * Uses AttendanceSession.generateUniquePIN from model
+ */
+const generateUniquePIN = async () => {
+  return await AttendanceSession.generateUniquePIN();
 };
 
 /**
@@ -298,8 +306,8 @@ const createAttendanceSession = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'course_id, title, start_time and end_time are required');
   }
 
-  // Generate PIN
-  const pin_code = generatePIN();
+  // Generate unique PIN (doesn't conflict with active sessions)
+  const pin_code = await generateUniquePIN();
 
   // Determine which section IDs to use
   // Priority: course_section_ids (array) > course_section_id (single)
@@ -573,6 +581,15 @@ const applyTimeChange = asyncHandler(async (req, res) => {
   const session = await AttendanceSession.findByPk(id);
   if (!session) throw new ApiError(404, 'ไม่พบรอบการเช็คชื่อ');
 
+  // Check if session is closed - only allow time extension
+  const currentStatus = computeSessionStatus(session);
+  if (currentStatus === 'closed') {
+    const isExtendingTime = updateData.end_time && new Date(updateData.end_time) > new Date();
+    if (!isExtendingTime) {
+      throw new ApiError(400, 'รอบเช็คชื่อปิดแล้ว สามารถขยายเวลาเพื่อเปิดใหม่เท่านั้น');
+    }
+  }
+
   // Snapshot old times for audit log
   const oldTimes = {
     start_time: session.start_time,
@@ -593,7 +610,7 @@ const applyTimeChange = asyncHandler(async (req, res) => {
 
   // Handle PIN regeneration
   if (updateData.regenerate_pin) {
-    updateData.pin_code = generatePIN();
+    updateData.pin_code = await generateUniquePIN();
     delete updateData.regenerate_pin;
   }
 
@@ -768,10 +785,32 @@ const updateAttendanceSession = asyncHandler(async (req, res) => {
     throw new ApiError(404, 'Attendance session not found');
   }
 
-  // If regenerating PIN
+  // Check if session is closed
+  const currentStatus = computeSessionStatus(session);
+  if (currentStatus === 'closed') {
+    // For closed sessions, only allow time extension (to reopen)
+    // Check if request is trying to extend end_time
+    const isExtendingTime = updateData.end_time && new Date(updateData.end_time) > new Date();
+    
+    if (!isExtendingTime) {
+      throw new ApiError(400, 'รอบเช็คชื่อปิดแล้ว สามารถขยายเวลาเพื่อเปิดใหม่เท่านั้น');
+    }
+    
+    // Only allow time-related fields when extending closed session
+    const allowedFields = ['start_time', 'end_time', 'late_threshold_time', 'late_threshold_minutes'];
+    const updateKeys = Object.keys(updateData);
+    const disallowedKeys = updateKeys.filter(key => !allowedFields.includes(key));
+    disallowedKeys.forEach(key => delete updateData[key]);
+  }
+
+  // If regenerating PIN (only allowed for non-closed sessions)
   if (updateData.regenerate_pin) {
-    updateData.pin_code = generatePIN();
-    delete updateData.regenerate_pin;
+    if (currentStatus === 'closed') {
+      delete updateData.regenerate_pin;
+    } else {
+      updateData.pin_code = await generateUniquePIN();
+      delete updateData.regenerate_pin;
+    }
   }
 
   // Remove status from updateData - status is computed from time
