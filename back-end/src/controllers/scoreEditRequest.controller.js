@@ -74,6 +74,11 @@ const getEditRequests = asyncHandler(async (req, res) => {
                         as: 'subItem',
                         attributes: ['id', 'name', 'max_score'],
                     },
+                    {
+                        model: User,
+                        as: 'grader',
+                        attributes: ['id', 'username', 'full_name'],
+                    },
                 ],
             },
             {
@@ -91,25 +96,37 @@ const getEditRequests = asyncHandler(async (req, res) => {
     });
 
     // Format response
-    const formatted = editRequests.map(req => ({
-        id: req.id,
-        status: req.status,
-        old_score: req.old_score ? parseFloat(req.old_score) : null,
-        new_score: parseFloat(req.new_score),
-        reason: req.reason,
-        images: req.images || [],
-        review_comment: req.review_comment,
-        created_at: req.created_at,
-        reviewed_at: req.reviewed_at,
-        score: {
-            id: req.score.id,
-            current_score: req.score.score ? parseFloat(req.score.score) : null,
-        },
-        assignment: {
-            id: req.score.assignment.id,
-            name: req.score.assignment.name,
-            max_score: parseFloat(req.score.assignment.max_score),
-        },
+    const formatted = editRequests.map(req => {
+        const assignmentType = req.score.assignment.assignment_type;
+        const isGroupAssignment = assignmentType === 'permanent_group' || assignmentType === 'weekly_group';
+        
+        return {
+            id: req.id,
+            status: req.status,
+            old_score: req.old_score ? parseFloat(req.old_score) : null,
+            new_score: parseFloat(req.new_score),
+            reason: req.reason,
+            images: req.images || [],
+            review_comment: req.review_comment,
+            created_at: req.created_at,
+            reviewed_at: req.reviewed_at,
+            score: {
+                id: req.score.id,
+                current_score: req.score.score ? parseFloat(req.score.score) : null,
+                graded_at: req.score.graded_at,
+            },
+            original_grader: req.score.grader ? {
+                id: req.score.grader.id,
+                username: req.score.grader.username,
+                full_name: req.score.grader.full_name,
+            } : null,
+            assignment: {
+                id: req.score.assignment.id,
+                name: req.score.assignment.name,
+                max_score: parseFloat(req.score.assignment.max_score),
+                assignment_type: assignmentType,
+                is_group_assignment: isGroupAssignment,
+            },
         sub_item: req.score.subItem ? {
             id: req.score.subItem.id,
             name: req.score.subItem.name,
@@ -130,7 +147,7 @@ const getEditRequests = asyncHandler(async (req, res) => {
             username: req.reviewer.username,
             full_name: req.reviewer.full_name,
         } : null,
-    }));
+    };});
 
     // Count by status (TA sees only their own counts)
     const countWhereBase = isTA && !isInstructor ? { requested_by: userId } : {};
@@ -298,7 +315,7 @@ const createEditRequest = asyncHandler(async (req, res) => {
     });
 
     if (existingRequest) {
-        throw new ApiError(400, 'There is already a pending edit request for this score');
+        throw new ApiError(400, 'มีคำร้องขอแก้ไขคะแนนรออนุมัติอยู่แล้ว กรุณารอให้อาจารย์พิจารณาก่อนจึงจะขอแก้ไขได้อีกครั้ง');
     }
 
     // Process uploaded images
@@ -404,7 +421,7 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
     });
 
     if (existingRequests.length > 0) {
-        throw new ApiError(400, `There are already pending edit requests for ${existingRequests.length} score(s)`);
+        throw new ApiError(400, `มีคำร้องขอแก้ไขคะแนนรออนุมัติอยู่แล้ว ${existingRequests.length} รายการ กรุณารอให้อาจารย์พิจารณาก่อนจึงจะขอแก้ไขได้อีกครั้ง`);
     }
 
     // Process uploaded images - same images for all batch requests

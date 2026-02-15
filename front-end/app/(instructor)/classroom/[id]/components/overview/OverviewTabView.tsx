@@ -306,30 +306,44 @@ function OverviewTabViewComponent({
                             </div>
                             <div>
                                 <span className="font-semibold text-slate-800 block">นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม</span>
-                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}%</span>
+                                <span className="text-xs text-slate-500">คะแนนต่ำกว่า {course.attention_threshold ?? 60}% (5 อันดับแรก)</span>
                             </div>
                         </div>
                     </CardHeader>
                     <CardBody className="px-5 py-4">
                         {overview?.lowPerformers && overview.lowPerformers.length > 0 ? (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {overview.lowPerformers.map((student) => (
-                                    <div key={student.id} className="bg-red-50 rounded-xl p-3 border border-red-100">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-medium text-slate-700 text-sm truncate">{student.full_name}</p>
+                            <div className="space-y-3">
+                                {overview.lowPerformers.slice(0, 5).map((student, index) => (
+                                    <div 
+                                        key={student.id} 
+                                        className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
+                                            (student.percentage || 0) < 30 
+                                                ? "bg-gradient-to-r from-red-50 to-red-100 border border-red-200" 
+                                                : "bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200"
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            {/* Warning Badge */}
+                                            <div className={`relative w-10 h-10 flex items-center justify-center rounded-full font-bold text-sm ${
+                                                (student.percentage || 0) < 30 
+                                                    ? "bg-gradient-to-br from-red-400 to-red-600 text-white shadow-lg" 
+                                                    : "bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-md"
+                                            }`}>
+                                                <Icon icon="solar:danger-triangle-bold" className="text-lg" />
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-800">{student.full_name}</p>
                                                 <p className="text-xs text-slate-400">{student.student_id}</p>
                                             </div>
-                                            <span className={`text-sm font-bold ${(student.percentage || 0) < 30 ? "text-red-600" : "text-amber-600"}`}>
-                                                {student.percentage || 0}%
-                                            </span>
                                         </div>
-                                        <Progress
-                                            value={student.percentage || 0}
-                                            color={(student.percentage || 0) < 30 ? "danger" : "warning"}
-                                            size="sm"
-                                            className="h-2"
-                                        />
+                                        <div className="text-right">
+                                            <p className={`text-lg font-bold ${
+                                                (student.percentage || 0) < 30 ? "text-red-600" : "text-amber-600"
+                                            }`}>
+                                                {student.percentage || 0}%
+                                            </p>
+                                            <p className="text-xs text-slate-400">{student.totalScore?.toFixed(1) || 0} คะแนน</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>

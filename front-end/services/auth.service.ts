@@ -163,9 +163,19 @@ class AuthService {
       return { success: true };
     }
 
+    // Extract error message from response
+    let errorMessage = 'เปลี่ยนรหัสผ่านไม่สำเร็จ';
+    if (response.message) {
+      errorMessage = response.message;
+    } else if (typeof response.error === 'string') {
+      errorMessage = response.error;
+    } else if (typeof response.error === 'object' && response.error?.message) {
+      errorMessage = response.error.message;
+    }
+
     return {
       success: false,
-      error: response.message || response.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
+      error: errorMessage,
     };
   }
 
@@ -182,9 +192,19 @@ class AuthService {
       return { success: true, user };
     }
 
+    // Extract error message from response
+    let errorMessage = 'อัปเดตโปรไฟล์ไม่สำเร็จ';
+    if (response.message) {
+      errorMessage = response.message;
+    } else if (typeof response.error === 'string') {
+      errorMessage = response.error;
+    } else if (typeof response.error === 'object' && response.error?.message) {
+      errorMessage = response.error.message;
+    }
+
     return {
       success: false,
-      error: response.message || response.error || 'อัปเดตโปรไฟล์ไม่สำเร็จ',
+      error: errorMessage,
     };
   }
 

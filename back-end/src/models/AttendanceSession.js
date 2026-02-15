@@ -92,8 +92,44 @@ const AttendanceSession = sequelize.define('AttendanceSession', {
     updatedAt: 'updated_at',
 });
 
-// Generate random PIN code
+// Generate random PIN code (simple)
 AttendanceSession.generatePIN = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
+ * Generate unique PIN that doesn't conflict with active sessions
+ * Active = sessions where start_time <= now <= end_time
+ * This allows PIN reuse once sessions are closed
+ * @param {number} maxAttempts - Maximum attempts before throwing error
+ * @returns {Promise<string>} - Unique PIN code
+ */
+AttendanceSession.generateUniquePIN = async (maxAttempts = 10) => {
+    const { Op } = require('sequelize');
+    const now = new Date();
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const pin = Math.floor(100000 + Math.random() * 900000).toString();
+        
+        // Check if PIN is used by any currently active session
+        // A session is "active" if start_time <= now <= end_time
+        const existingSession = await AttendanceSession.findOne({
+            where: {
+                pin_code: pin,
+                start_time: { [Op.lte]: now },
+                end_time: { [Op.gte]: now },
+            },
+        });
+        
+        if (!existingSession) {
+            return pin; // PIN is unique among active sessions
+        }
+    }
+    
+    // Fallback: return random PIN anyway (very unlikely to reach here)
+    // With 900,000 possible PINs and typically < 100 active sessions,
+    // collision probability is extremely low
+    console.warn('Could not generate unique PIN after max attempts, using random PIN');
     return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
