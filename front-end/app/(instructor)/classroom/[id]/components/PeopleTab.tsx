@@ -14,9 +14,7 @@ import {
     TableRow,
     TableCell,
 } from "@heroui/table";
-import { Pagination } from "@heroui/pagination";
 import { Icon } from "@iconify/react";
-import { useMemo, useState } from "react";
 
 // Types for the component
 interface Instructor {
@@ -79,8 +77,6 @@ function PeopleTableSkeleton() {
     );
 }
 
-const ITEMS_PER_PAGE = 10;
-
 export default function PeopleTab({
     course,
     isLoading,
@@ -93,42 +89,9 @@ export default function PeopleTab({
     currentUserId,
     isCourseActive = true,
 }: PeopleTabProps) {
-    const [currentPage, setCurrentPage] = useState(1);
-    
     // Get instructors count - use instructors array if available, otherwise fallback to single instructor
     const instructorsCount = course.instructors?.length || (course.instructor ? 1 : 0);
     const instructorsList = course.instructors || (course.instructor ? [course.instructor] : []);
-    
-    // Build people list for table
-    const allPeople = useMemo(() => [
-        // Instructor Rows (multiple instructors)
-        ...instructorsList.map(instructor => ({
-            id: `instructor-${instructor.id}`,
-            type: 'instructor' as const,
-            personId: instructor.id,
-            full_name: instructor.full_name,
-            email: instructor.email || "-",
-            avatar: instructor.avatar,
-            isPrimary: instructor.CourseInstructor?.is_primary || false,
-        })),
-        // TA Rows
-        ...(course.tas?.map(ta => ({
-            id: `ta-${ta.id}`,
-            type: 'ta' as const,
-            personId: ta.id,
-            full_name: ta.full_name,
-            email: ta.email || ta.username || "-",
-            avatar: ta.avatar,
-            isPrimary: false,
-        })) || [])
-    ], [instructorsList, course.tas]);
-    
-    // Pagination
-    const totalPages = Math.ceil(allPeople.length / ITEMS_PER_PAGE);
-    const paginatedPeople = useMemo(() => {
-        const start = (currentPage - 1) * ITEMS_PER_PAGE;
-        return allPeople.slice(start, start + ITEMS_PER_PAGE);
-    }, [allPeople, currentPage]);
 
     return (
         <div className="space-y-4">
@@ -189,8 +152,8 @@ export default function PeopleTab({
                 </>
             ) : (
                 <>
-                    {/* Stats Cards - Hidden on mobile */}
-                    <div className="hidden md:grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <Card className="shadow-sm border border-slate-200">
                             <CardBody className="p-4">
                                 <div className="flex items-center gap-3">
@@ -258,7 +221,28 @@ export default function PeopleTab({
                                             <p className="text-slate-400">ยังไม่มีบุคลากรในรายวิชานี้</p>
                                         </div>
                                     }>
-                                        {paginatedPeople.map((person) => (
+                                        {[
+                                            // Instructor Rows (multiple instructors)
+                                            ...instructorsList.map(instructor => ({
+                                                id: `instructor-${instructor.id}`,
+                                                type: 'instructor' as const,
+                                                personId: instructor.id,
+                                                full_name: instructor.full_name,
+                                                email: instructor.email || "-",
+                                                avatar: instructor.avatar,
+                                                isPrimary: instructor.CourseInstructor?.is_primary || false,
+                                            })),
+                                            // TA Rows
+                                            ...(course.tas?.map(ta => ({
+                                                id: `ta-${ta.id}`,
+                                                type: 'ta' as const,
+                                                personId: ta.id,
+                                                full_name: ta.full_name,
+                                                email: ta.email || ta.username || "-",
+                                                avatar: ta.avatar,
+                                                isPrimary: false,
+                                            })) || [])
+                                        ].map((person) => (
                                             <TableRow key={person.id}>
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">
@@ -370,25 +354,6 @@ export default function PeopleTab({
                                     </TableBody>
                                 </Table>
                             </div>
-                            
-                            {/* Pagination */}
-                            {totalPages > 1 && (
-                                <div className="flex justify-center py-4 border-t border-slate-100">
-                                    <Pagination
-                                        total={totalPages}
-                                        page={currentPage}
-                                        onChange={setCurrentPage}
-                                        showControls
-                                        size="sm"
-                                        color="primary"
-                                        classNames={{
-                                            wrapper: "gap-1",
-                                            item: "bg-transparent",
-                                            cursor: "bg-blue-500 text-white shadow-md",
-                                        }}
-                                    />
-                                </div>
-                            )}
                         </CardBody>
                     </Card>
 

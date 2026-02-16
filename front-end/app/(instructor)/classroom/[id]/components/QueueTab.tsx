@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -17,7 +17,6 @@ import {
     TableRow,
     TableCell,
 } from "@heroui/table";
-import { Pagination } from "@heroui/pagination";
 import {
     Modal,
     ModalContent,
@@ -117,10 +116,6 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
     const [isSessionsLoading, setIsSessionsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState<string>("all");
-    
-    // Pagination state
-    const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
 
     // Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -238,18 +233,6 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
         const matchesStatus = statusFilter === "all" || session.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
-
-    // Pagination logic
-    const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
-    const paginatedSessions = filteredSessions.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
-
-    // Reset to page 1 when filter changes
-    React.useEffect(() => {
-        setCurrentPage(1);
-    }, [searchQuery, statusFilter]);
 
     // Stats
     const stats = {
@@ -503,8 +486,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 </>
             ) : (
                 <>
-                    {/* Stats Cards - Hidden on mobile */}
-                    <div className="hidden md:grid grid-cols-5 gap-3">
+                    {/* Stats Cards */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                         <Card className="shadow-sm border border-slate-200">
                             <CardBody className="p-4">
                                 <div className="flex items-center gap-3">
@@ -670,7 +653,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                                                     </div>
                                                 }
                                             >
-                                                {paginatedSessions.map((session) => (
+                                                {filteredSessions.map((session) => (
                                                     <TableRow key={session.id}>
                                                         <TableCell>
                                                             <div>
@@ -916,22 +899,6 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                                             </TableBody>
                                         </Table>
                                     </div>
-
-                                    {/* Pagination */}
-                                    {totalPages > 1 && (
-                                        <div className="flex justify-center py-4 border-t border-slate-100">
-                                            <Pagination
-                                                total={totalPages}
-                                                page={currentPage}
-                                                onChange={setCurrentPage}
-                                                showControls
-                                                size="sm"
-                                                classNames={{
-                                                    cursor: "bg-blue-500",
-                                                }}
-                                            />
-                                        </div>
-                                    )}
                                 </CardBody>
                             </Card>
                         </>

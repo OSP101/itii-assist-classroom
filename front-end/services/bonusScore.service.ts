@@ -58,7 +58,7 @@ interface ApiResponse<T = unknown> {
     success: boolean;
     message?: string;
     data?: T;
-    error?: string | { code?: number; message?: string };
+    error?: string;
 }
 
 // Bonus Score Service

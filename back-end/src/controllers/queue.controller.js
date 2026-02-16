@@ -298,8 +298,8 @@ const createQueueSession = async (req, res) => {
             });
         }
 
-        // Generate unique PIN code (unique among active/paused sessions)
-        const pin_code = await QueueSession.generateUniquePIN();
+        // Generate PIN code
+        const pin_code = QueueSession.generatePIN();
 
         // Create session
         const session = await QueueSession.create(
@@ -535,7 +535,7 @@ const regeneratePIN = async (req, res) => {
             });
         }
 
-        const newPIN = await QueueSession.generateUniquePIN();
+        const newPIN = QueueSession.generatePIN();
         await session.update({ pin_code: newPIN });
 
         // Emit socket event
