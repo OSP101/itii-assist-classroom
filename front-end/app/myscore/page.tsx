@@ -781,11 +781,53 @@ export default function MyScorePage() {
                                                 <Icon icon="solar:notebook-bold" className="text-blue-500" />
                                                 <h4 className="font-medium text-gray-700">สอบกลางภาค</h4>
                                             </div>
+                                            
+                                            {/* Midterm Statistics */}
+                                            {/* {(() => {
+                                                const gradedMidterm = midtermScores.filter((e: ExamScoreData) => e.score !== null);
+                                                if (gradedMidterm.length > 0) {
+                                                    const midtermTotal = gradedMidterm.reduce((sum: number, e: ExamScoreData) => sum + (e.score || 0), 0);
+                                                    const midtermMaxTotal = gradedMidterm.reduce((sum: number, e: ExamScoreData) => sum + e.max_score, 0);
+                                                    return (
+                                                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 mb-4 border border-blue-100">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                                                                        <Icon icon="solar:notebook-bold" className="text-white text-lg" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">คะแนนสอบกลางภาค</p>
+                                                                        <p className="text-2xl font-bold text-blue-600">
+                                                                            {midtermTotal.toFixed(1)} <span className="text-sm text-gray-400">/ {midtermMaxTotal}</span>
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-3xl font-bold text-blue-600">
+                                                                        {midtermMaxTotal > 0 ? ((midtermTotal / midtermMaxTotal) * 100).toFixed(0) : 0}%
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        ตรวจแล้ว {gradedMidterm.length}/{midtermScores.length}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-3 bg-blue-100 rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full transition-all duration-500"
+                                                                    style={{ width: `${midtermMaxTotal > 0 ? (midtermTotal / midtermMaxTotal) * 100 : 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()} */}
+
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 {midtermScores.map((exam: ExamScoreData) => (
                                                     <div
                                                         key={exam.id}
-                                                        className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
+                                                        className="bg-white rounded-xl p-4 border border-blue-100 shadow-sm"
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-2">
@@ -806,13 +848,21 @@ export default function MyScorePage() {
                                                             </Chip>
                                                         </div>
                                                         <div className="text-center py-3">
-                                                            <span className={`text-3xl font-bold ${
-                                                                exam.score !== null 
-                                                                    ? (exam.score / exam.max_score >= 0.6 ? 'text-emerald-600' : 'text-amber-600')
-                                                                    : 'text-gray-400'
-                                                            }`}>
-                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
-                                                            </span>
+                                                            {(() => {
+                                                                const percent = exam.score !== null ? (exam.score / exam.max_score) * 100 : 0;
+                                                                let colorClass = 'text-gray-400';
+                                                                if (exam.score !== null) {
+                                                                    if (percent >= 80) colorClass = 'text-emerald-600';
+                                                                    else if (percent >= 60) colorClass = 'text-blue-600';
+                                                                    else if (percent >= 40) colorClass = 'text-amber-600';
+                                                                    else colorClass = 'text-red-600';
+                                                                }
+                                                                return (
+                                                                    <span className={`text-3xl font-bold ${colorClass}`}>
+                                                                        {exam.score !== null ? exam.score.toFixed(1) : '-'}
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                             <span className="text-gray-400 text-lg">/{exam.max_score}</span>
                                                         </div>
                                                         {exam.grader && (
@@ -833,11 +883,53 @@ export default function MyScorePage() {
                                                 <Icon icon="solar:diploma-bold" className="text-indigo-500" />
                                                 <h4 className="font-medium text-gray-700">สอบปลายภาค</h4>
                                             </div>
+                                            
+                                            {/* Final Statistics */}
+                                            {/* {(() => {
+                                                const gradedFinal = finalScores.filter((e: ExamScoreData) => e.score !== null);
+                                                if (gradedFinal.length > 0) {
+                                                    const finalTotal = gradedFinal.reduce((sum: number, e: ExamScoreData) => sum + (e.score || 0), 0);
+                                                    const finalMaxTotal = gradedFinal.reduce((sum: number, e: ExamScoreData) => sum + e.max_score, 0);
+                                                    return (
+                                                        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 mb-4 border border-indigo-100">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
+                                                                        <Icon icon="solar:diploma-bold" className="text-white text-lg" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-gray-600">คะแนนสอบปลายภาค</p>
+                                                                        <p className="text-2xl font-bold text-indigo-600">
+                                                                            {finalTotal.toFixed(1)} <span className="text-sm text-gray-400">/ {finalMaxTotal}</span>
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <p className="text-3xl font-bold text-indigo-600">
+                                                                        {finalMaxTotal > 0 ? ((finalTotal / finalMaxTotal) * 100).toFixed(0) : 0}%
+                                                                    </p>
+                                                                    <p className="text-xs text-gray-500">
+                                                                        ตรวจแล้ว {gradedFinal.length}/{finalScores.length}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="h-3 bg-indigo-100 rounded-full overflow-hidden">
+                                                                <div 
+                                                                    className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-500"
+                                                                    style={{ width: `${finalMaxTotal > 0 ? (finalTotal / finalMaxTotal) * 100 : 0}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()} */}
+
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                                 {finalScores.map((exam: ExamScoreData) => (
                                                     <div
                                                         key={exam.id}
-                                                        className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100"
+                                                        className="bg-white rounded-xl p-4 border border-indigo-100 shadow-sm"
                                                     >
                                                         <div className="flex items-center justify-between mb-2">
                                                             <div className="flex items-center gap-2">
@@ -858,13 +950,21 @@ export default function MyScorePage() {
                                                             </Chip>
                                                         </div>
                                                         <div className="text-center py-3">
-                                                            <span className={`text-3xl font-bold ${
-                                                                exam.score !== null 
-                                                                    ? (exam.score / exam.max_score >= 0.6 ? 'text-emerald-600' : 'text-amber-600')
-                                                                    : 'text-gray-400'
-                                                            }`}>
-                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
-                                                            </span>
+                                                            {(() => {
+                                                                const percent = exam.score !== null ? (exam.score / exam.max_score) * 100 : 0;
+                                                                let colorClass = 'text-gray-400';
+                                                                if (exam.score !== null) {
+                                                                    if (percent >= 80) colorClass = 'text-emerald-600';
+                                                                    else if (percent >= 60) colorClass = 'text-blue-600';
+                                                                    else if (percent >= 40) colorClass = 'text-amber-600';
+                                                                    else colorClass = 'text-red-600';
+                                                                }
+                                                                return (
+                                                                    <span className={`text-3xl font-bold ${colorClass}`}>
+                                                                        {exam.score !== null ? exam.score.toFixed(1) : '-'}
+                                                                    </span>
+                                                                );
+                                                            })()}
                                                             <span className="text-gray-400 text-lg">/{exam.max_score}</span>
                                                         </div>
                                                         {exam.grader && (

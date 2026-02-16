@@ -48,6 +48,10 @@ const updateProfile = {
     email: Joi.string().email().allow('', null).optional().messages({
       'string.email': 'Invalid email format',
     }),
+    current_password: Joi.string().required().messages({
+      'any.required': 'Current password is required',
+      'string.empty': 'Current password is required',
+    }),
   }),
 };
 

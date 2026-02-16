@@ -165,6 +165,79 @@ const handleScoreEditImageUpload = (req, res, next) => {
     });
 };
 
+// Avatar upload configuration
+const avatarUploadDir = path.join(__dirname, '../../uploads/avatars');
+if (!fs.existsSync(avatarUploadDir)) {
+    fs.mkdirSync(avatarUploadDir, { recursive: true });
+}
+
+// Avatar upload settings
+const AVATAR_CONFIG = {
+    maxSize: 256,        // Max size in pixels (square)
+    quality: 85,         // JPEG quality
+};
+
+// Create multer instance for avatar
+const uploadAvatar = multer({
+    storage: memoryStorage,
+    fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB max
+        files: 1,
+    },
+}).single('avatar');
+
+// Process and resize avatar to a square
+const processAvatar = async (file, userId) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const filename = `avatar-${userId}-${uniqueSuffix}.jpg`;
+    const outputPath = path.join(avatarUploadDir, filename);
+    
+    // Create sharp instance and resize to square
+    await sharp(file.buffer)
+        .resize(AVATAR_CONFIG.maxSize, AVATAR_CONFIG.maxSize, {
+            fit: 'cover',
+            position: 'center',
+        })
+        .jpeg({
+            quality: AVATAR_CONFIG.quality,
+            mozjpeg: true,
+        })
+        .toFile(outputPath);
+    
+    return {
+        filename,
+        path: `/uploads/avatars/${filename}`,
+    };
+};
+
+// Middleware wrapper for avatar upload
+const handleAvatarUpload = (req, res, next) => {
+    uploadAvatar(req, res, async (err) => {
+        if (err instanceof multer.MulterError) {
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'ไฟล์มีขนาดใหญ่เกินไป สูงสุด 5MB',
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: err.message,
+            });
+        } else if (err) {
+            return res.status(400).json({
+                success: false,
+                message: err.message,
+            });
+        }
+        
+        next();
+    });
+};
+
 module.exports = {
     handleScoreEditImageUpload,
+    handleAvatarUpload,
+    processAvatar,
 };

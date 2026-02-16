@@ -383,12 +383,12 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                     onValueChange={setSearchQuery}
                                     startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                                     className="w-full sm:max-w-sm"
-                                    size="sm"
+                                    size="md"
                                     variant="bordered"
                                     isClearable
                                 />
                                 <div className="flex items-center gap-2">
-                                    <Chip size="sm" variant="flat" className="bg-slate-100">
+                                    <Chip size="md" variant="flat" className="bg-slate-100">
                                         {filteredStudents.length} คน
                                     </Chip>
                                 </div>
@@ -398,148 +398,236 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
 
                     {/* Score Tables */}
                     {filteredSettings.length > 0 ? (
+                        <>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {filteredSettings.map(setting => (
-                                <Card key={setting.id} className="shadow-sm border border-slate-200">
-                                    <CardHeader className="px-4 py-3 bg-gradient-to-r from-slate-50 to-slate-100 border-b">
+                            {filteredSettings.map(setting => {
+                                // Calculate statistics for this setting (using all students, not filtered)
+                                // Only include valid numeric scores that exist
+                                const allSettingScores = students
+                                    .map(s => {
+                                        const rawScore = scoreMap[setting.id]?.[s.id]?.score;
+                                        if (rawScore === null || rawScore === undefined) return null;
+                                        const numScore = typeof rawScore === 'string' ? parseFloat(rawScore) : rawScore;
+                                        return isNaN(numScore) ? null : numScore;
+                                    })
+                                    .filter((score): score is number => score !== null);
+                                
+                                const avgScore = allSettingScores.length > 0 
+                                    ? (allSettingScores.reduce((a, b) => a + b, 0) / allSettingScores.length).toFixed(2)
+                                    : "-";
+                                const highScore = allSettingScores.length > 0 ? Math.max(...allSettingScores) : "-";
+                                const lowScore = allSettingScores.length > 0 ? Math.min(...allSettingScores) : "-";
+
+                                return (
+                                <Card key={setting.id} className="shadow-lg border-0 overflow-hidden">
+                                    {/* Header */}
+                                    <CardHeader className={`px-5 py-4 border-b-0 ${
+                                        setting.component === 'lab' 
+                                            ? 'bg-emerald-500' 
+                                            : 'bg-blue-500'
+                                    }`}>
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                                                    setting.component === 'lab' 
-                                                        ? 'bg-gradient-to-br from-emerald-400 to-teal-500' 
-                                                        : 'bg-gradient-to-br from-blue-400 to-indigo-500'
-                                                }`}>
+                                                <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                                     <Icon 
                                                         icon={setting.component === 'lab' ? 'solar:monitor-bold' : 'solar:book-bold'} 
-                                                        className="text-xl text-white" 
+                                                        className="text-2xl text-white" 
                                                     />
                                                 </div>
-                                                <div>
-                                                    <p className="font-semibold text-slate-800">
-                                                        {getComponentLabel(setting.component)}
+                                                <div className="text-white">
+                                                    <p className="font-bold text-lg">
+                                                        {setting.component === 'lab' ? 'ปฏิบัติการ (Lab)' : 'บรรยาย (Lecture)'}
                                                     </p>
-                                                    <p className="text-xs text-slate-500">
-                                                        คะแนนเต็ม {setting.max_score} คะแนน
-                                                    </p>
+                                                    {/* <p className="text-sm text-white/80">
+                                                        Max {setting.max_score} คะแนน
+                                                    </p> */}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {setting.is_visible ? (
-                                                    <Chip size="sm" color="success" variant="flat" startContent={<Icon icon="solar:eye-bold" width={14} />}>
-                                                        แสดงผล
-                                                    </Chip>
-                                                ) : (
-                                                    <Chip size="sm" variant="flat" className="bg-slate-100" startContent={<Icon icon="solar:eye-closed-linear" width={14} />}>
-                                                        ซ่อน
-                                                    </Chip>
-                                                )}
-                                                <Tooltip content="นำเข้าจาก Excel">
-                                                    <Button
-                                                        
-                                                        size="sm"
-                                                        variant="flat"
-                                                        color="primary"
-                                                        isDisabled={!isCourseActive}
-                                                        onPress={() => {
-                                                            setBulkSettingId(setting.id);
-                                                            setIsBulkModalOpen(true);
-                                                        }}
-                                                    >
-                                                        <Icon icon="solar:import-bold" />
-                                                        นำเข้าจาก Excel
-                                                    </Button>
-                                                </Tooltip>
-                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-md"
+                                                startContent={<Icon icon="solar:document-add-bold" />}
+                                                isDisabled={!isCourseActive}
+                                                onPress={() => {
+                                                    setBulkSettingId(setting.id);
+                                                    setIsBulkModalOpen(true);
+                                                }}
+                                            >
+                                                ดึงจาก Excel
+                                            </Button>
                                         </div>
                                     </CardHeader>
-                                    <CardBody className="p-0 max-h-96 overflow-y-auto">
-                                        <table className="w-full">
-                                            <thead className="sticky top-0 bg-slate-100/80 backdrop-blur-sm">
-                                                <tr>
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">รหัสนักศึกษา</th>
-                                                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">ชื่อ-นามสกุล</th>
-                                                    <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider w-28">คะแนน</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
-                                                {filteredStudents.map((student, idx) => {
-                                                    const isEditing = editingScore?.settingId === setting.id && editingScore?.studentId === student.id;
-                                                    const scoreValue = getScoreDisplay(setting.id, student.id);
-                                                    
-                                                    return (
-                                                        <tr 
-                                                            key={student.id} 
-                                                            className={`hover:bg-blue-50/50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
-                                                        >
-                                                            <td className="py-3 px-4 text-sm font-mono text-slate-600">
+
+                                    {/* Statistics Cards - Above Table */}
+                                    <div className="bg-white px-4 py-3 border-b border-slate-200">
+                                        <div className="grid grid-cols-4 gap-2">
+                                            <div className="flex items-center gap-2.5 bg-blue-50 rounded-xl px-3 py-2.5 border border-blue-100">
+                                                {/* <div className="w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center">
+                                                    <Icon icon="solar:calculator-bold" className="text-white text-lg" />
+                                                </div> */}
+                                                <div>
+                                                    <p className="text-sm text-blue-600 font-medium uppercase tracking-wide">คะแนนเฉลี่ย</p>
+                                                    <p className="text-base font-bold text-slate-800">{avgScore}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 bg-emerald-50 rounded-xl px-3 py-2.5 border border-emerald-100">
+                                                {/* <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center">
+                                                    <Icon icon="solar:arrow-up-bold" className="text-white text-lg" />
+                                                </div> */}
+                                                <div>
+                                                    <p className="text-sm text-emerald-600 font-medium uppercase tracking-wide">คะแนนสูงสุด</p>
+                                                    <p className="text-base font-bold text-slate-800">{highScore}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 bg-orange-50 rounded-xl px-3 py-2.5 border border-orange-100">
+                                                {/* <div className="w-9 h-9 rounded-xl bg-orange-500 flex items-center justify-center">
+                                                    <Icon icon="solar:arrow-down-bold" className="text-white text-lg" />
+                                                </div> */}
+                                                <div>
+                                                    <p className="text-sm text-orange-600 font-medium uppercase tracking-wide">คะแนนต่ำสุด</p>
+                                                    <p className="text-base font-bold text-slate-800">{lowScore}</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2.5 bg-purple-50 rounded-xl px-3 py-2.5 border border-purple-100">
+                                                {/* <div className="w-9 h-9 rounded-xl bg-purple-500 flex items-center justify-center">
+                                                    <Icon icon="solar:star-bold" className="text-white text-lg" />
+                                                </div> */}
+                                                <div>
+                                                    <p className="text-sm text-purple-600 font-medium uppercase tracking-wide">คะแนนเต็ม</p>
+                                                    <p className="text-base font-bold text-slate-800">{setting.max_score}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Table Header */}
+                                    <div className="border-b border-slate-200">
+                                        <div className="flex items-center px-5 py-3">
+                                            <div className="w-32 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                                รหัสนักศึกษา
+                                            </div>
+                                            <div className="flex-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                                ชื่อ-นามสกุล
+                                            </div>
+                                            <div className="w-16 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
+                                                Section
+                                            </div>
+                                            <div className="w-28 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">
+                                                คะแนน
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Table Body */}
+                                    <CardBody className="p-0 max-h-[400px] overflow-y-auto">
+                                        <div>
+                                            {filteredStudents.map((student, idx) => {
+                                                const isEditing = editingScore?.settingId === setting.id && editingScore?.studentId === student.id;
+                                                const scoreValue = getScoreDisplay(setting.id, student.id);
+                                                const hasScore = scoreValue !== "";
+                                                
+                                                return (
+                                                    <div 
+                                                        key={student.id} 
+                                                        className={`flex items-center px-5 py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                                                    >
+                                                        <div className="w-32">
+                                                            <span className="text-sm text-slate-600">
                                                                 {student.student_id}
-                                                            </td>
-                                                            <td className="py-3 px-4 text-sm text-slate-800">
-                                                                {student.full_name}
-                                                            </td>
-                                                            <td className="py-3 px-4 text-right">
-                                                                {isEditing ? (
-                                                                    <div className="flex items-center gap-1 justify-end">
-                                                                        <Input
-                                                                            type="number"
-                                                                            size="sm"
-                                                                            variant="bordered"
-                                                                            className="w-20"
-                                                                            value={editingScore.value}
-                                                                            onValueChange={(v) => setEditingScore({...editingScore, value: v})}
-                                                                            onKeyDown={(e) => {
-                                                                                if (e.key === 'Enter') {
-                                                                                    handleSaveScore(setting.id, student.id, editingScore.value);
-                                                                                } else if (e.key === 'Escape') {
-                                                                                    setEditingScore(null);
-                                                                                }
-                                                                            }}
-                                                                            autoFocus
-                                                                        />
-                                                                        <Button
-                                                                            isIconOnly
-                                                                            size="sm"
-                                                                            color="success"
-                                                                            variant="flat"
-                                                                            isLoading={isSaving}
-                                                                            onPress={() => handleSaveScore(setting.id, student.id, editingScore.value)}
-                                                                        >
-                                                                            <Icon icon="solar:check-circle-bold" />
-                                                                        </Button>
-                                                                        <Button
-                                                                            isIconOnly
-                                                                            size="sm"
-                                                                            variant="flat"
-                                                                            color="danger"
-                                                                            onPress={() => setEditingScore(null)}
-                                                                        >
-                                                                            <Icon icon="solar:close-circle-bold" />
-                                                                        </Button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        className="inline-flex items-center justify-end gap-1 px-2 py-1 rounded hover:bg-blue-50 transition-colors min-w-16 text-right"
-                                                                        onClick={() => setEditingScore({
-                                                                            settingId: setting.id,
-                                                                            studentId: student.id,
-                                                                            value: scoreValue,
-                                                                        })}
-                                                                        disabled={!isCourseActive}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 text-sm text-slate-700 truncate pr-4">
+                                                            {student.full_name}
+                                                        </div>
+                                                        <div className="w-16 text-center">
+                                                            {/* <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600"> */}
+                                                                {student.section || "-"}
+                                                            {/* </Chip> */}
+                                                        </div>
+                                                        <div className="w-28 flex items-center justify-end gap-2">
+                                                            {isEditing ? (
+                                                                <div className="flex items-center gap-1">
+                                                                    <Input
+                                                                        type="number"
+                                                                        size="sm"
+                                                                        variant="bordered"
+                                                                        className="w-16"
+                                                                        classNames={{
+                                                                            input: "text-center font-semibold",
+                                                                            inputWrapper: "h-8 min-h-8",
+                                                                        }}
+                                                                        value={editingScore.value}
+                                                                        onValueChange={(v) => setEditingScore({...editingScore, value: v})}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter') {
+                                                                                handleSaveScore(setting.id, student.id, editingScore.value);
+                                                                            } else if (e.key === 'Escape') {
+                                                                                setEditingScore(null);
+                                                                            }
+                                                                        }}
+                                                                        autoFocus
+                                                                    />
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        color="danger"
+                                                                        variant="flat"
+                                                                        className="min-w-7 w-7 h-7"
+                                                                        onPress={() => setEditingScore(null)}
                                                                     >
-                                                                        <span className={`text-sm font-medium ${scoreValue ? 'text-slate-800' : 'text-slate-400'}`}>
-                                                                            {scoreValue || "-"}
-                                                                        </span>
-                                                                        {isCourseActive && (
-                                                                            <Icon icon="solar:pen-linear" className="text-slate-400 text-xs" />
-                                                                        )}
-                                                                    </button>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
+                                                                        <Icon icon="solar:close-circle-bold" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        isIconOnly
+                                                                        size="sm"
+                                                                        color="success"
+                                                                        variant="flat"
+                                                                        isLoading={isSaving}
+                                                                        className="min-w-7 w-7 h-7"
+                                                                        onPress={() => handleSaveScore(setting.id, student.id, editingScore.value)}
+                                                                    >
+                                                                        <Icon icon="solar:check-circle-bold" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <button
+                                                                    className="group flex items-center gap-2"
+                                                                    onClick={() => setEditingScore({
+                                                                        settingId: setting.id,
+                                                                        studentId: student.id,
+                                                                        value: scoreValue,
+                                                                    })}
+                                                                    disabled={!isCourseActive}
+                                                                >
+                                                                    {(() => {
+                                                                        const numScore = parseFloat(scoreValue);
+                                                                        const percent = hasScore ? (numScore / setting.max_score) * 100 : 0;
+                                                                        let colorClass = 'bg-slate-100 text-slate-400';
+                                                                        if (hasScore) {
+                                                                            if (percent >= 80) colorClass = 'bg-emerald-500 text-white';
+                                                                            else if (percent >= 60) colorClass = 'bg-blue-500 text-white';
+                                                                            else if (percent >= 40) colorClass = 'bg-amber-500 text-white';
+                                                                            else colorClass = 'bg-red-500 text-white';
+                                                                        }
+                                                                        return (
+                                                                            <span className={`inline-flex items-center justify-center min-w-[50px] px-2.5 py-1 rounded-md text-sm font-semibold ${colorClass}`}>
+                                                                                {hasScore ? parseFloat(scoreValue).toFixed(2) : "0.00"}
+                                                                            </span>
+                                                                        );
+                                                                    })()}
+                                                                    {isCourseActive && (
+                                                                        <Icon 
+                                                                            icon="solar:pen-2-linear" 
+                                                                            className="text-slate-400 group-hover:text-blue-500 transition-colors" 
+                                                                        />
+                                                                    )}
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                         {filteredStudents.length === 0 && (
                                             <div className="text-center py-8 text-slate-500">
                                                 ไม่พบนักศึกษา
@@ -547,8 +635,10 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                         )}
                                     </CardBody>
                                 </Card>
-                            ))}
+                                );
+                            })}
                         </div>
+                        </>
                     ) : (
                         <Card className="shadow-sm border border-slate-200">
                             <CardBody className="text-center py-12">
@@ -578,49 +668,48 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             >
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:import-bold" className="text-xl text-blue-600" />
+                        <div className="p-2 bg-emerald-100 rounded-lg">
+                            <Icon icon="solar:import-bold" className="text-xl text-emerald-600" />
                         </div>
                         <div>
                             <h3 className="text-lg font-semibold">นำเข้าคะแนนจาก Excel</h3>
                             <p className="text-sm text-slate-500 font-normal">
-                                {bulkSettingId && settings.find(s => s.id === bulkSettingId) && (
-                                    <>คะแนนเต็ม: {settings.find(s => s.id === bulkSettingId)?.max_score} คะแนน</>
-                                )}
+                                คัดลอกข้อมูลจาก Excel แล้ววางในช่องด้านล่าง
                             </p>
                         </div>
                     </ModalHeader>
                     <ModalBody className="space-y-4">
-                        {/* Example Format */}
-                        <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                            <p className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
+                        {/* Format Info */}
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                            <div className="flex items-center gap-2 mb-3">
                                 <Icon icon="solar:info-circle-bold" className="text-blue-500" />
-                                รูปแบบข้อมูล: คัดลอกจาก Excel แล้ววาง
-                            </p>
-                            <div className="bg-white rounded border border-slate-200 p-3 font-mono text-xs">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="text-slate-500 border-b border-slate-200">
-                                            <th className="text-left pb-2 pr-8">คอลัมน์ A: รหัสนักศึกษา</th>
-                                            <th className="text-left pb-2">คอลัมน์ B: คะแนน</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-slate-700">
-                                        <tr><td className="py-1">650705010-1</td><td>85</td></tr>
-                                    </tbody>
-                                </table>
+                                <span className="text-sm font-medium text-slate-700">รูปแบบข้อมูล</span>
                             </div>
-                            <p className="text-xs text-slate-500 mt-2">
-                                ใส่ "-" หรือเว้นว่างถ้าต้องการลบคะแนน
-                            </p>
+                            <p className="text-sm text-slate-600 mb-3">คัดลอกข้อมูลจาก Excel โดยเรียงคอลัมน์ดังนี้:</p>
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                <Chip size="sm" variant="flat" className="bg-blue-100 text-blue-700">คอลัมน์ A: รหัสนักศึกษา</Chip>
+                                <Chip size="sm" variant="flat" className="bg-emerald-100 text-emerald-700">คอลัมน์ B: คะแนน</Chip>
+                            </div>
+                            <div className="flex items-start gap-2 text-xs text-slate-500">
+                                <Icon icon="solar:lightbulb-bolt-bold" className="text-amber-500 mt-0.5" />
+                                <span>เมื่อคัดลอกจาก Excel แล้ววาง ระบบจะแยกข้อมูลอัตโนมัติ</span>
+                            </div>
                         </div>
 
                         {/* Textarea for paste */}
-                        <div>
-                            <label className="text-sm font-medium text-slate-700 mb-2 block">วางข้อมูลที่นี่</label>
+                        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Icon icon="solar:clipboard-list-bold" className="text-slate-500" />
+                                <span className="text-sm font-medium text-slate-700">ข้อมูลคะแนน</span>
+                                {bulkSettingId && settings.find(s => s.id === bulkSettingId) && (
+                                    <Chip size="sm" variant="flat" className="bg-purple-100 text-purple-700 ml-auto">
+                                        คะแนนเต็ม: {settings.find(s => s.id === bulkSettingId)?.max_score}
+                                    </Chip>
+                                )}
+                            </div>
                             <textarea
-                                className="w-full h-40 p-3 border border-slate-200 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="วางข้อมูลจาก Excel ที่นี่..."
+                                className="w-full h-40 p-3 bg-white border border-slate-200 rounded-lg font-mono text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                placeholder="ตัวอย่าง: 650705010-1    85"
                                 value={bulkData}
                                 onChange={(e) => {
                                     setBulkData(e.target.value);
@@ -708,8 +797,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                     </ModalBody>
                     <ModalFooter>
                         <Button 
-                            variant="light" 
-                            color="danger"
+                            variant="flat"
+                            className="bg-slate-100 text-slate-600"
                             onPress={() => {
                                 setIsBulkModalOpen(false);
                                 setBulkData("");
@@ -719,13 +808,13 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                             ยกเลิก
                         </Button>
                         <Button 
-                            className="bg-gradient-to-r from-emerald-400 to-teal-500 text-white shadow-md"
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-md"
                             onPress={handleBulkImport}
                             isLoading={isBulkSaving}
                             isDisabled={parsedBulkData.filter(p => p.status === "valid").length === 0}
                             startContent={!isBulkSaving && <Icon icon="solar:import-bold" />}
                         >
-                            นำเข้า {parsedBulkData.filter(p => p.status === "valid").length} รายการ
+                            นำเข้าข้อมูล
                         </Button>
                     </ModalFooter>
                 </ModalContent>
