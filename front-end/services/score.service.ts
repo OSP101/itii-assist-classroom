@@ -115,7 +115,7 @@ interface ApiResponse<T> {
     success: boolean;
     data?: T;
     message?: string;
-    error?: string | { code?: number; message?: string };
+    error?: string;
 }
 
 const scoreService = {
@@ -203,14 +203,6 @@ const scoreService = {
         new_score: number;
         reason: string;
     }, images?: File[]): Promise<boolean> {
-        // Helper to extract error message from response
-        const getErrorMessage = (response: { message?: string; error?: string | { message?: string } }): string => {
-            if (response.message) return response.message;
-            if (typeof response.error === 'string') return response.error;
-            if (typeof response.error === 'object' && response.error?.message) return response.error.message;
-            return 'ไม่สามารถส่งคำขอแก้ไขได้';
-        };
-
         // If images provided, use FormData
         if (images && images.length > 0) {
             const formData = new FormData();
@@ -220,16 +212,10 @@ const scoreService = {
             images.forEach((image) => {
                 formData.append('images', image);
             });
-            const response = await api.post<{ message?: string }>('/score-edit-requests', formData);
-            if (!response.success) {
-                throw new Error(getErrorMessage(response));
-            }
+            const response = await api.post<unknown>('/score-edit-requests', formData);
             return response.success;
         }
-        const response = await api.post<{ message?: string }>('/score-edit-requests', data);
-        if (!response.success) {
-            throw new Error(getErrorMessage(response));
-        }
+        const response = await api.post<unknown>('/score-edit-requests', data);
         return response.success;
     },
 
@@ -241,14 +227,6 @@ const scoreService = {
         new_score: number;
         reason: string;
     }, images?: File[]): Promise<boolean> {
-        // Helper to extract error message from response
-        const getErrorMessage = (response: { message?: string; error?: string | { message?: string } }): string => {
-            if (response.message) return response.message;
-            if (typeof response.error === 'string') return response.error;
-            if (typeof response.error === 'object' && response.error?.message) return response.error.message;
-            return 'ไม่สามารถส่งคำขอแก้ไขได้';
-        };
-
         // If images provided, use FormData
         if (images && images.length > 0) {
             const formData = new FormData();
@@ -258,16 +236,10 @@ const scoreService = {
             images.forEach((image) => {
                 formData.append('images', image);
             });
-            const response = await api.post<{ message?: string }>('/score-edit-requests/batch', formData);
-            if (!response.success) {
-                throw new Error(getErrorMessage(response));
-            }
+            const response = await api.post<unknown>('/score-edit-requests/batch', formData);
             return response.success;
         }
-        const response = await api.post<{ message?: string }>('/score-edit-requests/batch', data);
-        if (!response.success) {
-            throw new Error(getErrorMessage(response));
-        }
+        const response = await api.post<unknown>('/score-edit-requests/batch', data);
         return response.success;
     },
 

@@ -2,7 +2,7 @@
  * Student Controller - Handle student-related requests
  */
 
-const { Student, Score, Assignment, AssignmentSubItem, User, Course, CourseSection, CourseSectionStudent, AttendanceSession, AttendanceRecord, StudentGroup, StudentGroupMember, BonusScore, ExamScore, ExamSetting } = require('../models');
+const { Student, Score, Assignment, AssignmentSubItem, User, Course, CourseSection, CourseSectionStudent, AttendanceSession, AttendanceRecord, StudentGroup, StudentGroupMember, BonusScore } = require('../models');
 const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -714,49 +714,6 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
     }
   });
 
-  // Get exam scores for this student (only visible ones)
-  const examScoreRecords = await ExamScore.findAll({
-    where: { student_id: student.id },
-    include: [
-      {
-        model: ExamSetting,
-        as: 'examSetting',
-        where: {
-          course_id: { [Op.in]: courseIds },
-          is_active: true,
-          is_visible: true, // Only show visible exam scores
-        },
-        attributes: ['id', 'course_id', 'exam_type', 'component', 'max_score', 'is_visible'],
-      },
-      {
-        model: User,
-        as: 'grader',
-        attributes: ['id', 'full_name'],
-      },
-    ],
-  });
-
-  // Group exam scores by course
-  const examScoresByCourse = {};
-  examScoreRecords.forEach(record => {
-    if (record.examSetting) {
-      const courseId = record.examSetting.course_id;
-      if (!examScoresByCourse[courseId]) {
-        examScoresByCourse[courseId] = [];
-      }
-      examScoresByCourse[courseId].push({
-        id: record.id,
-        exam_type: record.examSetting.exam_type,
-        component: record.examSetting.component,
-        score: record.score !== null ? parseFloat(record.score) : null,
-        max_score: parseFloat(record.examSetting.max_score),
-        grader: record.grader ? record.grader.full_name : null,
-        graded_at: record.graded_at,
-        comment: record.comment,
-      });
-    }
-  });
-
   // Build final response
   const courseScores = Object.values(scoresByCourse).map(courseData => {
     const bonusData = bonusByCourse[courseData.course.id] || { totalBonus: 0, records: [] };
@@ -770,7 +727,6 @@ const lookupStudentScores = asyncHandler(async (req, res) => {
         records: [],
         summary: { present: 0, late: 0, leave: 0, absent: 0 },
       },
-      examScores: examScoresByCourse[courseData.course.id] || [],
       progress: courseData.totalMaxScore > 0 
         ? Math.round((courseData.totalScore / courseData.totalMaxScore) * 100) 
         : 0,

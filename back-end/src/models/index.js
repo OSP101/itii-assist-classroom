@@ -37,10 +37,6 @@ const NotificationLog = require('./NotificationLog');
 // Activity Log
 const CourseActivityLog = require('./CourseActivityLog');
 
-// Exam Score System
-const ExamSetting = require('./ExamSetting');
-const ExamScore = require('./ExamScore');
-
 // ============================================
 // Define Associations
 // ============================================;
@@ -729,54 +725,6 @@ FcmToken.hasMany(NotificationLog, {
 });
 
 // ============================================
-// Exam Score Associations
-// ============================================
-
-// ExamSetting -> Course
-ExamSetting.belongsTo(Course, {
-  foreignKey: 'course_id',
-  as: 'course',
-});
-
-Course.hasMany(ExamSetting, {
-  foreignKey: 'course_id',
-  as: 'examSettings',
-});
-
-// ExamScore -> ExamSetting
-ExamScore.belongsTo(ExamSetting, {
-  foreignKey: 'exam_setting_id',
-  as: 'examSetting',
-});
-
-ExamSetting.hasMany(ExamScore, {
-  foreignKey: 'exam_setting_id',
-  as: 'scores',
-});
-
-// ExamScore -> Student
-ExamScore.belongsTo(Student, {
-  foreignKey: 'student_id',
-  as: 'student',
-});
-
-Student.hasMany(ExamScore, {
-  foreignKey: 'student_id',
-  as: 'examScores',
-});
-
-// ExamScore -> User (graded_by)
-ExamScore.belongsTo(User, {
-  foreignKey: 'graded_by',
-  as: 'grader',
-});
-
-User.hasMany(ExamScore, {
-  foreignKey: 'graded_by',
-  as: 'gradedExamScores',
-});
-
-// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -815,7 +763,4 @@ module.exports = {
   NotificationLog,
   // Activity Log
   CourseActivityLog,
-  // Exam Score System
-  ExamSetting,
-  ExamScore,
 };

@@ -989,10 +989,9 @@ export default function ScoreModal({
             setGroupMemberScores([]);
             setEditGroupMode("all");
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "ไม่สามารถส่งคำขอแก้ไขได้";
             addToast({
                 title: "เกิดข้อผิดพลาด",
-                description: errorMessage,
+                description: "ไม่สามารถส่งคำขอแก้ไขได้",
                 color: "danger",
             });
         } finally {

@@ -124,17 +124,6 @@ export interface BonusScoreData {
   records: BonusScoreRecord[];
 }
 
-export interface ExamScoreData {
-  id: number;
-  exam_type: 'midterm' | 'final';
-  component: 'lab' | 'lecture';
-  score: number | null;
-  max_score: number;
-  grader: string | null;
-  graded_at: string | null;
-  comment: string | null;
-}
-
 export interface CourseScoreData {
   course: {
     id: number;
@@ -154,7 +143,6 @@ export interface CourseScoreData {
     records: AttendanceRecordData[];
     summary: AttendanceSummary;
   };
-  examScores: ExamScoreData[];
 }
 
 export interface StudentScoreLookupResponse {

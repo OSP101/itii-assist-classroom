@@ -12,7 +12,7 @@ import { Link } from "@heroui/link";
 import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
-import { studentService, StudentScoreLookupResponse, CourseScoreData, AssignmentScore, ExamScoreData } from "@/services/student.service";
+import { studentService, StudentScoreLookupResponse, CourseScoreData, AssignmentScore } from "@/services/student.service";
 
 export default function MyScorePage() {
     const [studentId, setStudentId] = useState("");
@@ -371,11 +371,6 @@ export default function MyScorePage() {
         const hasGroup = groupAssignments.length > 0;
         const hasAttendance = attendance.records.length > 0;
         const hasBonus = bonusScore && (bonusScore.total > 0 || bonusScore.records.length > 0);
-        const hasExamScores = courseData.examScores && courseData.examScores.length > 0;
-
-        // Separate exam scores by type
-        const midtermScores = courseData.examScores?.filter((e: ExamScoreData) => e.exam_type === 'midterm') || [];
-        const finalScores = courseData.examScores?.filter((e: ExamScoreData) => e.exam_type === 'final') || [];
 
         return (
             <AccordionItem
@@ -754,127 +749,6 @@ export default function MyScorePage() {
                                                     </Chip>
                                                 </div>
                                             ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </Tab>
-                        )}
-
-                        {hasExamScores && (
-                            <Tab
-                                key="exam"
-                                title={
-                                    <div className="flex items-center gap-2">
-                                        <Icon icon="solar:diploma-bold" className="text-lg text-purple-500" />
-                                        <span>คะแนนสอบ</span>
-                                        <Chip size="sm" variant="flat" className="bg-purple-100 text-purple-600">
-                                            {courseData.examScores.length}
-                                        </Chip>
-                                    </div>
-                                }
-                            >
-                                <div className="p-4 sm:p-5 space-y-6">
-                                    {/* Midterm Section */}
-                                    {midtermScores.length > 0 && (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <Icon icon="solar:notebook-bold" className="text-blue-500" />
-                                                <h4 className="font-medium text-gray-700">สอบกลางภาค</h4>
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {midtermScores.map((exam: ExamScoreData) => (
-                                                    <div
-                                                        key={exam.id}
-                                                        className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <Icon 
-                                                                    icon={exam.component === 'lab' ? 'solar:monitor-bold' : 'solar:book-bold'} 
-                                                                    className={exam.component === 'lab' ? 'text-emerald-500' : 'text-blue-500'} 
-                                                                />
-                                                                <span className="font-medium text-gray-700">
-                                                                    {exam.component === 'lab' ? 'ปฏิบัติการ' : 'บรรยาย'}
-                                                                </span>
-                                                            </div>
-                                                            <Chip 
-                                                                size="sm" 
-                                                                color={exam.score !== null ? "success" : "default"} 
-                                                                variant="flat"
-                                                            >
-                                                                {exam.score !== null ? "ตรวจแล้ว" : "รอตรวจ"}
-                                                            </Chip>
-                                                        </div>
-                                                        <div className="text-center py-3">
-                                                            <span className={`text-3xl font-bold ${
-                                                                exam.score !== null 
-                                                                    ? (exam.score / exam.max_score >= 0.6 ? 'text-emerald-600' : 'text-amber-600')
-                                                                    : 'text-gray-400'
-                                                            }`}>
-                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
-                                                            </span>
-                                                            <span className="text-gray-400 text-lg">/{exam.max_score}</span>
-                                                        </div>
-                                                        {exam.grader && (
-                                                            <p className="text-xs text-gray-500 text-center">
-                                                                ตรวจโดย {exam.grader}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Final Section */}
-                                    {finalScores.length > 0 && (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <Icon icon="solar:diploma-bold" className="text-indigo-500" />
-                                                <h4 className="font-medium text-gray-700">สอบปลายภาค</h4>
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                {finalScores.map((exam: ExamScoreData) => (
-                                                    <div
-                                                        key={exam.id}
-                                                        className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100"
-                                                    >
-                                                        <div className="flex items-center justify-between mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <Icon 
-                                                                    icon={exam.component === 'lab' ? 'solar:monitor-bold' : 'solar:book-bold'} 
-                                                                    className={exam.component === 'lab' ? 'text-emerald-500' : 'text-indigo-500'} 
-                                                                />
-                                                                <span className="font-medium text-gray-700">
-                                                                    {exam.component === 'lab' ? 'ปฏิบัติการ' : 'บรรยาย'}
-                                                                </span>
-                                                            </div>
-                                                            <Chip 
-                                                                size="sm" 
-                                                                color={exam.score !== null ? "success" : "default"} 
-                                                                variant="flat"
-                                                            >
-                                                                {exam.score !== null ? "ตรวจแล้ว" : "รอตรวจ"}
-                                                            </Chip>
-                                                        </div>
-                                                        <div className="text-center py-3">
-                                                            <span className={`text-3xl font-bold ${
-                                                                exam.score !== null 
-                                                                    ? (exam.score / exam.max_score >= 0.6 ? 'text-emerald-600' : 'text-amber-600')
-                                                                    : 'text-gray-400'
-                                                            }`}>
-                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
-                                                            </span>
-                                                            <span className="text-gray-400 text-lg">/{exam.max_score}</span>
-                                                        </div>
-                                                        {exam.grader && (
-                                                            <p className="text-xs text-gray-500 text-center">
-                                                                ตรวจโดย {exam.grader}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
                                         </div>
                                     )}
                                 </div>
