@@ -346,7 +346,20 @@ function AssignmentsTabViewComponent({
                                         </Tooltip>
                                     </div>
 
-                                    {/* Bonus Score Button */}
+                                    {/* Bonus Score Button - Icon only on mobile */}
+                                    <Tooltip content="ให้คะแนนพิเศษ (ถาม-ตอบ)">
+                                        <Button
+                                            color="warning"
+                                            variant="flat"
+                                            isIconOnly
+                                            onPress={onOpenBonusScoreModal}
+                                            className="sm:hidden"
+                                            isDisabled={!isCourseActive}
+                                        >
+                                            <Icon icon="solar:star-bold" />
+                                        </Button>
+                                    </Tooltip>
+                                    {/* Bonus Score Button - Full on desktop */}
                                     <Tooltip content="ให้คะแนนพิเศษ (ถาม-ตอบ)">
                                         <Button
                                             color="warning"
@@ -360,15 +373,27 @@ function AssignmentsTabViewComponent({
                                         </Button>
                                     </Tooltip>
 
+                                    {/* Create Button - Icon only on mobile */}
+                                    <Tooltip content="สร้างงานใหม่">
+                                        <Button
+                                            color="primary"
+                                            isIconOnly
+                                            onPress={onOpenCreateModal}
+                                            className="sm:hidden bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25"
+                                            isDisabled={!isCourseActive}
+                                        >
+                                            <Icon icon="solar:add-circle-bold" />
+                                        </Button>
+                                    </Tooltip>
+                                    {/* Create Button - Full on desktop */}
                                     <Button
                                         color="primary"
                                         startContent={<Icon icon="solar:add-circle-bold" />}
                                         onPress={onOpenCreateModal}
-                                        className="bg-linear-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25 w-full sm:w-auto"
+                                        className="hidden sm:flex bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-indigo-500/25"
                                         isDisabled={!isCourseActive}
                                     >
-                                        <span className="hidden sm:inline">สร้างงานใหม่</span>
-                                        <span className="sm:hidden">สร้างงาน</span>
+                                        สร้างงานใหม่
                                     </Button>
                                 </div>
                             </div>
