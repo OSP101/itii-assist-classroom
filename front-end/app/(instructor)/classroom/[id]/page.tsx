@@ -107,15 +107,6 @@ const ScoreApprovalTab = dynamic(() => import("./components/ScoreApprovalTab"), 
     ssr: false,
 });
 
-const ExamScoresTab = dynamic(() => import("./components/exam-scores/ExamScoresTab"), {
-    loading: () => (
-        <div className="flex items-center justify-center py-12">
-            <Spinner size="lg" color="primary" />
-        </div>
-    ),
-    ssr: false,
-});
-
 // Lazy load Modal (only needed when user opens it)
 const ScoreModal = dynamic(() => import("./components/ScoreModal"), {
     loading: () => null,
@@ -896,7 +887,6 @@ export default function ClassroomDetailPage() {
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
         { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        { key: "exam-scores", label: "คะแนนสอบ", icon: "solar:diploma-bold", badge: "NEW" , badgeColor: "success" as const },
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
@@ -1040,7 +1030,7 @@ export default function ClassroomDetailPage() {
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
-                                    {item.badge && (
+                                    {/* {item.badge && (
                                         <Chip 
                                             size="sm" 
                                             variant="flat" 
@@ -1049,7 +1039,7 @@ export default function ClassroomDetailPage() {
                                         >
                                             {item.badge}
                                         </Chip>
-                                    )}
+                                    )} */}
                                 </button>
                             ))}
                         </nav>
@@ -1078,7 +1068,7 @@ export default function ClassroomDetailPage() {
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
-                                {item.badge && (
+                                {/* {item.badge && (
                                     <Chip 
                                         size="sm" 
                                         variant="flat" 
@@ -1087,7 +1077,7 @@ export default function ClassroomDetailPage() {
                                     >
                                         {item.badge}
                                     </Chip>
-                                )}
+                                )} */}
                             </button>
                         ))}
                     </nav>
@@ -1211,10 +1201,6 @@ export default function ClassroomDetailPage() {
 
                             {activeTab === "scores" && (
                                 <ScoresTab courseId={courseId} isCourseActive={course.is_active} />
-                            )}
-
-                            {activeTab === "exam-scores" && (
-                                <ExamScoresTab courseId={courseId} isCourseActive={course.is_active} />
                             )}
 
                             {activeTab === "approval" && (userRole === "instructor" || userRole === "ta") && (

@@ -2029,30 +2029,12 @@ const getCourseOverview = asyncHandler(async (req, res) => {
 
     if (assignmentScores.length > 0) {
       if (isGroupAssignment) {
-        // For group assignments, scores are stored per student but all members have the same score
-        // We need to avoid counting duplicate scores by taking unique (group_id, sub_item_id) pairs
-        const groupSubItemScores = new Map(); // Map of "group_id-sub_item_id" -> score
-        
+        // Group by group_id, sum scores per group
+        const groupTotals = new Map();
         for (const s of assignmentScores) {
           if (!s.group_id) continue;
-          // Create a unique key for each (group_id, sub_item_id) combination
-          const key = `${s.group_id}-${s.sub_item_id || 'main'}`;
-          // Only take the first score for each unique key (they should all be the same)
-          if (!groupSubItemScores.has(key)) {
-            groupSubItemScores.set(key, {
-              group_id: s.group_id,
-              sub_item_id: s.sub_item_id,
-              score: parseFloat(s.score) || 0
-            });
-          }
+          groupTotals.set(s.group_id, (groupTotals.get(s.group_id) || 0) + (parseFloat(s.score) || 0));
         }
-        
-        // Now group by group_id and sum scores (for sub-items)
-        const groupTotals = new Map();
-        for (const [_, scoreData] of groupSubItemScores) {
-          groupTotals.set(scoreData.group_id, (groupTotals.get(scoreData.group_id) || 0) + scoreData.score);
-        }
-        
         if (groupTotals.size > 0) {
           const totals = Array.from(groupTotals.values());
           avgScore = totals.reduce((a, b) => a + b, 0) / totals.length;
