@@ -898,11 +898,6 @@ export default function ClassroomDetailPage() {
             // badge: assignments.length > 0 ? assignments.length : undefined 
         },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        ...(userRole === 'instructor' ? [{
-            key: "exam-scores",
-            label: "คะแนนสอบ",
-            icon: "solar:diploma-bold",
-        }] : []),
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
@@ -1221,10 +1216,13 @@ export default function ClassroomDetailPage() {
                                 <ScoresTab courseId={courseId} isCourseActive={course.is_active} />
                             )}
 
+<<<<<<< HEAD
                             {activeTab === "exam-scores" && userRole === "instructor" && (
                                 <ExamScoresTab courseId={courseId} isCourseActive={course.is_active} />
                             )}
 
+=======
+>>>>>>> parent of 1c41219 (feat: add exam settings and scores management)
                             {activeTab === "approval" && (userRole === "instructor" || userRole === "ta") && (
                                 <ScoreApprovalTab
                                     courseId={courseId}
