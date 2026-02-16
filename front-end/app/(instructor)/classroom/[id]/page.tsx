@@ -145,6 +145,15 @@ const TAStatsTab = dynamic(() => import("./components/TAStatsTab"), {
     ssr: false,
 });
 
+const ExamScoresTab = dynamic(() => import("./components/exam-scores/ExamScoresTab"), {
+    loading: () => (
+        <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" color="primary" />
+        </div>
+    ),
+    ssr: false,
+});
+
 export default function ClassroomDetailPage() {
     const params = useParams();
     const courseId = params.id as string;
@@ -885,31 +894,35 @@ export default function ClassroomDetailPage() {
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
-        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", badge: assignments.length > 0 ? assignments.length : undefined },
+        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold", 
+            // badge: assignments.length > 0 ? assignments.length : undefined 
+        },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
             icon: "solar:clipboard-check-bold",
-            badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
-            badgeColor: "warning" as const,
+            // badge: pendingApprovalCount > 0 ? pendingApprovalCount : undefined,
+            // badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", badge: 'BETA', badgeColor: "warning" as const },
+        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", 
+            // badge: 'BETA', badgeColor: "warning" as const
+         },
         
         ...(userRole === 'instructor' ? [{
             key: "activity-log",
             label: "บันทึกกิจกรรม",
             icon: "solar:document-text-bold",
-            badge: 'ใหม่',
-            badgeColor: "success" as const,
+            // badge: 'ใหม่',
+            // badgeColor: "success" as const,
         }] : []),
         ...(userRole === 'instructor' ? [{
             key: "ta-stats",
             label: "สถิติ TA",
             icon: "solar:graph-new-up-bold",
-            badge: 'ใหม่',
-            badgeColor: "success" as const,
+            // badge: 'ใหม่',
+            // badgeColor: "success" as const,
         }] : []),
         ...(userRole === 'instructor' ? [{
             key: "settings",
