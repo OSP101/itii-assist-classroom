@@ -421,16 +421,18 @@ export default function MyScorePage() {
                 }
             >
 
-                <div className="bg-white overflow-x-auto">
+                <div className="bg-white">
                     <Tabs
                         aria-label="Course tabs"
                         color="primary"
                         variant="underlined"
                         classNames={{
-                            tabList: "gap-4 sm:gap-6 w-full relative rounded-none p-0 px-4 overflow-x-auto",
+                            base: "w-full",
+                            tabList: "gap-2 sm:gap-4 w-max min-w-full relative rounded-none p-0 px-4 flex-nowrap overflow-x-auto scrollbar-hide",
                             cursor: "w-full bg-blue-500",
-                            tab: "max-w-fit px-0 h-12",
+                            tab: "max-w-fit px-0 h-12 flex-shrink-0",
                             tabContent: "group-data-[selected=true]:text-blue-600",
+                            panel: "p-0",
                         }}
                     >
                         {hasLab && (

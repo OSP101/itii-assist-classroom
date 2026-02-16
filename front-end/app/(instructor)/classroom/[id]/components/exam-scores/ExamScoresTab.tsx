@@ -574,7 +574,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                     setParsedBulkData([]);
                 }} 
                 size="3xl"
-                scrollBehavior="inside"
+                scrollBehavior="outside"
             >
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
@@ -732,7 +732,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             </Modal>
 
             {/* Settings Modal */}
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} size="3xl">
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} size="3xl" scrollBehavior="outside">
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 rounded-lg">
