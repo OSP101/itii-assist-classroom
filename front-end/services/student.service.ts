@@ -124,6 +124,18 @@ export interface BonusScoreData {
   records: BonusScoreRecord[];
 }
 
+// Exam Score types for student lookup
+export interface ExamScoreData {
+  id: number;
+  exam_type: 'midterm' | 'final';
+  component: 'objective' | 'subjective';
+  score: number | null;
+  max_score: number;
+  grader: string | null;
+  graded_at: string | null;
+  comment?: string | null;
+}
+
 export interface CourseScoreData {
   course: {
     id: number;
@@ -143,6 +155,7 @@ export interface CourseScoreData {
     records: AttendanceRecordData[];
     summary: AttendanceSummary;
   };
+  examScores: ExamScoreData[];
 }
 
 export interface StudentScoreLookupResponse {
