@@ -111,7 +111,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
         const q = searchQuery.toLowerCase();
         return students.filter(s => 
             s.student_id.toLowerCase().includes(q) ||
-            s.full_name.toLowerCase().includes(q)
+            s.full_name.toLowerCase().includes(q) ||
+            s.section.toLowerCase().includes(q)
         );
     }, [students, searchQuery]);
 
@@ -401,7 +402,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {filteredSettings.map(setting => (
                                 <Card key={setting.id} className="shadow-sm border border-slate-200">
-                                    <CardHeader className="px-4 py-3 bg-gradient-to-r from-slate-50 to-slate-100 border-b">
+                                    <CardHeader className="px-4 py-3 bg-gradient-to-r from-slate-50 to-slate-100">
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -453,11 +454,12 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                         </div>
                                     </CardHeader>
                                     <CardBody className="p-0 max-h-96 overflow-y-auto">
-                                        <table className="w-full">
+                                        <table className="w-full p-2">
                                             <thead className="sticky top-0 bg-slate-100/80 backdrop-blur-sm">
                                                 <tr>
                                                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">รหัสนักศึกษา</th>
                                                     <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">ชื่อ-นามสกุล</th>
+                                                    <th className="text-left py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider">Section</th>
                                                     <th className="text-right py-3 px-4 text-xs font-semibold text-slate-600 uppercase tracking-wider w-28">คะแนน</th>
                                                 </tr>
                                             </thead>
@@ -476,6 +478,9 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                                             </td>
                                                             <td className="py-3 px-4 text-sm text-slate-800">
                                                                 {student.full_name}
+                                                            </td>
+                                                            <td className="py-3 px-4 text-sm text-slate-800">
+                                                                {student.section}
                                                             </td>
                                                             <td className="py-3 px-4 text-right">
                                                                 {isEditing ? (

@@ -12,7 +12,7 @@ import { Link } from "@heroui/link";
 import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
-import { studentService, StudentScoreLookupResponse, CourseScoreData, AssignmentScore } from "@/services/student.service";
+import { studentService, StudentScoreLookupResponse, CourseScoreData, AssignmentScore, ExamScoreData } from "@/services/student.service";
 
 export default function MyScorePage() {
     const [studentId, setStudentId] = useState("");
@@ -326,7 +326,7 @@ export default function MyScorePage() {
     };
 
     const renderCourseCard = (courseData: CourseScoreData, index: number) => {
-        const { course, assignments, totalScore, totalMaxScore, progress, attendance, bonusScore } = courseData;
+        const { course, assignments, totalScore, totalMaxScore, progress, attendance, bonusScore, examScores } = courseData;
         const gradedCount = assignments.filter(a => a.status === "graded").length;
 
         // Separate assignments by type
@@ -371,6 +371,15 @@ export default function MyScorePage() {
         const hasGroup = groupAssignments.length > 0;
         const hasAttendance = attendance.records.length > 0;
         const hasBonus = bonusScore && (bonusScore.total > 0 || bonusScore.records.length > 0);
+        const hasExam = examScores && examScores.length > 0;
+
+        // Calculate exam score totals
+        const examTotalScore = examScores?.reduce((sum, e) => sum + (e.score || 0), 0) || 0;
+        const examMaxScore = examScores?.reduce((sum, e) => sum + e.max_score, 0) || 0;
+
+        // Group exam scores by type
+        const midtermScores = examScores?.filter(e => e.exam_type === 'midterm') || [];
+        const finalScores = examScores?.filter(e => e.exam_type === 'final') || [];
 
         return (
             <AccordionItem
@@ -416,18 +425,18 @@ export default function MyScorePage() {
                 }
             >
 
-                <div className="bg-white">
+                <div className="bg-white overflow-hidden">
                     <Tabs
                         aria-label="Course tabs"
                         color="primary"
                         variant="underlined"
                         classNames={{
-                            base: "w-full",
+                            base: "w-full overflow-hidden",
                             tabList: "gap-2 sm:gap-4 w-max min-w-full relative rounded-none p-0 px-4 flex-nowrap overflow-x-auto scrollbar-hide",
                             cursor: "w-full bg-blue-500",
                             tab: "max-w-fit px-0 h-12 flex-shrink-0",
                             tabContent: "group-data-[selected=true]:text-blue-600",
-                            panel: "p-0",
+                            panel: "p-0 overflow-hidden",
                         }}
                     >
                         {hasLab && (
@@ -749,6 +758,146 @@ export default function MyScorePage() {
                                                     </Chip>
                                                 </div>
                                             ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </Tab>
+                        )}
+
+                        {hasExam && (
+                            <Tab
+                                key="exam"
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <Icon icon="solar:document-medicine-bold" className="text-lg text-rose-500" />
+                                        <span>คะแนนสอบ</span>
+                                        {examTotalScore > 0 && (
+                                            <Chip size="sm" variant="flat" className="bg-rose-100 text-rose-600">
+                                                {examTotalScore.toFixed(0)}/{examMaxScore}
+                                            </Chip>
+                                        )}
+                                    </div>
+                                }
+                            >
+                                <div className="p-4 sm:p-5">
+                                    {/* Exam Score Summary */}
+                                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl p-4 mb-4 border border-rose-100">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-10 h-10 bg-rose-500 rounded-lg flex items-center justify-center">
+                                                    <Icon icon="solar:document-medicine-bold" className="text-white text-lg" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium text-gray-600">คะแนนสอบรวม</p>
+                                                    <p className="text-2xl font-bold text-rose-600">
+                                                        {examTotalScore.toFixed(1)}
+                                                        <span className="text-sm text-rose-400 font-normal">/{examMaxScore}</span>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-3xl font-bold text-rose-600">
+                                                    {examMaxScore > 0 ? ((examTotalScore / examMaxScore) * 100).toFixed(0) : 0}%
+                                                </p>
+                                                <p className="text-xs text-gray-500">
+                                                    ตรวจแล้ว {examScores?.filter(e => e.score !== null).length}/{examScores?.length}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className="h-3 bg-rose-100 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-rose-500 to-pink-500 rounded-full transition-all duration-500"
+                                                style={{ width: `${examMaxScore > 0 ? (examTotalScore / examMaxScore) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Midterm Section */}
+                                    {midtermScores.length > 0 && (
+                                        <div className="mb-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Icon icon="solar:notes-bold" className="text-blue-500" />
+                                                <h4 className="font-semibold text-gray-700">สอบกลางภาค (Midterm)</h4>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                {midtermScores.map((exam) => (
+                                                    <div key={exam.id} className="bg-white rounded-xl border border-blue-100 p-3 flex items-center justify-between hover:shadow-sm transition-shadow">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${exam.component === 'objective' ? 'bg-blue-100' : 'bg-indigo-100'}`}>
+                                                                <Icon 
+                                                                    icon={exam.component === 'objective' ? 'solar:checklist-minimalistic-bold' : 'solar:pen-bold'} 
+                                                                    className={`text-lg ${exam.component === 'objective' ? 'text-blue-500' : 'text-indigo-500'}`} 
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-gray-800">
+                                                                    {exam.component === 'objective' ? 'ปรนัย (Objective)' : 'อัตนัย (Subjective)'}
+                                                                </p>
+                                                                {exam.grader && (
+                                                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                                        <Icon icon="solar:user-check-linear" />
+                                                                        {exam.grader}
+                                                                        {exam.graded_at && (
+                                                                            <span className="text-gray-400">• {formatShortDate(exam.graded_at)}</span>
+                                                                        )}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className={`text-xl font-bold ${exam.score !== null ? 'text-blue-600' : 'text-gray-400'}`}>
+                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
+                                                            </span>
+                                                            <span className="text-sm text-gray-400">/{exam.max_score}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Final Section */}
+                                    {finalScores.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <Icon icon="solar:diploma-bold" className="text-rose-500" />
+                                                <h4 className="font-semibold text-gray-700">สอบปลายภาค (Final)</h4>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                {finalScores.map((exam) => (
+                                                    <div key={exam.id} className="bg-white rounded-xl border border-rose-100 p-3 flex items-center justify-between hover:shadow-sm transition-shadow">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${exam.component === 'objective' ? 'bg-rose-100' : 'bg-pink-100'}`}>
+                                                                <Icon 
+                                                                    icon={exam.component === 'objective' ? 'solar:checklist-minimalistic-bold' : 'solar:pen-bold'} 
+                                                                    className={`text-lg ${exam.component === 'objective' ? 'text-rose-500' : 'text-pink-500'}`} 
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-medium text-gray-800">
+                                                                    {exam.component === 'objective' ? 'ปรนัย (Objective)' : 'อัตนัย (Subjective)'}
+                                                                </p>
+                                                                {exam.grader && (
+                                                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                                        <Icon icon="solar:user-check-linear" />
+                                                                        {exam.grader}
+                                                                        {exam.graded_at && (
+                                                                            <span className="text-gray-400">• {formatShortDate(exam.graded_at)}</span>
+                                                                        )}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <span className={`text-xl font-bold ${exam.score !== null ? 'text-rose-600' : 'text-gray-400'}`}>
+                                                                {exam.score !== null ? exam.score.toFixed(1) : '-'}
+                                                            </span>
+                                                            <span className="text-sm text-gray-400">/{exam.max_score}</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
