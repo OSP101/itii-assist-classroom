@@ -2,6 +2,8 @@ const passport = require('passport');
 const { User, RefreshToken, SystemLog } = require('../models');
 const { jwt: jwtUtil, ApiError, asyncHandler, logger } = require('../utils');
 const { authLogger, securityLogger } = require('../middlewares/requestLogger');
+const UAParser = require('ua-parser-js');
+const { Op } = require('sequelize');
 const config = require('../config');
 
 /**
@@ -178,7 +180,7 @@ const changePassword = asyncHandler(async (req, res) => {
   const isMatch = await user.comparePassword(currentPassword);
   
   if (!isMatch) {
-    throw ApiError.badRequest('Current password is incorrect');
+    throw ApiError.badRequest('รหัสผ่านปัจจุบันของคุณไม่ถูกต้อง');
   }
   
   // Update password and reset must_change_password flag
@@ -244,16 +246,22 @@ const forceChangePassword = asyncHandler(async (req, res) => {
 });
 
 /**
- * Update user profile
+ * Update user profile (requires password confirmation)
  * PUT /api/auth/profile
  */
 const updateProfile = asyncHandler(async (req, res) => {
-  const { full_name, email } = req.body;
+  const { full_name, email, current_password } = req.body;
   
   const user = await User.findByPk(req.user.id);
   
   if (!user) {
     throw ApiError.notFound('User not found');
+  }
+  
+  // Verify current password before allowing profile update
+  const isPasswordValid = await user.comparePassword(current_password);
+  if (!isPasswordValid) {
+    throw ApiError.badRequest('รหัสผ่านไม่ถูกต้อง');
   }
   
   // Update allowed fields
@@ -327,6 +335,236 @@ const googleCallback = asyncHandler(async (req, res, next) => {
   })(req, res, next);
 });
 
+/**
+ * Get active sessions for current user
+ * GET /api/auth/sessions
+ */
+const getSessions = asyncHandler(async (req, res) => {
+  const sessions = await RefreshToken.findAll({
+    where: {
+      user_id: req.user.id,
+      revoked: false,
+      expires_at: {
+        [Op.gt]: new Date(),
+      },
+    },
+    order: [['created_at', 'DESC']],
+  });
+  
+  // Get current session JTI from access token
+  const authHeader = req.get('Authorization');
+  let currentJti = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const decoded = jwtUtil.verifyAccessToken(token);
+      currentJti = decoded?.jti;
+    } catch (e) {
+      // Ignore
+    }
+  }
+  
+  // Parse user agent and format sessions
+  const formattedSessions = sessions.map(session => {
+    const meta = session.meta || {};
+    const parser = new UAParser(meta.userAgent || '');
+    const browser = parser.getBrowser();
+    const os = parser.getOS();
+    const device = parser.getDevice();
+    
+    // Determine if this is the current session
+    const isCurrent = session.jti === currentJti;
+    
+    return {
+      id: session.id,
+      jti: session.jti,
+      ip: meta.ip || 'Unknown',
+      browser: browser.name ? `${browser.name} ${browser.version || ''}`.trim() : 'Unknown',
+      os: os.name ? `${os.name} ${os.version || ''}`.trim() : 'Unknown',
+      device: device.type || 'Desktop',
+      provider: meta.provider || 'local',
+      loginAt: session.created_at,
+      expiresAt: session.expires_at,
+      isCurrent,
+    };
+  });
+  
+  res.json({
+    success: true,
+    data: {
+      sessions: formattedSessions,
+    },
+  });
+});
+
+/**
+ * Revoke a specific session
+ * DELETE /api/auth/sessions/:sessionId
+ */
+const revokeSession = asyncHandler(async (req, res) => {
+  const { sessionId } = req.params;
+  
+  const session = await RefreshToken.findOne({
+    where: {
+      id: sessionId,
+      user_id: req.user.id,
+      revoked: false,
+    },
+  });
+  
+  if (!session) {
+    throw ApiError.notFound('Session not found');
+  }
+  
+  session.revoked = true;
+  await session.save();
+  
+  // Log session revocation
+  await SystemLog.create({
+    log_type: 'security',
+    severity: 'info',
+    actor_user_id: req.user.id,
+    action: 'session_revoked',
+    detail: `User ${req.user.username} revoked session ${sessionId}`,
+    ip_address: req.ip,
+    user_agent: req.get('User-Agent'),
+  });
+  
+  res.json({
+    success: true,
+    message: 'Session revoked successfully',
+  });
+});
+
+/**
+ * Revoke all sessions except current
+ * POST /api/auth/sessions/revoke-all
+ */
+const revokeAllSessions = asyncHandler(async (req, res) => {
+  // Get current session JTI
+  const authHeader = req.get('Authorization');
+  let currentJti = null;
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    try {
+      const decoded = jwtUtil.verifyAccessToken(token);
+      currentJti = decoded?.jti;
+    } catch (e) {
+      // Ignore
+    }
+  }
+  
+  // Revoke all sessions except current
+  const whereClause = {
+    user_id: req.user.id,
+    revoked: false,
+  };
+  
+  if (currentJti) {
+    whereClause.jti = { [Op.ne]: currentJti };
+  }
+  
+  const result = await RefreshToken.update(
+    { revoked: true },
+    { where: whereClause }
+  );
+  
+  // Log
+  await SystemLog.create({
+    log_type: 'security',
+    severity: 'warning',
+    actor_user_id: req.user.id,
+    action: 'all_sessions_revoked',
+    detail: `User ${req.user.username} revoked all other sessions (${result[0]} sessions)`,
+    ip_address: req.ip,
+    user_agent: req.get('User-Agent'),
+  });
+  
+  res.json({
+    success: true,
+    message: `Revoked ${result[0]} session(s)`,
+    data: {
+      revokedCount: result[0],
+    },
+  });
+});
+
+/**
+ * Upload user avatar
+ * POST /api/auth/avatar
+ */
+const uploadUserAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw ApiError.badRequest('No file uploaded');
+  }
+  
+  const user = await User.findByPk(req.user.id);
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+  
+  // Process image with sharp and convert to base64
+  const sharp = require('sharp');
+  const processedBuffer = await sharp(req.file.buffer)
+    .resize(256, 256, {
+      fit: 'cover',
+      position: 'center',
+    })
+    .jpeg({
+      quality: 85,
+      mozjpeg: true,
+    })
+    .toBuffer();
+  
+  // Convert to base64 data URL
+  const base64Avatar = `data:image/jpeg;base64,${processedBuffer.toString('base64')}`;
+  
+  // Update user avatar with base64
+  user.avatar = base64Avatar;
+  await user.save();
+  
+  // Log avatar update
+  await SystemLog.create({
+    log_type: 'system',
+    severity: 'info',
+    actor_user_id: user.id,
+    action: 'avatar_updated',
+    detail: `User ${user.username} updated their avatar`,
+    ip_address: req.ip,
+    user_agent: req.get('User-Agent'),
+  });
+  
+  res.json({
+    success: true,
+    message: 'Avatar updated successfully',
+    data: {
+      avatar: base64Avatar,
+    },
+  });
+});
+
+/**
+ * Remove user avatar
+ * DELETE /api/auth/avatar
+ */
+const removeAvatar = asyncHandler(async (req, res) => {
+  const user = await User.findByPk(req.user.id);
+  if (!user) {
+    throw ApiError.notFound('User not found');
+  }
+  
+  user.avatar = null;
+  await user.save();
+  
+  res.json({
+    success: true,
+    message: 'Avatar removed successfully',
+    data: {
+      user: user.toSafeObject(),
+    },
+  });
+});
+
 module.exports = {
   login,
   refresh,
@@ -336,4 +574,9 @@ module.exports = {
   changePassword,
   forceChangePassword,
   googleCallback,
+  getSessions,
+  revokeSession,
+  revokeAllSessions,
+  uploadUserAvatar,
+  removeAvatar,
 };

@@ -13,6 +13,11 @@ export const API_ENDPOINTS = {
   CHANGE_PASSWORD: '/auth/change-password',
   UPDATE_PROFILE: '/auth/profile',
   GOOGLE_AUTH: '/auth/google',
+  SESSIONS: '/auth/sessions',
+  REVOKE_SESSION: (sessionId: number) => `/auth/sessions/${sessionId}`,
+  REVOKE_ALL_SESSIONS: '/auth/sessions/revoke-all',
+  UPLOAD_AVATAR: '/auth/avatar',
+  REMOVE_AVATAR: '/auth/avatar',
 
   // System (Admin)
   SYSTEM_METRICS: '/system/metrics',

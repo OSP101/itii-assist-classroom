@@ -18,6 +18,19 @@ export interface User {
   updated_at: string;
 }
 
+export interface Session {
+  id: number;
+  jti: string;
+  ip: string;
+  browser: string;
+  os: string;
+  device: string;
+  provider: string;
+  loginAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
+}
+
 export interface LoginCredentials {
   username: string;
   password: string;
@@ -163,14 +176,21 @@ class AuthService {
       return { success: true };
     }
 
+    // Handle error object format: { code: number, message: string }
+    const err = response.error as unknown;
+    const errorMessage = response.message || 
+      (typeof err === 'object' && err !== null && 'message' in err ? (err as { message: string }).message : null) || 
+      (typeof err === 'string' ? err : null) || 
+      'เปลี่ยนรหัสผ่านไม่สำเร็จ';
+
     return {
       success: false,
-      error: response.message || response.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ',
+      error: errorMessage,
     };
   }
 
-   // Update user profile
-  async updateProfile(data: { full_name?: string; email?: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+   // Update user profile (requires password confirmation)
+  async updateProfile(data: { full_name?: string; email?: string; current_password: string }): Promise<{ success: boolean; user?: User; error?: string }> {
     const response = await apiService.put<{ user: User }>(API_ENDPOINTS.UPDATE_PROFILE, data);
 
     if (response.success && response.data) {
@@ -182,9 +202,16 @@ class AuthService {
       return { success: true, user };
     }
 
+    // Handle error object format: { code: number, message: string }
+    const err = response.error as unknown;
+    const errorMessage = response.message || 
+      (typeof err === 'object' && err !== null && 'message' in err ? (err as { message: string }).message : null) || 
+      (typeof err === 'string' ? err : null) || 
+      'อัปเดตโปรไฟล์ไม่สำเร็จ';
+
     return {
       success: false,
-      error: response.message || response.error || 'อัปเดตโปรไฟล์ไม่สำเร็จ',
+      error: errorMessage,
     };
   }
 
@@ -260,6 +287,101 @@ class AuthService {
     return {
       success: false,
       error: response.message || 'ไม่สามารถเปลี่ยนรหัสผ่านได้',
+    };
+  }
+
+  /**
+   * Get active sessions
+   */
+  async getSessions(): Promise<{ success: boolean; sessions?: Session[]; error?: string }> {
+    const response = await apiService.get<{ sessions: Session[] }>(API_ENDPOINTS.SESSIONS);
+
+    if (response.success && response.data) {
+      return { success: true, sessions: response.data.sessions };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถดึงข้อมูล sessions ได้',
+    };
+  }
+
+  /**
+   * Revoke a specific session
+   */
+  async revokeSession(sessionId: number): Promise<{ success: boolean; error?: string }> {
+    const response = await apiService.delete(API_ENDPOINTS.REVOKE_SESSION(sessionId));
+
+    if (response.success) {
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถยกเลิก session ได้',
+    };
+  }
+
+  /**
+   * Revoke all sessions except current
+   */
+  async revokeAllSessions(): Promise<{ success: boolean; revokedCount?: number; error?: string }> {
+    const response = await apiService.post<{ revokedCount: number }>(API_ENDPOINTS.REVOKE_ALL_SESSIONS);
+
+    if (response.success && response.data) {
+      return { success: true, revokedCount: response.data.revokedCount };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถยกเลิก sessions ได้',
+    };
+  }
+
+  /**
+   * Upload avatar
+   */
+  async uploadAvatar(file: File): Promise<{ success: boolean; avatar?: string; error?: string }> {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    const response = await apiService.post<{ avatar: string }>(API_ENDPOINTS.UPLOAD_AVATAR, formData);
+
+    if (response.success && response.data) {
+      // Update stored user with new avatar
+      const storedUser = this.getStoredUser();
+      if (storedUser) {
+        storedUser.avatar = response.data.avatar;
+        localStorage.setItem('user', JSON.stringify(storedUser));
+      }
+      return { success: true, avatar: response.data.avatar };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถอัปโหลดรูปภาพได้',
+    };
+  }
+
+  /**
+   * Remove avatar
+   */
+  async removeAvatar(): Promise<{ success: boolean; error?: string }> {
+    const response = await apiService.delete<{ user: User }>(API_ENDPOINTS.REMOVE_AVATAR);
+
+    if (response.success) {
+      // Update stored user
+      const storedUser = this.getStoredUser();
+      if (storedUser) {
+        storedUser.avatar = null;
+        localStorage.setItem('user', JSON.stringify(storedUser));
+      }
+      return { success: true };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถลบรูปภาพได้',
     };
   }
 }

@@ -22,8 +22,11 @@ const app = express();
 // Trust proxy (for rate limiting behind reverse proxy)
 app.set('trust proxy', 1);
 
-// Security middleware
-app.use(helmet());
+// Security middleware - configure helmet to allow cross-origin images
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginEmbedderPolicy: false,
+}));
 
 // CORS configuration
 const allowedOrigins = [
@@ -142,9 +145,13 @@ app.use(slowQueryLogger(2000));
 // Initialize Passport
 app.use(passport.initialize());
 
-// Serve uploaded files (static)
+// Serve uploaded files (static) with CORS support
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+}, express.static(path.join(__dirname, '../uploads')));
 
 // Request Logger Middleware (บันทึกเฉพาะการกระทำต่อระบบ ไม่บันทึกการเข้าหน้า)
 const { requestLogger } = require('./middlewares');
