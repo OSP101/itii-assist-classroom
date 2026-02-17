@@ -58,6 +58,9 @@ pipeline {
                         string(credentialsId: 'DEV_NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', variable: 'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'),
                         string(credentialsId: 'DEV_NEXT_PUBLIC_FIREBASE_APP_ID', variable: 'NEXT_PUBLIC_FIREBASE_APP_ID'),
                         string(credentialsId: 'DEV_NEXT_PUBLIC_FIREBASE_VAPID_KEY', variable: 'NEXT_PUBLIC_FIREBASE_VAPID_KEY'),
+                        // Email credentials (Resend API)
+                        string(credentialsId: 'DEV_RESEND_API_KEY', variable: 'RESEND_API_KEY'),
+                        string(credentialsId: 'DEV_SMTP_FROM', variable: 'SMTP_FROM'),
                     ]) {
                         sh '''
                         # Create backend .env.dev file
@@ -78,6 +81,8 @@ FRONTEND_URL=$FRONTEND_URL
 JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
 JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
 FIREBASE_SERVICE_ACCOUNT=$FIREBASE_SERVICE_ACCOUNT
+RESEND_API_KEY=$RESEND_API_KEY
+SMTP_FROM=$SMTP_FROM
 EOF
 
                         # Create frontend .env.local.dev file
