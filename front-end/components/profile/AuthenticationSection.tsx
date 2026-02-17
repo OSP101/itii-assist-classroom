@@ -10,6 +10,7 @@ import { Icon } from "@iconify/react";
 import { twoFactorService, TwoFactorStatus } from "@/services/twoFactor.service";
 import TwoFactorSetupModal from "./TwoFactorSetupModal";
 import TwoFactorDisableModal from "./TwoFactorDisableModal";
+import RegenerateBackupCodesModal from "./RegenerateBackupCodesModal";
 
 interface AuthenticationSectionProps {
   onOpenPasswordModal: () => void;
@@ -21,6 +22,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
   const [isLoading2FA, setIsLoading2FA] = useState(true);
   const [showSetupModal, setShowSetupModal] = useState(false);
   const [showDisableModal, setShowDisableModal] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [isReconfiguring, setIsReconfiguring] = useState(false);
 
   // Load 2FA status
   const load2FAStatus = useCallback(async () => {
@@ -121,13 +124,51 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                       <p className="text-sm text-default-500">{getMethodLabel(twoFactorStatus.method)}</p>
                     </div>
                   </div>
+                  <div className="flex items-center gap-2">
+                    {twoFactorStatus.method === "totp" && (
+                      <Button 
+                        color="primary" 
+                        variant="flat" 
+                        size="sm"
+                        startContent={<Icon icon="solar:pen-linear" />}
+                        onPress={() => {
+                          setIsReconfiguring(true);
+                          setShowSetupModal(true);
+                        }}
+                      >
+                        แก้ไข
+                      </Button>
+                    )}
+                    <Button 
+                      color="danger" 
+                      variant="flat" 
+                      size="sm"
+                      onPress={() => setShowDisableModal(true)}
+                    >
+                      ปิดการใช้งาน
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Recovery Codes Section */}
+              <div className="bg-default-50 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Icon icon="solar:key-bold" className="text-xl text-default-600" />
+                    <div>
+                      <p className="text-sm font-medium text-default-700">Recovery Codes</p>
+                      <p className="text-sm text-default-500">รหัสสำรองสำหรับเข้าสู่ระบบเมื่อไม่สามารถใช้วิธีอื่นได้</p>
+                    </div>
+                  </div>
                   <Button 
-                    color="danger" 
+                    color="warning" 
                     variant="flat" 
                     size="sm"
-                    onPress={() => setShowDisableModal(true)}
+                    startContent={<Icon icon="solar:refresh-linear" />}
+                    onPress={() => setShowRegenerateModal(true)}
                   >
-                    ปิดการใช้งาน
+                    สร้างใหม่
                   </Button>
                 </div>
               </div>
@@ -238,9 +279,13 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
       {/* 2FA Setup Modal */}
       <TwoFactorSetupModal
         isOpen={showSetupModal}
-        onClose={() => setShowSetupModal(false)}
+        onClose={() => {
+          setShowSetupModal(false);
+          setIsReconfiguring(false);
+        }}
         onSuccess={load2FAStatus}
         hasEmail={!!userEmail}
+        isReconfiguring={isReconfiguring}
       />
 
       {/* 2FA Disable Modal */}
@@ -249,6 +294,12 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
         onClose={() => setShowDisableModal(false)}
         onSuccess={load2FAStatus}
         method={twoFactorStatus?.method || null}
+      />
+
+      {/* Regenerate Backup Codes Modal */}
+      <RegenerateBackupCodesModal
+        isOpen={showRegenerateModal}
+        onClose={() => setShowRegenerateModal(false)}
       />
     </div>
   );

@@ -41,7 +41,7 @@ module.exports = {
     accessSecret: process.env.JWT_ACCESS_SECRET || 'default-access-secret',
     refreshSecret: process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '1d',
   },
 
   // Google OAuth
@@ -69,7 +69,7 @@ module.exports = {
 
   // Two-Factor Authentication
   twoFactor: {
-    appName: process.env.TWO_FACTOR_APP_NAME || 'ITII Assist',
+    appName: process.env.TWO_FACTOR_APP_NAME || 'ITII Assist Classroom',
     issuer: process.env.TWO_FACTOR_ISSUER || 'ITII Assist Classroom',
   },
 };

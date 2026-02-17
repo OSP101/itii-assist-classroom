@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
@@ -18,13 +18,46 @@ export default function VerifyTwoFactorPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
   const [twoFactorData, setTwoFactorData] = useState<TwoFactorLoginData | null>(null);
+  const emailSentRef = useRef(false);
   
   // Input states
   const [otpCode, setOtpCode] = useState("");
   const [recoveryCode, setRecoveryCode] = useState("");
   const [inputMode, setInputMode] = useState<InputMode>("otp");
   const [error, setError] = useState("");
+
+  // Send email code for email 2FA
+  const sendEmailCode = useCallback(async (userId: number, isResend = false) => {
+    if (isSendingEmail || cooldown > 0) return;
+    
+    setIsSendingEmail(true);
+    setError("");
+    
+    try {
+      const result = await twoFactorService.sendLoginCode(userId);
+      if (result.success) {
+        setEmailSent(true);
+        setCooldown(60); // 60 seconds cooldown
+        if (isResend) {
+          addToast({
+            title: "ส่งรหัสใหม่แล้ว",
+            description: "กรุณาตรวจสอบอีเมลของคุณ",
+            color: "success",
+          });
+        }
+      } else {
+        setError(result.error || "ไม่สามารถส่งรหัสได้ กรุณาลองใหม่");
+      }
+    } catch {
+      setError("เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      setIsSendingEmail(false);
+    }
+  }, [isSendingEmail, cooldown]);
 
   // Load 2FA data from sessionStorage on mount
   useEffect(() => {
@@ -34,6 +67,12 @@ export default function VerifyTwoFactorPage() {
         const parsed = JSON.parse(storedData) as TwoFactorLoginData;
         setTwoFactorData(parsed);
         setIsLoading(false);
+        
+        // Auto-send email code for email 2FA (only once)
+        if (parsed.twoFactorMethod === "email" && !emailSentRef.current) {
+          emailSentRef.current = true;
+          sendEmailCode(parsed.userId, false);
+        }
       } catch {
         // Invalid data, redirect to login
         router.push("/login");
@@ -42,7 +81,15 @@ export default function VerifyTwoFactorPage() {
       // No 2FA data, redirect to login
       router.push("/login");
     }
-  }, [router]);
+  }, [router, sendEmailCode]);
+
+  // Cooldown timer
+  useEffect(() => {
+    if (cooldown > 0) {
+      const timer = setTimeout(() => setCooldown(cooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cooldown]);
 
   const handleVerify = useCallback(async (codeOverride?: string) => {
     if (!twoFactorData) return;
@@ -175,6 +222,25 @@ export default function VerifyTwoFactorPage() {
             <div className="space-y-6">
               {inputMode === "otp" ? (
                 <div className="flex flex-col items-center gap-4">
+                  {/* Email sending status */}
+                  {twoFactorData?.twoFactorMethod === "email" && (
+                    <div className="w-full">
+                      {isSendingEmail ? (
+                        <div className="p-3 bg-primary-50 border border-primary-200 rounded-lg flex items-center justify-center gap-2">
+                          <Spinner size="sm" color="primary" />
+                          <span className="text-sm text-primary">กำลังส่งรหัสไปยังอีเมล...</span>
+                        </div>
+                      ) : emailSent ? (
+                        <div className="p-3 bg-success-50 border border-success-200 rounded-lg">
+                          <p className="text-sm text-success text-center flex items-center justify-center gap-2">
+                            <Icon icon="solar:check-circle-bold" className="text-lg" />
+                            ส่งรหัสไปยังอีเมลของคุณแล้ว
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+
                   <InputOtp
                     length={6}
                     value={otpCode}
@@ -193,8 +259,22 @@ export default function VerifyTwoFactorPage() {
                     classNames={{
                       segment: "w-12 h-14 text-xl",
                     }}
-                    isDisabled={isVerifying}
+                    isDisabled={isVerifying || (twoFactorData?.twoFactorMethod === "email" && isSendingEmail)}
                   />
+
+                  {/* Resend email button for email 2FA */}
+                  {twoFactorData?.twoFactorMethod === "email" && emailSent && (
+                    <Button
+                      variant="light"
+                      size="sm"
+                      onPress={() => sendEmailCode(twoFactorData.userId, true)}
+                      isLoading={isSendingEmail}
+                      isDisabled={cooldown > 0}
+                      startContent={cooldown === 0 ? <Icon icon="solar:refresh-bold" className="text-lg" /> : null}
+                    >
+                      {cooldown > 0 ? `ส่งรหัสใหม่ได้ใน ${cooldown} วินาที` : "ส่งรหัสใหม่"}
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <Input
@@ -249,7 +329,9 @@ export default function VerifyTwoFactorPage() {
                 >
                   {inputMode === "otp"
                     ? "ใช้รหัสสำรอง (Recovery Code)"
-                    : "ใช้รหัสจาก Authenticator App"}
+                    : twoFactorData?.twoFactorMethod === "totp"
+                      ? "ใช้รหัสจาก Authenticator App"
+                      : "ใช้รหัสจากอีเมล"}
                 </Link>
               </div>
 
