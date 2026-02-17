@@ -459,8 +459,165 @@ const send2FASetupEmail = async (to, method, userName) => {
   }
 };
 
+/**
+ * Generate password reset email HTML
+ */
+const getPasswordResetHTML = (resetUrl, userName) => `
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>รีเซ็ตรหัสผ่าน - ${config.twoFactor.appName}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #eef2f7; -webkit-font-smoothing: antialiased;">
+  <div style="display: none; max-height: 0; overflow: hidden;">
+    คุณได้ร้องขอรีเซ็ตรหัสผ่าน - ลิงก์นี้มีอายุ 1 ชั่วโมง
+  </div>
+  
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #eef2f7; padding: 48px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 480px; background-color: #ffffff; border-radius: 24px; box-shadow: 0 8px 32px rgba(0,0,0,0.08); overflow: hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(145deg, #dc2626 0%, #ef4444 50%, #f87171 100%); padding: 40px 32px; text-align: center;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" style="padding-bottom: 20px;">
+                    <div style="width: 72px; height: 72px; background: rgba(255,255,255,0.2); border-radius: 20px; display: inline-block; line-height: 72px; text-align: center;">
+                      <span style="font-size: 36px;">🔑</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center">
+                    <h1 style="color: #ffffff; margin: 0 0 8px; font-size: 26px; font-weight: 700; letter-spacing: -0.5px;">
+                      รีเซ็ตรหัสผ่าน
+                    </h1>
+                    <p style="color: rgba(255,255,255,0.9); margin: 0; font-size: 15px;">
+                      ${config.twoFactor.appName}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Content -->
+          <tr>
+            <td style="padding: 36px 32px;">
+              <p style="color: #1e293b; font-size: 17px; margin: 0 0 8px; font-weight: 600;">
+                สวัสดี${userName ? ` ${userName}` : ''}! 👋
+              </p>
+              <p style="color: #475569; font-size: 15px; margin: 0 0 28px; line-height: 1.7;">
+                เราได้รับคำขอรีเซ็ตรหัสผ่านสำหรับบัญชีของคุณ กดปุ่มด้านล่างเพื่อตั้งรหัสผ่านใหม่
+              </p>
+              
+              <!-- Reset Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center">
+                    <a href="${resetUrl}" style="display: inline-block; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; text-decoration: none; padding: 16px 48px; border-radius: 14px; font-size: 16px; font-weight: 600; box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);">
+                      🔒 ตั้งรหัสผ่านใหม่
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Link fallback -->
+              <p style="color: #64748b; font-size: 12px; margin: 24px 0 0; text-align: center; line-height: 1.6;">
+                หากปุ่มด้านบนไม่ทำงาน คัดลอกลิงก์นี้ไปวางในเบราว์เซอร์:<br>
+                <a href="${resetUrl}" style="color: #3b82f6; word-break: break-all;">${resetUrl}</a>
+              </p>
+              
+              <!-- Timer Warning -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top: 28px;">
+                <tr>
+                  <td style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 14px; padding: 18px 20px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td width="44" valign="top">
+                          <div style="width: 36px; height: 36px; background: #fbbf24; border-radius: 10px; text-align: center; line-height: 36px;">
+                            <span style="font-size: 18px;">⏱️</span>
+                          </div>
+                        </td>
+                        <td style="padding-left: 14px;">
+                          <p style="color: #92400e; font-size: 14px; margin: 0; line-height: 1.5; font-weight: 600;">
+                            ลิงก์นี้จะหมดอายุใน 1 ชั่วโมง
+                          </p>
+                          <p style="color: #a16207; font-size: 13px; margin: 4px 0 0; line-height: 1.4;">
+                            สามารถใช้ได้เพียงครั้งเดียวเท่านั้น
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Didn't Request Section -->
+          <tr>
+            <td style="padding: 0 32px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; border-radius: 14px; padding: 20px; border: 1px solid #e2e8f0;">
+                <tr>
+                  <td>
+                    <p style="color: #475569; font-size: 14px; margin: 0 0 12px; font-weight: 600;">
+                      🤔 ไม่ได้เป็นคนร้องขอ?
+                    </p>
+                    <p style="color: #64748b; font-size: 13px; margin: 0; line-height: 1.7;">
+                      หากคุณไม่ได้ร้องขอรีเซ็ตรหัสผ่าน คุณสามารถเพิกเฉยอีเมลนี้ได้ ลิงก์จะหมดอายุโดยอัตโนมัติ
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); padding: 28px; text-align: center; border-top: 1px solid #e2e8f0;">
+              <p style="color: #64748b; font-size: 12px; margin: 0 0 4px;">
+                © 2026 ${config.twoFactor.appName}
+              </p>
+              <p style="color: #94a3b8; font-size: 11px; margin: 0;">
+                อีเมลนี้ถูกส่งโดยอัตโนมัติ กรุณาอย่าตอบกลับ
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+/**
+ * Send password reset email
+ */
+const sendPasswordResetEmail = async (to, resetUrl, userName) => {
+  const html = getPasswordResetHTML(resetUrl, userName);
+  const subject = `รีเซ็ตรหัสผ่าน - ${config.twoFactor.appName}`;
+  const text = `คุณได้ร้องขอรีเซ็ตรหัสผ่าน\n\nกดลิงก์นี้เพื่อตั้งรหัสผ่านใหม่: ${resetUrl}\n\nลิงก์นี้จะหมดอายุใน 1 ชั่วโมง\n\nหากคุณไม่ได้ร้องขอ กรุณาเพิกเฉยอีเมลนี้`;
+
+  try {
+    const result = await sendEmail({ to, subject, html, text });
+    console.log('📧 Password reset email sent to:', to, 'MessageID:', result.messageId);
+    return result;
+  } catch (error) {
+    console.error('📧 Failed to send password reset email:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   send2FACode,
   send2FASetupEmail,
+  sendPasswordResetEmail,
   sendEmail,
 };

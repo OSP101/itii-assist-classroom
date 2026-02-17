@@ -123,7 +123,13 @@ class AuthService {
    // Logout
   async logout(): Promise<void> {
     try {
-      await apiService.post(API_ENDPOINTS.LOGOUT);
+      // Get refresh token before clearing to send to server
+      const refreshToken = typeof window !== 'undefined' 
+        ? localStorage.getItem('refreshToken') 
+        : null;
+      
+      // Send refresh token to revoke it on server
+      await apiService.post(API_ENDPOINTS.LOGOUT, { refreshToken });
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -307,6 +313,14 @@ class AuthService {
   }
 
   /**
+   * Get GitHub OAuth URL
+   */
+  getGitHubAuthUrl(): string {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return `${apiBaseUrl}/auth/github`;
+  }
+
+  /**
    * Force change password (for first login)
    */
   async forceChangePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
@@ -416,6 +430,54 @@ class AuthService {
     return {
       success: false,
       error: response.message || 'ไม่สามารถลบรูปภาพได้',
+    };
+  }
+
+  /**
+   * Request password reset (Forgot Password)
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await apiService.post<{ message: string }>('/auth/forgot-password', { email });
+
+    if (response.success) {
+      return { success: true, message: response.data?.message || response.message };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถส่งคำขอได้',
+    };
+  }
+
+  /**
+   * Validate password reset token
+   */
+  async validateResetToken(token: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
+    const response = await apiService.post<{ valid: boolean }>('/auth/validate-reset-token', { token });
+
+    if (response.success && response.data) {
+      return { success: true, valid: response.data.valid };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'Token ไม่ถูกต้องหรือหมดอายุ',
+    };
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await apiService.post<{ message: string }>('/auth/reset-password', { token, newPassword });
+
+    if (response.success) {
+      return { success: true, message: response.data?.message || response.message };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถรีเซ็ตรหัสผ่านได้',
     };
   }
 }

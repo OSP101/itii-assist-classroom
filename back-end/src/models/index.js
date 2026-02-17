@@ -44,6 +44,12 @@ const ExamScore = require('./ExamScore');
 // Two-Factor Authentication
 const TwoFactorPending = require('./TwoFactorPending');
 
+// OAuth Accounts
+const UserOAuthAccount = require('./UserOAuthAccount');
+
+// Password Reset
+const PasswordResetToken = require('./PasswordResetToken');
+
 // ============================================
 // Define Associations
 // ============================================;
@@ -780,6 +786,38 @@ ExamScore.belongsTo(User, {
 });
 
 // ============================================
+// User OAuth Accounts
+// ============================================
+
+// User -> OAuth Accounts
+User.hasMany(UserOAuthAccount, {
+  foreignKey: 'user_id',
+  as: 'oauthAccounts',
+  onDelete: 'CASCADE',
+});
+
+UserOAuthAccount.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+// ============================================
+// Password Reset Tokens
+// ============================================
+
+// User -> Password Reset Tokens
+User.hasMany(PasswordResetToken, {
+  foreignKey: 'user_id',
+  as: 'passwordResetTokens',
+  onDelete: 'CASCADE',
+});
+
+PasswordResetToken.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+// ============================================
 // Export all models
 // ============================================
 module.exports = {
@@ -823,4 +861,8 @@ module.exports = {
   ExamScore,
   // Two-Factor Authentication
   TwoFactorPending,
+  // OAuth Accounts
+  UserOAuthAccount,
+  // Password Reset
+  PasswordResetToken,
 };

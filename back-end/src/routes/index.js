@@ -22,10 +22,12 @@ const queuePublicRoutes = require('./queuePublic.routes');
 const notificationRoutes = require('./notification.routes');
 const courseActivityLogRoutes = require('./courseActivityLog.routes');
 const examScoreRoutes = require('./examScore.routes');
+const oauthRoutes = require('./oauth.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/auth/2fa', twoFactorRoutes);
+router.use('/oauth', oauthRoutes);
 router.use('/system', systemRoutes);
 router.use('/logs', systemLogRoutes);
 router.use('/users', userRoutes);

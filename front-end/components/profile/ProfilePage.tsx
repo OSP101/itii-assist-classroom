@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, lazy, Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Spinner } from "@heroui/spinner";
@@ -30,17 +30,22 @@ interface ProfilePageProps {
 
 export default function ProfilePage({ variant = "admin", onBack }: ProfilePageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Get initial tab from URL or default to "personal"
+  const tabFromUrl = searchParams.get("tab") as MenuKey | null;
+  const validTabs: MenuKey[] = ["personal", "authentication", "sessions"];
+  const initialTab = tabFromUrl && validTabs.includes(tabFromUrl) ? tabFromUrl : "personal";
   
   // User state
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   // Navigation state
-  const [activeMenu, setActiveMenu] = useState<MenuKey>("personal");
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [activeMenu, setActiveMenu] = useState<MenuKey>(initialTab);
   // Track visited tabs for caching (keep mounted once visited)
-  const [visitedTabs, setVisitedTabs] = useState<MenuKey[]>(["personal"]);
+  const [visitedTabs, setVisitedTabs] = useState<MenuKey[]>([initialTab]);
   
   // Profile form
   const [fullName, setFullName] = useState("");
@@ -92,6 +97,15 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
     // Track visited tabs for caching
     setVisitedTabs(prev => prev.includes(activeMenu) ? prev : [...prev, activeMenu]);
   }, [activeMenu]);
+  
+  // Handle tab change with URL update
+  const handleTabChange = useCallback((tab: MenuKey) => {
+    setActiveMenu(tab);
+    // Update URL without page reload
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState({}, "", url.toString());
+  }, []);
   
   const loadSessions = async () => {
     setIsLoadingSessions(true);
@@ -366,28 +380,43 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
   return (
     <div className="max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center gap-3">
           {onBack && (
-            <Button isIconOnly variant="light" onPress={onBack}>
+            <Button isIconOnly variant="light" onPress={onBack} size="sm">
               <Icon icon="solar:arrow-left-linear" className="text-xl" />
             </Button>
           )}
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-default-900">ตั้งค่าบัญชี</h1>
-            <p className="text-sm text-default-500">จัดการข้อมูลส่วนตัวและความปลอดภัย</p>
+            <p className="text-xs sm:text-sm text-default-500">จัดการข้อมูลส่วนตัวและความปลอดภัย</p>
           </div>
         </div>
         
-        {/* Mobile menu button */}
-        <Button
-          className="lg:hidden"
-          variant="flat"
-          startContent={<Icon icon="solar:hamburger-menu-linear" />}
-          onPress={() => setIsMobileMenuOpen(true)}
-        >
-          {MENU_ITEMS.find(m => m.key === activeMenu)?.label}
-        </Button>
+        {/* Mobile Tabs */}
+        <div className="lg:hidden overflow-x-auto scrollbar-hide -mx-4 px-4">
+          <div className="flex gap-2 min-w-max pb-1">
+            {MENU_ITEMS.map((item) => (
+              <Button
+                key={item.key}
+                size="sm"
+                variant={activeMenu === item.key ? "solid" : "flat"}
+                color={activeMenu === item.key ? (item.key === "authentication" ? "warning" : "primary") : "default"}
+                className={`flex-shrink-0 ${
+                  activeMenu === item.key 
+                    ? item.key === "authentication" 
+                      ? "bg-warning-500 text-white shadow-md" 
+                      : "shadow-md"
+                    : "bg-default-100"
+                }`}
+                startContent={<Icon icon={item.icon} className="text-base" />}
+                onPress={() => handleTabChange(item.key as MenuKey)}
+              >
+                {item.label}
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Main Layout */}
@@ -397,7 +426,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           <Card className="border border-default-200 shadow-sm p-4">
             <ProfileSidebar
               activeMenu={activeMenu}
-              setActiveMenu={setActiveMenu}
+              setActiveMenu={handleTabChange}
             />
           </Card>
         </div>
@@ -407,33 +436,6 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           {renderCachedContent()}
         </div>
       </div>
-
-      {/* Mobile Menu Modal */}
-      <Modal
-        isOpen={isMobileMenuOpen}
-        onClose={() => setIsMobileMenuOpen(false)}
-        placement="bottom"
-        size="full"
-        classNames={{
-          base: "m-0 rounded-t-2xl",
-          body: "p-4",
-        }}
-      >
-        <ModalContent>
-          <ModalHeader className="flex-col items-start">
-            <h3 className="text-lg font-semibold">เมนู</h3>
-            <p className="text-sm text-default-500 font-normal">เลือกหมวดหมู่ที่ต้องการ</p>
-          </ModalHeader>
-          <ModalBody>
-            <ProfileSidebar
-              activeMenu={activeMenu}
-              setActiveMenu={setActiveMenu}
-              setIsMobileMenuOpen={setIsMobileMenuOpen}
-              isMobile
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
 
       {/* Revoke All Sessions Modal */}
       <Modal isOpen={showRevokeAllModal} onClose={() => setShowRevokeAllModal(false)}>

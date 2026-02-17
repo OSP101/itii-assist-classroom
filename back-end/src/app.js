@@ -256,6 +256,21 @@ const startServer = async () => {
       logger.info(`📍 API URL: http://localhost:${config.port}/api`);
       logger.info(`🔌 Socket.io enabled`);
     });
+    
+    // Start session cleanup scheduler (runs every hour)
+    const { RefreshToken } = require('./models');
+    setInterval(async () => {
+      try {
+        const result = await RefreshToken.cleanupStaleSessions();
+        if (result.expiredCount > 0 || result.revokedCount > 0) {
+          logger.info(`🧹 Session cleanup: ${result.expiredCount} expired, ${result.revokedCount} revoked sessions removed`);
+        }
+      } catch (error) {
+        logger.error('Session cleanup error:', error);
+      }
+    }, 60 * 60 * 1000); // Every hour
+    logger.info('🧹 Session cleanup scheduler started');
+    
   } catch (error) {
     logger.error('Failed to start server:', error);
     process.exit(1);

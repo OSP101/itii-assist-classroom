@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Button } from "@heroui/button";
@@ -42,6 +42,27 @@ export default function LoginPage() {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [pendingUser, setPendingUser] = useState<{ username: string; role: string } | null>(null);
+
+    // Forgot password modal state
+    const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] = useState(false);
+    const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
+    const [isSendingResetEmail, setIsSendingResetEmail] = useState(false);
+    const [resetEmailSent, setResetEmailSent] = useState(false);
+
+    // Password validation helpers - memoized
+    const passwordValidation = useMemo(() => ({
+        minLength: newPassword.length >= 8,
+        hasLowercase: /[a-z]/.test(newPassword),
+        hasUppercase: /[A-Z]/.test(newPassword),
+        hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword),
+    }), [newPassword]);
+    
+    const isPasswordValid = useMemo(() => 
+        passwordValidation.minLength && 
+        passwordValidation.hasLowercase && 
+        passwordValidation.hasUppercase && 
+        passwordValidation.hasSpecialChar
+    , [passwordValidation]);
 
     // Get Turnstile key only on client side to avoid hydration mismatch
     useEffect(() => {
@@ -146,10 +167,10 @@ export default function LoginPage() {
     };
 
     const handleForceChangePassword = async () => {
-        if (!newPassword || newPassword.length < 6) {
+        if (!isPasswordValid) {
             addToast({
-                title: "รหัสผ่านไม่ถูกต้อง",
-                description: "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร",
+                title: "รหัสผ่านไม่ผ่านเงื่อนไข",
+                description: "กรุณาตรวจสอบเงื่อนไขรหัสผ่าน",
                 color: "warning",
             });
             return;
@@ -199,6 +220,51 @@ export default function LoginPage() {
     const handleGoogleLogin = () => {
         // Redirect to Google OAuth
         window.location.href = authService.getGoogleAuthUrl();
+    };
+
+    const handleGitHubLogin = () => {
+        // Redirect to GitHub OAuth
+        window.location.href = authService.getGitHubAuthUrl();
+    };
+
+    const handleForgotPassword = async () => {
+        if (!forgotPasswordEmail) {
+            addToast({
+                title: "กรุณากรอกอีเมล",
+                description: "กรุณากรอกอีเมลของคุณ",
+                color: "warning",
+            });
+            return;
+        }
+
+        // Simple email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(forgotPasswordEmail)) {
+            addToast({
+                title: "รูปแบบอีเมลไม่ถูกต้อง",
+                description: "กรุณากรอกอีเมลให้ถูกต้อง",
+                color: "warning",
+            });
+            return;
+        }
+
+        setIsSendingResetEmail(true);
+        try {
+            const result = await authService.forgotPassword(forgotPasswordEmail);
+            // Always show success (for security - don't reveal if email exists)
+            setResetEmailSent(true);
+        } catch (error) {
+            // Still show success for security
+            setResetEmailSent(true);
+        } finally {
+            setIsSendingResetEmail(false);
+        }
+    };
+
+    const closeForgotPasswordModal = () => {
+        setIsForgotPasswordModalOpen(false);
+        setForgotPasswordEmail("");
+        setResetEmailSent(false);
     };
 
     return (
@@ -295,11 +361,15 @@ export default function LoginPage() {
                                         }}
                                     />
 
-                                    {/* <div className="flex justify-end">
-                                    <Link href="#" size="sm" className="text-blue-400 hover:text-blue-500">
-                                        ลืมรหัสผ่าน?
-                                    </Link>
-                                </div> */}
+                                    <div className="flex justify-end">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setIsForgotPasswordModalOpen(true)}
+                                            className="text-blue-400 hover:text-blue-500 text-sm hover:underline transition-colors cursor-pointer"
+                                        >
+                                            ลืมรหัสผ่าน?
+                                        </button>
+                                    </div>
 
                                     {/* Turnstile - Only render on client after key is loaded */}
                                     <div className="w-full mt-2" suppressHydrationWarning>
@@ -346,10 +416,6 @@ export default function LoginPage() {
                                 {/* Divider */}
                                 <div className="relative flex py-4 sm:py-6 items-center">
                                     <div className="flex-grow border-t border-blue-100"></div>
-                                    <span className="flex-shrink-0 mx-3 sm:mx-4 text-slate-400 text-xs sm:text-sm">
-                                        หรือเข้าสู่ระบบด้วย
-                                    </span>
-                                    <div className="flex-grow border-t border-blue-100"></div>
                                 </div>
 
                                 {/* Google Login */}
@@ -380,6 +446,21 @@ export default function LoginPage() {
                                     }
                                 >
                                     เข้าสู่ระบบด้วย Google
+                                </Button>
+
+                                {/* GitHub Login */}
+                                <Button
+                                    variant="bordered"
+                                    size="md"
+                                    className="w-full h-11 sm:h-12 font-medium border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-600 text-sm mt-3"
+                                    onPress={handleGitHubLogin}
+                                    startContent={
+                                        <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                                        </svg>
+                                    }
+                                >
+                                    เข้าสู่ระบบด้วย GitHub
                                 </Button>
 
                             </div>
@@ -430,7 +511,7 @@ export default function LoginPage() {
                                 <Input
                                     label="รหัสผ่านใหม่"
                                     labelPlacement="outside"
-                                    placeholder="กรอกรหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)"
+                                    placeholder="กรอกรหัสผ่านใหม่"
                                     variant="bordered"
                                     size="md"
                                     type={showNewPassword ? "text" : "password"}
@@ -488,18 +569,46 @@ export default function LoginPage() {
                             </div>
 
                             {/* Password Requirements */}
-                            <div className="p-3 bg-slate-50 rounded-lg">
-                                <p className="text-xs text-slate-500 font-medium mb-2">ข้อกำหนดรหัสผ่าน:</p>
-                                <ul className="text-xs text-slate-500 space-y-1">
-                                    <li className={`flex items-center gap-2 ${newPassword.length >= 6 ? "text-green-600" : ""}`}>
-                                        <Icon icon={newPassword.length >= 6 ? "solar:check-circle-bold" : "solar:close-circle-linear"} className="text-sm" />
-                                        อย่างน้อย 6 ตัวอักษร
-                                    </li>
-                                    <li className={`flex items-center gap-2 ${newPassword === confirmPassword && confirmPassword !== "" ? "text-green-600" : ""}`}>
-                                        <Icon icon={newPassword === confirmPassword && confirmPassword !== "" ? "solar:check-circle-bold" : "solar:close-circle-linear"} className="text-sm" />
-                                        รหัสผ่านทั้ง 2 ช่องตรงกัน
-                                    </li>
-                                </ul>
+                            <div className="bg-slate-50 rounded-lg p-3 space-y-2">
+                                <p className="text-xs font-medium text-slate-600 mb-2">ข้อกำหนดรหัสผ่าน:</p>
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center gap-2">
+                                        <Icon 
+                                            icon={passwordValidation.minLength ? "solar:check-circle-bold" : "solar:close-circle-linear"} 
+                                            className={passwordValidation.minLength ? "text-green-500" : "text-slate-400"} 
+                                        />
+                                        <span className={`text-xs ${passwordValidation.minLength ? "text-green-600" : "text-slate-500"}`}>
+                                            อย่างน้อย 8 ตัวอักษร
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Icon 
+                                            icon={passwordValidation.hasLowercase ? "solar:check-circle-bold" : "solar:close-circle-linear"} 
+                                            className={passwordValidation.hasLowercase ? "text-green-500" : "text-slate-400"} 
+                                        />
+                                        <span className={`text-xs ${passwordValidation.hasLowercase ? "text-green-600" : "text-slate-500"}`}>
+                                            มีตัวอักษรพิมพ์เล็ก (a-z)
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Icon 
+                                            icon={passwordValidation.hasUppercase ? "solar:check-circle-bold" : "solar:close-circle-linear"} 
+                                            className={passwordValidation.hasUppercase ? "text-green-500" : "text-slate-400"} 
+                                        />
+                                        <span className={`text-xs ${passwordValidation.hasUppercase ? "text-green-600" : "text-slate-500"}`}>
+                                            มีตัวอักษรพิมพ์ใหญ่ (A-Z)
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Icon 
+                                            icon={passwordValidation.hasSpecialChar ? "solar:check-circle-bold" : "solar:close-circle-linear"} 
+                                            className={passwordValidation.hasSpecialChar ? "text-green-500" : "text-slate-400"} 
+                                        />
+                                        <span className={`text-xs ${passwordValidation.hasSpecialChar ? "text-green-600" : "text-slate-500"}`}>
+                                            มีอักขระพิเศษ (!@#$%^&* ฯลฯ)
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </ModalBody>
@@ -508,12 +617,136 @@ export default function LoginPage() {
                             color="primary"
                             onPress={handleForceChangePassword}
                             isLoading={isChangingPassword}
-                            isDisabled={newPassword.length < 6 || newPassword !== confirmPassword}
+                            isDisabled={!isPasswordValid || newPassword !== confirmPassword}
                             className="w-full font-medium bg-gradient-to-r from-blue-400 to-indigo-500"
                             startContent={!isChangingPassword && <Icon icon="solar:key-bold" className="text-lg" />}
                         >
                             เปลี่ยนรหัสผ่าน
                         </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Forgot Password Modal */}
+            <Modal
+                isOpen={isForgotPasswordModalOpen}
+                onClose={closeForgotPasswordModal}
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                                <Icon icon="solar:key-bold" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-slate-800">ลืมรหัสผ่าน</h3>
+                                <p className="text-sm text-slate-500 font-normal mt-1">
+                                    {resetEmailSent ? "ตรวจสอบอีเมลของคุณ" : "กรอกอีเมลเพื่อรีเซ็ตรหัสผ่าน"}
+                                </p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-4">
+                        {resetEmailSent ? (
+                            <div className="space-y-4">
+                                {/* Success Message */}
+                                <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-green-100 rounded-full">
+                                            <Icon icon="solar:check-circle-bold" className="text-green-600 text-xl" />
+                                        </div>
+                                        <div className="text-sm text-green-700">
+                                            <p className="font-semibold">ส่งอีเมลแล้ว!</p>
+                                            <p className="mt-1">
+                                                เราได้ส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปยังอีเมลของคุณแล้ว กรุณาตรวจสอบอีเมลและทำตามขั้นตอนเพื่อรีเซ็ตรหัสผ่านของคุณ
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Instructions */}
+                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:info-circle-bold" className="text-blue-500 text-xl mt-0.5" />
+                                        <div className="text-sm text-blue-700">
+                                            <p className="font-semibold">ขั้นตอนต่อไป:</p>
+                                            <ul className="mt-2 space-y-1 list-disc list-inside">
+                                                <li>ตรวจสอบกล่องจดหมายของคุณ</li>
+                                                <li>ตรวจสอบโฟลเดอร์สแปมด้วย</li>
+                                                <li>ลิงก์จะหมดอายุใน 1 ชั่วโมง</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* Info */}
+                                <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:info-circle-bold" className="text-amber-500 text-xl mt-0.5" />
+                                        <div className="text-sm text-amber-700">
+                                            <p>กรอกอีเมลที่ลงทะเบียนไว้ในระบบ เราจะส่งลิงก์สำหรับตั้งรหัสผ่านใหม่ไปยังอีเมลของคุณ</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Email Input */}
+                                <Input
+                                    label="อีเมล"
+                                    labelPlacement="outside"
+                                    placeholder="กรอกอีเมลของคุณ"
+                                    type="email"
+                                    variant="bordered"
+                                    size="md"
+                                    value={forgotPasswordEmail}
+                                    onValueChange={setForgotPasswordEmail}
+                                    startContent={<Icon icon="solar:letter-linear" className="text-amber-400 text-xl" />}
+                                    classNames={{
+                                        inputWrapper: "border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                        label: "text-slate-600 font-medium text-sm",
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !isSendingResetEmail) {
+                                            handleForgotPassword();
+                                        }
+                                    }}
+                                    className="pt-4"
+                                />
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4">
+                        {resetEmailSent ? (
+                            <Button
+                                color="primary"
+                                onPress={closeForgotPasswordModal}
+                                className="w-full font-medium bg-gradient-to-r from-blue-400 to-indigo-500"
+                            >
+                                กลับไปหน้าเข้าสู่ระบบ
+                            </Button>
+                        ) : (
+                            <div className="flex gap-3">
+                                <Button
+                                    variant="bordered"
+                                    onPress={closeForgotPasswordModal}
+                                    className="flex-1"
+                                >
+                                    ยกเลิก
+                                </Button>
+                                <Button
+                                    color="warning"
+                                    onPress={handleForgotPassword}
+                                    isLoading={isSendingResetEmail}
+                                    isDisabled={!forgotPasswordEmail}
+                                    className="flex-1 font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+                                    startContent={!isSendingResetEmail && <Icon icon="solar:letter-bold" className="text-lg" />}
+                                >
+                                    ส่งลิงก์รีเซ็ต
+                                </Button>
+                            </div>
+                        )}
                     </ModalFooter>
                 </ModalContent>
             </Modal>

@@ -51,6 +51,23 @@ module.exports = {
     callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/google/callback',
   },
 
+  // GitHub OAuth
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3001/api/auth/github/callback',
+  },
+
+  // Apple OAuth
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID, // Service ID (e.g., com.example.app.signin)
+    teamId: process.env.APPLE_TEAM_ID,
+    keyId: process.env.APPLE_KEY_ID,
+    privateKeyPath: process.env.APPLE_PRIVATE_KEY_PATH, // Path to .p8 file
+    privateKey: process.env.APPLE_PRIVATE_KEY, // Or direct key content
+    callbackUrl: process.env.APPLE_CALLBACK_URL || 'http://localhost:3001/api/auth/apple/callback',
+  },
+
   // Frontend
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 

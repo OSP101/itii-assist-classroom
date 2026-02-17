@@ -112,6 +112,25 @@ router.delete('/avatar', authenticate, authController.removeAvatar);
  */
 router.get(
   '/google',
+  (req, res, next) => {
+    // Store action and link token in cookie for callback
+    if (req.query.action === 'link') {
+      res.cookie('oauth_action', 'link', { 
+        httpOnly: true, 
+        maxAge: 5 * 60 * 1000, // 5 minutes
+        sameSite: 'lax'
+      });
+      // Store the access token for linking to existing user
+      if (req.query.link_token) {
+        res.cookie('oauth_link_token', req.query.link_token, { 
+          httpOnly: true, 
+          maxAge: 5 * 60 * 1000, // 5 minutes
+          sameSite: 'lax'
+        });
+      }
+    }
+    next();
+  },
   passport.authenticate('google', {
     scope: ['profile', 'email'],
     session: false,
@@ -124,5 +143,88 @@ router.get(
  * @access  Public
  */
 router.get('/google/callback', authController.googleCallback);
+
+/**
+ * @route   GET /api/auth/github
+ * @desc    Initiate GitHub OAuth login
+ * @access  Public
+ */
+router.get(
+  '/github',
+  (req, res, next) => {
+    // Store action and link token in cookie for callback
+    if (req.query.action === 'link') {
+      res.cookie('oauth_action', 'link', { 
+        httpOnly: true, 
+        maxAge: 5 * 60 * 1000, // 5 minutes
+        sameSite: 'lax'
+      });
+      // Store the access token for linking to existing user
+      if (req.query.link_token) {
+        res.cookie('oauth_link_token', req.query.link_token, { 
+          httpOnly: true, 
+          maxAge: 5 * 60 * 1000, // 5 minutes
+          sameSite: 'lax'
+        });
+      }
+    }
+    next();
+  },
+  passport.authenticate('github', {
+    scope: ['user:email'],
+    session: false,
+  })
+);
+
+/**
+ * @route   GET /api/auth/github/callback
+ * @desc    GitHub OAuth callback
+ * @access  Public
+ */
+router.get('/github/callback', authController.githubCallback);
+
+/**
+ * @route   POST /api/auth/apple
+ * @desc    Initiate Apple OAuth login
+ * @access  Public
+ */
+router.post(
+  '/apple',
+  passport.authenticate('apple', {
+    session: false,
+  })
+);
+
+/**
+ * @route   POST /api/auth/apple/callback
+ * @desc    Apple OAuth callback (Apple uses POST)
+ * @access  Public
+ */
+router.post('/apple/callback', authController.appleCallback);
+
+// ============================================
+// Password Reset Routes
+// ============================================
+
+/**
+ * @route   POST /api/auth/forgot-password
+ * @desc    Request password reset email
+ * @access  Public
+ */
+router.post('/forgot-password', authController.forgotPassword);
+
+/**
+ * @route   POST /api/auth/validate-reset-token
+ * @desc    Validate password reset token
+ * @access  Public
+ */
+router.post('/validate-reset-token', authController.validateResetToken);
+
+/**
+ * @route   POST /api/auth/reset-password
+ * @desc    Reset password with token
+ * @access  Public
+ */
+router.post('/reset-password', authController.resetPassword);
 
 module.exports = router;

@@ -295,7 +295,7 @@ export default function InstructorLayout({
                                         <DropdownItem
                                             key="profile"
                                             startContent={<Icon icon="solar:user-linear" />}
-                                            onPress={() => router.push("/profile")}
+                                            onPress={() => router.push("/profile?tab=personal")}
                                         >
                                             ตั้งค่าโปรไฟล์
                                         </DropdownItem>
@@ -361,7 +361,7 @@ export default function InstructorLayout({
                                     <DropdownItem
                                         key="settings"
                                         startContent={<Icon icon="solar:settings-linear" className="text-lg" />}
-                                        onPress={() => router.push("/profile")}
+                                        onPress={() => router.push("/profile?tab=personal")}
                                     >
                                         ตั้งค่าโปรไฟล์
                                     </DropdownItem>

@@ -1,6 +1,7 @@
 export { apiService } from './api.service';
 export { authService } from './auth.service';
 export { twoFactorService } from './twoFactor.service';
+export { oauthService } from './oauth.service';
 export { userService } from './user.service';
 export { studentService } from './student.service';
 export { courseService } from './course.service';
