@@ -34,7 +34,7 @@ function AuthCallbackContent() {
                 // If it was a link action, go back to profile
                 const returnUrl = sessionStorage.getItem("oauth_return_url");
                 sessionStorage.removeItem("oauth_return_url");
-                setTimeout(() => router.push(returnUrl || "/login"), 3000);
+                setTimeout(() => router.replace(returnUrl || "/login"), 3000);
                 return;
             }
 
@@ -43,12 +43,12 @@ function AuthCallbackContent() {
                 try {
                     const twoFactorData = JSON.parse(decodeURIComponent(twoFactor));
                     sessionStorage.setItem("twoFactorData", JSON.stringify(twoFactorData));
-                    router.push("/auth/verify-2fa");
+                    router.replace("/auth/verify-2fa");
                     return;
                 } catch {
                     setStatus("error");
                     setMessage("ข้อมูลการยืนยันตัวตนไม่ถูกต้อง");
-                    setTimeout(() => router.push("/login"), 3000);
+                    setTimeout(() => router.replace("/login"), 3000);
                     return;
                 }
             }
@@ -62,7 +62,7 @@ function AuthCallbackContent() {
                     description: "ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง",
                     color: "danger",
                 });
-                setTimeout(() => router.push("/login"), 3000);
+                setTimeout(() => router.replace("/login"), 3000);
                 return;
             }
 
@@ -95,12 +95,12 @@ function AuthCallbackContent() {
                                 // Extract path from URL
                                 try {
                                     const url = new URL(returnUrl);
-                                    router.push(url.pathname);
+                                    router.replace(url.pathname);
                                 } catch {
-                                    router.push("/admin/profile");
+                                    router.replace("/permissions?tab=authentication");
                                 }
                             } else {
-                                router.push("/admin/profile");
+                                router.replace("/permissions?tab=authentication");
                             }
                         }, 1500);
                         return;
@@ -119,14 +119,14 @@ function AuthCallbackContent() {
                     setTimeout(() => {
                         switch (userResult.user?.role) {
                             case "admin":
-                                router.push("/admin/dashboard");
+                                router.replace("/admin/dashboard");
                                 break;
                             case "instructor":
                             case "ta":
-                                router.push("/home");
+                                router.replace("/home");
                                 break;
                             default:
-                                router.push("/");
+                                router.replace("/");
                         }
                     }, 1500);
                 } else {
@@ -142,7 +142,7 @@ function AuthCallbackContent() {
                 });
                 // Clear any stored tokens
                 authService.clearTokens();
-                setTimeout(() => router.push("/login"), 3000);
+                setTimeout(() => router.replace("/login"), 3000);
             }
         };
 
