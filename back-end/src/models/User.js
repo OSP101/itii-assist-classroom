@@ -52,6 +52,32 @@ const User = sequelize.define('User', {
     type: DataTypes.TEXT('long'),
     allowNull: true,
   },
+  // Two-Factor Authentication fields
+  two_factor_enabled: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  },
+  two_factor_method: {
+    type: DataTypes.ENUM('totp', 'email'),
+    allowNull: true,
+    defaultValue: null,
+  },
+  two_factor_secret: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    defaultValue: null,
+  },
+  two_factor_backup_codes: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+  },
+  two_factor_confirmed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+  },
 }, {
   tableName: 'users',
   timestamps: true,
@@ -64,9 +90,9 @@ User.prototype.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password_hash);
 };
 
-// Instance method to return safe user data (without password)
+// Instance method to return safe user data (without password and secrets)
 User.prototype.toSafeObject = function() {
-  const { password_hash, ...safeUser } = this.toJSON();
+  const { password_hash, two_factor_secret, two_factor_backup_codes, ...safeUser } = this.toJSON();
   return safeUser;
 };
 

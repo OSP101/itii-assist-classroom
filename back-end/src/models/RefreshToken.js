@@ -47,4 +47,24 @@ RefreshToken.cleanupExpired = async function() {
   });
 };
 
+// Static method to clean up revoked tokens (older than 24 hours)
+RefreshToken.cleanupRevoked = async function() {
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return this.destroy({
+    where: {
+      revoked: true,
+      created_at: {
+        [require('sequelize').Op.lt]: oneDayAgo,
+      },
+    },
+  });
+};
+
+// Static method to clean up all stale sessions
+RefreshToken.cleanupStaleSessions = async function() {
+  const expiredCount = await this.cleanupExpired();
+  const revokedCount = await this.cleanupRevoked();
+  return { expiredCount, revokedCount };
+};
+
 module.exports = RefreshToken;

@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require('./auth.routes');
+const twoFactorRoutes = require('./twoFactor.routes');
 const systemRoutes = require('./system.routes');
 const systemLogRoutes = require('./systemLog.routes');
 const userRoutes = require('./user.routes');
@@ -21,9 +22,12 @@ const queuePublicRoutes = require('./queuePublic.routes');
 const notificationRoutes = require('./notification.routes');
 const courseActivityLogRoutes = require('./courseActivityLog.routes');
 const examScoreRoutes = require('./examScore.routes');
+const oauthRoutes = require('./oauth.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
+router.use('/auth/2fa', twoFactorRoutes);
+router.use('/oauth', oauthRoutes);
 router.use('/system', systemRoutes);
 router.use('/logs', systemLogRoutes);
 router.use('/users', userRoutes);

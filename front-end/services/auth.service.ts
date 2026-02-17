@@ -41,6 +41,11 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   mustChangePassword?: boolean;
+  // 2FA fields (when 2FA is required)
+  requiresTwoFactor?: boolean;
+  twoFactorMethod?: 'totp' | 'email';
+  userId?: number;
+  email?: string;
 }
 
 export interface AuthState {
@@ -49,12 +54,41 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+// Local type for 2FA data to avoid circular import
+interface TwoFactorResult {
+  requiresTwoFactor: true;
+  userId: number;
+  twoFactorMethod: 'totp' | 'email';
+  email: string | null;
+}
+
 class AuthService {
    // Login with username and password
-  async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; mustChangePassword?: boolean; error?: string }> {
+  async login(credentials: LoginCredentials): Promise<{ 
+    success: boolean; 
+    user?: User; 
+    mustChangePassword?: boolean; 
+    requiresTwoFactor?: boolean;
+    twoFactorData?: TwoFactorResult;
+    error?: string 
+  }> {
     const response = await apiService.post<LoginResponse>(API_ENDPOINTS.LOGIN, credentials);
 
     if (response.success && response.data) {
+      // Check if 2FA is required
+      if (response.data.requiresTwoFactor) {
+        return {
+          success: true,
+          requiresTwoFactor: true,
+          twoFactorData: {
+            requiresTwoFactor: true as const,
+            userId: response.data.userId!,
+            twoFactorMethod: response.data.twoFactorMethod!,
+            email: response.data.email ?? null
+          }
+        };
+      }
+
       const { user, accessToken, refreshToken, mustChangePassword } = response.data;
       
       // Store tokens
@@ -89,7 +123,13 @@ class AuthService {
    // Logout
   async logout(): Promise<void> {
     try {
-      await apiService.post(API_ENDPOINTS.LOGOUT);
+      // Get refresh token before clearing to send to server
+      const refreshToken = typeof window !== 'undefined' 
+        ? localStorage.getItem('refreshToken') 
+        : null;
+      
+      // Send refresh token to revoke it on server
+      await apiService.post(API_ENDPOINTS.LOGOUT, { refreshToken });
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -273,6 +313,14 @@ class AuthService {
   }
 
   /**
+   * Get GitHub OAuth URL
+   */
+  getGitHubAuthUrl(): string {
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    return `${apiBaseUrl}/auth/github`;
+  }
+
+  /**
    * Force change password (for first login)
    */
   async forceChangePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
@@ -382,6 +430,54 @@ class AuthService {
     return {
       success: false,
       error: response.message || 'ไม่สามารถลบรูปภาพได้',
+    };
+  }
+
+  /**
+   * Request password reset (Forgot Password)
+   */
+  async forgotPassword(email: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await apiService.post<{ message: string }>('/auth/forgot-password', { email });
+
+    if (response.success) {
+      return { success: true, message: response.data?.message || response.message };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถส่งคำขอได้',
+    };
+  }
+
+  /**
+   * Validate password reset token
+   */
+  async validateResetToken(token: string): Promise<{ success: boolean; valid?: boolean; error?: string }> {
+    const response = await apiService.post<{ valid: boolean }>('/auth/validate-reset-token', { token });
+
+    if (response.success && response.data) {
+      return { success: true, valid: response.data.valid };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'Token ไม่ถูกต้องหรือหมดอายุ',
+    };
+  }
+
+  /**
+   * Reset password with token
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    const response = await apiService.post<{ message: string }>('/auth/reset-password', { token, newPassword });
+
+    if (response.success) {
+      return { success: true, message: response.data?.message || response.message };
+    }
+
+    return {
+      success: false,
+      error: response.message || 'ไม่สามารถรีเซ็ตรหัสผ่านได้',
     };
   }
 }

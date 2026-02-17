@@ -19,6 +19,8 @@ function AuthCallbackContent() {
             const accessToken = searchParams.get("accessToken");
             const refreshToken = searchParams.get("refreshToken");
             const error = searchParams.get("error");
+            const twoFactor = searchParams.get("twoFactor");
+            const linked = searchParams.get("linked"); // OAuth linking action
 
             // Handle error from backend
             if (error) {
@@ -29,8 +31,26 @@ function AuthCallbackContent() {
                     description: decodeURIComponent(error),
                     color: "danger",
                 });
-                setTimeout(() => router.push("/login"), 3000);
+                // If it was a link action, go back to profile
+                const returnUrl = sessionStorage.getItem("oauth_return_url");
+                sessionStorage.removeItem("oauth_return_url");
+                setTimeout(() => router.push(returnUrl || "/login"), 3000);
                 return;
+            }
+
+            // Handle 2FA required
+            if (twoFactor) {
+                try {
+                    const twoFactorData = JSON.parse(decodeURIComponent(twoFactor));
+                    sessionStorage.setItem("twoFactorData", JSON.stringify(twoFactorData));
+                    router.push("/auth/verify-2fa");
+                    return;
+                } catch {
+                    setStatus("error");
+                    setMessage("ข้อมูลการยืนยันตัวตนไม่ถูกต้อง");
+                    setTimeout(() => router.push("/login"), 3000);
+                    return;
+                }
             }
 
             // Check if tokens are present
@@ -54,6 +74,38 @@ function AuthCallbackContent() {
                 const userResult = await authService.getMe();
 
                 if (userResult.success && userResult.user) {
+                    // Check if this was a link action
+                    if (linked) {
+                        const providerName = linked === 'github' ? 'GitHub' : linked === 'google' ? 'Google' : linked;
+                        setStatus("success");
+                        setMessage(`เชื่อมต่อ ${providerName} สำเร็จ`);
+
+                        addToast({
+                            title: "เชื่อมต่อสำเร็จ",
+                            description: `เชื่อมต่อบัญชี ${providerName} เรียบร้อยแล้ว`,
+                            color: "success",
+                        });
+
+                        // Get return URL from sessionStorage or default to profile page
+                        const returnUrl = sessionStorage.getItem("oauth_return_url");
+                        sessionStorage.removeItem("oauth_return_url");
+                        
+                        setTimeout(() => {
+                            if (returnUrl) {
+                                // Extract path from URL
+                                try {
+                                    const url = new URL(returnUrl);
+                                    router.push(url.pathname);
+                                } catch {
+                                    router.push("/admin/profile");
+                                }
+                            } else {
+                                router.push("/admin/profile");
+                            }
+                        }, 1500);
+                        return;
+                    }
+                    
                     setStatus("success");
                     setMessage(`ยินดีต้อนรับ ${userResult.user.full_name}`);
 

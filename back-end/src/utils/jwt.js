@@ -82,8 +82,11 @@ const generateTokens = (user) => {
     role: user.role,
   };
   
-  const accessToken = generateAccessToken(payload);
+  // Generate refresh token first to get the jti
   const { token: refreshToken, jti, expiresAt } = generateRefreshToken(payload);
+  
+  // Include jti in access token so we can identify the session
+  const accessToken = generateAccessToken({ ...payload, jti });
   
   return {
     accessToken,

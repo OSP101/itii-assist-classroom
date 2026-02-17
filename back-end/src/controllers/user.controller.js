@@ -6,6 +6,7 @@ const User = require('../models/User');
 const SystemLog = require('../models/SystemLog');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { adminLinkByEmail } = require('./oauth.controller');
 const { Op } = require('sequelize');
 const crypto = require('crypto');
 
@@ -164,6 +165,11 @@ const createUser = asyncHandler(async (req, res) => {
     avatar,
     must_change_password: true, // Force password change on first login
   });
+
+  // Auto-link Google account if email is provided
+  if (email) {
+    await adminLinkByEmail(user.id, email, 'google');
+  }
 
   // Log action
   await SystemLog.create({

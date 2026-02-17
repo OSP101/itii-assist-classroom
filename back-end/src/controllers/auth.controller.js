@@ -1,7 +1,8 @@
 const passport = require('passport');
-const { User, RefreshToken, SystemLog } = require('../models');
+const { User, RefreshToken, SystemLog, PasswordResetToken } = require('../models');
 const { jwt: jwtUtil, ApiError, asyncHandler, logger } = require('../utils');
-const { authLogger, securityLogger } = require('../middlewares/requestLogger');
+const { sendPasswordResetEmail } = require('../utils/emailService');
+const { authLogger, securityLogger, getClientIp } = require('../middlewares/requestLogger');
 const UAParser = require('ua-parser-js');
 const { Op } = require('sequelize');
 const config = require('../config');
@@ -23,6 +24,22 @@ const login = asyncHandler(async (req, res, next) => {
     }
     
     try {
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Return partial response - user needs to complete 2FA
+        return res.json({
+          success: true,
+          message: 'Two-factor authentication required',
+          data: {
+            requiresTwoFactor: true,
+            twoFactorMethod: user.two_factor_method,
+            userId: user.id,
+            // Mask email for display
+            email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+          },
+        });
+      }
+
       // Generate tokens
       const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
       
@@ -272,12 +289,12 @@ const updateProfile = asyncHandler(async (req, res) => {
   
   // Log profile update
   await SystemLog.create({
-    log_type: 'system',
+    log_type: 'auth',
     severity: 'info',
     actor_user_id: user.id,
     action: 'profile_updated',
     detail: `User ${user.username} updated their profile`,
-    ip_address: req.ip,
+    ip_address: getClientIp(req),
     user_agent: req.get('User-Agent'),
   });
   
@@ -295,18 +312,121 @@ const updateProfile = asyncHandler(async (req, res) => {
  * GET /api/auth/google/callback
  */
 const googleCallback = asyncHandler(async (req, res, next) => {
+  // Check if this is a link action from cookie
+  const isLinkAction = req.cookies?.oauth_action === 'link';
+  const linkToken = req.cookies?.oauth_link_token;
+  
+  // Clear the cookies
+  res.clearCookie('oauth_action');
+  res.clearCookie('oauth_link_token');
+  
   passport.authenticate('google', { session: false }, async (err, user, info) => {
     if (err) {
       return next(err);
     }
     
+    // Handle link action when user not found through normal flow
+    if (!user && isLinkAction && linkToken && info?.profile) {
+      try {
+        // Verify the link token to get the current user
+        const decoded = jwtUtil.verifyAccessToken(linkToken);
+        if (!decoded || !decoded.userId) {
+          const errorMessage = encodeURIComponent('Invalid or expired session. Please try again.');
+          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        }
+        
+        // Find the user
+        const existingUser = await User.findByPk(decoded.userId);
+        if (!existingUser) {
+          const errorMessage = encodeURIComponent('User not found. Please try again.');
+          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        }
+        
+        // Link the OAuth account
+        const { UserOAuthAccount } = require('../models');
+        await UserOAuthAccount.findOrCreate({
+          where: { user_id: existingUser.id, provider: 'google' },
+          defaults: {
+            provider_user_id: info.profile.provider_user_id,
+            provider_email: info.profile.provider_email,
+            provider_name: info.profile.provider_name,
+            provider_avatar: info.profile.provider_avatar,
+            linked_at: new Date(),
+          },
+        });
+        
+        // Generate new tokens
+        const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(existingUser);
+        
+        // Save refresh token
+        await RefreshToken.create({
+          jti,
+          user_id: existingUser.id,
+          expires_at: expiresAt,
+          meta: {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            provider: 'google',
+          },
+        });
+        
+        // Redirect with success
+        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
+        return res.redirect(redirectUrl);
+        
+      } catch (linkError) {
+        console.error('Link error:', linkError);
+        const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
+        return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+      }
+    }
+    
     if (!user) {
       // Redirect to frontend with error
       const errorMessage = encodeURIComponent(info?.message || 'Google login failed');
-      return res.redirect(`${config.frontendUrl}/login?error=${errorMessage}`);
+      const redirectPath = isLinkAction ? '/admin/profile' : '/login';
+      return res.redirect(`${config.frontendUrl}${redirectPath}?error=${errorMessage}`);
     }
     
     try {
+      // For link action, redirect back to profile page with success message
+      if (isLinkAction) {
+        // Generate tokens for the user
+        const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
+        
+        // Save refresh token to database
+        await RefreshToken.create({
+          jti,
+          user_id: user.id,
+          expires_at: expiresAt,
+          meta: {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            provider: 'google',
+          },
+        });
+        
+        // Log the login action
+        await authLogger.logLogin(req, user, 'google');
+        
+        // Redirect to profile with tokens and success flag
+        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
+        return res.redirect(redirectUrl);
+      }
+      
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Redirect to frontend with 2FA required data
+        const twoFactorData = {
+          requiresTwoFactor: true,
+          twoFactorMethod: user.two_factor_method,
+          userId: user.id,
+          email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+        };
+        const encodedData = encodeURIComponent(JSON.stringify(twoFactorData));
+        return res.redirect(`${config.frontendUrl}/auth/callback?twoFactor=${encodedData}`);
+      }
+
       // Generate tokens
       const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
       
@@ -324,6 +444,212 @@ const googleCallback = asyncHandler(async (req, res, next) => {
       
       // Log the login action
       await authLogger.logLogin(req, user, 'google');
+      
+      // Redirect to frontend with tokens
+      const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+      res.redirect(redirectUrl);
+      
+    } catch (error) {
+      next(error);
+    }
+  })(req, res, next);
+});
+
+/**
+ * GitHub OAuth callback
+ * GET /api/auth/github/callback
+ */
+const githubCallback = asyncHandler(async (req, res, next) => {
+  // Check if this is a link action from cookie
+  const isLinkAction = req.cookies?.oauth_action === 'link';
+  const linkToken = req.cookies?.oauth_link_token;
+  
+  // Clear the cookies
+  res.clearCookie('oauth_action');
+  res.clearCookie('oauth_link_token');
+  
+  passport.authenticate('github', { session: false }, async (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    
+    // Handle link action when user not found through normal flow
+    if (!user && isLinkAction && linkToken && info?.profile) {
+      try {
+        // Verify the link token to get the current user
+        const decoded = jwtUtil.verifyAccessToken(linkToken);
+        if (!decoded || !decoded.userId) {
+          const errorMessage = encodeURIComponent('Invalid or expired session. Please try again.');
+          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        }
+        
+        // Find the user
+        const existingUser = await User.findByPk(decoded.userId);
+        if (!existingUser) {
+          const errorMessage = encodeURIComponent('User not found. Please try again.');
+          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        }
+        
+        // Link the OAuth account
+        const { UserOAuthAccount } = require('../models');
+        await UserOAuthAccount.findOrCreate({
+          where: { user_id: existingUser.id, provider: 'github' },
+          defaults: {
+            provider_user_id: info.profile.provider_user_id,
+            provider_email: info.profile.provider_email,
+            provider_name: info.profile.provider_name,
+            provider_avatar: info.profile.provider_avatar,
+            linked_at: new Date(),
+          },
+        });
+        
+        // Generate new tokens
+        const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(existingUser);
+        
+        // Save refresh token
+        await RefreshToken.create({
+          jti,
+          user_id: existingUser.id,
+          expires_at: expiresAt,
+          meta: {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            provider: 'github',
+          },
+        });
+        
+        // Redirect with success
+        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
+        return res.redirect(redirectUrl);
+        
+      } catch (linkError) {
+        console.error('Link error:', linkError);
+        const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
+        return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+      }
+    }
+    
+    if (!user) {
+      // Redirect to frontend with error
+      const errorMessage = encodeURIComponent(info?.message || 'GitHub login failed');
+      const redirectPath = isLinkAction ? '/admin/profile' : '/login';
+      return res.redirect(`${config.frontendUrl}${redirectPath}?error=${errorMessage}`);
+    }
+    
+    try {
+      // For link action, redirect back to profile page with success message
+      if (isLinkAction) {
+        // Generate tokens for the user
+        const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
+        
+        // Save refresh token to database
+        await RefreshToken.create({
+          jti,
+          user_id: user.id,
+          expires_at: expiresAt,
+          meta: {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            provider: 'github',
+          },
+        });
+        
+        // Log the login action
+        await authLogger.logLogin(req, user, 'github');
+        
+        // Redirect to profile with tokens and success flag
+        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
+        return res.redirect(redirectUrl);
+      }
+      
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Redirect to frontend with 2FA required data
+        const twoFactorData = {
+          requiresTwoFactor: true,
+          twoFactorMethod: user.two_factor_method,
+          userId: user.id,
+          email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+        };
+        const encodedData = encodeURIComponent(JSON.stringify(twoFactorData));
+        return res.redirect(`${config.frontendUrl}/auth/callback?twoFactor=${encodedData}`);
+      }
+
+      // Generate tokens
+      const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
+      
+      // Save refresh token to database
+      await RefreshToken.create({
+        jti,
+        user_id: user.id,
+        expires_at: expiresAt,
+        meta: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          provider: 'github',
+        },
+      });
+      
+      // Log the login action
+      await authLogger.logLogin(req, user, 'github');
+      
+      // Redirect to frontend with tokens
+      const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+      res.redirect(redirectUrl);
+      
+    } catch (error) {
+      next(error);
+    }
+  })(req, res, next);
+});
+
+/**
+ * Apple OAuth callback
+ * POST /api/auth/apple/callback
+ */
+const appleCallback = asyncHandler(async (req, res, next) => {
+  passport.authenticate('apple', { session: false }, async (err, user, info) => {
+    if (err) {
+      return next(err);
+    }
+    
+    if (!user) {
+      // Redirect to frontend with error
+      const errorMessage = encodeURIComponent(info?.message || 'Apple login failed');
+      return res.redirect(`${config.frontendUrl}/login?error=${errorMessage}`);
+    }
+    
+    try {
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Redirect to frontend with 2FA required data
+        const twoFactorData = {
+          requiresTwoFactor: true,
+          twoFactorMethod: user.two_factor_method,
+          userId: user.id,
+          email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+        };
+        const encodedData = encodeURIComponent(JSON.stringify(twoFactorData));
+        return res.redirect(`${config.frontendUrl}/auth/callback?twoFactor=${encodedData}`);
+      }
+
+      // Generate tokens
+      const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
+      
+      // Save refresh token to database
+      await RefreshToken.create({
+        jti,
+        user_id: user.id,
+        expires_at: expiresAt,
+        meta: {
+          ip: req.ip,
+          userAgent: req.get('User-Agent'),
+          provider: 'apple',
+        },
+      });
+      
+      // Log the login action
+      await authLogger.logLogin(req, user, 'apple');
       
       // Redirect to frontend with tokens
       const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;
@@ -426,7 +752,7 @@ const revokeSession = asyncHandler(async (req, res) => {
     actor_user_id: req.user.id,
     action: 'session_revoked',
     detail: `User ${req.user.username} revoked session ${sessionId}`,
-    ip_address: req.ip,
+    ip_address: getClientIp(req),
     user_agent: req.get('User-Agent'),
   });
   
@@ -472,11 +798,11 @@ const revokeAllSessions = asyncHandler(async (req, res) => {
   // Log
   await SystemLog.create({
     log_type: 'security',
-    severity: 'warning',
+    severity: 'warn',
     actor_user_id: req.user.id,
     action: 'all_sessions_revoked',
     detail: `User ${req.user.username} revoked all other sessions (${result[0]} sessions)`,
-    ip_address: req.ip,
+    ip_address: getClientIp(req),
     user_agent: req.get('User-Agent'),
   });
   
@@ -525,12 +851,12 @@ const uploadUserAvatar = asyncHandler(async (req, res) => {
   
   // Log avatar update
   await SystemLog.create({
-    log_type: 'system',
+    log_type: 'auth',
     severity: 'info',
     actor_user_id: user.id,
     action: 'avatar_updated',
     detail: `User ${user.username} updated their avatar`,
-    ip_address: req.ip,
+    ip_address: getClientIp(req),
     user_agent: req.get('User-Agent'),
   });
   
@@ -565,6 +891,167 @@ const removeAvatar = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Request password reset (Forgot Password)
+ * POST /api/auth/forgot-password
+ * 
+ * Security: Always returns success message regardless of whether email exists
+ * This prevents email enumeration attacks
+ */
+const forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    throw ApiError.badRequest('กรุณากรอกอีเมล');
+  }
+
+  // Always respond with the same message for security
+  const successMessage = 'หากอีเมลนี้มีในระบบ เราจะส่งลิงก์สำหรับรีเซ็ตรหัสผ่านไปยังอีเมลของคุณ';
+
+  try {
+    // Find user by email (case-insensitive)
+    const user = await User.findOne({
+      where: {
+        email: { [Op.like]: email.toLowerCase() },
+        is_active: true,
+      },
+    });
+
+    if (user) {
+      // Generate reset token (expires in 60 minutes)
+      const { token, expires_at } = await PasswordResetToken.createForUser(user.id, 60);
+
+      // Build reset URL
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const resetUrl = `${frontendUrl}/auth/reset-password?token=${token}`;
+
+      // Send email
+      await sendPasswordResetEmail(user.email, resetUrl, user.full_name || user.username);
+
+      // Log the request
+      await SystemLog.create({
+        log_type: 'auth',
+        severity: 'info',
+        actor_user_id: user.id,
+        action: 'password_reset_requested',
+        detail: `Password reset requested for user ${user.username}`,
+        ip_address: getClientIp(req),
+        user_agent: req.get('User-Agent'),
+      });
+    } else {
+      // Log attempt with non-existent email (for monitoring purposes)
+      await SystemLog.create({
+        log_type: 'auth',
+        severity: 'warn',
+        actor_user_id: null,
+        action: 'password_reset_nonexistent_email',
+        detail: `Password reset attempted for non-existent email: ${email}`,
+        ip_address: getClientIp(req),
+        user_agent: req.get('User-Agent'),
+      });
+    }
+  } catch (error) {
+    // Log error but don't expose it to user
+    logger.error('Password reset error:', error);
+  }
+
+  // Always return success (prevents email enumeration)
+  res.json({
+    success: true,
+    message: successMessage,
+  });
+});
+
+/**
+ * Validate password reset token
+ * POST /api/auth/validate-reset-token
+ */
+const validateResetToken = asyncHandler(async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    throw ApiError.badRequest('Token is required');
+  }
+
+  const tokenRecord = await PasswordResetToken.verifyToken(token);
+
+  if (!tokenRecord) {
+    throw ApiError.badRequest('ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุแล้ว');
+  }
+
+  res.json({
+    success: true,
+    message: 'Token is valid',
+    data: {
+      valid: true,
+    },
+  });
+});
+
+/**
+ * Reset password with token
+ * POST /api/auth/reset-password
+ */
+const resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    throw ApiError.badRequest('Token and new password are required');
+  }
+
+  if (newPassword.length < 6) {
+    throw ApiError.badRequest('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+  }
+
+  // Verify token
+  const tokenRecord = await PasswordResetToken.verifyToken(token);
+
+  if (!tokenRecord) {
+    throw ApiError.badRequest('ลิงก์รีเซ็ตรหัสผ่านไม่ถูกต้องหรือหมดอายุแล้ว');
+  }
+
+  // Get user
+  const user = await User.findByPk(tokenRecord.user_id);
+
+  if (!user) {
+    throw ApiError.notFound('ไม่พบผู้ใช้');
+  }
+
+  if (!user.is_active) {
+    throw ApiError.forbidden('บัญชีผู้ใช้ถูกปิดการใช้งาน');
+  }
+
+  // Update password
+  user.password_hash = newPassword; // Will be hashed by beforeUpdate hook
+  user.must_change_password = false;
+  await user.save();
+
+  // Mark token as used
+  await PasswordResetToken.markAsUsed(token);
+
+  // Revoke all refresh tokens for this user (security measure)
+  await RefreshToken.update(
+    { revoked: true },
+    { where: { user_id: user.id, revoked: false } }
+  );
+
+  // Log the password reset
+  await SystemLog.create({
+    log_type: 'auth',
+    severity: 'info',
+    actor_user_id: user.id,
+    action: 'password_reset_completed',
+    detail: `Password reset completed for user ${user.username}`,
+    ip_address: getClientIp(req),
+    user_agent: req.get('User-Agent'),
+  });
+
+  res.json({
+    success: true,
+    message: 'รหัสผ่านถูกเปลี่ยนเรียบร้อยแล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่',
+  });
+});
+
 module.exports = {
   login,
   refresh,
@@ -574,9 +1061,14 @@ module.exports = {
   changePassword,
   forceChangePassword,
   googleCallback,
+  githubCallback,
+  appleCallback,
   getSessions,
   revokeSession,
   revokeAllSessions,
   uploadUserAvatar,
   removeAvatar,
+  forgotPassword,
+  validateResetToken,
+  resetPassword,
 };
