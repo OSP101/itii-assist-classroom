@@ -41,6 +41,11 @@ export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
   mustChangePassword?: boolean;
+  // 2FA fields (when 2FA is required)
+  requiresTwoFactor?: boolean;
+  twoFactorMethod?: 'totp' | 'email';
+  userId?: number;
+  email?: string;
 }
 
 export interface AuthState {
@@ -49,12 +54,41 @@ export interface AuthState {
   isLoading: boolean;
 }
 
+// Local type for 2FA data to avoid circular import
+interface TwoFactorResult {
+  requiresTwoFactor: true;
+  userId: number;
+  twoFactorMethod: 'totp' | 'email';
+  email: string | null;
+}
+
 class AuthService {
    // Login with username and password
-  async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; mustChangePassword?: boolean; error?: string }> {
+  async login(credentials: LoginCredentials): Promise<{ 
+    success: boolean; 
+    user?: User; 
+    mustChangePassword?: boolean; 
+    requiresTwoFactor?: boolean;
+    twoFactorData?: TwoFactorResult;
+    error?: string 
+  }> {
     const response = await apiService.post<LoginResponse>(API_ENDPOINTS.LOGIN, credentials);
 
     if (response.success && response.data) {
+      // Check if 2FA is required
+      if (response.data.requiresTwoFactor) {
+        return {
+          success: true,
+          requiresTwoFactor: true,
+          twoFactorData: {
+            requiresTwoFactor: true as const,
+            userId: response.data.userId!,
+            twoFactorMethod: response.data.twoFactorMethod!,
+            email: response.data.email ?? null
+          }
+        };
+      }
+
       const { user, accessToken, refreshToken, mustChangePassword } = response.data;
       
       // Store tokens

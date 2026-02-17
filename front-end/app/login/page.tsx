@@ -77,34 +77,45 @@ export default function LoginPage() {
                 password: formData.password,
             });
 
-            if (result.success && result.user) {
-                // Check if user must change password
-                if (result.mustChangePassword) {
-                    setPendingUser({ username: result.user.username, role: result.user.role });
-                    setIsChangePasswordModalOpen(true);
+            if (result.success) {
+                // Check if 2FA is required - redirect to verification page
+                if (result.requiresTwoFactor && result.twoFactorData) {
+                    // Store 2FA data in sessionStorage and redirect
+                    sessionStorage.setItem("twoFactorData", JSON.stringify(result.twoFactorData));
+                    router.push("/auth/verify-2fa");
                     setIsLoading(false);
                     return;
                 }
 
-                addToast({
-                    title: "เข้าสู่ระบบสำเร็จ",
-                    description: `ยินดีต้อนรับ ${formData.username}`,
-                    color: "success",
-                });
+                if (result.user) {
+                    // Check if user must change password
+                    if (result.mustChangePassword) {
+                        setPendingUser({ username: result.user.username, role: result.user.role });
+                        setIsChangePasswordModalOpen(true);
+                        setIsLoading(false);
+                        return;
+                    }
 
-                // Redirect based on role
-                switch (result.user.role) {
-                    case 'admin':
-                        router.push('/admin/dashboard');
-                        break;
-                    case 'instructor':
-                        router.push('/home');
-                        break;
-                    case 'ta':
-                        router.push('/home');
-                        break;
-                    default:
-                        router.push('/');
+                    addToast({
+                        title: "เข้าสู่ระบบสำเร็จ",
+                        description: `ยินดีต้อนรับ ${formData.username}`,
+                        color: "success",
+                    });
+
+                    // Redirect based on role
+                    switch (result.user.role) {
+                        case 'admin':
+                            router.push('/admin/dashboard');
+                            break;
+                        case 'instructor':
+                            router.push('/home');
+                            break;
+                        case 'ta':
+                            router.push('/home');
+                            break;
+                        default:
+                            router.push('/');
+                    }
                 }
             } else {
                 // Handle error - might be string or object

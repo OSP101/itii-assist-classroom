@@ -23,6 +23,22 @@ const login = asyncHandler(async (req, res, next) => {
     }
     
     try {
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Return partial response - user needs to complete 2FA
+        return res.json({
+          success: true,
+          message: 'Two-factor authentication required',
+          data: {
+            requiresTwoFactor: true,
+            twoFactorMethod: user.two_factor_method,
+            userId: user.id,
+            // Mask email for display
+            email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+          },
+        });
+      }
+
       // Generate tokens
       const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
       
@@ -272,7 +288,7 @@ const updateProfile = asyncHandler(async (req, res) => {
   
   // Log profile update
   await SystemLog.create({
-    log_type: 'system',
+    log_type: 'auth',
     severity: 'info',
     actor_user_id: user.id,
     action: 'profile_updated',
@@ -307,6 +323,19 @@ const googleCallback = asyncHandler(async (req, res, next) => {
     }
     
     try {
+      // Check if 2FA is enabled
+      if (user.two_factor_enabled) {
+        // Redirect to frontend with 2FA required data
+        const twoFactorData = {
+          requiresTwoFactor: true,
+          twoFactorMethod: user.two_factor_method,
+          userId: user.id,
+          email: user.email ? user.email.replace(/(.{2})(.*)(@.*)/, '$1***$3') : null,
+        };
+        const encodedData = encodeURIComponent(JSON.stringify(twoFactorData));
+        return res.redirect(`${config.frontendUrl}/auth/callback?twoFactor=${encodedData}`);
+      }
+
       // Generate tokens
       const { accessToken, refreshToken, jti, expiresAt } = jwtUtil.generateTokens(user);
       

@@ -3,6 +3,7 @@ const router = express.Router();
 
 // Import route modules
 const authRoutes = require('./auth.routes');
+const twoFactorRoutes = require('./twoFactor.routes');
 const systemRoutes = require('./system.routes');
 const systemLogRoutes = require('./systemLog.routes');
 const userRoutes = require('./user.routes');
@@ -24,6 +25,7 @@ const examScoreRoutes = require('./examScore.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
+router.use('/auth/2fa', twoFactorRoutes);
 router.use('/system', systemRoutes);
 router.use('/logs', systemLogRoutes);
 router.use('/users', userRoutes);

@@ -88,7 +88,7 @@ function ConfirmPasswordModal({
           <Input
             type={showPassword ? "text" : "password"}
             label="รหัสผ่านปัจจุบัน"
-            placeholder="กรอกรหัสผ่านของคุณ"
+            labelPlacement="outside"
             value={password}
             onValueChange={(value) => {
               setPassword(value);

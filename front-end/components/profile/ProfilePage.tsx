@@ -340,6 +340,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           <Suspense fallback={<AuthenticationSkeleton />}>
             <AuthenticationSection
               onOpenPasswordModal={() => setShowPasswordModal(true)}
+              userEmail={user?.email}
             />
           </Suspense>
         </div>

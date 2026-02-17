@@ -1,0 +1,7 @@
+{
+  "dependencies": {
+    "nodemailer": "^8.0.1",
+    "otplib": "^13.3.0",
+    "qrcode": "^1.5.4"
+  }
+}

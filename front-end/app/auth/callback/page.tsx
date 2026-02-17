@@ -19,6 +19,7 @@ function AuthCallbackContent() {
             const accessToken = searchParams.get("accessToken");
             const refreshToken = searchParams.get("refreshToken");
             const error = searchParams.get("error");
+            const twoFactor = searchParams.get("twoFactor");
 
             // Handle error from backend
             if (error) {
@@ -31,6 +32,21 @@ function AuthCallbackContent() {
                 });
                 setTimeout(() => router.push("/login"), 3000);
                 return;
+            }
+
+            // Handle 2FA required
+            if (twoFactor) {
+                try {
+                    const twoFactorData = JSON.parse(decodeURIComponent(twoFactor));
+                    sessionStorage.setItem("twoFactorData", JSON.stringify(twoFactorData));
+                    router.push("/auth/verify-2fa");
+                    return;
+                } catch {
+                    setStatus("error");
+                    setMessage("ข้อมูลการยืนยันตัวตนไม่ถูกต้อง");
+                    setTimeout(() => router.push("/login"), 3000);
+                    return;
+                }
             }
 
             // Check if tokens are present

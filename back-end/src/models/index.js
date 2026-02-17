@@ -41,6 +41,9 @@ const CourseActivityLog = require('./CourseActivityLog');
 const ExamSetting = require('./ExamSetting');
 const ExamScore = require('./ExamScore');
 
+// Two-Factor Authentication
+const TwoFactorPending = require('./TwoFactorPending');
+
 // ============================================
 // Define Associations
 // ============================================;
@@ -818,4 +821,6 @@ module.exports = {
   // Exam Score Models
   ExamSetting,
   ExamScore,
+  // Two-Factor Authentication
+  TwoFactorPending,
 };

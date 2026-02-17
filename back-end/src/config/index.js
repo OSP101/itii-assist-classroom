@@ -56,4 +56,20 @@ module.exports = {
 
   // Cookie
   cookieSecret: process.env.COOKIE_SECRET || 'default-cookie-secret',
+
+  // Email (for 2FA)
+  email: {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT, 10) || 587,
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'noreply@itii-assist.com',
+  },
+
+  // Two-Factor Authentication
+  twoFactor: {
+    appName: process.env.TWO_FACTOR_APP_NAME || 'ITII Assist',
+    issuer: process.env.TWO_FACTOR_ISSUER || 'ITII Assist Classroom',
+  },
 };
