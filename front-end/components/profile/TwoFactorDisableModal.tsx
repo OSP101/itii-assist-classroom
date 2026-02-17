@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useCallback, useEffect } from "react";
+import { memo, useState, useCallback, useEffect, useRef } from "react";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Input } from "@heroui/input";
 import { InputOtp } from "@heroui/input-otp";
@@ -30,6 +30,10 @@ function TwoFactorDisableModal({
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const emailSentRef = useRef(false);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -40,8 +44,58 @@ function TwoFactorDisableModal({
       setInputMode("otp");
       setShowPassword(false);
       setError("");
+      setIsSendingEmail(false);
+      setEmailSent(false);
+      setResendCooldown(0);
+      emailSentRef.current = false;
     }
   }, [isOpen]);
+
+  // Auto-send email code when modal opens for email method
+  useEffect(() => {
+    if (isOpen && method === "email" && !emailSentRef.current) {
+      emailSentRef.current = true;
+      sendEmailCode();
+    }
+  }, [isOpen, method]);
+
+  // Countdown timer for resend button
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const sendEmailCode = async () => {
+    setIsSendingEmail(true);
+    try {
+      const result = await twoFactorService.resendEmailCode();
+      if (result.success) {
+        setEmailSent(true);
+        setResendCooldown(60);
+      } else {
+        setError(result.error || "ไม่สามารถส่งรหัสได้");
+      }
+    } catch (err) {
+      setError("เกิดข้อผิดพลาดในการส่งรหัส");
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (resendCooldown > 0) return;
+    await sendEmailCode();
+    if (!error) {
+      addToast({
+        title: "ส่งรหัสใหม่แล้ว",
+        description: "กรุณาตรวจสอบอีเมลของคุณ",
+        color: "success",
+      });
+    }
+  };
 
   const handleDisable = useCallback(async () => {
     if (!password.trim()) {
@@ -111,6 +165,8 @@ function TwoFactorDisableModal({
               type={showPassword ? "text" : "password"}
               label="รหัสผ่านปัจจุบัน"
               labelPlacement="outside"
+              variant="bordered"
+              placeholder=" "
               value={password}
               onValueChange={(v) => {
                 setPassword(v);
@@ -175,6 +231,87 @@ function TwoFactorDisableModal({
                     className="text-default-600 hover:text-primary"
                   >
                     {inputMode === "otp" ? "ใช้รหัสสำรองแทน" : "ใช้รหัสจาก Authenticator App"}
+                  </Link>
+                </div>
+              </div>
+            )}
+
+            {method === "email" && (
+              <div className="space-y-4">
+                {/* Email sending status */}
+                {isSendingEmail && (
+                  <div className="flex items-center justify-center gap-2 text-default-500">
+                    <Icon icon="svg-spinners:ring-resize" className="text-lg" />
+                    <span className="text-sm">กำลังส่งรหัสไปยังอีเมล...</span>
+                  </div>
+                )}
+                
+                {emailSent && !isSendingEmail && (
+                  <div className="flex items-center justify-center gap-2 text-success">
+                    <Icon icon="solar:check-circle-bold" className="text-lg" />
+                    <span className="text-sm">ส่งรหัสไปยังอีเมลแล้ว</span>
+                  </div>
+                )}
+
+                {inputMode === "otp" ? (
+                  <>
+                    <div className="flex flex-col items-center gap-2">
+                      <label className="text-sm text-default-600">รหัสยืนยัน 6 หลักจากอีเมล</label>
+                      <InputOtp
+                        length={6}
+                        value={code}
+                        onValueChange={(value) => {
+                          setCode(value);
+                          setError("");
+                        }}
+                        size="lg"
+                        variant="bordered"
+                        classNames={{
+                          segment: "w-11 h-12 text-lg",
+                        }}
+                      />
+                    </div>
+                    <div className="text-center">
+                      <Button
+                        variant="light"
+                        size="sm"
+                        onPress={handleResendEmail}
+                        isLoading={isSendingEmail}
+                        isDisabled={resendCooldown > 0}
+                        startContent={resendCooldown > 0 ? <Icon icon="solar:clock-circle-outline" className="text-lg" /> : <Icon icon="solar:refresh-linear" className="text-lg" />}
+                      >
+                        {resendCooldown > 0 ? `ส่งรหัสใหม่ได้ใน ${resendCooldown} วินาที` : "ส่งรหัสใหม่"}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <Input
+                    label="รหัสสำรอง (Recovery Code)"
+                    labelPlacement="outside"
+                    placeholder="XXXX-XXXX"
+                    value={recoveryCode}
+                    onValueChange={(v) => {
+                      setRecoveryCode(v.toUpperCase());
+                      setError("");
+                    }}
+                    classNames={{
+                      input: "text-center font-mono tracking-wider",
+                    }}
+                  />
+                )}
+                <div className="text-center">
+                  <Link
+                    as="button"
+                    size="sm"
+                    onPress={() => {
+                      setInputMode(inputMode === "otp" ? "recovery" : "otp");
+                      setCode("");
+                      setRecoveryCode("");
+                      setError("");
+                    }}
+                    className="text-default-600 hover:text-primary"
+                  >
+                    {inputMode === "otp" ? "ใช้รหัสสำรองแทน" : "ใช้รหัสจากอีเมล"}
                   </Link>
                 </div>
               </div>

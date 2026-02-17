@@ -1,7 +1,6 @@
 const asyncHandler = require('express-async-handler');
 const { User, TwoFactorPending, SystemLog, RefreshToken } = require('../models');
-const { ApiError } = require('../middlewares/errorHandler');
-const { jwt: jwtUtil, logger } = require('../utils');
+const { ApiError, jwt: jwtUtil, logger } = require('../utils');
 const { authLogger } = require('../middlewares/requestLogger');
 const twoFactorService = require('../utils/twoFactorService');
 const emailService = require('../utils/emailService');
@@ -232,10 +231,21 @@ const resendEmailCode = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('ไม่พบอีเมลในโปรไฟล์');
   }
 
-  // Get pending setup
-  const pending = await TwoFactorPending.findOne({
+  // Get or create pending record
+  let pending = await TwoFactorPending.findOne({
     where: { user_id: user.id, method: 'email' },
   });
+
+  // If no pending record and user has email 2FA enabled, create one for verification
+  if (!pending && user.two_factor_enabled && user.two_factor_method === 'email') {
+    pending = await TwoFactorPending.create({
+      user_id: user.id,
+      method: 'email',
+      secret: 'email-verification', // Placeholder for email method
+      email_code: twoFactorService.generateEmailCode(),
+      email_code_expires_at: new Date(Date.now() + 5 * 60 * 1000),
+    });
+  }
 
   if (!pending) {
     throw ApiError.badRequest('ไม่พบการตั้งค่า กรุณาเริ่มใหม่อีกครั้ง');
@@ -292,9 +302,24 @@ const disable = asyncHandler(async (req, res) => {
 
     let isValid = false;
 
+    // For TOTP method
     if (user.two_factor_method === 'totp' && user.two_factor_secret) {
       const decryptedSecret = twoFactorService.decryptSecret(user.two_factor_secret);
       isValid = twoFactorService.verifyTOTP(code, decryptedSecret);
+    }
+
+    // For Email method - check pending code
+    if (user.two_factor_method === 'email') {
+      const pending = await TwoFactorPending.findOne({
+        where: { user_id: user.id, method: 'email' },
+      });
+      
+      if (pending && pending.email_code === code) {
+        if (new Date() <= pending.email_code_expires_at) {
+          isValid = true;
+          await pending.destroy();
+        }
+      }
     }
 
     // Also check backup codes
