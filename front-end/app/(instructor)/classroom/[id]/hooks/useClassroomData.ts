@@ -123,6 +123,8 @@ export function useClassroomData(courseId: string) {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setLoading("course", false);

@@ -137,6 +137,8 @@ function TwoFactorSetupModal({
                     title: "สำเร็จ",
                     description: "เปิดใช้งานการยืนยันตัวตนสองขั้นตอนสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 setError(result.error || "รหัสไม่ถูกต้อง");
@@ -162,6 +164,8 @@ function TwoFactorSetupModal({
                     title: "ส่งรหัสใหม่แล้ว",
                     description: "กรุณาตรวจสอบอีเมลของคุณ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 setError(result.error || "ไม่สามารถส่งรหัสใหม่ได้");
@@ -186,6 +190,8 @@ function TwoFactorSetupModal({
             title: "คัดลอกแล้ว",
             description: "คัดลอกรหัสสำรองทั้งหมดแล้ว",
             color: "success",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
     }, [backupCodes]);
 
@@ -207,6 +213,8 @@ function TwoFactorSetupModal({
             title: "ดาวน์โหลดสำเร็จ",
             description: "ไฟล์รหัสสำรองถูกดาวน์โหลดแล้ว",
             color: "success",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
     }, [backupCodes]);
 

@@ -332,14 +332,14 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         const decoded = jwtUtil.verifyAccessToken(linkToken);
         if (!decoded || !decoded.userId) {
           const errorMessage = encodeURIComponent('Invalid or expired session. Please try again.');
-          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+          return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
         }
         
         // Find the user
         const existingUser = await User.findByPk(decoded.userId);
         if (!existingUser) {
           const errorMessage = encodeURIComponent('User not found. Please try again.');
-          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+          return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
         }
         
         // Link the OAuth account
@@ -371,20 +371,20 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         });
         
         // Redirect with success
-        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
+        const redirectUrl = `${config.frontendUrl}/auth/link-callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
         return res.redirect(redirectUrl);
         
       } catch (linkError) {
         console.error('Link error:', linkError);
         const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
-        return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
       }
     }
     
     if (!user) {
       // Redirect to frontend with error
       const errorMessage = encodeURIComponent(info?.message || 'Google login failed');
-      const redirectPath = isLinkAction ? '/admin/profile' : '/login';
+      const redirectPath = isLinkAction ? '/auth/link-callback' : '/login';
       return res.redirect(`${config.frontendUrl}${redirectPath}?error=${errorMessage}`);
     }
     
@@ -409,8 +409,8 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         // Log the login action
         await authLogger.logLogin(req, user, 'google');
         
-        // Redirect to profile with tokens and success flag
-        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
+        // Redirect to link-callback page with tokens and success flag
+        const redirectUrl = `${config.frontendUrl}/auth/link-callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=google`;
         return res.redirect(redirectUrl);
       }
       
@@ -480,14 +480,14 @@ const githubCallback = asyncHandler(async (req, res, next) => {
         const decoded = jwtUtil.verifyAccessToken(linkToken);
         if (!decoded || !decoded.userId) {
           const errorMessage = encodeURIComponent('Invalid or expired session. Please try again.');
-          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+          return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
         }
         
         // Find the user
         const existingUser = await User.findByPk(decoded.userId);
         if (!existingUser) {
           const errorMessage = encodeURIComponent('User not found. Please try again.');
-          return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+          return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
         }
         
         // Link the OAuth account
@@ -519,20 +519,20 @@ const githubCallback = asyncHandler(async (req, res, next) => {
         });
         
         // Redirect with success
-        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
+        const redirectUrl = `${config.frontendUrl}/auth/link-callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
         return res.redirect(redirectUrl);
         
       } catch (linkError) {
         console.error('Link error:', linkError);
         const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
-        return res.redirect(`${config.frontendUrl}/admin/profile?error=${errorMessage}`);
+        return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
       }
     }
     
     if (!user) {
       // Redirect to frontend with error
       const errorMessage = encodeURIComponent(info?.message || 'GitHub login failed');
-      const redirectPath = isLinkAction ? '/admin/profile' : '/login';
+      const redirectPath = isLinkAction ? '/auth/link-callback' : '/login';
       return res.redirect(`${config.frontendUrl}${redirectPath}?error=${errorMessage}`);
     }
     
@@ -557,8 +557,8 @@ const githubCallback = asyncHandler(async (req, res, next) => {
         // Log the login action
         await authLogger.logLogin(req, user, 'github');
         
-        // Redirect to profile with tokens and success flag
-        const redirectUrl = `${config.frontendUrl}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
+        // Redirect to link-callback page with tokens and success flag
+        const redirectUrl = `${config.frontendUrl}/auth/link-callback?accessToken=${accessToken}&refreshToken=${refreshToken}&linked=github`;
         return res.redirect(redirectUrl);
       }
       

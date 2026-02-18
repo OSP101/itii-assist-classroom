@@ -58,6 +58,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
         title: "ไม่มีสิทธิ์เข้าถึง",
         description: "คุณไม่มีสิทธิ์เข้าถึงหน้านี้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       router.push('/login');
       return;
@@ -81,6 +83,8 @@ export function AdminProvider({ children }: { children: ReactNode }) {
       title: "ออกจากระบบสำเร็จ",
       description: "กำลังนำท่านไปยังหน้าเข้าสู่ระบบ",
       color: "success",
+      timeout: 3000,
+                shouldShowTimeoutProgress: true,
     });
     router.push('/login');
   };

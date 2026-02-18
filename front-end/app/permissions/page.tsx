@@ -116,6 +116,8 @@ export default function PermissionsPage() {
                 title: "สำเร็จ",
                 description: "อนุญาตการเข้าถึงตำแหน่งแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: unknown) {
             const geoError = error as GeolocationPositionError;
@@ -125,12 +127,16 @@ export default function PermissionsPage() {
                     title: "ถูกปฏิเสธ",
                     description: "การเข้าถึงตำแหน่งถูกปฏิเสธ กรุณาเปิดในการตั้งค่าเบราว์เซอร์",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
                     description: "ไม่สามารถระบุตำแหน่งได้ กรุณาลองใหม่",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } finally {
@@ -157,12 +163,16 @@ export default function PermissionsPage() {
                     title: "สำเร็จ",
                     description: "อนุญาตการแจ้งเตือนแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else if (result === "denied") {
                 addToast({
                     title: "ถูกปฏิเสธ",
                     description: "การแจ้งเตือนถูกปฏิเสธ กรุณาเปิดในการตั้งค่าเบราว์เซอร์",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -171,6 +181,8 @@ export default function PermissionsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถขอสิทธิ์แจ้งเตือนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -197,6 +209,8 @@ export default function PermissionsPage() {
                 title: "สำเร็จ",
                 description: "อนุญาตการเข้าถึงกล้องแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
 
             // Auto stop after 10 seconds
@@ -213,12 +227,16 @@ export default function PermissionsPage() {
                     title: "ถูกปฏิเสธ",
                     description: "การเข้าถึงกล้องถูกปฏิเสธ กรุณาเปิดในการตั้งค่าเบราว์เซอร์",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
                     description: "ไม่สามารถเข้าถึงกล้องได้",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
             setIsTestingCamera(false);

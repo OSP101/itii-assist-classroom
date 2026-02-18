@@ -28,6 +28,7 @@ import { Select, SelectItem } from "@heroui/select";
 import { Input } from "@heroui/input";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
+import { IoSchool } from "react-icons/io5";
 import { QRCodeSVG } from "qrcode.react";
 import { io, Socket } from "socket.io-client";
 import attendanceService, {
@@ -135,6 +136,8 @@ export default function LiveAttendancePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -143,9 +146,11 @@ export default function LiveAttendancePage() {
 
     // Initialize socket connection
     useEffect(() => {
-        const socket = io(window.location.origin, {
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+        
+        const socket = io(socketUrl, {
             path: "/socket.io",
-            transports: ["websocket"],
+            transports: ["websocket", "polling"],
             reconnection: true,
             reconnectionAttempts: 5,
             reconnectionDelay: 1000,
@@ -178,6 +183,8 @@ export default function LiveAttendancePage() {
                 title: "นักศึกษาเช็คชื่อ",
                 description: `${data.record.student?.full_name || "นักศึกษา"} เช็คชื่อเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -194,6 +201,8 @@ export default function LiveAttendancePage() {
                 title: "ปิดรอบเช็คชื่อแล้ว",
                 description: "รอบการเช็คชื่อถูกปิดแล้ว",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             setSession((prev) => (prev ? { ...prev, status: "closed" } : null));
         });
@@ -293,6 +302,8 @@ export default function LiveAttendancePage() {
                     title: "สำเร็จ",
                     description: "ปิดรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -301,6 +312,8 @@ export default function LiveAttendancePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถปิดรอบเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsClosing(false);
@@ -329,6 +342,8 @@ export default function LiveAttendancePage() {
                     title: "สำเร็จ",
                     description: "อัปเดตสถานะเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -337,6 +352,8 @@ export default function LiveAttendancePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอัปเดตสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsUpdatingStatus(false);
@@ -356,6 +373,8 @@ export default function LiveAttendancePage() {
                 title: "คัดลอกแล้ว",
                 description: "PIN ถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -367,6 +386,8 @@ export default function LiveAttendancePage() {
             title: "คัดลอกแล้ว",
             description: "URL ถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
             color: "success",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
     };
 
@@ -391,10 +412,13 @@ export default function LiveAttendancePage() {
 
     if (isLoading) {
         return (
-            <div className="flex justify-center items-center min-h-screen bg-slate-50">
-                <div className="text-center">
+            <div className="flex justify-center items-center min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
                     <Spinner size="lg" color="primary" />
-                    <p className="mt-4 text-slate-500">กำลังโหลดข้อมูล...</p>
+                    <p className="text-slate-500">กำลังโหลดข้อมูล...</p>
                 </div>
             </div>
         );

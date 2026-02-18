@@ -200,6 +200,8 @@ export default function HomePage() {
                 title: "ข้อมูลอัปเดต",
                 description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
                 color: "primary",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -293,6 +295,8 @@ export default function HomePage() {
                     title: "ไฟล์ใหญ่เกินไป",
                     description: "กรุณาเลือกไฟล์ขนาดไม่เกิน 2MB",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 return;
             }
@@ -330,6 +334,8 @@ export default function HomePage() {
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกรหัสวิชาและชื่อวิชา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -352,6 +358,8 @@ export default function HomePage() {
                     title: "สำเร็จ",
                     description: "สร้างรายวิชาเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsCreateModalOpen(false);
                 resetForm();
@@ -368,6 +376,8 @@ export default function HomePage() {
                     title: "ไม่สามารถสร้างรายวิชาได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -375,6 +385,8 @@ export default function HomePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถสร้างรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -408,6 +420,8 @@ export default function HomePage() {
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกรหัสวิชาและชื่อวิชา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -430,6 +444,8 @@ export default function HomePage() {
                     title: "สำเร็จ",
                     description: "แก้ไขรายวิชาเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsEditModalOpen(false);
                 resetForm();
@@ -445,6 +461,8 @@ export default function HomePage() {
                     title: "ไม่สามารถแก้ไขรายวิชาได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -452,6 +470,8 @@ export default function HomePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถแก้ไขรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -494,6 +514,8 @@ export default function HomePage() {
                     title: courseToToggle.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
                     description: `รายวิชา ${courseToToggle.code} ${courseToToggle.is_active ? "ปิด" : "เปิด"}ใช้งานเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsToggleStatusModalOpen(false);
                 setCourseToToggle(null);
@@ -509,6 +531,8 @@ export default function HomePage() {
                     title: "ไม่สามารถเปลี่ยนสถานะได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -516,6 +540,8 @@ export default function HomePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

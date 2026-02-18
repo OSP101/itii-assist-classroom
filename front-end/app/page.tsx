@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Spinner } from "@heroui/spinner";
+import { IoSchool } from "react-icons/io5";
 import { authService } from "@/services/auth.service";
 
 export default function Home() {
@@ -48,7 +49,12 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100">
-      <Spinner size="lg" color="primary" />
+      <div className="flex flex-col items-center gap-4">
+        <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+          <IoSchool />
+        </div>
+        <Spinner size="lg" color="primary" />
+      </div>
     </div>
   );
 }

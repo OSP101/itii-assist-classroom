@@ -175,6 +175,8 @@ export default function SystemLogsPage() {
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถโหลดข้อมูล Log ได้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } finally {
       setIsLoading(false);
@@ -233,6 +235,8 @@ export default function SystemLogsPage() {
         title: "ส่งออกสำเร็จ",
         description: "ดาวน์โหลดไฟล์ CSV เรียบร้อยแล้ว",
         color: "success",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } catch (error) {
       console.error("Failed to export logs:", error);
@@ -240,6 +244,8 @@ export default function SystemLogsPage() {
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถส่งออกข้อมูลได้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } finally {
       setIsExporting(false);

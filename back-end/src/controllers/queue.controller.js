@@ -1625,6 +1625,9 @@ const getBookingStatus = async (req, res) => {
 /**
  * Cancel booking (Student)
  * นักศึกษาสามารถยกเลิกการจองได้เฉพาะเมื่อ status เป็น 'waiting' เท่านั้น
+ * 
+ * Fix: Use SELECT FOR UPDATE to prevent race condition with background assignment worker
+ * Key: Remove from Redis BEFORE MySQL commit to prevent assignment during cancel
  */
 const cancelBooking = async (req, res) => {
     const transaction = await sequelize.transaction();
@@ -1632,6 +1635,7 @@ const cancelBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
+        // [FIX] Use SELECT FOR UPDATE to lock the row during transaction
         const booking = await QueueBooking.findByPk(bookingId, {
             include: [
                 {
@@ -1646,6 +1650,7 @@ const cancelBooking = async (req, res) => {
                 },
             ],
             transaction,
+            lock: transaction.LOCK.UPDATE, // Prevent concurrent modifications
         });
 
         if (!booking) {
@@ -1665,6 +1670,18 @@ const cancelBooking = async (req, res) => {
             });
         }
 
+        // [FIX] Remove from Redis BEFORE MySQL commit to prevent assignment worker from picking it up
+        // This is crucial to prevent race: remove from queue first, then update MySQL
+        await redisQueue.removeBookingFromQueue(booking.queue_session_id, booking.id, booking.booking_type);
+        
+        // [FIX] Update Redis desk status immediately (before MySQL)
+        if (booking.desk_id) {
+            await redisQueue.setDeskStatus(booking.queue_session_id, booking.desk_id, {
+                [booking.booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: booking.booking_type === 'grading' ? 'not_started' : 'none',
+                [booking.booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: '',
+            });
+        }
+        
         // Update booking status to cancelled
         await booking.update(
             {
@@ -1674,7 +1691,7 @@ const cancelBooking = async (req, res) => {
             { transaction }
         );
 
-        // If booking had an assigned desk, reset the desk status in QueueDeskStatus
+        // If booking had an assigned desk, reset the desk status in QueueDeskStatus (MySQL)
         if (booking.desk_id) {
             const deskStatus = await QueueDeskStatus.findOne({
                 where: {
@@ -1686,36 +1703,50 @@ const cancelBooking = async (req, res) => {
 
             if (deskStatus) {
                 if (booking.booking_type === 'grading') {
-                    await deskStatus.update({ grading_status: 'not_started' }, { transaction });
+                    await deskStatus.update({ 
+                        grading_status: 'not_started',
+                        grading_booking_id: null,
+                    }, { transaction });
                 } else {
-                    await deskStatus.update({ help_status: 'none' }, { transaction });
+                    await deskStatus.update({ 
+                        help_status: 'none',
+                        help_booking_id: null,
+                    }, { transaction });
                 }
             }
         }
 
         await transaction.commit();
 
-        // [Redis] Remove booking from waiting queue and update desk status
-        await redisQueue.removeBookingFromQueue(booking.queue_session_id, booking.id, booking.booking_type);
-        if (booking.desk_id) {
-            await redisQueue.setDeskStatus(booking.queue_session_id, booking.desk_id, {
-                [booking.booking_type === 'grading' ? 'gradingStatus' : 'helpStatus']: booking.booking_type === 'grading' ? 'not_started' : 'none',
-                [booking.booking_type === 'grading' ? 'gradingBookingId' : 'helpBookingId']: '',
-            });
-        }
-
         // Emit socket event for real-time update
         const io = req.app.get('io');
         if (io) {
+            // Notify queue room (projector/dashboard)
             io.to(`queue-${booking.queue_session_id}`).emit('booking-cancelled', {
                 bookingId: booking.id,
                 queueNumber: booking.queue_number,
                 bookingType: booking.booking_type,
                 deskId: booking.desk_id,
             });
+
+            // [FIX] Also notify the specific booking room so student/TA gets update
+            io.to(`booking-${booking.id}`).emit('booking-cancelled', {
+                bookingId: booking.id,
+                queueNumber: booking.queue_number,
+                bookingType: booking.booking_type,
+                deskId: booking.desk_id,
+            });
+
+            // [FIX] If booking was assigned to a worker, notify them to refresh
+            if (booking.assigned_worker_id) {
+                io.to(`worker-${booking.assigned_worker_id}`).emit('booking-cancelled', {
+                    bookingId: booking.id,
+                    queueNumber: booking.queue_number,
+                });
+            }
         }
 
-        logger.info(`Booking ${bookingId} cancelled by student`);
+        logger.info(`Booking ${bookingId} cancelled by student/admin`);
 
         res.json({
             success: true,
@@ -2298,7 +2329,12 @@ const getDeskStatuses = async (req, res) => {
                         {
                             model: Desk,
                             as: 'desks',
-                            where: { is_enabled: true },
+                            where: {
+                                [Op.or]: [
+                                    { is_enabled: true },
+                                    { type: 'teacher' },
+                                ],
+                            },
                             required: false,
                         },
                     ],

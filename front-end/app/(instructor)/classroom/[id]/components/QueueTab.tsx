@@ -163,6 +163,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลการจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSessionsLoading(false);
@@ -268,6 +270,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกชื่อการจองคิว",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -277,6 +281,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "กรุณาเลือกห้อง",
                 description: "กรุณาเลือกห้องเรียน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -289,6 +295,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                     title: "สำเร็จ",
                     description: "สร้างการจองคิวเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsCreateModalOpen(false);
                 resetForm();
@@ -300,6 +308,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถสร้างการจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -323,6 +333,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "สำเร็จ",
                 description: "อัพเดทการจองคิวเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             setIsEditModalOpen(false);
             fetchSessions();
@@ -332,6 +344,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถอัพเดทการจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -349,6 +363,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "สำเร็จ",
                 description: "ลบการจองคิวเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             setIsDeleteModalOpen(false);
             setDeleteTarget(null);
@@ -359,6 +375,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถลบการจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -373,6 +391,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "สำเร็จ",
                 description: `เปลี่ยนสถานะเป็น ${statusDisplay[newStatus].label} เรียบร้อยแล้ว`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             fetchSessions();
         } catch (error: unknown) {
@@ -381,6 +401,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -405,6 +427,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "สำเร็จ",
                 description: "เริ่มการจองคิวเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             setIsStartModalOpen(false);
             setStartTarget(null);
@@ -415,6 +439,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถเริ่มการจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -431,6 +457,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "สำเร็จ",
                 description: pauseAction === 'paused' ? "หยุดรับคิวเรียบร้อยแล้ว" : "เปิดรับคิวเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             setIsPauseModalOpen(false);
             setPauseTarget(null);
@@ -441,6 +469,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

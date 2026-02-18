@@ -88,7 +88,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             setScoreMap(map);
         } catch (error) {
             console.error("Failed to load exam data:", error);
-            addToast({ title: "ไม่สามารถโหลดข้อมูลได้", color: "danger" });
+            addToast({ title: "ไม่สามารถโหลดข้อมูลได้", color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
         } finally {
             setIsLoading(false);
         }
@@ -121,18 +122,21 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
         
         const score = scoreValue === "" ? null : parseFloat(scoreValue);
         if (scoreValue !== "" && isNaN(score as number)) {
-            addToast({ title: "คะแนนไม่ถูกต้อง", color: "danger" });
+            addToast({ title: "คะแนนไม่ถูกต้อง", color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
             return;
         }
 
         // Check if score exceeds max_score
         const setting = settings.find(s => s.id === settingId);
         if (setting && score !== null && score > setting.max_score) {
-            addToast({ title: `คะแนนเกินคะแนนเต็ม (${setting.max_score})`, color: "danger" });
+            addToast({ title: `คะแนนเกินคะแนนเต็ม (${setting.max_score})`, color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
             return;
         }
         if (score !== null && score < 0) {
-            addToast({ title: "คะแนนต้องไม่ติดลบ", color: "danger" });
+            addToast({ title: "คะแนนต้องไม่ติดลบ", color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
             return;
         }
 
@@ -153,9 +157,9 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                 },
             }));
             setEditingScore(null);
-            addToast({ title: "บันทึกคะแนนสำเร็จ", color: "success" });
+            addToast({ title: "บันทึกคะแนนสำเร็จ", color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
         } catch (error: any) {
-            addToast({ title: error?.response?.data?.message || "ไม่สามารถบันทึกได้", color: "danger" });
+            addToast({ title: error?.response?.data?.message || "ไม่สามารถบันทึกได้", color: "danger", timeout: 3000, shouldShowTimeoutProgress: true });
         } finally {
             setIsSaving(false);
         }
@@ -226,7 +230,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
         // Get only valid items
         const validItems = parsedBulkData.filter(p => p.status === "valid" && p.matchedStudent);
         if (validItems.length === 0) {
-            addToast({ title: "ไม่มีข้อมูลที่ถูกต้อง กรุณาตรวจสอบข้อมูล", color: "danger" });
+            addToast({ title: "ไม่มีข้อมูลที่ถูกต้อง กรุณาตรวจสอบข้อมูล", color: "danger", timeout: 3000, shouldShowTimeoutProgress: true });
             return;
         }
 
@@ -242,9 +246,9 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                 scores,
             });
 
-            addToast({ title: result.message, color: "success" });
+            addToast({ title: result.message, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
             if (result.errors.length > 0) {
-                addToast({ title: `มี ${result.errors.length} รายการที่ไม่สำเร็จ`, color: "warning" });
+                addToast({ title: `มี ${result.errors.length} รายการที่ไม่สำเร็จ`, color: "warning", timeout: 3000, shouldShowTimeoutProgress: true });
             }
 
             // Reload data
@@ -254,7 +258,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             setBulkSettingId(null);
             setParsedBulkData([]);
         } catch (error: any) {
-            addToast({ title: error?.response?.data?.message || "ไม่สามารถนำเข้าได้", color: "danger" });
+            addToast({ title: error?.response?.data?.message || "ไม่สามารถนำเข้าได้", color: "danger", timeout: 3000, shouldShowTimeoutProgress: true });
         } finally {
             setIsBulkSaving(false);
         }
@@ -269,12 +273,12 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                 const id = parseInt(idStr);
                 await examScoreService.updateExamSetting(courseId, id, data);
             }
-            addToast({ title: "บันทึกการตั้งค่าสำเร็จ", color: "success" });
+            addToast({ title: "บันทึกการตั้งค่าสำเร็จ", color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
             await loadData();
             setIsSettingsModalOpen(false);
             setSettingsData({});
         } catch (error: any) {
-            addToast({ title: error?.response?.data?.message || "ไม่สามารถบันทึกได้", color: "danger" });
+            addToast({ title: error?.response?.data?.message || "ไม่สามารถบันทึกได้", color: "danger", timeout: 3000, shouldShowTimeoutProgress: true });
         } finally {
             setIsSaving(false);
         }

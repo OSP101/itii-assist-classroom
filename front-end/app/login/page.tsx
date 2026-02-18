@@ -9,8 +9,10 @@ import { Card, CardBody } from "@heroui/card";
 import { Divider } from "@heroui/divider";
 import { Link } from "@heroui/link";
 import { Skeleton } from "@heroui/skeleton";
+import { Spinner } from "@heroui/spinner";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Icon } from "@iconify/react";
+import { IoSchool } from "react-icons/io5";
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { addToast } from "@heroui/toast";
 import { authService } from "@/services";
@@ -23,6 +25,7 @@ const Turnstile = dynamic(
 
 export default function LoginPage() {
     const router = useRouter();
+    const [isCheckingAuth, setIsCheckingAuth] = useState(true);
     const [isVisible, setIsVisible] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [formData, setFormData] = useState({
@@ -64,6 +67,34 @@ export default function LoginPage() {
         passwordValidation.hasSpecialChar
     , [passwordValidation]);
 
+    // Check if user is already logged in
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                const result = await authService.getMe();
+                if (result.success && result.user) {
+                    // User is already logged in, redirect based on role
+                    switch (result.user.role) {
+                        case 'admin':
+                            router.replace('/admin/dashboard');
+                            break;
+                        case 'instructor':
+                        case 'ta':
+                            router.replace('/home');
+                            break;
+                        default:
+                            router.replace('/');
+                    }
+                    return; // Don't set isCheckingAuth to false, we're redirecting
+                }
+            } catch (error) {
+                // Not logged in, stay on login page
+            }
+            setIsCheckingAuth(false);
+        };
+        checkAuth();
+    }, [router]);
+
     // Get Turnstile key only on client side to avoid hydration mismatch
     useEffect(() => {
         const key = process.env.NEXT_PUBLIC_CLOUD;
@@ -86,6 +117,8 @@ export default function LoginPage() {
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -121,6 +154,8 @@ export default function LoginPage() {
                         title: "เข้าสู่ระบบสำเร็จ",
                         description: `ยินดีต้อนรับ ${formData.username}`,
                         color: "success",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
 
                     // Redirect based on role
@@ -151,6 +186,8 @@ export default function LoginPage() {
                     title: "เข้าสู่ระบบไม่สำเร็จ",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 refTurnstile.current?.reset();
             }
@@ -159,6 +196,8 @@ export default function LoginPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             refTurnstile.current?.reset();
         } finally {
@@ -172,6 +211,8 @@ export default function LoginPage() {
                 title: "รหัสผ่านไม่ผ่านเงื่อนไข",
                 description: "กรุณาตรวจสอบเงื่อนไขรหัสผ่าน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -181,6 +222,8 @@ export default function LoginPage() {
                 title: "รหัสผ่านไม่ตรงกัน",
                 description: "กรุณากรอกรหัสผ่านให้ตรงกันทั้ง 2 ช่อง",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -193,6 +236,8 @@ export default function LoginPage() {
                     title: "เปลี่ยนรหัสผ่านสำเร็จ",
                     description: "กรุณาเข้าสู่ระบบอีกครั้งด้วยรหัสผ่านใหม่",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsChangePasswordModalOpen(false);
                 setNewPassword("");
@@ -204,6 +249,8 @@ export default function LoginPage() {
                     title: "เกิดข้อผิดพลาด",
                     description: result.error || "ไม่สามารถเปลี่ยนรหัสผ่านได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -211,6 +258,8 @@ export default function LoginPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเปลี่ยนรหัสผ่านได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsChangingPassword(false);
@@ -233,6 +282,8 @@ export default function LoginPage() {
                 title: "กรุณากรอกอีเมล",
                 description: "กรุณากรอกอีเมลของคุณ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -244,6 +295,8 @@ export default function LoginPage() {
                 title: "รูปแบบอีเมลไม่ถูกต้อง",
                 description: "กรุณากรอกอีเมลให้ถูกต้อง",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -266,6 +319,21 @@ export default function LoginPage() {
         setForgotPasswordEmail("");
         setResetEmailSent(false);
     };
+
+    // Show loading while checking auth
+    if (isCheckingAuth) {
+        return (
+            <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
+                    <Spinner size="lg" color="primary" />
+                    {/* <p className="text-slate-500 text-sm">กำลังตรวจสอบสถานะการเข้าสู่ระบบ...</p> */}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 p-3 sm:p-4">
@@ -452,7 +520,7 @@ export default function LoginPage() {
                                 <Button
                                     variant="bordered"
                                     size="md"
-                                    className="w-full h-11 sm:h-12 font-medium border-slate-300 hover:border-slate-400 hover:bg-slate-50 text-slate-600 text-sm mt-3"
+                                    className="w-full h-11 sm:h-12 font-medium border-blue-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 text-sm mt-3"
                                     onPress={handleGitHubLogin}
                                     startContent={
                                         <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24" fill="currentColor">

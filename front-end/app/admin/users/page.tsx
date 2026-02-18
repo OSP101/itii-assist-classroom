@@ -135,6 +135,8 @@ export default function UsersPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลผู้ใช้ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -192,6 +194,8 @@ export default function UsersPage() {
                 title: "กรุณากรอกข้อมูลให้ครบ",
                 description: "ชื่อผู้ใช้ และชื่อ-นามสกุล จำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -217,6 +221,8 @@ export default function UsersPage() {
                     title: "ไม่สามารถสร้างผู้ใช้ได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -224,6 +230,8 @@ export default function UsersPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถสร้างผู้ใช้ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -252,6 +260,8 @@ export default function UsersPage() {
                     title: "อัปเดตผู้ใช้สำเร็จ",
                     description: `ผู้ใช้ ${formData.username} ถูกอัปเดตเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsEditModalOpen(false);
                 resetForm();
@@ -263,6 +273,8 @@ export default function UsersPage() {
                     title: "ไม่สามารถอัปเดตผู้ใช้ได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -270,6 +282,8 @@ export default function UsersPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอัปเดตผู้ใช้ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -290,6 +304,8 @@ export default function UsersPage() {
                     title: "ลบผู้ใช้สำเร็จ",
                     description: `ผู้ใช้ ${selectedUser.username} ถูกลบเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeleteModalOpen(false);
                 setSelectedUser(null);
@@ -301,6 +317,8 @@ export default function UsersPage() {
                     title: "ไม่สามารถลบผู้ใช้ได้",
                     description: response.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -308,6 +326,8 @@ export default function UsersPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถลบผู้ใช้ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -325,6 +345,8 @@ export default function UsersPage() {
                     title: user.is_active ? "ปิดใช้งานสำเร็จ" : "เปิดใช้งานสำเร็จ",
                     description: `ผู้ใช้ ${user.username} ถูก${user.is_active ? "ปิด" : "เปิด"}ใช้งานแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 fetchUsers();
                 fetchStats();
@@ -334,6 +356,8 @@ export default function UsersPage() {
                     title: "เกิดข้อผิดพลาด",
                     description: response.message || "ไม่สามารถเปลี่ยนสถานะได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -341,6 +365,8 @@ export default function UsersPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             isUpdatingRef.current = false;
@@ -368,12 +394,16 @@ export default function UsersPage() {
                 title: "คัดลอกแล้ว",
                 description: `${label} ถูกคัดลอกไปยังคลิปบอร์ดแล้ว`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error) {
             addToast({
                 title: "ไม่สามารถคัดลอกได้",
                 description: "กรุณาคัดลอกด้วยตนเอง",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -401,6 +431,8 @@ export default function UsersPage() {
                     title: "ไฟล์ใหญ่เกินไป",
                     description: "กรุณาเลือกไฟล์ขนาดไม่เกิน 2MB",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 return;
             }

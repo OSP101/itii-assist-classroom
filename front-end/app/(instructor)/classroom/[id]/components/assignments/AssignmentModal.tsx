@@ -129,6 +129,8 @@ function AssignmentModalComponent({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกชื่องาน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -138,6 +140,8 @@ function AssignmentModalComponent({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเพิ่มข้อย่อยอย่างน้อย 1 ข้อ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -147,6 +151,8 @@ function AssignmentModalComponent({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเลือกสัปดาห์",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -191,6 +197,8 @@ function AssignmentModalComponent({
                     title: "สำเร็จ",
                     description: editingAssignment ? "แก้ไขงานเรียบร้อย" : "สร้างงานใหม่เรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 onSuccess();
                 onClose();
@@ -203,6 +211,8 @@ function AssignmentModalComponent({
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถบันทึกงานได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

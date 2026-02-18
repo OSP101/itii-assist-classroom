@@ -64,7 +64,7 @@ export function Providers({ children, themeProps }: ProvidersProps) {
             </AuthSyncProvider>
           </NotificationProvider>
         </SocketProvider>
-        <ToastProvider placement="bottom-right" toastProps={{timeout: 5000}} />
+        <ToastProvider placement="top-right" toastProps={{timeout: 3000, shouldShowTimeoutProgress: true}} />
       </NextThemesProvider>
     </HeroUIProvider>
   );

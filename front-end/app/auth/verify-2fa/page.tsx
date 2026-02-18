@@ -47,6 +47,8 @@ export default function VerifyTwoFactorPage() {
             title: "ส่งรหัสใหม่แล้ว",
             description: "กรุณาตรวจสอบอีเมลของคุณ",
             color: "success",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
           });
         }
       } else {
@@ -140,6 +142,8 @@ export default function VerifyTwoFactorPage() {
           title: "เข้าสู่ระบบสำเร็จ",
           description: `ยินดีต้อนรับ ${user.username}`,
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
 
         // Redirect based on role

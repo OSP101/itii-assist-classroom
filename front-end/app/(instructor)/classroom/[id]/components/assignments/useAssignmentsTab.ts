@@ -124,6 +124,8 @@ export function useAssignmentsTab({
                 title: "สำเร็จ",
                 description: "ลบงานเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             
             // Emit real-time update
@@ -139,6 +141,8 @@ export function useAssignmentsTab({
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถลบงานได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsDeleting(false);

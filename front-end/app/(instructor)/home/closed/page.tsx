@@ -125,6 +125,8 @@ export default function ClosedCoursesPage() {
                 title: "ข้อมูลอัปเดต",
                 description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
                 color: "primary",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -247,6 +249,8 @@ export default function ClosedCoursesPage() {
                     title: "เปิดใช้งานแล้ว",
                     description: `รายวิชา ${selectedCourse.code} เปิดใช้งานเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsRestoreModalOpen(false);
                 setSelectedCourse(null);
@@ -261,6 +265,8 @@ export default function ClosedCoursesPage() {
                     title: "ไม่สามารถเปิดใช้งานได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -268,6 +274,8 @@ export default function ClosedCoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถเปิดใช้งานได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -286,6 +294,8 @@ export default function ClosedCoursesPage() {
                     title: "ลบรายวิชาแล้ว",
                     description: `รายวิชา ${selectedCourse.code} ถูกลบออกจากระบบถาวรแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeleteModalOpen(false);
                 setSelectedCourse(null);
@@ -301,6 +311,8 @@ export default function ClosedCoursesPage() {
                     title: "ไม่สามารถลบรายวิชาได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -308,6 +320,8 @@ export default function ClosedCoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถลบรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

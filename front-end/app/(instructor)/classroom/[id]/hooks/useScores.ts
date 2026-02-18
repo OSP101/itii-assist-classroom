@@ -60,6 +60,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลคะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -81,6 +83,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "บันทึกแล้ว",
                 description: "บันทึกคะแนนเรียบร้อย",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             
             onOverviewRefresh?.();
@@ -91,6 +95,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถบันทึกคะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     }, [selectedAssignment, onOverviewRefresh, emitUpdate]);
@@ -124,6 +130,8 @@ export function useScores(options: UseScoresOptions = {}) {
                     title: "บันทึกแล้ว",
                     description: `บันทึกคะแนนทั้งหมด ${scores.length} รายการเรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate?.("score", "bulk", selectedAssignment.id);
@@ -136,6 +144,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถบันทึกคะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSaving(false);
@@ -158,6 +168,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "บันทึกแล้ว",
                 description: `บันทึกคะแนนกลุ่ม ${selectedGroup.name} เรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             
             emitUpdate?.("score", "update", selectedAssignment.id);
@@ -171,6 +183,8 @@ export function useScores(options: UseScoresOptions = {}) {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถบันทึกคะแนนกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         } finally {

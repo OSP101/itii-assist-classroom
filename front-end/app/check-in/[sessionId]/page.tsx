@@ -10,6 +10,7 @@ import { Spinner } from "@heroui/spinner";
 import { Avatar } from "@heroui/avatar";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
+import { IoSchool } from "react-icons/io5";
 import { io, Socket } from "socket.io-client";
 import attendanceService, { type AttendanceSession } from "@/services/attendance.service";
 
@@ -178,6 +179,8 @@ export default function StudentCheckInPage() {
                 title: "เข้าสู่ระบบไม่สำเร็จ",
                 description: "ไม่สามารถอ่านข้อมูลจาก Google ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -270,6 +273,8 @@ export default function StudentCheckInPage() {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอก PIN 6 หลัก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -302,6 +307,8 @@ export default function StudentCheckInPage() {
                 title: "เช็คชื่อไม่สำเร็จ",
                 description: (error as Error).message || "กรุณาตรวจสอบ PIN และลองใหม่",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -310,9 +317,11 @@ export default function StudentCheckInPage() {
 
     // Initialize socket
     useEffect(() => {
-  const socket = io(window.location.origin, {
+  const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+  
+  const socket = io(socketUrl, {
     path: "/socket.io",
-    transports: ["websocket"],
+    transports: ["websocket", "polling"],
   });
 
         socket.on("connect", () => {
@@ -359,9 +368,12 @@ export default function StudentCheckInPage() {
                 <CardBody className="p-6">
                     {/* Loading */}
                     {step === "loading" && (
-                        <div className="text-center py-10">
-                            <Spinner size="lg" />
-                            <p className="mt-4 text-slate-500">กำลังโหลด...</p>
+                        <div className="flex flex-col items-center gap-4 py-10">
+                            <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center text-white text-4xl">
+                                <IoSchool />
+                            </div>
+                            <Spinner size="lg" color="primary" />
+                            <p className="text-slate-500">กำลังโหลด...</p>
                         </div>
                     )}
 

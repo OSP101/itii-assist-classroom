@@ -161,6 +161,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -185,6 +187,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                     title: "อนุมัติสำเร็จ",
                     description: `อนุมัติการแก้ไขคะแนน ${selectedIds.length} รายการเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else if (request) {
                 // Single approve
@@ -193,6 +197,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                     title: "อนุมัติสำเร็จ",
                     description: "อนุมัติการแก้ไขคะแนนเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
             setActionModal({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
@@ -203,6 +209,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอนุมัติได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -218,6 +226,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                 title: "กรุณาระบุเหตุผล",
                 description: "ต้องระบุเหตุผลในการปฏิเสธ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -231,6 +241,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                     title: "ปฏิเสธสำเร็จ",
                     description: `ปฏิเสธการแก้ไขคะแนน ${selectedIds.length} รายการเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else if (request) {
                 // Single reject
@@ -239,6 +251,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                     title: "ปฏิเสธสำเร็จ",
                     description: "ปฏิเสธการแก้ไขคะแนนเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
             setActionModal({ isOpen: false, type: "reject", request: null, group: null, selectedIds: [] });
@@ -249,6 +263,8 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถปฏิเสธได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

@@ -221,6 +221,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถโหลดข้อมูลห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -320,6 +322,16 @@ export default function ClassroomsPage() {
         return () => window.removeEventListener('keydown', handler);
     }, [showLayoutModal, handleUndo, handleRedo]);
 
+    // Renumber desks after deletion: sort spatially (column-major x→y) then assign 1-N per group
+    const renumberDesks = useCallback((desks: Desk[]): Desk[] => {
+        const sorted = [...desks].sort((a, b) => a.x !== b.x ? a.x - b.x : a.y - b.y);
+        let tc = 0, sc = 0;
+        return sorted.map((d) => {
+            if (d.type === "teacher") { tc++; return { ...d, number: tc }; }
+            else { sc++; return { ...d, number: sc }; }
+        });
+    }, []);
+
     // Helper: update desks with undo support
     const updateDesksWithUndo = useCallback((updater: (desks: Desk[]) => Desk[]) => {
         setEditingClassroom((prev) => {
@@ -336,6 +348,8 @@ export default function ClassroomsPage() {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกข้อมูลให้ครบถ้วน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -374,6 +388,8 @@ export default function ClassroomsPage() {
                 title: "สำเร็จ",
                 description: "สร้างห้องเรียนแล้ว กรุณาจัดผังห้อง",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: any) {
             console.error("Failed to create classroom:", error);
@@ -381,6 +397,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถสร้างห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSaving(false);
@@ -404,6 +422,8 @@ export default function ClassroomsPage() {
                 title: "สำเร็จ",
                 description: "ลบห้องเรียนเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: any) {
             console.error("Failed to delete classroom:", error);
@@ -411,6 +431,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถลบห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -430,6 +452,8 @@ export default function ClassroomsPage() {
                 title: "สำเร็จ",
                 description: "กู้คืนห้องเรียนเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: any) {
             console.error("Failed to restore classroom:", error);
@@ -437,6 +461,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถกู้คืนห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -455,6 +481,8 @@ export default function ClassroomsPage() {
                     title: "สำเร็จ",
                     description: response.data.message,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -463,6 +491,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถเปลี่ยนสถานะห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -487,6 +517,8 @@ export default function ClassroomsPage() {
                 title: "สำเร็จ",
                 description: "ลบห้องเรียนถาวรเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: any) {
             console.error("Failed to permanently delete classroom:", error);
@@ -494,6 +526,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถลบห้องเรียนถาวรได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -530,6 +564,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถโหลดข้อมูลห้องเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -549,7 +585,8 @@ export default function ClassroomsPage() {
     // Save edited classroom info
     const handleEditClassroom = async () => {
         if (!editingClassroomId || !editFormData.name || !editFormData.building || !editFormData.floor) {
-            addToast({ title: "ข้อมูลไม่ครบ", description: "กรุณากรอกข้อมูลให้ครบถ้วน", color: "warning" });
+            addToast({ title: "ข้อมูลไม่ครบ", description: "กรุณากรอกข้อมูลให้ครบถ้วน", color: "warning",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
             return;
         }
         try {
@@ -566,9 +603,9 @@ export default function ClassroomsPage() {
             const updated = transformClassroomFromAPI(response.data);
             setClassrooms((prev) => prev.map((c) => (c.id === editingClassroomId ? updated : c)));
             setShowEditModal(false);
-            addToast({ title: "สำเร็จ", description: "แก้ไขข้อมูลห้องเรียนแล้ว", color: "success" });
+            addToast({ title: "สำเร็จ", description: "แก้ไขข้อมูลห้องเรียนแล้ว", color: "success",timeout: 3000, shouldShowTimeoutProgress: true });
         } catch (error: any) {
-            addToast({ title: "เกิดข้อผิดพลาด", description: error.message || "ไม่สามารถแก้ไขข้อมูลได้", color: "danger" });
+            addToast({ title: "เกิดข้อผิดพลาด", description: error.message || "ไม่สามารถแก้ไขข้อมูลได้", color: "danger", timeout: 3000, shouldShowTimeoutProgress: true });
         } finally {
             setIsSaving(false);
         }
@@ -724,17 +761,7 @@ export default function ClassroomsPage() {
 
         updateDesksWithUndo((desks) => {
             const remaining = desks.filter((d) => d.id !== selectedDesk.id);
-            let teacherCount = 0;
-            let studentCount = 0;
-            return remaining.map((d) => {
-                if (d.type === "teacher") {
-                    teacherCount++;
-                    return { ...d, number: teacherCount };
-                } else {
-                    studentCount++;
-                    return { ...d, number: studentCount };
-                }
-            });
+            return renumberDesks(remaining);
         });
 
         setShowDeskModal(false);
@@ -788,6 +815,8 @@ export default function ClassroomsPage() {
                 title: "สำเร็จ",
                 description: "บันทึกผังห้องเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } catch (error: any) {
             console.error("Failed to save layout:", error);
@@ -795,6 +824,8 @@ export default function ClassroomsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถบันทึกผังห้องได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSaving(false);
@@ -1509,11 +1540,7 @@ export default function ClassroomsPage() {
                                                 onPress={() => {
                                                     updateDesksWithUndo((desks) => {
                                                         const remaining = desks.filter((d) => !selectedDeskIds.has(d.id));
-                                                        let tc = 0, sc = 0;
-                                                        return remaining.map((d) => {
-                                                            if (d.type === "teacher") { tc++; return { ...d, number: tc }; }
-                                                            else { sc++; return { ...d, number: sc }; }
-                                                        });
+                                                        return renumberDesks(remaining);
                                                     });
                                                     setSelectedDeskIds(new Set());
                                                 }}

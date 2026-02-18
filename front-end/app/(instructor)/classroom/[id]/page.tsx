@@ -21,10 +21,10 @@ import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
 import Link from "next/link";
 // Import custom hooks
-import { 
-    useClassroomData, 
-    useClassroomActions, 
-    useScores, 
+import {
+    useClassroomData,
+    useClassroomActions,
+    useScores,
     useModalStates,
     type TeamMember,
     type PermanentTeam,
@@ -161,7 +161,7 @@ export default function ClassroomDetailPage() {
     // ============================================
     // Custom Hooks - Data & Business Logic
     // ============================================
-    
+
     const classroomData = useClassroomData(courseId);
     const {
         course,
@@ -231,20 +231,20 @@ export default function ClassroomDetailPage() {
     // ============================================
     // UI-Only States (local to this component)
     // ============================================
-    
+
     const [activeTab, setActiveTab] = useState("overview");
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [expandedSections, setExpandedSections] = useState<number[]>([]);
-    
+
     // Section UI states
     const [sectionSubTab, setSectionSubTab] = useState<"students" | "permanent" | "weekly">("students");
     const [sectionSearchQuery, setSectionSearchQuery] = useState("");
-    
+
     // Team UI states
     const [selectedWeek, setSelectedWeek] = useState(1);
     const [totalWeeks] = useState(15);
     const [selectedSectionForTeam, setSelectedSectionForTeam] = useState<number | "all">("all");
-    
+
     // Score modal specific state
     const [scoreModalAssignment, setScoreModalAssignment] = useState<AssignmentType | null>(null);
     const [scoreSearchQuery, setScoreSearchQuery] = useState("");
@@ -252,7 +252,7 @@ export default function ClassroomDetailPage() {
     // ============================================
     // Computed Values (Memoized)
     // ============================================
-    
+
     const totalStudents = useMemo(() => {
         return course?.sections?.reduce((acc, section) => acc + (section.studentCount || 0), 0) || 0;
     }, [course?.sections]);
@@ -268,7 +268,7 @@ export default function ClassroomDetailPage() {
             if (modals.instructorModal.searchQuery) {
                 const query = modals.instructorModal.searchQuery.toLowerCase();
                 return instructor.full_name.toLowerCase().includes(query) ||
-                       instructor.email?.toLowerCase().includes(query);
+                    instructor.email?.toLowerCase().includes(query);
             }
             return true;
         });
@@ -369,11 +369,11 @@ export default function ClassroomDetailPage() {
     const getAvailableStudentsForEdit = useCallback(() => {
         const editTeam = modals.editTeamModal.team;
         if (!editTeam) return [];
-        
+
         const allStudents = getAllEnrolledStudents();
         const currentMemberIds = new Set(modals.editTeamModal.members);
         const otherTeamMemberIds = new Set<number>();
-        
+
         if (editTeam.type === "permanent") {
             permanentTeams.forEach(team => {
                 if (team.id !== editTeam.id) {
@@ -388,8 +388,8 @@ export default function ClassroomDetailPage() {
                 }
             });
         }
-        
-        return allStudents.filter(s => 
+
+        return allStudents.filter(s =>
             currentMemberIds.has(s.id) || !otherTeamMemberIds.has(s.id)
         );
     }, [modals.editTeamModal.team, modals.editTeamModal.members, getAllEnrolledStudents, permanentTeams, weeklyTeams]);
@@ -510,6 +510,8 @@ export default function ClassroomDetailPage() {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเลือกนักศึกษา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -526,9 +528,9 @@ export default function ClassroomDetailPage() {
         const studentsToAdd = modals.studentModal.parsedStudents
             .filter(p => p.status === "matched" && p.matchedStudent)
             .map(p => p.matchedStudent!.id);
-        
+
         if (studentsToAdd.length === 0 || !modals.studentModal.sectionId) return;
-        
+
         modals.setIsSubmitting(true);
         const success = await classroomActions.bulkAddStudentsToSection(
             modals.studentModal.sectionId,
@@ -551,7 +553,7 @@ export default function ClassroomDetailPage() {
 
     const handleCreateTeam = async () => {
         modals.setIsSubmitting(true);
-        
+
         if (modals.teamModal.formationMethod === "manual") {
             const success = await classroomActions.createTeam(
                 modals.teamModal.type,
@@ -576,7 +578,7 @@ export default function ClassroomDetailPage() {
             );
             modals.teamModal.reset();
         }
-        
+
         modals.setIsSubmitting(false);
     };
 
@@ -603,7 +605,7 @@ export default function ClassroomDetailPage() {
     const confirmBulkDeleteTeams = async () => {
         const teamsToDelete = weeklyTeams[selectedWeek] || [];
         if (teamsToDelete.length === 0) return;
-        
+
         modals.setIsSubmitting(true);
         await classroomActions.bulkDeleteTeams(teamsToDelete.map(t => t.id));
         modals.setIsSubmitting(false);
@@ -673,12 +675,12 @@ export default function ClassroomDetailPage() {
         modals.teamModal.setIsParsing(true);
 
         try {
-            const sectionFilter = selectedSectionForTeam === "all" 
-                ? "all" 
+            const sectionFilter = selectedSectionForTeam === "all"
+                ? "all"
                 : course?.sections?.find(s => s.id === selectedSectionForTeam)?.section_no;
-            
+
             const response = await classroomActions.searchStudentsByIds(lines, sectionFilter);
-            
+
             if (!response.success || !response.data) {
                 modals.teamModal.setIsParsing(false);
                 return;
@@ -745,6 +747,8 @@ export default function ClassroomDetailPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถค้นหานักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             modals.teamModal.setParsedMembers([]);
         } finally {
@@ -845,6 +849,8 @@ export default function ClassroomDetailPage() {
                 title: "ไม่มีกลุ่มที่จะลบ",
                 description: "ไม่พบกลุ่มในสัปดาห์ที่เลือก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -894,11 +900,12 @@ export default function ClassroomDetailPage() {
         { key: "overview", label: "ภาพรวม", icon: "solar:chart-2-bold" },
         { key: "sections", label: "กลุ่มเรียน", icon: "solar:notebook-bold" },
         { key: "people", label: "บุคลากร", icon: "solar:users-group-rounded-bold" },
-        { key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold"
+        {
+            key: "assignments", label: "งานในชั้นเรียน", icon: "solar:clipboard-list-bold"
             // , badge: assignments.length > 0 ? assignments.length : undefined 
         },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        { key: "exam-scores", label: "คะแนนสอบ", icon: "solar:diploma-bold", badge: "NEW" , badgeColor: "success" as const },
+        { key: "exam-scores", label: "คะแนนสอบ", icon: "solar:diploma-bold", badge: "NEW", badgeColor: "success" as const },
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
@@ -907,10 +914,11 @@ export default function ClassroomDetailPage() {
             // badgeColor: "warning" as const,
         }] : []),
         { key: "attendance", label: "เช็คชื่อ", icon: "solar:user-check-bold" },
-        { key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold", 
+        {
+            key: "queue", label: "คิวตรวจงาน", icon: "solar:sort-by-time-bold",
             // badge: 'BETA', badgeColor: "warning" as const 
         },
-        
+
         ...(userRole === 'instructor' ? [{
             key: "activity-log",
             label: "บันทึกกิจกรรม",
@@ -977,7 +985,7 @@ export default function ClassroomDetailPage() {
                     onClick={() => setIsMobileSidebarOpen(false)}
                 >
                     <div
-                        className="w-72 h-full bg-white shadow-xl"
+                        className="w-72 h-full bg-white shadow-xl flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Mobile Sidebar Header */}
@@ -1026,7 +1034,7 @@ export default function ClassroomDetailPage() {
                         </div>
 
                         {/* Mobile Menu Items */}
-                        <nav className="p-3">
+                        <nav className="flex-1 overflow-y-auto p-3">
                             {menuItems.map((item) => (
                                 <button
                                     key={item.key}
@@ -1038,16 +1046,16 @@ export default function ClassroomDetailPage() {
                                     }}
                                     disabled={(item as any).status === "coming_soon"}
                                     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl mb-1 transition-all ${activeTab === item.key
-                                            ? "bg-blue-50 text-blue-600"
-                                            : "text-slate-600 hover:bg-slate-50"
+                                        ? "bg-blue-50 text-blue-600"
+                                        : "text-slate-600 hover:bg-slate-50"
                                         } ${(item as any).status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
                                     {item.badge && (
-                                        <Chip 
-                                            size="sm" 
-                                            variant="flat" 
+                                        <Chip
+                                            size="sm"
+                                            variant="flat"
                                             color={(item as any).badgeColor || "primary"}
                                             className="h-5 min-w-5 px-1 ml-auto"
                                         >
@@ -1076,16 +1084,16 @@ export default function ClassroomDetailPage() {
                                     }
                                 }}
                                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${activeTab === item.key
-                                        ? "bg-blue-50 text-blue-600 font-medium"
-                                        : "text-slate-600 hover:bg-slate-50"
+                                    ? "bg-blue-50 text-blue-600 font-medium"
+                                    : "text-slate-600 hover:bg-slate-50"
                                     } ${(item as any).status === "coming_soon" ? "cursor-not-allowed opacity-50 bg-slate-50" : "cursor-pointer"}`}
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
                                 {item.badge && (
-                                    <Chip 
-                                        size="sm" 
-                                        variant="flat" 
+                                    <Chip
+                                        size="sm"
+                                        variant="flat"
                                         color={(item as any).badgeColor || "primary"}
                                         className="h-5 min-w-5 px-1 ml-auto text-xs"
                                     >
@@ -1133,130 +1141,130 @@ export default function ClassroomDetailPage() {
                         {/* Content - Only show when course is loaded */}
                         {course && (
                             <>
-                    {/* Closed course banner */}
-                    {!course.is_active && (
-                        <div className="mb-4 rounded-xl border border-warning-200 bg-warning-50 dark:border-warning-700 dark:bg-warning-900/30 p-4">
-                            <div className="flex items-center gap-3">
-                                <div className="flex-shrink-0">
-                                    <Icon icon="solar:lock-keyhole-bold" className="text-warning-600 dark:text-warning-400" width={24} />
-                                </div>
-                                <div className="flex-1">
-                                    <p className="font-semibold text-warning-800 dark:text-warning-300">
-                                        รายวิชานี้ปิดใช้งานอยู่
-                                    </p>
-                                    <p className="text-sm text-warning-600 dark:text-warning-400">
-                                        สามารถดูข้อมูลได้อย่างเดียว ต้องเปิดใช้งานรายวิชาก่อนถึงจะแก้ไขได้
-                                    </p>
-                                </div>
-                                {userRole === "instructor" && (
-                                    <Button
-                                        size="sm"
-                                        color="warning"
-                                        variant="flat"
-                                        onPress={() => setActiveTab("settings")}
-                                        startContent={<Icon icon="solar:settings-linear" width={16} />}
-                                    >
-                                        ไปที่ตั้งค่า
-                                    </Button>
+                                {/* Closed course banner */}
+                                {!course.is_active && (
+                                    <div className="mb-4 rounded-xl border border-warning-200 bg-warning-50 dark:border-warning-700 dark:bg-warning-900/30 p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex-shrink-0">
+                                                <Icon icon="solar:lock-keyhole-bold" className="text-warning-600 dark:text-warning-400" width={24} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-warning-800 dark:text-warning-300">
+                                                    รายวิชานี้ปิดใช้งานอยู่
+                                                </p>
+                                                <p className="text-sm text-warning-600 dark:text-warning-400">
+                                                    สามารถดูข้อมูลได้อย่างเดียว ต้องเปิดใช้งานรายวิชาก่อนถึงจะแก้ไขได้
+                                                </p>
+                                            </div>
+                                            {userRole === "instructor" && (
+                                                <Button
+                                                    size="sm"
+                                                    color="warning"
+                                                    variant="flat"
+                                                    onPress={() => setActiveTab("settings")}
+                                                    startContent={<Icon icon="solar:settings-linear" width={16} />}
+                                                >
+                                                    ไปที่ตั้งค่า
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
-                        </div>
-                    )}
 
-                    {activeTab === "overview" && (
-                                <OverviewTab
-                                    course={course}
-                                    overview={overview}
-                                    isLoading={isOverviewLoading}
-                                    userRole={userRole}
-                                    assignments={assignments}
-                                    onNavigateToAssignments={() => setActiveTab("assignments")}
-                                />
-                            )}
+                                {activeTab === "overview" && (
+                                    <OverviewTab
+                                        course={course}
+                                        overview={overview}
+                                        isLoading={isOverviewLoading}
+                                        userRole={userRole}
+                                        assignments={assignments}
+                                        onNavigateToAssignments={() => setActiveTab("assignments")}
+                                    />
+                                )}
 
-                            {activeTab === "sections" && (
-                                <SectionsTab courseId={courseId} isCourseActive={course.is_active} />
-                            )}
+                                {activeTab === "sections" && (
+                                    <SectionsTab courseId={courseId} isCourseActive={course.is_active} />
+                                )}
 
-                            {activeTab === "people" && (
-                                <PeopleTab
-                                    course={course}
-                                    isLoading={isPeopleLoading}
-                                    isPeopleLoading={isPeopleLoading}
-                                    onOpenAddTAModal={() => modals.taModal.setIsOpen(true)}
-                                    onOpenAddInstructorModal={() => modals.instructorModal.setIsOpen(true)}
-                                    onRemoveTA={handleRemoveTA}
-                                    onRemoveInstructor={handleRemoveInstructor}
-                                    userRole={userRole}
-                                    currentUserId={currentUserId}
-                                    isCourseActive={course.is_active}
-                                />
-                            )}
+                                {activeTab === "people" && (
+                                    <PeopleTab
+                                        course={course}
+                                        isLoading={isPeopleLoading}
+                                        isPeopleLoading={isPeopleLoading}
+                                        onOpenAddTAModal={() => modals.taModal.setIsOpen(true)}
+                                        onOpenAddInstructorModal={() => modals.instructorModal.setIsOpen(true)}
+                                        onRemoveTA={handleRemoveTA}
+                                        onRemoveInstructor={handleRemoveInstructor}
+                                        userRole={userRole}
+                                        currentUserId={currentUserId}
+                                        isCourseActive={course.is_active}
+                                    />
+                                )}
 
-                            {activeTab === "assignments" && (
-                                <AssignmentsTab
-                                    assignments={assignments}
-                                    setAssignments={setAssignments}
-                                    isLoading={isAssignmentsLoading}
-                                    courseId={courseId}
-                                    weeklyTeams={weeklyTeams}
-                                    onOpenScoreModal={(assignment) => {
-                                        setScoreModalAssignment(assignment);
-                                        modals.scoreModals.setIsScoreModalOpen(true);
-                                    }}
-                                    onOpenBonusScoreModal={() => modals.scoreModals.setIsBonusScoreModalOpen(true)}
-                                    onAssignmentChanged={() => {
-                                        fetchAssignments(true);
-                                        fetchOverview(true);
-                                    }}
-                                    isCourseActive={course.is_active}
-                                />
-                            )}
+                                {activeTab === "assignments" && (
+                                    <AssignmentsTab
+                                        assignments={assignments}
+                                        setAssignments={setAssignments}
+                                        isLoading={isAssignmentsLoading}
+                                        courseId={courseId}
+                                        weeklyTeams={weeklyTeams}
+                                        onOpenScoreModal={(assignment) => {
+                                            setScoreModalAssignment(assignment);
+                                            modals.scoreModals.setIsScoreModalOpen(true);
+                                        }}
+                                        onOpenBonusScoreModal={() => modals.scoreModals.setIsBonusScoreModalOpen(true)}
+                                        onAssignmentChanged={() => {
+                                            fetchAssignments(true);
+                                            fetchOverview(true);
+                                        }}
+                                        isCourseActive={course.is_active}
+                                    />
+                                )}
 
-                            {activeTab === "scores" && (
-                                <ScoresTab courseId={courseId} isCourseActive={course.is_active} />
-                            )}
+                                {activeTab === "scores" && (
+                                    <ScoresTab courseId={courseId} isCourseActive={course.is_active} />
+                                )}
 
-                            {activeTab === "exam-scores" && (
-                                <ExamScoresTab courseId={courseId} isCourseActive={course.is_active} />
-                            )}
+                                {activeTab === "exam-scores" && (
+                                    <ExamScoresTab courseId={courseId} isCourseActive={course.is_active} />
+                                )}
 
-                            {activeTab === "approval" && (userRole === "instructor" || userRole === "ta") && (
-                                <ScoreApprovalTab
-                                    courseId={courseId}
-                                    userRole={userRole}
-                                    onPendingCountChange={setPendingApprovalCount}
-                                    isCourseActive={course.is_active}
-                                />
-                            )}
+                                {activeTab === "approval" && (userRole === "instructor" || userRole === "ta") && (
+                                    <ScoreApprovalTab
+                                        courseId={courseId}
+                                        userRole={userRole}
+                                        onPendingCountChange={setPendingApprovalCount}
+                                        isCourseActive={course.is_active}
+                                    />
+                                )}
 
-                            {activeTab === "attendance" && (
-                                <AttendanceTab
-                                    course={course}
-                                    isLoading={isOverviewLoading}
-                                    onAttendanceChanged={() => fetchOverview(true)}
-                                    isCourseActive={course.is_active}
-                                />
-                            )}
+                                {activeTab === "attendance" && (
+                                    <AttendanceTab
+                                        course={course}
+                                        isLoading={isOverviewLoading}
+                                        onAttendanceChanged={() => fetchOverview(true)}
+                                        isCourseActive={course.is_active}
+                                    />
+                                )}
 
-                            {activeTab === "settings" && userRole === "instructor" && (
-                                <SettingsTab
-                                    course={course}
-                                    onCourseUpdate={(updatedCourse) => setCourse(updatedCourse)}
-                                />
-                            )}
+                                {activeTab === "settings" && userRole === "instructor" && (
+                                    <SettingsTab
+                                        course={course}
+                                        onCourseUpdate={(updatedCourse) => setCourse(updatedCourse)}
+                                    />
+                                )}
 
-                            {activeTab === "queue" && (
-                                <QueueTab course={course} isLoading={isOverviewLoading} isCourseActive={course.is_active} />
-                            )}
+                                {activeTab === "queue" && (
+                                    <QueueTab course={course} isLoading={isOverviewLoading} isCourseActive={course.is_active} />
+                                )}
 
-                            {activeTab === "activity-log" && userRole === "instructor" && (
-                                <ActivityLogTab courseId={courseId} />
-                            )}
+                                {activeTab === "activity-log" && userRole === "instructor" && (
+                                    <ActivityLogTab courseId={courseId} />
+                                )}
 
-                            {activeTab === "ta-stats" && userRole === "instructor" && (
-                                <TAStatsTab courseId={courseId} />
-                            )}
+                                {activeTab === "ta-stats" && userRole === "instructor" && (
+                                    <TAStatsTab courseId={courseId} />
+                                )}
                             </>
                         )}
                     </div>
@@ -1352,9 +1360,9 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Add TA Modal */}
-            <Modal 
-                isOpen={modals.taModal.isOpen} 
-                onClose={modals.taModal.reset} 
+            <Modal
+                isOpen={modals.taModal.isOpen}
+                onClose={modals.taModal.reset}
                 size="2xl"
                 scrollBehavior="outside"
             >
@@ -1437,7 +1445,7 @@ export default function ClassroomDetailPage() {
                                 </Button>
                             )}
                         </div>
-                        
+
                         {/* TA List */}
                         <div className="mt-1 border border-slate-200 rounded-xl overflow-hidden">
                             <div className="h-[300px] overflow-y-auto">
@@ -1446,9 +1454,9 @@ export default function ClassroomDetailPage() {
                                     const filteredTAs = tasList.filter(ta => {
                                         // ไม่แสดง TA ที่อยู่ในวิชาแล้ว
                                         if (existingTAIds.includes(ta.id)) return false;
-                                        
+
                                         const searchLower = modals.taModal.searchQuery.toLowerCase();
-                                        const matchesSearch = !modals.taModal.searchQuery || 
+                                        const matchesSearch = !modals.taModal.searchQuery ||
                                             ta.full_name.toLowerCase().includes(searchLower) ||
                                             (ta.email && ta.email.toLowerCase().includes(searchLower)) ||
                                             (ta.username && ta.username.toLowerCase().includes(searchLower));
@@ -1471,11 +1479,10 @@ export default function ClassroomDetailPage() {
                                             <div
                                                 key={ta.id}
                                                 onClick={() => toggleTASelection(ta.id)}
-                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
-                                                    isSelected
-                                                        ? "bg-blue-50 cursor-pointer"
-                                                        : "hover:bg-slate-50 cursor-pointer"
-                                                }`}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${isSelected
+                                                    ? "bg-blue-50 cursor-pointer"
+                                                    : "hover:bg-slate-50 cursor-pointer"
+                                                    }`}
                                             >
                                                 {/* Checkbox */}
                                                 <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 `}>
@@ -1504,7 +1511,7 @@ export default function ClassroomDetailPage() {
                                 })()}
                             </div>
                         </div>
-                        
+
                         {/* Selected TAs Preview */}
                         {modals.taModal.selectedIds.length > 0 && (
                             <div className="mt-2">
@@ -1519,7 +1526,7 @@ export default function ClassroomDetailPage() {
                                                 variant="flat"
                                                 color="primary"
                                                 onClose={() => toggleTASelection(taId)}
-                                                
+
                                             >
                                                 {ta.full_name}
                                             </Chip>
@@ -1530,8 +1537,8 @@ export default function ClassroomDetailPage() {
                         )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={modals.taModal.reset}
                         >
                             ยกเลิก
@@ -1551,8 +1558,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Add Instructor Modal */}
-            <Modal 
-                isOpen={modals.instructorModal.isOpen} 
+            <Modal
+                isOpen={modals.instructorModal.isOpen}
                 onClose={modals.instructorModal.reset}
                 size="2xl"
                 scrollBehavior="outside"
@@ -1631,7 +1638,7 @@ export default function ClassroomDetailPage() {
                                 </Button>
                             )}
                         </div>
-                        
+
                         {/* Instructor List */}
                         <div className="mt-2 border border-slate-200 rounded-xl overflow-hidden">
                             <div className="h-[300px] overflow-y-auto">
@@ -1655,11 +1662,10 @@ export default function ClassroomDetailPage() {
                                                         modals.instructorModal.setSelectedIds([...current, instructor.id]);
                                                     }
                                                 }}
-                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${
-                                                    isSelected
-                                                        ? "bg-indigo-50 cursor-pointer"
-                                                        : "hover:bg-slate-50 cursor-pointer"
-                                                }`}
+                                                className={`flex items-center gap-3 p-3 border-b border-slate-100 last:border-0 transition-all ${isSelected
+                                                    ? "bg-indigo-50 cursor-pointer"
+                                                    : "hover:bg-slate-50 cursor-pointer"
+                                                    }`}
                                             >
                                                 {/* Checkbox */}
                                                 <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0`}>
@@ -1688,7 +1694,7 @@ export default function ClassroomDetailPage() {
                                 )}
                             </div>
                         </div>
-                        
+
                         {/* Selected Instructors Preview */}
                         {modals.instructorModal.selectedIds.length > 0 && (
                             <div className="mt-2">
@@ -1717,8 +1723,8 @@ export default function ClassroomDetailPage() {
                         )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={modals.instructorModal.reset}
                         >
                             ยกเลิก
@@ -1738,8 +1744,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Add Student Modal */}
-            <Modal 
-                isOpen={modals.studentModal.isOpen} 
+            <Modal
+                isOpen={modals.studentModal.isOpen}
                 onClose={modals.studentModal.reset}
                 size="2xl"
                 scrollBehavior="inside"
@@ -1854,27 +1860,25 @@ export default function ClassroomDetailPage() {
                                     {modals.studentModal.parsedStudents.length > 0 && (
                                         <div className="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-lg p-3">
                                             {modals.studentModal.parsedStudents.map((item, index) => (
-                                                <div 
+                                                <div
                                                     key={index}
-                                                    className={`p-3 rounded-lg border transition-all ${
-                                                        item.status === "matched" ? "border-emerald-200 bg-emerald-50" :
+                                                    className={`p-3 rounded-lg border transition-all ${item.status === "matched" ? "border-emerald-200 bg-emerald-50" :
                                                         item.status === "already_enrolled" ? "border-amber-200 bg-amber-50" :
-                                                        "border-red-200 bg-red-50"
-                                                    }`}
+                                                            "border-red-200 bg-red-50"
+                                                        }`}
                                                 >
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-2">
-                                                            <Icon 
+                                                            <Icon
                                                                 icon={
                                                                     item.status === "matched" ? "solar:check-circle-bold" :
-                                                                    item.status === "already_enrolled" ? "solar:info-circle-bold" :
-                                                                    "solar:close-circle-bold"
+                                                                        item.status === "already_enrolled" ? "solar:info-circle-bold" :
+                                                                            "solar:close-circle-bold"
                                                                 }
-                                                                className={`text-lg ${
-                                                                    item.status === "matched" ? "text-emerald-500" :
+                                                                className={`text-lg ${item.status === "matched" ? "text-emerald-500" :
                                                                     item.status === "already_enrolled" ? "text-amber-500" :
-                                                                    "text-red-500"
-                                                                }`}
+                                                                        "text-red-500"
+                                                                    }`}
                                                             />
                                                             <span className="text-sm font-medium">{item.inputValue}</span>
                                                         </div>
@@ -1913,15 +1917,15 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={modals.studentModal.reset}
                         >
                             ยกเลิก
                         </Button>
                         {modals.studentModal.mode === "select" ? (
-                            <Button 
-                                color="primary" 
+                            <Button
+                                color="primary"
                                 onPress={handleAddStudent}
                                 isLoading={modals.isSubmitting}
                                 isDisabled={!modals.studentModal.studentId}
@@ -1931,8 +1935,8 @@ export default function ClassroomDetailPage() {
                                 เพิ่มนักศึกษา
                             </Button>
                         ) : (
-                            <Button 
-                                color="success" 
+                            <Button
+                                color="success"
                                 onPress={handleBulkAddStudents}
                                 isLoading={modals.isSubmitting}
                                 isDisabled={modals.studentModal.parsedStudents.filter(p => p.status === "matched").length === 0}
@@ -1947,8 +1951,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Delete Confirmation Modal */}
-            <Modal 
-                isOpen={modals.deleteModal.isOpen} 
+            <Modal
+                isOpen={modals.deleteModal.isOpen}
                 onClose={modals.deleteModal.reset}
                 size="lg"
             >
@@ -2018,11 +2022,10 @@ export default function ClassroomDetailPage() {
                                             {/* Team Delete */}
                                             {modals.deleteModal.type === "team" && (
                                                 <>
-                                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${
-                                                        modals.deleteModal.target.teamType === "permanent"
-                                                            ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                                            : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                                                    }`}>
+                                                    <div className={`w-14 h-14 rounded-xl flex items-center justify-center shadow-lg ${modals.deleteModal.target.teamType === "permanent"
+                                                        ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                                                        : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                                                        }`}>
                                                         <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                                                     </div>
                                                     <div className="flex-1">
@@ -2156,15 +2159,15 @@ export default function ClassroomDetailPage() {
                         )}
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
-                            variant="light" 
+                        <Button
+                            variant="light"
                             onPress={modals.deleteModal.reset}
                             isDisabled={modals.isSubmitting}
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="danger" 
+                        <Button
+                            color="danger"
                             onPress={() => {
                                 switch (modals.deleteModal.type) {
                                     case "student": confirmRemoveStudent(); break;
@@ -2188,8 +2191,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Bulk Delete Teams Modal */}
-            <Modal 
-                isOpen={modals.bulkDeleteModal.isOpen} 
+            <Modal
+                isOpen={modals.bulkDeleteModal.isOpen}
                 onClose={() => modals.bulkDeleteModal.setIsOpen(false)}
                 size="lg"
             >
@@ -2277,15 +2280,15 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
+                        <Button
                             variant="light"
                             onPress={() => modals.bulkDeleteModal.setIsOpen(false)}
                             isDisabled={modals.isSubmitting}
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="danger" 
+                        <Button
+                            color="danger"
                             onPress={confirmBulkDeleteTeams}
                             isLoading={modals.isSubmitting}
                             className="bg-red-500"
@@ -2297,8 +2300,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Create Team Modal */}
-            <Modal 
-                isOpen={modals.teamModal.isOpen} 
+            <Modal
+                isOpen={modals.teamModal.isOpen}
                 onClose={modals.teamModal.reset}
                 size="xl"
                 scrollBehavior="inside"
@@ -2306,11 +2309,10 @@ export default function ClassroomDetailPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${
-                                modals.teamModal.type === "permanent" 
-                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                    : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                            }`}>
+                            <div className={`p-3 rounded-xl shadow-lg ${modals.teamModal.type === "permanent"
+                                ? "bg-gradient-to-br from-purple-500 to-indigo-600"
+                                : "bg-gradient-to-br from-emerald-500 to-teal-600"
+                                }`}>
                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -2337,22 +2339,20 @@ export default function ClassroomDetailPage() {
                             <div className="flex gap-2 p-1 bg-slate-100 rounded-xl">
                                 <button
                                     onClick={() => modals.teamModal.setFormationMethod("manual")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                        modals.teamModal.formationMethod === "manual"
-                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                            : "text-slate-600 hover:bg-slate-200"
-                                    }`}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${modals.teamModal.formationMethod === "manual"
+                                        ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                        : "text-slate-600 hover:bg-slate-200"
+                                        }`}
                                 >
                                     <Icon icon="solar:checklist-linear" />
                                     เลือกด้วยตนเอง
                                 </button>
                                 <button
                                     onClick={() => modals.teamModal.setFormationMethod("random")}
-                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                        modals.teamModal.formationMethod === "random"
-                                            ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                            : "text-slate-600 hover:bg-slate-200"
-                                    }`}
+                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${modals.teamModal.formationMethod === "random"
+                                        ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                        : "text-slate-600 hover:bg-slate-200"
+                                        }`}
                                 >
                                     <Icon icon="solar:shuffle-bold" />
                                     สุ่มอัตโนมัติ
@@ -2386,11 +2386,10 @@ export default function ClassroomDetailPage() {
                                                 modals.teamModal.setExcelData("");
                                                 modals.teamModal.setParsedMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                                modals.teamModal.memberMode === "select"
-                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                                    : "text-slate-600 hover:bg-slate-200"
-                                            }`}
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${modals.teamModal.memberMode === "select"
+                                                ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                                : "text-slate-600 hover:bg-slate-200"
+                                                }`}
                                         >
                                             <Icon icon="solar:checklist-linear" />
                                             เลือกจากรายชื่อ
@@ -2400,11 +2399,10 @@ export default function ClassroomDetailPage() {
                                                 modals.teamModal.setMemberMode("paste");
                                                 modals.teamModal.setMembers([]);
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                                                modals.teamModal.memberMode === "paste"
-                                                    ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
-                                                    : "text-slate-600 hover:bg-slate-200"
-                                            }`}
+                                            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${modals.teamModal.memberMode === "paste"
+                                                ? `bg-white shadow-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"}`
+                                                : "text-slate-600 hover:bg-slate-200"
+                                                }`}
                                         >
                                             <Icon icon="solar:clipboard-list-linear" />
                                             วางจาก Excel
@@ -2447,13 +2445,12 @@ export default function ClassroomDetailPage() {
                                                                         modals.teamModal.setMembers([...modals.teamModal.members, student.id]);
                                                                     }
                                                                 }}
-                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${
-                                                                    modals.teamModal.members.includes(student.id)
-                                                                        ? modals.teamModal.type === "permanent"
-                                                                            ? "bg-purple-50 border-l-4 border-l-purple-500"
-                                                                            : "bg-emerald-50 border-l-4 border-l-emerald-500"
-                                                                        : "hover:bg-slate-50"
-                                                                }`}
+                                                                className={`flex items-center justify-between p-3 cursor-pointer transition-colors border-b border-slate-100 last:border-0 ${modals.teamModal.members.includes(student.id)
+                                                                    ? modals.teamModal.type === "permanent"
+                                                                        ? "bg-purple-50 border-l-4 border-l-purple-500"
+                                                                        : "bg-emerald-50 border-l-4 border-l-emerald-500"
+                                                                    : "hover:bg-slate-50"
+                                                                    }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     <Avatar name={student.full_name} size="sm" className={
@@ -2465,9 +2462,8 @@ export default function ClassroomDetailPage() {
                                                                     </div>
                                                                 </div>
                                                                 {modals.teamModal.members.includes(student.id) && (
-                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${
-                                                                        modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                                    }`} />
+                                                                    <Icon icon="solar:check-circle-bold" className={`text-xl ${modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                                        }`} />
                                                                 )}
                                                             </div>
                                                         ))
@@ -2527,11 +2523,10 @@ export default function ClassroomDetailPage() {
                                                         }
                                                     }}
                                                     placeholder={"64070001\n64070002\n64070003\n..."}
-                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${
-                                                        modals.teamModal.type === "permanent"
-                                                            ? "border-purple-200 focus:ring-purple-400"
-                                                            : "border-emerald-200 focus:ring-emerald-400"
-                                                    }`}
+                                                    className={`w-full h-28 px-4 py-3 border rounded-xl text-sm font-mono focus:outline-none focus:ring-2 resize-none bg-white ${modals.teamModal.type === "permanent"
+                                                        ? "border-purple-200 focus:ring-purple-400"
+                                                        : "border-emerald-200 focus:ring-emerald-400"
+                                                        }`}
                                                 />
                                                 <div className="mt-2 flex justify-end">
                                                     <Button
@@ -2564,11 +2559,10 @@ export default function ClassroomDetailPage() {
                                                             ผลการตรวจสอบ ({modals.teamModal.parsedMembers.length} รายการ)
                                                         </p>
                                                         <div className="flex gap-2 text-xs">
-                                                            <span className={`px-2 py-1 rounded-full ${
-                                                                modals.teamModal.type === "permanent"
-                                                                    ? "bg-purple-100 text-purple-700"
-                                                                    : "bg-emerald-100 text-emerald-700"
-                                                            }`}>
+                                                            <span className={`px-2 py-1 rounded-full ${modals.teamModal.type === "permanent"
+                                                                ? "bg-purple-100 text-purple-700"
+                                                                : "bg-emerald-100 text-emerald-700"
+                                                                }`}>
                                                                 พบ {modals.teamModal.parsedMembers.filter(p => p.status === "matched").length}
                                                             </span>
                                                             <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full">
@@ -2583,11 +2577,10 @@ export default function ClassroomDetailPage() {
                                                         {modals.teamModal.parsedMembers.map((result, idx) => (
                                                             <div
                                                                 key={idx}
-                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${
-                                                                    result.status === "matched"
-                                                                        ? modals.teamModal.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
-                                                                        : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
-                                                                }`}
+                                                                className={`flex items-center justify-between p-3 border-b border-slate-100 last:border-0 ${result.status === "matched"
+                                                                    ? modals.teamModal.type === "permanent" ? "bg-purple-50" : "bg-emerald-50"
+                                                                    : result.status === "already_in_team" ? "bg-amber-50" : "bg-red-50"
+                                                                    }`}
                                                             >
                                                                 <div className="flex items-center gap-3">
                                                                     {result.matchedStudent ? (
@@ -2616,11 +2609,10 @@ export default function ClassroomDetailPage() {
                                                                 </div>
                                                                 <div>
                                                                     {result.status === "matched" && (
-                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${
-                                                                            modals.teamModal.type === "permanent"
-                                                                                ? "bg-purple-200 text-purple-700"
-                                                                                : "bg-emerald-200 text-emerald-700"
-                                                                        }`}>
+                                                                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${modals.teamModal.type === "permanent"
+                                                                            ? "bg-purple-200 text-purple-700"
+                                                                            : "bg-emerald-200 text-emerald-700"
+                                                                            }`}>
                                                                             <Icon icon="solar:check-circle-bold" className="text-sm" />
                                                                             พร้อมเพิ่ม
                                                                         </span>
@@ -2660,11 +2652,10 @@ export default function ClassroomDetailPage() {
                                             >
                                                 <Icon icon="solar:minus-circle-linear" />
                                             </Button>
-                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                                                modals.teamModal.type === "permanent"
-                                                    ? "bg-purple-50 border-purple-200"
-                                                    : "bg-emerald-50 border-emerald-200"
-                                            }`}>
+                                            <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${modals.teamModal.type === "permanent"
+                                                ? "bg-purple-50 border-purple-200"
+                                                : "bg-emerald-50 border-emerald-200"
+                                                }`}>
                                                 <Icon icon="solar:users-group-rounded-linear" className={
                                                     modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
                                                 } />
@@ -2683,23 +2674,19 @@ export default function ClassroomDetailPage() {
                                     </div>
 
                                     {/* Preview */}
-                                    <Card className={`shadow-sm border ${
-                                        modals.teamModal.type === "permanent"
-                                            ? "border-purple-100 bg-purple-50/50"
-                                            : "border-emerald-100 bg-emerald-50/50"
-                                    }`}>
+                                    <Card className={`shadow-sm border ${modals.teamModal.type === "permanent"
+                                        ? "border-purple-100 bg-purple-50/50"
+                                        : "border-emerald-100 bg-emerald-50/50"
+                                        }`}>
                                         <CardBody className="py-3 px-4">
                                             <div className="flex items-start gap-3">
-                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${
-                                                    modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
-                                                }`} />
+                                                <Icon icon="solar:info-circle-bold" className={`text-xl mt-0.5 ${modals.teamModal.type === "permanent" ? "text-purple-500" : "text-emerald-500"
+                                                    }`} />
                                                 <div>
-                                                    <p className={`font-medium ${
-                                                        modals.teamModal.type === "permanent" ? "text-purple-800" : "text-emerald-800"
-                                                    }`}>ตัวอย่างการจับกลุ่ม</p>
-                                                    <p className={`text-sm ${
-                                                        modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"
-                                                    }`}>
+                                                    <p className={`font-medium ${modals.teamModal.type === "permanent" ? "text-purple-800" : "text-emerald-800"
+                                                        }`}>ตัวอย่างการจับกลุ่ม</p>
+                                                    <p className={`text-sm ${modals.teamModal.type === "permanent" ? "text-purple-600" : "text-emerald-600"
+                                                        }`}>
                                                         {(() => {
                                                             const unassigned = getUnassignedStudents(modals.teamModal.type, modals.teamModal.type === "weekly" ? selectedWeek : undefined);
                                                             const numTeams = Math.ceil(unassigned.length / modals.teamModal.size);
@@ -2707,9 +2694,8 @@ export default function ClassroomDetailPage() {
                                                             if (unassigned.length === 0) {
                                                                 return "ไม่มีนักศึกษาที่ยังไม่อยู่ในกลุ่ม";
                                                             }
-                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${
-                                                                remainder > 0 ? `(${numTeams - 1} กลุ่ม ${modals.teamModal.size} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${modals.teamModal.size} คน)`
-                                                            }`;
+                                                            return `นักศึกษา ${unassigned.length} คน จะถูกแบ่งเป็น ${numTeams} กลุ่ม ${remainder > 0 ? `(${numTeams - 1} กลุ่ม ${modals.teamModal.size} คน และ 1 กลุ่ม ${remainder} คน)` : `(กลุ่มละ ${modals.teamModal.size} คน)`
+                                                                }`;
                                                         })()}
                                                     </p>
                                                 </div>
@@ -2744,8 +2730,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Edit Team Modal */}
-            <Modal 
-                isOpen={modals.editTeamModal.isOpen} 
+            <Modal
+                isOpen={modals.editTeamModal.isOpen}
                 onClose={modals.editTeamModal.reset}
                 size="xl"
                 scrollBehavior="inside"
@@ -2897,8 +2883,8 @@ export default function ClassroomDetailPage() {
             </Modal>
 
             {/* Group Score Modal */}
-            <Modal 
-                isOpen={modals.scoreModals.isGroupScoreModalOpen} 
+            <Modal
+                isOpen={modals.scoreModals.isGroupScoreModalOpen}
                 onClose={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}
                 size="md"
             >
@@ -2972,14 +2958,14 @@ export default function ClassroomDetailPage() {
                         </div>
                     </ModalBody>
                     <ModalFooter className="px-6 py-4 border-t border-slate-100">
-                        <Button 
+                        <Button
                             variant="light"
                             onPress={() => modals.scoreModals.setIsGroupScoreModalOpen(false)}
                         >
                             ยกเลิก
                         </Button>
-                        <Button 
-                            color="secondary" 
+                        <Button
+                            color="secondary"
                             onPress={async () => {
                                 const success = await scores.saveGroupScore();
                                 if (success) modals.scoreModals.setIsGroupScoreModalOpen(false);

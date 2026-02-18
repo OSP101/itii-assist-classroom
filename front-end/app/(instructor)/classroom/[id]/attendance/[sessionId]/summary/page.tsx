@@ -127,6 +127,8 @@ export default function AttendanceSummaryPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -160,6 +162,8 @@ export default function AttendanceSummaryPage() {
                     title: "สำเร็จ",
                     description: "อัปเดตสถานะเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -168,6 +172,8 @@ export default function AttendanceSummaryPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอัปเดตสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsUpdatingStatus(false);

@@ -93,6 +93,8 @@ function TwoFactorDisableModal({
         title: "ส่งรหัสใหม่แล้ว",
         description: "กรุณาตรวจสอบอีเมลของคุณ",
         color: "success",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     }
   };
@@ -115,6 +117,8 @@ function TwoFactorDisableModal({
           title: "สำเร็จ",
           description: "ปิดใช้งานการยืนยันตัวตนสองขั้นตอนสำเร็จ",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
         onSuccess();
         onClose();

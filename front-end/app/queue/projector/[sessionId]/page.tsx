@@ -15,6 +15,7 @@ import {
 } from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
+import { IoSchool } from "react-icons/io5";
 import { io, Socket } from "socket.io-client";
 import QRCode from "react-qr-code";
 
@@ -160,6 +161,8 @@ export default function ProjectorViewPage() {
                     title: "Session ปิดแล้ว",
                     description: "การจองคิวถูกปิด",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
             fetchData();
@@ -212,6 +215,8 @@ export default function ProjectorViewPage() {
                         ? "นักศึกษาจะไม่สามารถจองคิวใหม่ได้"
                         : "นักศึกษาสามารถจองคิวได้อีกครั้ง",
                     color: newStatus === 'paused' ? "warning" : "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 fetchData();
             } else {
@@ -219,6 +224,8 @@ export default function ProjectorViewPage() {
                     title: "เกิดข้อผิดพลาด",
                     description: result.error?.message || "ไม่สามารถเปลี่ยนสถานะได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -227,6 +234,8 @@ export default function ProjectorViewPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsTogglingStatus(false);
@@ -260,6 +269,8 @@ export default function ProjectorViewPage() {
                     title: "ยกเลิกการจองสำเร็จ",
                     description: `โต๊ะ ${selectedDesk.number} ถูกล้างแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeskModalOpen(false);
                 setSelectedDesk(null);
@@ -269,6 +280,8 @@ export default function ProjectorViewPage() {
                     title: "ยกเลิกไม่สำเร็จ",
                     description: result.error?.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -277,6 +290,8 @@ export default function ProjectorViewPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถยกเลิกการจองได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsCancelling(false);
@@ -342,10 +357,13 @@ export default function ProjectorViewPage() {
 
     if (isLoading) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <div className="text-center">
+            <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-indigo-100 flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
+                        <IoSchool />
+                    </div>
                     <Spinner size="lg" color="primary" />
-                    <p className="text-slate-600 mt-4">กำลังโหลด...</p>
+                    {/* <p className="text-slate-600">กำลังโหลด...</p> */}
                 </div>
             </div>
         );
@@ -576,7 +594,7 @@ export default function ProjectorViewPage() {
                 {/* Sidebar - QR Code & Legend */}
                 {sidebarPosition === 'bottom' ? (
                     /* ── Bottom layout: compact single-row strip ── */
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-3 flex items-center gap-6">
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-5 flex items-center gap-6">
                         {/* QR / Status section */}
                         {isClosed ? (
                             <div className="flex items-center gap-3 text-rose-600 shrink-0">
@@ -596,7 +614,7 @@ export default function ProjectorViewPage() {
                             </div>
                         ) : (
                             <div className="flex items-center gap-4 shrink-0">
-                                <QRCode value={getBookingUrl()} size={130} bgColor="#ffffff" fgColor="#000000" level="L" />
+                                <QRCode value={getBookingUrl()} size={200} bgColor="#ffffff" fgColor="#000000" level="L" />
                                 <div className="bg-blue-100 rounded-xl px-4 py-2">
                                     <span className="text-sm text-slate-600">PIN Code</span>
                                     <p className="text-4xl font-mono font-bold text-blue-700 text-center">{data.session.pin_code}</p>

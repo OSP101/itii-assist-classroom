@@ -64,6 +64,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -113,6 +115,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                     title: "ให้คะแนนสำเร็จ",
                     description: `${studentName} ได้รับ +1 คะแนน (รวม ${response.data.totalBonus} คะแนน)`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 // Update local state
@@ -145,6 +149,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถให้คะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setGivingTo(null);
@@ -160,6 +166,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                     title: "ลบสำเร็จ",
                     description: "ลบคะแนนพิเศษเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 // Reload data
                 loadData();
@@ -169,6 +177,8 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถลบคะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };

@@ -256,6 +256,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลการเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             if (showLoading) {
@@ -379,6 +381,8 @@ export function useAttendanceTab(
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกชื่อรอบการเช็คชื่อ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -407,6 +411,8 @@ export function useAttendanceTab(
                     title: "สำเร็จ",
                     description: "สร้างรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 closeCreateModal();
                 fetchSessions(false);
@@ -419,6 +425,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถสร้างรอบการเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -433,6 +441,8 @@ export function useAttendanceTab(
                 title: "กรุณากรอกข้อมูล",
                 description: "กรุณากรอกชื่อรอบการเช็คชื่อ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -523,6 +533,8 @@ export function useAttendanceTab(
                     title: "สำเร็จ",
                     description: "แก้ไขรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 closeEditModal();
                 fetchSessions(false);
@@ -533,6 +545,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถแก้ไขรอบการเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -563,6 +577,8 @@ export function useAttendanceTab(
                         ? `แก้ไขเวลาและปรับปรุงสถานะ: ${parts.join(', ')}`
                         : "แก้ไขรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 setIsTimeChangePreviewOpen(false);
@@ -577,6 +593,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถบันทึกการเปลี่ยนแปลงได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsApplyingTimeChange(false);
@@ -600,6 +618,8 @@ export function useAttendanceTab(
                     title: "สำเร็จ",
                     description: "ลบรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 closeDeleteModal();
                 fetchSessions(false);
@@ -612,6 +632,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถลบรอบการเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -627,6 +649,8 @@ export function useAttendanceTab(
                     title: "สำเร็จ",
                     description: "เริ่มเปิดรอบเช็คชื่อแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 fetchSessions(false);
             } catch (error: unknown) {
@@ -635,6 +659,8 @@ export function useAttendanceTab(
                     title: "เกิดข้อผิดพลาด",
                     description: error instanceof Error ? error.message : "ไม่สามารถเปิดรอบเช็คชื่อได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 return;
             }
@@ -653,6 +679,8 @@ export function useAttendanceTab(
                     title: "สำเร็จ",
                     description: "ปิดรอบการเช็คชื่อเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 closeCloseSessionModal();
                 fetchSessions(false);
@@ -663,6 +691,8 @@ export function useAttendanceTab(
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถปิดรอบการเช็คชื่อได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -679,6 +709,8 @@ export function useAttendanceTab(
                 title: "ไม่รองรับ",
                 description: "เบราว์เซอร์ของคุณไม่รองรับการดึงตำแหน่งที่ตั้ง",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -688,6 +720,8 @@ export function useAttendanceTab(
             title: "กำลังดึงตำแหน่ง GPS...",
             description: "กรุณารอสักครู่ ระบบกำลังระบุตำแหน่งจาก GPS",
             color: "primary",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
 
         navigator.geolocation.getCurrentPosition(
@@ -719,6 +753,8 @@ export function useAttendanceTab(
                     title: "ไม่สามารถดึงตำแหน่ง GPS ได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsGettingLocation(false);
             },

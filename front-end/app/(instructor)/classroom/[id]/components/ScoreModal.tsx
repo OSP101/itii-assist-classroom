@@ -185,6 +185,8 @@ export default function ScoreModal({
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -247,6 +249,8 @@ export default function ScoreModal({
                     title: "ไฟล์ไม่ถูกต้อง",
                     description: `${file.name} ไม่ใช่ไฟล์รูปภาพ`,
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 continue;
             }
@@ -256,6 +260,8 @@ export default function ScoreModal({
                     title: "ไฟล์ใหญ่เกินไป",
                     description: `${file.name} มีขนาดเกิน 5MB`,
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 continue;
             }
@@ -728,6 +734,8 @@ export default function ScoreModal({
                 title: "บันทึกคะแนนสำเร็จ",
                 description: `บันทึกคะแนน${isGroupAssignment ? "กลุ่ม" : "นักศึกษา"}เรียบร้อยแล้ว`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
 
             // Reload scoresData เพื่อให้ข้อมูลเป็นปัจจุบัน
@@ -752,6 +760,8 @@ export default function ScoreModal({
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถบันทึกคะแนนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -940,6 +950,8 @@ export default function ScoreModal({
                         title: "ไม่มีสมาชิกที่เลือก",
                         description: "กรุณาเลือกอย่างน้อย 1 คนที่มีคะแนนอยู่แล้ว",
                         color: "warning",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                     return;
                 }
@@ -955,6 +967,8 @@ export default function ScoreModal({
                     title: "ส่งคำขอแก้ไขสำเร็จ",
                     description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${selectedMembers.length} คนเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 // For main score (individual)
@@ -970,6 +984,8 @@ export default function ScoreModal({
                     title: "ส่งคำขอแก้ไขสำเร็จ",
                     description: "คำขอแก้ไขคะแนนถูกส่งไปยังผู้ดูแลแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
 
@@ -993,6 +1009,8 @@ export default function ScoreModal({
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถส่งคำขอแก้ไขได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
