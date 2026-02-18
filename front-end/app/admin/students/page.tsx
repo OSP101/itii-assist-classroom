@@ -105,6 +105,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -171,6 +173,8 @@ export default function StudentsPage() {
                 title: "กรุณากรอกข้อมูลให้ครบ",
                 description: "รหัสนักศึกษา ชื่อ-นามสกุล และอีเมล จำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -184,6 +188,8 @@ export default function StudentsPage() {
                     title: "เพิ่มนักศึกษาสำเร็จ",
                     description: `นักศึกษา ${formData.full_name} ถูกเพิ่มเรียบร้อยแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsCreateModalOpen(false);
                 resetForm();
@@ -195,6 +201,8 @@ export default function StudentsPage() {
                     title: "ไม่สามารถเพิ่มนักศึกษาได้",
                     description: response.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -202,6 +210,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเพิ่มนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -218,6 +228,8 @@ export default function StudentsPage() {
                 title: "กรุณากรอกข้อมูลให้ครบ",
                 description: "รหัสนักศึกษาและชื่อ-นามสกุล จำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -237,6 +249,8 @@ export default function StudentsPage() {
                     title: "อัปเดตข้อมูลสำเร็จ",
                     description: `ข้อมูลนักศึกษา ${formData.full_name} ถูกอัปเดตแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsEditModalOpen(false);
                 setSelectedStudent(null);
@@ -248,6 +262,8 @@ export default function StudentsPage() {
                     title: "ไม่สามารถอัปเดตข้อมูลได้",
                     description: response.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -255,6 +271,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอัปเดตข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -275,6 +293,8 @@ export default function StudentsPage() {
                     title: "ลบนักศึกษาสำเร็จ",
                     description: `นักศึกษา ${selectedStudent.full_name} ถูกลบแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeleteModalOpen(false);
                 setSelectedStudent(null);
@@ -286,6 +306,8 @@ export default function StudentsPage() {
                     title: "ไม่สามารถลบนักศึกษาได้",
                     description: response.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -293,6 +315,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถลบนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -310,6 +334,8 @@ export default function StudentsPage() {
                     title: student.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว",
                     description: `สถานะของ ${student.full_name} ถูกเปลี่ยนแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 fetchStudents();
                 fetchStats();
@@ -320,6 +346,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             isUpdatingRef.current = false;
@@ -333,6 +361,8 @@ export default function StudentsPage() {
                 title: "กรุณากรอกข้อมูล",
                 description: "ใส่ข้อมูลนักศึกษาที่ต้องการนำเข้า",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -357,6 +387,8 @@ export default function StudentsPage() {
                 title: "ไม่พบข้อมูลที่ถูกต้อง",
                 description: "กรุณาตรวจสอบรูปแบบข้อมูล (ต้องมีรหัสและชื่อ)",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -388,6 +420,8 @@ export default function StudentsPage() {
                     title: "นำเข้าข้อมูลเสร็จสิ้น",
                     description: description || "ไม่มีการเปลี่ยนแปลง",
                     color: toastColor,
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 setIsImportModalOpen(false);
@@ -401,6 +435,8 @@ export default function StudentsPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถนำเข้าข้อมูลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

@@ -198,12 +198,32 @@ const tryAssignForSession = async (sessionId, bookingType) => {
 
 /**
  * Perform the actual assignment
+ * [FIX] Added MySQL status verification to prevent race condition with cancel operation
  */
 const performAssignment = async (sessionId, booking, worker) => {
+  loadModels();
+  
   const now = Date.now();
   const userId = worker.userId;
   
   logger.info(`[AssignmentWorker] Assigning booking ${booking.id} to worker ${userId}`);
+
+  // [FIX] Verify booking still exists and is in 'waiting' status in MySQL
+  // This prevents race condition where cancel happened after Redis pop but before assignment
+  const mysqlBooking = await QueueBooking.findOne({
+    where: {
+      id: booking.id,
+      status: 'waiting', // Only assign if still waiting
+    },
+  });
+
+  if (!mysqlBooking) {
+    logger.warn(`[AssignmentWorker] Booking ${booking.id} no longer in 'waiting' status, skipping assignment`);
+    // Return worker to available pool since assignment was skipped
+    const { setWorkerOnline } = require('./redisQueueService');
+    await setWorkerOnline(sessionId, userId);
+    return;
+  }
 
   // 1. Update Redis state (immediate, real-time)
   await setWorkerBusy(sessionId, userId, booking.id);

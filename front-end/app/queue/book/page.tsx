@@ -12,6 +12,7 @@ import { Avatar } from "@heroui/avatar";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
+import { IoSchool } from "react-icons/io5";
 import { io, Socket } from "socket.io-client";
 
 import { API_BASE_URL } from "@/config/api";
@@ -259,6 +260,8 @@ function BookQueueContent() {
                                 title: "พบการจองที่ยังไม่เสร็จ",
                                 description: `กำลังแสดงคิวที่ ${result.data.booking.queue_number}`,
                                 color: "primary",
+                                timeout: 3000,
+                shouldShowTimeoutProgress: true,
                             });
                         }
                     } else {
@@ -351,6 +354,8 @@ function BookQueueContent() {
                 title: "กรุณากรอก PIN",
                 description: "กรุณากรอก PIN Code",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -374,6 +379,8 @@ function BookQueueContent() {
                     title: isPaused ? "ปิดรับการจองคิว" : "PIN ไม่ถูกต้อง",
                     description: result.error?.message || "ไม่พบการจองคิวที่เปิดอยู่",
                     color: isPaused ? "warning" : "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -382,6 +389,8 @@ function BookQueueContent() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถตรวจสอบ PIN ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsVerifying(false);
@@ -394,6 +403,8 @@ function BookQueueContent() {
             addToast({
                 title: "กรุณากรอกรหัสนักศึกษา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -402,6 +413,8 @@ function BookQueueContent() {
             addToast({
                 title: "กรุณากรอกเลขโต๊ะ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -412,6 +425,8 @@ function BookQueueContent() {
                 title: "ไม่สามารถจองได้",
                 description: validationErrors[0].message,
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -435,6 +450,8 @@ function BookQueueContent() {
                 title: "พบการจองที่มีอยู่แล้ว",
                 description: `กำลังแสดงคิวที่ ${existingBookingWarning.existing_booking.queue_number}`,
                 color: "primary",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -475,6 +492,8 @@ function BookQueueContent() {
                     title: "จองคิวสำเร็จ!",
                     description: `คิวที่ ${result.data.queue_number}`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 // Start polling status with session ID for real-time position updates
@@ -485,6 +504,8 @@ function BookQueueContent() {
                     title: isPaused ? "ปิดรับการจองคิว" : "จองคิวไม่สำเร็จ",
                     description: result.error?.message || "เกิดข้อผิดพลาด",
                     color: isPaused ? "warning" : "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -493,6 +514,8 @@ function BookQueueContent() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถจองคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsBooking(false);
@@ -555,6 +578,8 @@ function BookQueueContent() {
                     title: "ยกเลิกการจองสำเร็จ",
                     description: `คิวที่ ${bookingResult.queue_number} ถูกยกเลิกแล้ว`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 // Reset to form step so user can book again
@@ -566,6 +591,8 @@ function BookQueueContent() {
                     title: "ยกเลิกไม่สำเร็จ",
                     description: result.error?.message || "เกิดข้อผิดพลาด",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -574,6 +601,8 @@ function BookQueueContent() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถยกเลิกการจองได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsCancelling(false);
@@ -622,6 +651,8 @@ function BookQueueContent() {
                 title: "ตรวจเสร็จแล้ว!",
                 description: "คิวของคุณเสร็จสิ้นแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -713,9 +744,12 @@ function BookQueueContent() {
                 {deskNoticeModal}
                 <Card className="w-full max-w-md shadow-2xl">
                     <CardBody className="p-8">
-                        <div className="text-center">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center text-white text-4xl">
+                                <IoSchool />
+                            </div>
                             <Spinner size="lg" color="primary" />
-                            <p className="mt-4 text-slate-500">กำลังตรวจสอบสถานะ...</p>
+                            <p className="text-slate-500">กำลังตรวจสอบสถานะ...</p>
                         </div>
                     </CardBody>
                 </Card>

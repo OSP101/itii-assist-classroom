@@ -380,6 +380,8 @@ export const QRPreviewModal = memo(function QRPreviewModal({
                 title: "คัดลอกแล้ว",
                 description: "PIN ถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         }
     };
@@ -390,6 +392,8 @@ export const QRPreviewModal = memo(function QRPreviewModal({
             title: "คัดลอกแล้ว",
             description: "ลิงก์เช็คชื่อถูกคัดลอกไปยังคลิปบอร์ดแล้ว",
             color: "success",
+            timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
     };
 

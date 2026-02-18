@@ -110,6 +110,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                 title: "ไม่รองรับ",
                 description: "เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -136,6 +138,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                         title,
                         description: body,
                         color: getToastColor(payload.data?.type),
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                 });
 
@@ -147,6 +151,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                     title: "เปิดการแจ้งเตือนแล้ว",
                     description: "คุณจะได้รับการแจ้งเตือนเมื่อมีงานใหม่",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
 
                 return true;
@@ -158,6 +164,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                         title: "การแจ้งเตือนถูกปิด",
                         description: "กรุณาเปิดการแจ้งเตือนในการตั้งค่าเบราว์เซอร์",
                         color: "warning",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                 }
 
@@ -169,6 +177,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเปิดการแจ้งเตือนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         } finally {

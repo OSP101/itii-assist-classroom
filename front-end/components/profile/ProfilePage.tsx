@@ -145,6 +145,8 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           title: "สำเร็จ",
           description: "อัปเดตโปรไฟล์เรียบร้อยแล้ว",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         // Throw error to show in modal
@@ -173,6 +175,8 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
         title: "ไฟล์ไม่ถูกต้อง",
         description: "กรุณาเลือกไฟล์รูปภาพ",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       return;
     }
@@ -183,6 +187,8 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
         title: "ไฟล์ใหญ่เกินไป",
         description: "ขนาดไฟล์ต้องไม่เกิน 5MB",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       return;
     }
@@ -196,12 +202,16 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           title: "สำเร็จ",
           description: "อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         addToast({
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถอัปโหลดรูปภาพได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {
@@ -210,6 +220,8 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถอัปโหลดรูปภาพได้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } finally {
       setIsUploadingAvatar(false);
@@ -231,12 +243,16 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           title: "สำเร็จ",
           description: "ลบรูปโปรไฟล์เรียบร้อยแล้ว",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         addToast({
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถลบรูปภาพได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {
@@ -257,12 +273,16 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           title: "สำเร็จ",
           description: "ยกเลิกการเข้าสู่ระบบเรียบร้อยแล้ว",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         addToast({
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถยกเลิกได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {
@@ -284,12 +304,16 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
           title: "สำเร็จ",
           description: `ยกเลิกการเข้าสู่ระบบ ${result.revokedCount} เซสชันเรียบร้อยแล้ว`,
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         addToast({
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถยกเลิกได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {

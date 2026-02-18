@@ -28,8 +28,189 @@ import queueService, {
 import { authService } from "@/services/auth.service";
 import scoreService from "@/services/score.service";
 import { useNotification } from "@/contexts/NotificationContext";
+import { API_BASE_URL } from "@/config/api";
 
 const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || "http://localhost:3001";
+
+
+interface MiniDeskInfo {
+    id: number;
+    number: string;
+    position_x: number;
+    position_y: number;
+    is_enabled: boolean;
+    type?: string; // 'computer' | 'normal' | 'teacher'
+}
+
+function getDirectionGuide(
+    prev: { x: number; y: number },
+    curr: { x: number; y: number }
+): { label: string; icon: string; distance: "ใกล้" | "ปานกลาง" | "ไกล" } {
+    const dx = curr.x - prev.x;
+    const dy = curr.y - prev.y; // y increases downward on canvas
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const deg = (angle + 360) % 360;
+
+    let label: string;
+    let icon: string;
+    if (deg >= 337.5 || deg < 22.5)       { label = "ขวา";       icon = "solar:arrow-right-bold"; }
+    else if (deg < 67.5)                  { label = "ขวา-ล่าง";  icon = "solar:arrow-right-down-bold"; }
+    else if (deg < 112.5)                 { label = "ล่าง";       icon = "solar:arrow-down-bold"; }
+    else if (deg < 157.5)                 { label = "ซ้าย-ล่าง"; icon = "solar:arrow-left-down-bold"; }
+    else if (deg < 202.5)                 { label = "ซ้าย";       icon = "solar:arrow-left-bold"; }
+    else if (deg < 247.5)                 { label = "ซ้าย-บน";   icon = "solar:arrow-left-up-bold"; }
+    else if (deg < 292.5)                 { label = "บน";         icon = "solar:arrow-up-bold"; }
+    else                                  { label = "ขวา-บน";    icon = "solar:arrow-right-up-bold"; }
+
+    const distance: "ใกล้" | "ปานกลาง" | "ไกล" =
+        dist < 80 ? "ใกล้" : dist < 200 ? "ปานกลาง" : "ไกล";
+
+    return { label, icon, distance };
+}
+
+function MiniRoomMap({
+    desks,
+    currentDeskNumber,
+    previousDeskNumber,
+}: {
+    desks: MiniDeskInfo[];
+    currentDeskNumber: string | null;
+    previousDeskNumber: string | null;
+}) {
+    const enabled = desks.filter(
+        (d) =>
+            (d.is_enabled || d.type === "teacher") &&
+            d.position_x !== undefined &&
+            d.position_y !== undefined
+    );
+    if (enabled.length === 0) return null;
+
+    const xs = enabled.map((d) => d.position_x);
+    const ys = enabled.map((d) => d.position_y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const rawW = Math.max(...xs) - minX;
+    const rawH = Math.max(...ys) - minY;
+
+    const W = 300;
+    const H = 180;
+    const PAD = 18;
+    const scale = Math.min(
+        rawW > 0 ? (W - PAD * 2) / rawW : 1,
+        rawH > 0 ? (H - PAD * 2) / rawH : 1
+    );
+    const R = 7;
+
+    const cx = (desk: MiniDeskInfo) => PAD + (desk.position_x - minX) * scale;
+    const cy = (desk: MiniDeskInfo) => PAD + (desk.position_y - minY) * scale;
+
+    const currentDesk  = enabled.find((d) => String(d.number) === String(currentDeskNumber ?? ""))  ?? null;
+    const previousDesk = enabled.find((d) => String(d.number) === String(previousDeskNumber ?? "")) ?? null;
+
+    // Orthogonal (L-shaped) marching-ants path: previous → current
+    let arrowEl: React.ReactNode = null;
+    if (previousDesk && currentDesk && previousDesk.number !== currentDesk.number) {
+        const x1 = cx(previousDesk), y1 = cy(previousDesk);
+        const x2 = cx(currentDesk),  y2 = cy(currentDesk);
+        const dx = x2 - x1, dy = y2 - y1;
+        const RS = R + 3; // gap from desk edge
+
+        // Start point – gap in horizontal direction from origin
+        const sx = x1 + (dx > 0 ? RS : dx < 0 ? -RS : 0);
+
+        let d: string;
+        if (Math.abs(dy) < R * 2) {
+            // Same row → pure horizontal
+            const ex = x2 + (dx > 0 ? -RS : RS);
+            d = `M ${sx},${y1} H ${ex}`;
+        } else {
+            // L-shape: horizontal first to x2, then vertical to y2
+            const ey = y2 + (dy > 0 ? -RS : RS);
+            d = `M ${sx},${y1} H ${x2} V ${ey}`;
+        }
+
+        arrowEl = (
+            <path
+                d={d}
+                stroke="#6366F1"
+                strokeWidth={2}
+                fill="none"
+                strokeDasharray="6 4"
+                strokeLinecap="round"
+                markerEnd="url(#miniArrow)"
+                style={{ animation: "miniDash 0.45s linear infinite" }}
+            />
+        );
+    }
+
+    return (
+        <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className="w-full"
+            style={{ maxHeight: 180 }}
+        >
+            <defs>
+                <style>{`@keyframes miniDash{to{stroke-dashoffset:-10;}}`}</style>
+                <marker id="miniArrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                    <path d="M0,0.5 L6,3.5 L0,6.5 Z" fill="#6366F1" />
+                </marker>
+            </defs>
+            {enabled.map((desk) => {
+                const isCurrent  = String(desk.number) === String(currentDeskNumber ?? "");
+                const isPrevious = String(desk.number) === String(previousDeskNumber ?? "");
+                const x = cx(desk);
+                const y = cy(desk);
+
+                // Teacher desk → wide green pill as a room reference landmark
+                if (desk.type === "teacher") {
+                    const rw = 26, rh = 10;
+                    return (
+                        <g key={desk.id}>
+                            <rect
+                                x={x - rw / 2} y={y - rh / 2}
+                                width={rw} height={rh} rx={3}
+                                fill="#059669"
+                            />
+                        </g>
+                    );
+                }
+
+                // Regular / computer desk — no stroke border
+                let fill = "#CBD5E1"; // slate-300
+                if (isCurrent)       fill = "#FBBF24"; // amber
+                else if (isPrevious) fill = "#93C5FD"; // light-blue
+                return (
+                    <g key={desk.id}>
+                        {isCurrent && (
+                            <circle cx={x} cy={y} r={R + 5} fill="#FDE68A" opacity={0.5}>
+                                <animate
+                                    attributeName="r"
+                                    values={`${R + 4};${R + 9};${R + 4}`}
+                                    dur="1.5s"
+                                    repeatCount="indefinite"
+                                />
+                                <animate
+                                    attributeName="opacity"
+                                    values="0.5;0.1;0.5"
+                                    dur="1.5s"
+                                    repeatCount="indefinite"
+                                />
+                            </circle>
+                        )}
+                        <circle cx={x} cy={y} r={R} fill={fill} />
+                    </g>
+                );
+            })}
+            {arrowEl}
+        </svg>
+    );
+}
+
+// ============================================================
+// Main Component
+// ============================================================
 
 export default function WorkerDashboardPage() {
     const params = useParams();
@@ -78,6 +259,10 @@ export default function WorkerDashboardPage() {
     const [skipReason, setSkipReason] = useState("");
     const [isSkipping, setIsSkipping] = useState(false);
 
+    // Mini room map
+    const [deskLayout, setDeskLayout] = useState<MiniDeskInfo[]>([]);
+    const [previousDeskNumber, setPreviousDeskNumber] = useState<string | null>(null);
+
     // Socket
     const socketRef = useRef<Socket | null>(null);
 
@@ -97,6 +282,45 @@ export default function WorkerDashboardPage() {
             setCurrentUser({ id: user.id, full_name: user.full_name });
         }
     }, []);
+
+    // Fetch desk layout for mini map
+    useEffect(() => {
+        const loadDeskLayout = async () => {
+            try {
+                // Use same public endpoint as projector page – guaranteed to return x/y
+                const response = await fetch(
+                    `${API_BASE_URL}/queue/sessions/${sessionId}/desk-statuses`
+                );
+                const result = await response.json();
+                if (result.success && result.data?.desks) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const desks = result.data.desks as any[];
+                    setDeskLayout(
+                        desks
+                            .filter(
+                                (d) =>
+                                    // Always include teacher desks as spatial landmarks
+                                    (d.is_enabled || d.type === 'teacher') &&
+                                    d.x !== undefined &&
+                                    d.y !== undefined
+                            )
+                            .map((d) => ({
+                                id: Number(d.id),
+                                number: String(d.number),
+                                position_x: d.x as number,
+                                position_y: d.y as number,
+                                is_enabled: d.is_enabled as boolean,
+                                type: d.type as string | undefined,
+                            }))
+                    );
+                }
+            } catch (err) {
+                // Non-critical – mini map simply won't show
+                console.warn("Could not load desk layout for mini map:", err);
+            }
+        };
+        loadDeskLayout();
+    }, [sessionId]);
 
     // Fetch session details and check for existing booking
     const fetchSession = useCallback(async () => {
@@ -130,6 +354,8 @@ export default function WorkerDashboardPage() {
                         title: "พบงานที่ค้างอยู่",
                         description: `โต๊ะ ${currentBooking.desk_number} - ${currentBooking.booking_type === "grading" ? "ตรวจงาน" : "ช่วยเหลือ"}`,
                         color: "primary",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                 } else if (currentUser && data.workers) {
                     console.log("No pending booking, checking worker list");
@@ -152,6 +378,8 @@ export default function WorkerDashboardPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูล Session ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -219,6 +447,8 @@ export default function WorkerDashboardPage() {
                     title: "มีงานใหม่!",
                     description: `โต๊ะ ${result.currentBooking.desk_number} - ${result.currentBooking.booking_type === "grading" ? "ตรวจงาน" : "ขอความช่วยเหลือ"}`,
                     color: "primary",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (err) {
@@ -266,6 +496,8 @@ export default function WorkerDashboardPage() {
                 title: "มีงานใหม่!",
                 description: `โต๊ะ ${data.booking.desk_number} - ${data.booking.booking_type === "grading" ? "ตรวจงาน" : "ขอความช่วยเหลือ"}`,
                 color: "primary",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -278,6 +510,8 @@ export default function WorkerDashboardPage() {
                         title: "Session ถูกปิด",
                         description: "การรับคิวถูกยกเลิก",
                         color: "warning",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                 }
             }
@@ -317,6 +551,8 @@ export default function WorkerDashboardPage() {
                 title: "กรุณาเลือก",
                 description: "กรุณาเลือกอย่างน้อย 1 ประเภทงานที่ต้องการรับ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -345,12 +581,16 @@ export default function WorkerDashboardPage() {
                     title: "มีงานรอตรวจ!",
                     description: `โต๊ะ ${result.assignedBooking.desk_number} - ${result.assignedBooking.booking_type === "grading" ? "ตรวจงาน" : "ขอความช่วยเหลือ"}`,
                     color: "primary",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 addToast({
                     title: "สำเร็จ",
                     description: "เข้าร่วมรับงานเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -359,6 +599,8 @@ export default function WorkerDashboardPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถเข้าร่วมรับงานได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsJoining(false);
@@ -378,6 +620,8 @@ export default function WorkerDashboardPage() {
                     title: "หยุดรับงานใหม่",
                     description: "จะไม่ได้รับงานใหม่ กรุณาทำงานปัจจุบันให้เสร็จ",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 // No current booking - leave immediately
@@ -387,6 +631,8 @@ export default function WorkerDashboardPage() {
                     title: "สำเร็จ",
                     description: "ออกจากการรับงานเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -395,6 +641,8 @@ export default function WorkerDashboardPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถออกจากการรับงานได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLeaving(false);
@@ -432,8 +680,14 @@ export default function WorkerDashboardPage() {
                 title: "สำเร็จ",
                 description: "บันทึกผลเรียบร้อยแล้ว",
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
 
+            // Save position of completed desk for direction guide
+            if (currentBooking?.desk_number) {
+                setPreviousDeskNumber(currentBooking.desk_number);
+            }
             setCurrentBooking(null);
             setIsCompleteModalOpen(false);
             setCompleteForm({ score: "", score_comment: "", worker_note: "", sub_item_scores: [] });
@@ -449,6 +703,8 @@ export default function WorkerDashboardPage() {
                     title: "ออกจากการรับงานแล้ว",
                     description: "คุณได้ออกจากการรับงานเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 skipPollingRef.current = false; // Allow polling again
@@ -463,6 +719,8 @@ export default function WorkerDashboardPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถบันทึกผลได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsCompleting(false);
@@ -481,8 +739,14 @@ export default function WorkerDashboardPage() {
                 title: "ข้ามคิวแล้ว",
                 description: "ระบบจะยิงงานใหม่มาให้อัตโนมัติ",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
 
+            // Save position of skipped desk for direction guide
+            if (currentBooking?.desk_number) {
+                setPreviousDeskNumber(currentBooking.desk_number);
+            }
             setCurrentBooking(null);
             setIsSkipModalOpen(false);
             setSkipReason("");
@@ -492,6 +756,8 @@ export default function WorkerDashboardPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: error instanceof Error ? error.message : "ไม่สามารถข้ามคิวได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSkipping(false);
@@ -582,6 +848,21 @@ export default function WorkerDashboardPage() {
     // Total scored (existing + new)
     const totalScoredItemsCount = existingScoredItemsCount + newScoredItemsCount;
 
+    // Direction guide for mini map
+    const currentDeskPos  = currentBooking
+        ? (deskLayout.find((d) => String(d.number) === String(currentBooking.desk_number)) ?? null)
+        : null;
+    const previousDeskPos = previousDeskNumber
+        ? (deskLayout.find((d) => String(d.number) === String(previousDeskNumber)) ?? null)
+        : null;
+    const directionGuide =
+        currentDeskPos && previousDeskPos && String(previousDeskNumber) !== String(currentBooking?.desk_number ?? "")
+            ? getDirectionGuide(
+                  { x: previousDeskPos.position_x, y: previousDeskPos.position_y },
+                  { x: currentDeskPos.position_x,  y: currentDeskPos.position_y }
+              )
+            : null;
+
     if (isLoading) {
         return (
             <div className="min-h-screen bg-slate-100 p-6">
@@ -668,13 +949,13 @@ export default function WorkerDashboardPage() {
                         >
                             กลับ
                         </Button> */}
-                        <h1 className="text-2xl font-bold text-slate-800">{session.title}</h1>
-                        <p className="text-slate-500">
+                        <h1 className="text-xl font-bold text-slate-800">{session.title}</h1>
+                        <p className="text-slate-500 text-sm">
                             ห้อง {session.classroom?.name} • PIN: <span className="font-mono font-bold text-blue-600">{session.pin_code}</span>
                         </p>
                     </div>
                     <Chip
-                        size="lg"
+                        size="md"
                         color={isPausedAfterComplete ? "warning" : isWorkerOnline ? "success" : "default"}
                         variant="flat"
                         startContent={
@@ -780,7 +1061,7 @@ export default function WorkerDashboardPage() {
                     <>
                         {/* Current Task Card */}
                         <Card className="shadow-lg border-0">
-                            <CardHeader className="px-6 py-4 border-b border-slate-100">
+                            <CardHeader className="px-4 py-2 border-b border-slate-100">
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-3">
                                         <div className={`p-2 rounded-xl ${currentBooking ? "bg-emerald-100" : "bg-slate-100"}`}>
@@ -828,10 +1109,10 @@ export default function WorkerDashboardPage() {
                                 {currentBooking ? (
                                     <div className="space-y-6">
                                         {/* Booking Info */}
-                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6">
+                                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4">
                                             <div className="flex items-center justify-between mb-4">
                                                 <Chip
-                                                    size="lg"
+                                                    size="sm"
                                                     color={currentBooking.booking_type === "grading" ? "success" : "warning"}
                                                     variant="flat"
                                                     startContent={
@@ -850,24 +1131,74 @@ export default function WorkerDashboardPage() {
                                                 </span>
                                             </div>
 
-                                            <div className="text-center mb-6">
-                                                <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white shadow-lg mb-3">
-                                                    <span className="text-4xl font-bold text-blue-600">
+                                            <div className="mb-5 flex items-center justify-center gap-3">
+                                                <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white shadow-lg">
+                                                    <span className="text-3xl font-bold text-blue-600">
                                                         {currentBooking.desk_number}
                                                     </span>
                                                 </div>
-                                                <p className="text-lg font-semibold text-slate-800">
+                                                <div>
+                                                <p className="text-md font-semibold text-slate-800">
                                                     โต๊ะ {currentBooking.desk_number}
                                                 </p>
                                                 {currentBooking.zone && (
-                                                    <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700">
-                                                        <Icon icon="solar:map-point-bold" className="text-base" />
-                                                        <span className="text-sm font-medium">{currentBooking.zone.name}</span>
-                                                    </div>
+                                                    // <div className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                                                    //     <Icon icon="solar:map-point-bold" className="text-base" />
+                                                        <span className="text-sm text-slate-500">{currentBooking.zone.name}</span>
+                                                    // </div>
                                                 )}
+                                                </div>
                                             </div>
 
-                                            <div className="bg-white rounded-xl p-4 space-y-2">
+                                            {/* ─── Mini Room Map + Direction Guide ─── */}
+                                            {deskLayout.length > 0 && (
+                                                <div className="rounded-xl overflow-hidden border border-white/60 bg-white/50 mb-4">
+                                                    {/* Direction banner – only show when we know previous desk */}
+                                                    {directionGuide && (
+                                                        <div className="flex items-center gap-2 px-3 py-2 bg-indigo-500 text-white text-xs text-center font-normal">
+                                                            {/* <Icon icon={directionGuide.icon} className="text-lg shrink-0" /> */}
+                                                            <span className="text-center">
+                                                                จากโต๊ะ {previousDeskNumber} → โต๊ะ {currentBooking.desk_number}{" "}
+                                                                <span className="font-normal">
+                                                                    ({directionGuide.label},{" "}{directionGuide.distance})
+                                                                </span>
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                    {/* SVG map */}
+                                                    <div className="px-2 pt-2">
+                                                        <MiniRoomMap
+                                                            desks={deskLayout}
+                                                            currentDeskNumber={currentBooking.desk_number}
+                                                            previousDeskNumber={previousDeskNumber}
+                                                        />
+                                                    </div>
+                                                    {/* Legend */}
+                                                    <div className="flex items-center gap-4 px-3 pb-2 text-xs text-slate-500">
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-400" />
+                                                            โต๊ะนี้
+                                                        </span>
+                                                        {previousDeskNumber && String(previousDeskNumber) !== String(currentBooking.desk_number) && (
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="inline-block w-2.5 h-2.5 rounded-full bg-blue-300" />
+                                                                โต๊ะก่อนหน้า
+                                                            </span>
+                                                        )}
+                                                        {/* <span className="flex items-center gap-1">
+                                                            <span className="inline-block w-3 h-1.5 rounded-sm bg-emerald-600" />
+                                                            โต๊ะอาจารย์
+                                                        </span>
+                                                        <span className="flex items-center gap-1">
+                                                            <span className="inline-block w-2.5 h-2.5 rounded-full bg-slate-300" />
+                                                            โต๊ะอื่น
+                                                        </span> */}
+                                                    </div>
+                                                </div>
+                                            )}
+
+
+                                            <div className="bg-white rounded-xl p-3 space-y-2">
                                                 <div className="flex items-center gap-3">
                                                     <Avatar
                                                         name={currentBooking.student?.full_name || "Student"}
@@ -893,6 +1224,7 @@ export default function WorkerDashboardPage() {
                                                 )}
                                             </div>
                                         </div>
+
 
                                         {/* Action Buttons */}
                                         <div className="flex gap-3">
@@ -956,6 +1288,7 @@ export default function WorkerDashboardPage() {
                     </>
                 )}
             </div>
+
 
             {/* Complete Booking Modal */}
             <Modal 

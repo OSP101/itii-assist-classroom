@@ -63,6 +63,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
   const [linkedAccounts, setLinkedAccounts] = useState<OAuthAccount[]>([]);
   const [isLoadingOAuth, setIsLoadingOAuth] = useState(true);
   const [unlinkingProvider, setUnlinkingProvider] = useState<string | null>(null);
+  const [linkingProvider, setLinkingProvider] = useState<string | null>(null);
   const [showUnlinkModal, setShowUnlinkModal] = useState(false);
   const [providerToUnlink, setProviderToUnlink] = useState<string | null>(null);
 
@@ -100,6 +101,38 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     load2FAStatus();
     loadOAuthAccounts();
   }, [load2FAStatus, loadOAuthAccounts]);
+
+  // Listen for popup OAuth link result
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "oauth_link_result") return;
+
+      if (event.data.success) {
+        addToast({
+          title: "เชื่อมต่อสำเร็จ",
+          description: `เชื่อมต่อบัญชี ${event.data.providerName} เรียบร้อยแล้ว`,
+          color: "success",
+          timeout: 3000,
+          shouldShowTimeoutProgress: true,
+        });
+        loadOAuthAccounts();
+      } else {
+        addToast({
+          title: "เชื่อมต่อไม่สำเร็จ",
+          description: event.data.error || "ไม่สามารถเชื่อมต่อบัญชีได้",
+          color: "danger",
+          timeout: 3000,
+          shouldShowTimeoutProgress: true,
+        });
+      }
+      // Clear loading state regardless of result
+      setLinkingProvider(null);
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [loadOAuthAccounts]);
 
   const getMethodLabel = (method: string | null) => {
     switch (method) {
@@ -141,6 +174,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
           title: "สำเร็จ",
           description: `ยกเลิกการเชื่อมต่อ ${oauthService.getProviderDisplayName(providerToUnlink)} แล้ว`,
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
         await loadOAuthAccounts();
       } else {
@@ -148,6 +183,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถยกเลิกการเชื่อมต่อได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {
@@ -156,6 +193,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถยกเลิกการเชื่อมต่อได้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } finally {
       setUnlinkingProvider(null);
@@ -163,14 +202,58 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     }
   };
 
+
   // Handle link (initiate OAuth flow)
   const handleLink = (provider: string) => {
-    oauthService.initiateLink(provider);
+    setLinkingProvider(provider);
+    const tab = oauthService.initiateLink(provider);
+    if (!tab) {
+      setLinkingProvider(null);
+      return;
+    }
+    // Wait 8s before polling — OAuth flow navigates through multiple domains
+    // which can make tab.closed temporarily appear true (cross-origin nav).
+    // Only after the flow should have settled do we start watching for manual close.
+    const startPoll = setTimeout(() => {
+      const poll = setInterval(() => {
+        try {
+          if (tab.closed) {
+            clearInterval(poll);
+            // Give postMessage 400ms to arrive before resetting
+            setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
+          }
+        } catch {
+          // Cross-origin access error — tab still navigating, keep waiting
+        }
+      }, 800);
+    }, 8000);
+
+    // Safety cleanup if component unmounts
+    return () => clearTimeout(startPoll);
   };
 
   // Handle re-authenticate (same as link but for existing connection)
   const handleReAuthenticate = (provider: string) => {
-    oauthService.initiateLink(provider);
+    setLinkingProvider(provider);
+    const tab = oauthService.initiateLink(provider);
+    if (!tab) {
+      setLinkingProvider(null);
+      return;
+    }
+    const startPoll = setTimeout(() => {
+      const poll = setInterval(() => {
+        try {
+          if (tab.closed) {
+            clearInterval(poll);
+            setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
+          }
+        } catch {
+          // Cross-origin access error — tab still navigating, keep waiting
+        }
+      }, 800);
+    }, 8000);
+
+    return () => clearTimeout(startPoll);
   };
 
   // Get provider management URL
@@ -285,6 +368,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                   </div>
                 </div>
               </div>
+
+
 
               {/* Recovery Codes Section */}
               <div className="bg-default-50 rounded-lg p-3 sm:p-4">
@@ -430,8 +515,9 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                               key="reauth"
                               startContent={<Icon icon="solar:refresh-linear" className="text-lg" />}
                               onPress={() => handleReAuthenticate(provider.key)}
+                              isDisabled={linkingProvider !== null}
                             >
-                              ยืนยันตัวตนใหม่
+                              {linkingProvider === provider.key ? "กำลังดำเนินการ..." : "ยืนยันตัวตนใหม่"}
                             </DropdownItem>
                             <DropdownItem
                               key="disconnect"
@@ -452,8 +538,10 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                         variant="flat" 
                         className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-xs"
                         onPress={() => handleLink(provider.key)}
+                        isLoading={linkingProvider === provider.key}
+                        isDisabled={linkingProvider !== null}
                       >
-                        เชื่อมต่อ
+                        {linkingProvider === provider.key ? "กำลังเชื่อมต่อ..." : "เชื่อมต่อ"}
                       </Button>
                     ) : (
                       <Chip 

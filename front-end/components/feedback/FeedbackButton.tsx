@@ -59,6 +59,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                 title: "จำนวนไฟล์เกินกำหนด",
                 description: "อัปโหลดได้สูงสุด 5 ไฟล์",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -75,6 +77,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                         title: "ไฟล์ใหญ่เกินไป",
                         description: `${file.name} มีขนาดเกิน 5MB`,
                         color: "warning",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                     continue;
                 }
@@ -95,6 +99,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                 title: "อัปโหลดไม่สำเร็จ",
                 description: "เกิดข้อผิดพลาดในการอัปโหลดไฟล์",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setUploadingFiles(false);
@@ -114,6 +120,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                 title: "กรุณากรอกหัวข้อ",
                 description: "หัวข้อจำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -123,6 +131,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                 title: "กรุณากรอกรายละเอียด",
                 description: "รายละเอียดจำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -145,6 +155,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                     title: "ส่ง Feedback สำเร็จ",
                     description: "ขอบคุณสำหรับ Feedback ของคุณ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 resetForm();
                 onClose();
@@ -153,6 +165,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                     title: "เกิดข้อผิดพลาด",
                     description: response.message || "ไม่สามารถส่ง Feedback ได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -160,6 +174,8 @@ export function FeedbackModal({ isOpen, onClose, userEmail }: FeedbackFormProps)
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถส่ง Feedback ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

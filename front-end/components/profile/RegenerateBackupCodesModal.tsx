@@ -55,6 +55,8 @@ function RegenerateBackupCodesModal({
           title: "สำเร็จ",
           description: "สร้างรหัสสำรองใหม่สำเร็จ",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       } else {
         setError(result.error || "ไม่สามารถสร้างรหัสสำรองใหม่ได้");
@@ -79,6 +81,8 @@ function RegenerateBackupCodesModal({
       title: "คัดลอกแล้ว",
       description: "คัดลอกรหัสสำรองทั้งหมดแล้ว",
       color: "success",
+      timeout: 3000,
+                shouldShowTimeoutProgress: true,
     });
   }, [backupCodes]);
 

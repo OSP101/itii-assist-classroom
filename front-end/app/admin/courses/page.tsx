@@ -138,6 +138,8 @@ export default function CoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -200,6 +202,8 @@ export default function CoursesPage() {
                 title: "ข้อมูลอัปเดต",
                 description: "มีการเปลี่ยนแปลงข้อมูลรายวิชา",
                 color: "primary",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         });
 
@@ -243,6 +247,8 @@ export default function CoursesPage() {
                     title: "ไฟล์ใหญ่เกินไป",
                     description: "ขนาดไฟล์ต้องไม่เกิน 2MB",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 return;
             }
@@ -253,6 +259,8 @@ export default function CoursesPage() {
                     title: "ไฟล์ไม่ถูกต้อง",
                     description: "กรุณาเลือกไฟล์รูปภาพเท่านั้น",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 return;
             }
@@ -331,6 +339,8 @@ export default function CoursesPage() {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกรหัสวิชาและชื่อวิชา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -343,6 +353,8 @@ export default function CoursesPage() {
                     title: "สำเร็จ",
                     description: "สร้างรายวิชาสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsCreateModalOpen(false);
                 resetForm();
@@ -359,6 +371,8 @@ export default function CoursesPage() {
                     title: "ไม่สามารถสร้างรายวิชาได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -367,6 +381,8 @@ export default function CoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถสร้างรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -380,6 +396,8 @@ export default function CoursesPage() {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกรหัสวิชาและชื่อวิชา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -402,6 +420,8 @@ export default function CoursesPage() {
                     title: "สำเร็จ",
                     description: "อัปเดตรายวิชาสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsEditModalOpen(false);
                 resetForm();
@@ -417,6 +437,8 @@ export default function CoursesPage() {
                     title: "ไม่สามารถอัปเดตรายวิชาได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -425,6 +447,8 @@ export default function CoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถอัปเดตรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -443,6 +467,8 @@ export default function CoursesPage() {
                     title: "สำเร็จ",
                     description: "ลบรายวิชาสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeleteModalOpen(false);
                 setSelectedCourse(null);
@@ -457,6 +483,8 @@ export default function CoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถลบรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -475,6 +503,8 @@ export default function CoursesPage() {
                     title: "สำเร็จ",
                     description: selectedCourse.is_active ? "ปิดใช้งานรายวิชาแล้ว" : "เปิดใช้งานรายวิชาแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsToggleStatusModalOpen(false);
                 setSelectedCourse(null);
@@ -490,6 +520,8 @@ export default function CoursesPage() {
                     title: "ไม่สามารถเปลี่ยนสถานะได้",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -498,6 +530,8 @@ export default function CoursesPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเปลี่ยนสถานะได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

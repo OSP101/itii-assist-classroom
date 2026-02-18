@@ -68,6 +68,8 @@ function ResetPasswordContent() {
                 title: "รหัสผ่านไม่ผ่านเงื่อนไข",
                 description: "กรุณาตรวจสอบเงื่อนไขรหัสผ่าน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -77,6 +79,8 @@ function ResetPasswordContent() {
                 title: "รหัสผ่านไม่ตรงกัน",
                 description: "กรุณากรอกรหัสผ่านให้ตรงกันทั้ง 2 ช่อง",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -90,12 +94,16 @@ function ResetPasswordContent() {
                     title: "สำเร็จ",
                     description: "รหัสผ่านถูกเปลี่ยนเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
                     description: result.error || "ไม่สามารถรีเซ็ตรหัสผ่านได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -103,6 +111,8 @@ function ResetPasswordContent() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsResetting(false);

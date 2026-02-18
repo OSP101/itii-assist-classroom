@@ -165,7 +165,8 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
         setLogs(data.logs);
         setPagination(data.pagination);
       } catch {
-        addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดข้อมูลได้", color: "danger" });
+        addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดข้อมูลได้", color: "danger", timeout: 3000,
+                shouldShowTimeoutProgress: true, });
       } finally {
         setLoading(false);
       }

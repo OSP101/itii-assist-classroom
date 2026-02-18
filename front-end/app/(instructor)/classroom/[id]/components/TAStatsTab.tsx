@@ -342,7 +342,8 @@ function TADetailView({
       });
       setDetail(data);
     } catch {
-      addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดข้อมูลรายละเอียด TA ได้", color: "danger" });
+      addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดข้อมูลรายละเอียด TA ได้", color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
     } finally {
       setLoading(false);
     }
@@ -748,7 +749,8 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
       const result = await getTAStats(courseId);
       setData(result);
     } catch {
-      addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดสถิติ TA ได้", color: "danger" });
+      addToast({ title: "เกิดข้อผิดพลาด", description: "ไม่สามารถโหลดสถิติ TA ได้", color: "danger",timeout: 3000,
+                shouldShowTimeoutProgress: true, });
     } finally {
       setLoading(false);
     }

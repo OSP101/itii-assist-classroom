@@ -57,6 +57,8 @@ export function useClassroomActions({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกหมายเลขกลุ่มเรียน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -88,6 +90,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "เพิ่มกลุ่มเรียนสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 fetchOverview();
@@ -101,6 +105,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มกลุ่มเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -128,6 +134,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "ลบกลุ่มเรียนเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 fetchOverview();
@@ -141,6 +149,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถลบกลุ่มเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -156,6 +166,8 @@ export function useClassroomActions({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเลือกผู้ช่วยสอนอย่างน้อย 1 คน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -178,6 +190,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: `เพิ่มผู้ช่วยสอน ${addedCount} คนเรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("user", "create");
@@ -190,6 +204,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มผู้ช่วยสอนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -211,6 +227,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "นำผู้ช่วยสอนออกเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("user", "delete", userId);
@@ -223,6 +241,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถนำผู้ช่วยสอนออกได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -238,6 +258,8 @@ export function useClassroomActions({
                 title: "กรุณาเลือกอาจารย์",
                 description: "เลือกอาจารย์อย่างน้อย 1 คน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -250,6 +272,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "เพิ่มอาจารย์เรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("user", "create");
                 return true;
@@ -261,6 +285,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มอาจารย์ได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -282,6 +308,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "นำอาจารย์ออกเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("user", "delete", userId);
@@ -294,6 +322,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถนำอาจารย์ออกได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -338,6 +368,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "เพิ่มนักศึกษาเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 fetchOverview();
@@ -351,6 +383,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -368,6 +402,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: `เพิ่มนักศึกษา ${studentIds.length} คนเรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("student", "bulk");
@@ -380,6 +416,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -429,6 +467,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "นำนักศึกษาออกเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 fetchOverview();
@@ -442,6 +482,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถนำนักศึกษาออกได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -480,6 +522,8 @@ export function useClassroomActions({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกชื่อกลุ่ม",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -489,6 +533,8 @@ export function useClassroomActions({
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเลือกสมาชิกอย่างน้อย 1 คน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -507,6 +553,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: `สร้างกลุ่ม "${name}" เรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "create");
                 return true;
@@ -518,6 +566,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถสร้างกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -561,6 +611,8 @@ export function useClassroomActions({
                 title: "สำเร็จ",
                 description: `สร้างกลุ่มแบบสุ่ม ${successCount} กลุ่มเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             emitUpdate("group", "bulk");
         }
@@ -585,6 +637,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "แก้ไขกลุ่มเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "update", teamId);
                 return true;
@@ -596,6 +650,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถแก้ไขกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -610,6 +666,8 @@ export function useClassroomActions({
                     title: "สำเร็จ",
                     description: "ลบกลุ่มเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "delete", teamId);
                 return true;
@@ -621,6 +679,8 @@ export function useClassroomActions({
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถลบกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return false;
         }
@@ -644,6 +704,8 @@ export function useClassroomActions({
                 title: "สำเร็จ",
                 description: `ลบกลุ่ม ${successCount} กลุ่มเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             emitUpdate("group", "bulk");
         }
@@ -661,6 +723,8 @@ export function useClassroomActions({
                 title: "ไม่พบกลุ่ม",
                 description: `ไม่พบกลุ่มในสัปดาห์ที่ ${sourceWeek}`,
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return 0;
         }
@@ -687,6 +751,8 @@ export function useClassroomActions({
                 title: "สำเร็จ",
                 description: `คัดลอก ${successCount} กลุ่มเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             emitUpdate("group", "bulk");
         }

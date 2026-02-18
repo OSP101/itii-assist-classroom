@@ -95,24 +95,24 @@ class OAuthService {
 
   /**
    * Initiate OAuth linking flow
-   * Redirects to the OAuth provider
+   * Opens in a new tab; when done the tab sends postMessage back and closes itself.
    */
-  initiateLink(provider: string): void {
-    const currentUrl = window.location.href;
-    // Store return URL for after OAuth flow
-    sessionStorage.setItem("oauth_return_url", currentUrl);
-    
+  initiateLink(provider: string): Window | null {
     // Get current access token for linking
     const accessToken = localStorage.getItem("accessToken");
-    
-    // Redirect to backend OAuth endpoint with access token
+
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
     const linkUrl = new URL(`${backendUrl}/auth/${provider}`);
     linkUrl.searchParams.set("action", "link");
     if (accessToken) {
       linkUrl.searchParams.set("link_token", accessToken);
     }
-    window.location.href = linkUrl.toString();
+
+    // Open in a new tab — browsers allow this when triggered by a user click.
+    // Do NOT pass a features string; any features string turns it into a popup window.
+    // We intentionally avoid "noopener" so window.opener is accessible in the callback tab.
+    const tab = window.open(linkUrl.toString(), "_blank");
+    return tab;
   }
 }
 

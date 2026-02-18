@@ -72,6 +72,8 @@ export default function MyScorePage() {
                 title: "กรุณากรอกรหัสนักศึกษา",
                 description: "กรุณากรอกรหัสนักศึกษาเพื่อค้นหาคะแนน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -91,6 +93,8 @@ export default function MyScorePage() {
                     title: "ค้นหาสำเร็จ",
                     description: `พบข้อมูลของ ${response.data.student.full_name}`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             } else {
                 setData(null);
@@ -98,6 +102,8 @@ export default function MyScorePage() {
                     title: "ไม่พบข้อมูล",
                     description: "ไม่พบข้อมูลนักศึกษาในระบบ",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: unknown) {
@@ -107,6 +113,8 @@ export default function MyScorePage() {
                 title: "เกิดข้อผิดพลาด",
                 description: errorMessage,
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);

@@ -215,6 +215,8 @@ export default function FeedbackPage() {
                     title: "อัปเดตสำเร็จ",
                     description: "อัปเดต Feedback เรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsViewModalOpen(false);
                 fetchFeedbacks();
@@ -224,6 +226,8 @@ export default function FeedbackPage() {
                     title: "เกิดข้อผิดพลาด",
                     description: response.message || "ไม่สามารถอัปเดตได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -231,6 +235,8 @@ export default function FeedbackPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถอัปเดตได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -249,6 +255,8 @@ export default function FeedbackPage() {
                     title: "ลบสำเร็จ",
                     description: "ลบ Feedback เรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsDeleteModalOpen(false);
                 fetchFeedbacks();
@@ -258,6 +266,8 @@ export default function FeedbackPage() {
                     title: "เกิดข้อผิดพลาด",
                     description: response.message || "ไม่สามารถลบได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error) {
@@ -265,6 +275,8 @@ export default function FeedbackPage() {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถลบได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);

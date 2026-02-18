@@ -86,6 +86,8 @@ export function useSettingsTab({ course, onCourseUpdate }: UseSettingsTabProps) 
                 title: "กรุณากรอกข้อมูล",
                 description: "รหัสวิชาและชื่อวิชาจำเป็นต้องกรอก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -107,6 +109,8 @@ export function useSettingsTab({ course, onCourseUpdate }: UseSettingsTabProps) 
                     title: "สำเร็จ",
                     description: "บันทึกการตั้งค่าเรียบร้อยแล้ว",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 onCourseUpdate(response.data);
                 setIsEditing(false);
@@ -118,6 +122,8 @@ export function useSettingsTab({ course, onCourseUpdate }: UseSettingsTabProps) 
                     title: "เกิดข้อผิดพลาด",
                     description: errorMessage,
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -125,6 +131,8 @@ export function useSettingsTab({ course, onCourseUpdate }: UseSettingsTabProps) 
                 title: "เกิดข้อผิดพลาด",
                 description: error.message || "ไม่สามารถบันทึกการตั้งค่าได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSaving(false);

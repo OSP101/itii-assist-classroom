@@ -204,7 +204,7 @@ export default function InstructorLayout({
                     <div className="w-15 h-15 bg-gradient-to-br from-blue-400 to-indigo-500 rounded flex items-center justify-center text-white text-4xl">
                         <IoSchool />
                     </div>
-                    <p className="text-xl text-slate-700">The ITII Assist Classroom is loading.</p>
+                    {/* <p className="text-xl text-slate-700">The ITII Assist Classroom is loading.</p> */}
                     <Spinner size="lg" color="primary" />
                 </div>
             </div>

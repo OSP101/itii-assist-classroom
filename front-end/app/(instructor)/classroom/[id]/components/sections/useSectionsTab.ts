@@ -370,6 +370,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถโหลดข้อมูลรายวิชาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsLoading(false);
@@ -709,6 +711,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกหมายเลขกลุ่มเรียน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -743,6 +747,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "เพิ่มกลุ่มเรียนสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("section", "create", newSection.id);
@@ -754,6 +760,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มกลุ่มเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -799,6 +807,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "ลบกลุ่มเรียนเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("section", "delete", target.sectionId);
@@ -810,6 +820,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถลบกลุ่มเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -836,6 +848,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณากรอกหมายเลขกลุ่มเรียน",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -851,6 +865,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "หมายเลขซ้ำ",
                 description: `หมายเลขกลุ่มเรียน ${editSectionModalState.sectionNo} มีอยู่แล้ว`,
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -885,6 +901,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "แก้ไขกลุ่มเรียนสำเร็จ",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("section", "update", editSectionModalState.sectionId);
@@ -896,6 +914,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถแก้ไขกลุ่มเรียนได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -920,6 +940,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "ข้อมูลไม่ครบ",
                 description: "กรุณาเลือกนักศึกษา",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -964,6 +986,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "เพิ่มนักศึกษาเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("student", "create", studentModalState.studentId);
@@ -975,6 +999,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -1004,6 +1030,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: `เพิ่มนักศึกษา ${studentsToAdd.length} คนเรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("student", "bulk");
@@ -1015,6 +1043,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถเพิ่มนักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -1072,6 +1102,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "นำนักศึกษาออกเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 
                 emitUpdate("student", "delete", target.studentId);
@@ -1083,6 +1115,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถนำนักศึกษาออกได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -1098,6 +1132,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "ข้อมูลไม่ครบ",
                     description: "กรุณากรอกชื่อกลุ่ม",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsSubmitting(false);
                 return;
@@ -1108,6 +1144,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "ข้อมูลไม่ครบ",
                     description: "กรุณาเลือกสมาชิกอย่างน้อย 1 คน",
                     color: "warning",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setIsSubmitting(false);
                 return;
@@ -1127,6 +1165,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                         title: "สำเร็จ",
                         description: `สร้างกลุ่ม "${teamModalState.name}" เรียบร้อย`,
                         color: "success",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
                     emitUpdate("group", "create");
                     teamModal.reset();
@@ -1137,6 +1177,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "เกิดข้อผิดพลาด",
                     description: err.message || "ไม่สามารถสร้างกลุ่มได้",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
             }
         } else {
@@ -1179,6 +1221,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: `สร้างกลุ่มแบบสุ่ม ${successCount} กลุ่มเรียบร้อย`,
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "bulk");
             }
@@ -1205,6 +1249,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "แก้ไขกลุ่มเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "update", editTeamModalState.team.id);
                 editTeamModal.reset();
@@ -1215,6 +1261,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถแก้ไขกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -1234,6 +1282,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                     title: "สำเร็จ",
                     description: "ลบกลุ่มเรียบร้อย",
                     color: "success",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 emitUpdate("group", "delete", target.teamId);
                 deleteModal.reset();
@@ -1244,6 +1294,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: err.message || "ไม่สามารถลบกลุ่มได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
         } finally {
             setIsSubmitting(false);
@@ -1273,6 +1325,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "สำเร็จ",
                 description: `ลบกลุ่ม ${successCount} กลุ่มเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             emitUpdate("group", "bulk");
         }
@@ -1288,6 +1342,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "ไม่พบกลุ่ม",
                 description: `ไม่พบกลุ่มในสัปดาห์ที่ ${sourceWeek}`,
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -1316,6 +1372,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "สำเร็จ",
                 description: `คัดลอก ${successCount} กลุ่มเรียบร้อย`,
                 color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             emitUpdate("group", "bulk");
         }
@@ -1394,6 +1452,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "ไม่มีกลุ่มที่จะลบ",
                 description: "ไม่พบกลุ่มในสัปดาห์ที่เลือก",
                 color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             return;
         }
@@ -1523,6 +1583,8 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 title: "เกิดข้อผิดพลาด",
                 description: "ไม่สามารถค้นหานักศึกษาได้",
                 color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
             });
             teamModal.setParsedMembers([]);
         } finally {

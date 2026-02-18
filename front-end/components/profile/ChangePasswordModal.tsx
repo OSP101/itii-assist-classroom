@@ -61,6 +61,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
         title: "ข้อมูลไม่ครบ",
         description: "กรุณากรอกข้อมูลให้ครบถ้วน",
         color: "warning",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       return;
     }
@@ -70,6 +72,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
         title: "รหัสผ่านไม่ตรงกัน",
         description: "รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       return;
     }
@@ -79,6 +83,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
         title: "รหัสผ่านไม่ผ่านเงื่อนไข",
         description: "กรุณาตรวจสอบเงื่อนไขรหัสผ่าน",
         color: "warning",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
       return;
     }
@@ -92,6 +98,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
           title: "สำเร็จ",
           description: "เปลี่ยนรหัสผ่านเรียบร้อยแล้ว กรุณาเข้าสู่ระบบใหม่",
           color: "success",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
         resetForm();
         onClose();
@@ -104,6 +112,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
           title: "เกิดข้อผิดพลาด",
           description: result.error || "ไม่สามารถเปลี่ยนรหัสผ่านได้",
           color: "danger",
+          timeout: 3000,
+                shouldShowTimeoutProgress: true,
         });
       }
     } catch (error) {
@@ -112,6 +122,8 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
         title: "เกิดข้อผิดพลาด",
         description: "ไม่สามารถเปลี่ยนรหัสผ่านได้",
         color: "danger",
+        timeout: 3000,
+                shouldShowTimeoutProgress: true,
       });
     } finally {
       setIsChangingPassword(false);

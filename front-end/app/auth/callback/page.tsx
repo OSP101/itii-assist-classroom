@@ -24,12 +24,24 @@ function AuthCallbackContent() {
 
             // Handle error from backend
             if (error) {
+                // If opened as a popup (link action), postMessage error and close
+                if (typeof window !== "undefined" && window.opener && window.opener !== window) {
+                    window.opener.postMessage(
+                        { type: "oauth_link_result", success: false, error: decodeURIComponent(error) },
+                        window.location.origin
+                    );
+                    window.close();
+                    return;
+                }
+
                 setStatus("error");
                 setMessage(decodeURIComponent(error));
                 addToast({
                     title: "เข้าสู่ระบบไม่สำเร็จ",
                     description: decodeURIComponent(error),
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 // If it was a link action, go back to profile
                 const returnUrl = sessionStorage.getItem("oauth_return_url");
@@ -61,6 +73,8 @@ function AuthCallbackContent() {
                     title: "เกิดข้อผิดพลาด",
                     description: "ไม่พบข้อมูลการเข้าสู่ระบบ กรุณาลองใหม่อีกครั้ง",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 setTimeout(() => router.replace("/login"), 3000);
                 return;
@@ -77,6 +91,18 @@ function AuthCallbackContent() {
                     // Check if this was a link action
                     if (linked) {
                         const providerName = linked === 'github' ? 'GitHub' : linked === 'google' ? 'Google' : linked;
+
+                        // If opened as popup, send result back to opener and close
+                        if (typeof window !== "undefined" && window.opener && window.opener !== window) {
+                            window.opener.postMessage(
+                                { type: "oauth_link_result", success: true, provider: linked, providerName },
+                                window.location.origin
+                            );
+                            window.close();
+                            return;
+                        }
+
+                        // Fallback: normal redirect flow
                         setStatus("success");
                         setMessage(`เชื่อมต่อ ${providerName} สำเร็จ`);
 
@@ -84,6 +110,8 @@ function AuthCallbackContent() {
                             title: "เชื่อมต่อสำเร็จ",
                             description: `เชื่อมต่อบัญชี ${providerName} เรียบร้อยแล้ว`,
                             color: "success",
+                            timeout: 3000,
+                shouldShowTimeoutProgress: true,
                         });
 
                         // Get return URL from sessionStorage or default to profile page
@@ -113,6 +141,8 @@ function AuthCallbackContent() {
                         title: "เข้าสู่ระบบสำเร็จ",
                         description: `ยินดีต้อนรับ ${userResult.user.full_name}`,
                         color: "success",
+                        timeout: 3000,
+                shouldShowTimeoutProgress: true,
                     });
 
                     // Redirect based on role
@@ -139,6 +169,8 @@ function AuthCallbackContent() {
                     title: "เกิดข้อผิดพลาด",
                     description: "ไม่สามารถเข้าสู่ระบบได้ กรุณาลองใหม่อีกครั้ง",
                     color: "danger",
+                    timeout: 3000,
+                shouldShowTimeoutProgress: true,
                 });
                 // Clear any stored tokens
                 authService.clearTokens();
