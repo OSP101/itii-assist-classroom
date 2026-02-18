@@ -102,16 +102,20 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     loadOAuthAccounts();
   }, [load2FAStatus, loadOAuthAccounts]);
 
-  // Listen for popup OAuth link result
+  // Listen for OAuth link result via BroadcastChannel.
+  // BroadcastChannel is more reliable than postMessage+window.opener because
+  // window.opener becomes null after cross-origin navigation (e.g. Google redirect chain).
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      if (event.data?.type !== "oauth_link_result") return;
+    const channel = new BroadcastChannel("oauth_link_channel");
 
-      if (event.data.success) {
+    channel.onmessage = (event) => {
+      const data = event.data;
+      if (data?.type !== "oauth_link_result") return;
+
+      if (data.success) {
         addToast({
           title: "เชื่อมต่อสำเร็จ",
-          description: `เชื่อมต่อบัญชี ${event.data.providerName} เรียบร้อยแล้ว`,
+          description: `เชื่อมต่อบัญชี ${data.providerName} เรียบร้อยแล้ว`,
           color: "success",
           timeout: 3000,
           shouldShowTimeoutProgress: true,
@@ -120,18 +124,18 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
       } else {
         addToast({
           title: "เชื่อมต่อไม่สำเร็จ",
-          description: event.data.error || "ไม่สามารถเชื่อมต่อบัญชีได้",
+          description: data.error || "ไม่สามารถเชื่อมต่อบัญชีได้",
           color: "danger",
           timeout: 3000,
           shouldShowTimeoutProgress: true,
         });
       }
-      // Clear loading state regardless of result
+      // Clear loading state and localStorage flag
+      localStorage.removeItem("pending_oauth_link_provider");
       setLinkingProvider(null);
     };
 
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => channel.close();
   }, [loadOAuthAccounts]);
 
   const getMethodLabel = (method: string | null) => {
@@ -219,6 +223,8 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
         try {
           if (tab.closed) {
             clearInterval(poll);
+            // Tab closed without postMessage → user aborted; clear the flag
+            localStorage.removeItem("pending_oauth_link_provider");
             // Give postMessage 400ms to arrive before resetting
             setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
           }
@@ -245,6 +251,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
         try {
           if (tab.closed) {
             clearInterval(poll);
+            localStorage.removeItem("pending_oauth_link_provider");
             setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
           }
         } catch {
@@ -261,6 +268,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     const provider = PROVIDERS.find(p => p.key === providerKey);
     return provider?.manageUrl || '#';
   };
+
 
   return (
     <div className="space-y-4 sm:space-y-6">

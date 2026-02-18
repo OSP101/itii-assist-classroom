@@ -101,6 +101,10 @@ class OAuthService {
     // Get current access token for linking
     const accessToken = localStorage.getItem("accessToken");
 
+    // Signal to the callback page (via shared localStorage) that this is a link action.
+    // This is more reliable than backend cookies which can be dropped during cross-origin redirects.
+    localStorage.setItem("pending_oauth_link_provider", provider);
+
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
     const linkUrl = new URL(`${backendUrl}/auth/${provider}`);
     linkUrl.searchParams.set("action", "link");

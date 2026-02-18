@@ -14,25 +14,22 @@ function LinkCallbackContent() {
     const linked = searchParams.get("linked");
     const error = searchParams.get("error");
 
-    const sendAndClose = (data: Record<string, unknown>) => {
-      if (window.opener && window.opener !== window) {
-        try {
-          window.opener.postMessage(
-            { type: "oauth_link_result", ...data },
-            window.location.origin
-          );
-        } catch {
-          // opener might be cross-origin or closed
-        }
-        // Small delay to ensure message is received before closing
-        setTimeout(() => window.close(), 100);
-      } else {
-        // Fallback: opened directly (not via window.open) — redirect to profile
+    // Always clean up the localStorage flag when link-callback is reached
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("pending_oauth_link_provider");
+    }
+
+    const sendAndClose = (data: Record<string, unknown>) => { 
+      const channel = new BroadcastChannel("oauth_link_channel");
+      channel.postMessage({ type: "oauth_link_result", ...data });
+      setTimeout(() => channel.close(), 200);
+      window.close();
+      setTimeout(() => {
         const path = data.success
           ? "/profile?tab=authentication"
           : `/profile?tab=authentication&error=${encodeURIComponent(String(data.error ?? "เกิดข้อผิดพลาด"))}`;
         window.location.href = path;
-      }
+      }, 500);
     };
 
     if (error) {

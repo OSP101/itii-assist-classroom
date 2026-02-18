@@ -22,15 +22,29 @@ function AuthCallbackContent() {
             const twoFactor = searchParams.get("twoFactor");
             const linked = searchParams.get("linked"); // OAuth linking action
 
+            // Check if this callback is from a link action initiated via new tab.
+            // We use localStorage (shared across same-origin tabs) because backend cookies
+            // can be silently dropped during cross-domain OAuth redirects.
+            const pendingLinkProvider =
+                typeof window !== "undefined"
+                    ? localStorage.getItem("pending_oauth_link_provider")
+                    : null;
+            const isLinkTab =
+                !!pendingLinkProvider &&
+                typeof window !== "undefined" &&
+                !!window.opener &&
+                window.opener !== window;
+
             // Handle error from backend
             if (error) {
                 // If opened as a popup (link action), postMessage error and close
-                if (typeof window !== "undefined" && window.opener && window.opener !== window) {
-                    window.opener.postMessage(
-                        { type: "oauth_link_result", success: false, error: decodeURIComponent(error) },
-                        window.location.origin
-                    );
+                if (isLinkTab) {
+                    localStorage.removeItem("pending_oauth_link_provider");
+                    const channel = new BroadcastChannel("oauth_link_channel");
+                    channel.postMessage({ type: "oauth_link_result", success: false, error: decodeURIComponent(error) });
+                    setTimeout(() => channel.close(), 200);
                     window.close();
+                    setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
                     return;
                 }
 
@@ -84,21 +98,45 @@ function AuthCallbackContent() {
                 // Store tokens
                 authService.setTokens(accessToken, refreshToken);
 
+                // ---------- LINK-TAB INTERCEPT ----------
+                // If the backend treated the link flow as a normal login (cookie was dropped
+                // during cross-origin OAuth redirects), we still detect it here via localStorage.
+                if (isLinkTab) {
+                    localStorage.removeItem("pending_oauth_link_provider");
+                    const resolvedLinked = linked || pendingLinkProvider!;
+                    const providerName =
+                        resolvedLinked === "github"
+                            ? "GitHub"
+                            : resolvedLinked === "google"
+                              ? "Google"
+                              : resolvedLinked;
+                    // Use BroadcastChannel — doesn't require window.opener
+                    const channel = new BroadcastChannel("oauth_link_channel");
+                    channel.postMessage({ type: "oauth_link_result", success: true, provider: resolvedLinked, providerName });
+                    setTimeout(() => channel.close(), 200);
+                    window.close();
+                    // Fallback redirect if tab doesn't close
+                    setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
+                    return;
+                }
+                // ----------------------------------------
+
                 // Fetch user info
                 const userResult = await authService.getMe();
 
                 if (userResult.success && userResult.user) {
-                    // Check if this was a link action
+                    // Check if this was a link action (backend correctly set linked param)
                     if (linked) {
                         const providerName = linked === 'github' ? 'GitHub' : linked === 'google' ? 'Google' : linked;
 
-                        // If opened as popup, send result back to opener and close
-                        if (typeof window !== "undefined" && window.opener && window.opener !== window) {
-                            window.opener.postMessage(
-                                { type: "oauth_link_result", success: true, provider: linked, providerName },
-                                window.location.origin
-                            );
+                        // If opened as a link tab, broadcast result and close
+                        if (typeof window !== "undefined" && pendingLinkProvider) {
+                            localStorage.removeItem("pending_oauth_link_provider");
+                            const channel = new BroadcastChannel("oauth_link_channel");
+                            channel.postMessage({ type: "oauth_link_result", success: true, provider: linked, providerName });
+                            setTimeout(() => channel.close(), 200);
                             window.close();
+                            setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
                             return;
                         }
 
