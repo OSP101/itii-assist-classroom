@@ -87,6 +87,10 @@ export interface UseAttendanceTabReturn {
     closeTimeChangePreview: () => void;
     confirmApplyTimeChange: () => Promise<void>;
 
+    // Pending update notification (for other users' changes)
+    pendingAttendanceUpdate: boolean;
+    ackAttendanceUpdate: () => Promise<void>;
+
     // Context
     courseId: string;
 }
@@ -100,7 +104,7 @@ export function useAttendanceTab(
     onAttendanceChanged?: () => void
 ): UseAttendanceTabReturn {
     const router = useRouter();
-    const { emitDataUpdate } = useSocket();
+    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates } = useSocket();
 
     // ========================================================================
     // Memoized Values
@@ -122,6 +126,9 @@ export function useAttendanceTab(
 
     // For triggering status updates (without causing full component re-renders)
     const [statusTick, setStatusTick] = useState(0);
+
+    // Pending update flag (other user changed data → show notification)
+    const [pendingAttendanceUpdate, setPendingAttendanceUpdate] = useState(false);
 
     // ========================================================================
     // Filter State
@@ -282,6 +289,21 @@ export function useAttendanceTab(
         return () => clearInterval(interval);
     }, []);
 
+    // Subscribe to real-time socket events from OTHER users
+    useEffect(() => {
+        subscribeToUpdates();
+        const unsubscribe = onDataUpdate((data) => {
+            if (data.resource !== "attendance") return;
+            // Filter events to this classroom only
+            if (data.data?.courseId && String(data.data.courseId) !== String(course.id)) return;
+            setPendingAttendanceUpdate(true);
+        });
+        return () => {
+            unsubscribe();
+            unsubscribeFromUpdates();
+        };
+    }, [onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, course.id]);
+
     // ========================================================================
     // Form Helpers
     // ========================================================================
@@ -387,6 +409,31 @@ export function useAttendanceTab(
             return;
         }
 
+        // Validate time ordering
+        const _startDate = startDateTime.toDate(getLocalTimeZone());
+        const _endDate   = endDateTime.toDate(getLocalTimeZone());
+        const _lateDate  = lateThresholdTime.toDate(getLocalTimeZone());
+        if (_endDate <= _startDate) {
+            addToast({
+                title: "เวลาไม่ถูกต้อง",
+                description: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น",
+                color: "danger",
+                timeout: 4000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+        if (_lateDate < _startDate || _lateDate > _endDate) {
+            addToast({
+                title: "เวลาตัดสายไม่ถูกต้อง",
+                description: "เวลาตัดสายต้องอยู่ระหว่างเวลาเริ่มต้นและสิ้นสุด",
+                color: "danger",
+                timeout: 4000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+
         setIsSubmitting(true);
         try {
             const startDate = startDateTime.toDate(getLocalTimeZone());
@@ -416,7 +463,7 @@ export function useAttendanceTab(
                 });
                 closeCreateModal();
                 fetchSessions(false);
-                emitDataUpdate("attendance", "create", result.id);
+                emitDataUpdate("attendance", "create", result.id, { courseId: course.id });
                 onAttendanceChanged?.();
             }
         } catch (error: unknown) {
@@ -442,6 +489,31 @@ export function useAttendanceTab(
                 description: "กรุณากรอกชื่อรอบการเช็คชื่อ",
                 color: "warning",
                 timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+
+        // Validate time ordering
+        const _startDate = startDateTime.toDate(getLocalTimeZone());
+        const _endDate   = endDateTime.toDate(getLocalTimeZone());
+        const _lateDate  = lateThresholdTime.toDate(getLocalTimeZone());
+        if (_endDate <= _startDate) {
+            addToast({
+                title: "เวลาไม่ถูกต้อง",
+                description: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่มต้น",
+                color: "danger",
+                timeout: 4000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+        if (_lateDate < _startDate || _lateDate > _endDate) {
+            addToast({
+                title: "เวลาตัดสายไม่ถูกต้อง",
+                description: "เวลาตัดสายต้องอยู่ระหว่างเวลาเริ่มต้นและสิ้นสุด",
+                color: "danger",
+                timeout: 4000,
                 shouldShowTimeoutProgress: true,
             });
             return;
@@ -538,6 +610,7 @@ export function useAttendanceTab(
                 });
                 closeEditModal();
                 fetchSessions(false);
+                emitDataUpdate("attendance", "update", editTarget.id, { courseId: course.id });
             }
         } catch (error: unknown) {
             console.error("Error updating session:", error);
@@ -551,7 +624,7 @@ export function useAttendanceTab(
         } finally {
             setIsSubmitting(false);
         }
-    }, [editTarget, formData, startDateTime, endDateTime, lateThresholdTime, lateThresholdMinutes, closeEditModal, fetchSessions]);
+    }, [editTarget, formData, startDateTime, endDateTime, lateThresholdTime, lateThresholdMinutes, course.id, closeEditModal, fetchSessions, emitDataUpdate]);
 
     /**
      * Confirm and apply the time change after preview.
@@ -586,6 +659,7 @@ export function useAttendanceTab(
                 pendingUpdateDataRef.current = null;
                 closeEditModal();
                 fetchSessions(false);
+                emitDataUpdate("attendance", "update", editTarget.id, { courseId: course.id });
             }
         } catch (error: unknown) {
             console.error("Error applying time change:", error);
@@ -599,7 +673,7 @@ export function useAttendanceTab(
         } finally {
             setIsApplyingTimeChange(false);
         }
-    }, [editTarget, closeEditModal, fetchSessions]);
+    }, [editTarget, course.id, closeEditModal, fetchSessions, emitDataUpdate]);
 
     const closeTimeChangePreview = useCallback(() => {
         setIsTimeChangePreviewOpen(false);
@@ -623,7 +697,7 @@ export function useAttendanceTab(
                 });
                 closeDeleteModal();
                 fetchSessions(false);
-                emitDataUpdate("attendance", "delete", deleteTarget.id);
+                emitDataUpdate("attendance", "delete", deleteTarget.id, { courseId: course.id });
                 onAttendanceChanged?.();
             }
         } catch (error: unknown) {
@@ -653,6 +727,7 @@ export function useAttendanceTab(
                 shouldShowTimeoutProgress: true,
                 });
                 fetchSessions(false);
+                emitDataUpdate("attendance", "update", session.id, { courseId: course.id });
             } catch (error: unknown) {
                 console.error("Error activating session:", error);
                 addToast({
@@ -666,7 +741,7 @@ export function useAttendanceTab(
             }
         }
         window.open(`/attendance/${course.id}/session/${session.id}/live`, "_blank");
-    }, [course.id, fetchSessions]);
+    }, [course.id, fetchSessions, emitDataUpdate]);
 
     const confirmCloseSession = useCallback(async () => {
         if (!closeTarget) return;
@@ -684,6 +759,7 @@ export function useAttendanceTab(
                 });
                 closeCloseSessionModal();
                 fetchSessions(false);
+                emitDataUpdate("attendance", "update", closeTarget.id, { courseId: course.id });
             }
         } catch (error: unknown) {
             console.error("Error closing session:", error);
@@ -697,7 +773,13 @@ export function useAttendanceTab(
         } finally {
             setIsSubmitting(false);
         }
-    }, [closeTarget, closeCloseSessionModal, fetchSessions]);
+    }, [closeTarget, course.id, closeCloseSessionModal, fetchSessions, emitDataUpdate]);
+
+    // Acknowledge pending attendance update (dismiss notification + silent refresh)
+    const ackAttendanceUpdate = useCallback(async () => {
+        setPendingAttendanceUpdate(false);
+        await fetchSessions(false);
+    }, [fetchSessions]);
 
     // ========================================================================
     // GPS Handler
@@ -827,6 +909,10 @@ export function useAttendanceTab(
         isApplyingTimeChange,
         closeTimeChangePreview,
         confirmApplyTimeChange,
+
+        // Pending update notification
+        pendingAttendanceUpdate,
+        ackAttendanceUpdate,
 
         // Context
         courseId: course.id,

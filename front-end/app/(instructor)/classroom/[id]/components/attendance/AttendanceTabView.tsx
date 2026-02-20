@@ -214,7 +214,7 @@ function AttendanceTabViewComponent({ course, isLoading, hook, isCourseActive = 
         courseId,
     } = hook;
 
-    const showLoading = isLoading || isSessionsLoading;
+    const showLoading = isSessionsLoading;
 
     return (
         <div className="space-y-4">

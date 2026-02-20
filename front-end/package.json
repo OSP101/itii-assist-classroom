@@ -59,6 +59,7 @@
     "@types/leaflet": "^1.9.21",
     "clsx": "2.1.1",
     "date-fns": "^4.1.0",
+    "exceljs": "^4.4.0",
     "firebase": "^12.8.0",
     "framer-motion": "11.18.2",
     "intl-messageformat": "10.7.16",
@@ -74,9 +75,11 @@
     "react-leaflet": "^4.2.1",
     "react-qr-code": "^2.0.18",
     "react-turnstile": "^1.1.4",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@eslint/compat": "^2.0.2",
     "@next/eslint-plugin-next": "15.5.9",
     "@react-types/shared": "3.32.1",
     "@tailwindcss/postcss": "4.1.11",

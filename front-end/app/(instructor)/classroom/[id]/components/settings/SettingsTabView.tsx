@@ -7,6 +7,7 @@ import { Input, Textarea } from "@heroui/input";
 import { Chip } from "@heroui/chip";
 import { Switch } from "@heroui/switch";
 import { Slider } from "@heroui/slider";
+import { Divider } from "@heroui/divider";
 import { Icon } from "@iconify/react";
 import type { Course } from "@/services/course.service";
 import type { SettingsFormData, UseSettingsTabReturn } from "./useSettingsTab";
@@ -18,14 +19,56 @@ interface SettingsTabViewProps {
     formData: SettingsFormData;
     hasWarningChanges: boolean;
     isDisablingCourse: boolean;
+    isExporting: boolean;
     stats: UseSettingsTabReturn["stats"];
     onUpdateField: <K extends keyof SettingsFormData>(field: K, value: SettingsFormData[K]) => void;
     onSave: () => void;
     onCancel: () => void;
     onStartEditing: () => void;
+    onExportAll: () => void;
     getSemesterText: (semester: number) => string;
 }
 
+// ─── Reusable Section Card Header ───────────────────────────────────────────
+function SectionCardHeader({
+    icon,
+    title,
+    subtitle,
+    gradientFrom,
+    gradientTo,
+}: {
+    icon: string;
+    title: string;
+    subtitle: string;
+    gradientFrom: string;
+    gradientTo: string;
+}) {
+    return (
+        <CardHeader className="px-5 py-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradientFrom} ${gradientTo} flex items-center justify-center shadow-sm`}>
+                    <Icon icon={icon} className="text-xl text-white" />
+                </div>
+                <div>
+                    <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+                    <p className="text-xs text-slate-500">{subtitle}</p>
+                </div>
+            </div>
+        </CardHeader>
+    );
+}
+
+// ─── Read-only field display ─────────────────────────────────────────────────
+function ReadField({ icon, value }: { icon: string; value: string }) {
+    return (
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200">
+            <Icon icon={icon} className="text-slate-400 flex-shrink-0" />
+            <span className="text-slate-800 font-medium text-sm">{value}</span>
+        </div>
+    );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
 function SettingsTabViewComponent({
     course,
     isEditing,
@@ -33,434 +76,423 @@ function SettingsTabViewComponent({
     formData,
     hasWarningChanges,
     isDisablingCourse,
+    isExporting,
     stats,
     onUpdateField,
     onSave,
     onCancel,
     onStartEditing,
+    onExportAll,
     getSemesterText,
 }: SettingsTabViewProps) {
-    return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-500 to-slate-700 flex items-center justify-center shadow-lg">
-                        <Icon icon="solar:settings-bold" className="text-2xl text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800">ตั้งค่ารายวิชา</h1>
-                        <p className="text-slate-500">จัดการข้อมูลและการตั้งค่าของรายวิชา</p>
-                    </div>
-                </div>
-                
-                {!isEditing ? (
-                    <Button
-                        color="primary"
-                        startContent={<Icon icon="solar:pen-bold" />}
-                        onPress={onStartEditing}
-                    >
-                        แก้ไขข้อมูล
-                    </Button>
-                ) : (
-                    <div className="flex gap-2">
-                        <Button variant="flat" onPress={onCancel}>
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="primary"
-                            isLoading={isSaving}
-                            startContent={!isSaving && <Icon icon="solar:check-circle-bold" />}
-                            onPress={onSave}
-                        >
-                            บันทึก
-                        </Button>
-                    </div>
-                )}
-            </div>
+    const thresholdColor =
+        formData.attention_threshold < 50 ? "danger" : formData.attention_threshold < 70 ? "warning" : "success";
+    const thresholdBarColor =
+        formData.attention_threshold < 50 ? "bg-red-500" : formData.attention_threshold < 70 ? "bg-amber-500" : "bg-emerald-500";
 
-            {/* Course Info Card */}
-            <Card className="shadow-md">
-                <CardHeader className="flex gap-3 px-6 py-4 border-b border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                        <Icon icon="solar:document-text-bold" className="text-xl text-blue-600" />
+    return (
+        <div className="space-y-5">
+
+            {/* ── Hero Header ─────────────────────────────────────────────── */}
+            <Card className="shadow-md border-0 bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 text-white overflow-hidden">
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute -top-8 -right-8 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
+                    <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
+                </div>
+                <CardBody className="relative p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center">
+                                <Icon icon="solar:settings-bold-duotone" className="text-2xl text-white" />
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h1 className="text-xl font-bold">ตั้งค่ารายวิชา</h1>
+                                    <Chip
+                                        size="sm"
+                                        className={`border-0 text-xs ${course.is_active ? "bg-emerald-500/30 text-emerald-100" : "bg-red-500/30 text-red-100"}`}
+                                        startContent={
+                                            <div className={`w-1.5 h-1.5 rounded-full ${course.is_active ? "bg-emerald-400 animate-pulse" : "bg-red-400"}`} />
+                                        }
+                                    >
+                                        {course.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                                    </Chip>
+                                </div>
+                                <p className="text-white/60 text-sm">{course.code} · {getSemesterText(course.semester)} · {course.year}</p>
+                            </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        {!isEditing ? (
+                            <Button
+                                className="bg-white/15 border border-white/25 text-white hover:bg-white/25 backdrop-blur-sm"
+                                startContent={<Icon icon="solar:pen-bold" />}
+                                onPress={onStartEditing}
+                                size="sm"
+                            >
+                                แก้ไขข้อมูล
+                            </Button>
+                        ) : (
+                            <div className="flex gap-2">
+                                <Button
+                                    size="sm"
+                                    className="bg-white/10 border border-white/20 text-white hover:bg-white/20"
+                                    onPress={onCancel}
+                                >
+                                    ยกเลิก
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg"
+                                    isLoading={isSaving}
+                                    startContent={!isSaving && <Icon icon="solar:check-circle-bold" />}
+                                    onPress={onSave}
+                                >
+                                    บันทึก
+                                </Button>
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800">ข้อมูลรายวิชา</h3>
-                        <p className="text-sm text-slate-500">ข้อมูลพื้นฐานของรายวิชา</p>
+
+                    {/* Quick stat pills */}
+                    <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-white/10">
+                        <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/80">
+                            <Icon icon="solar:users-group-rounded-bold" className="text-sm" />
+                            {stats.totalStudents} นักศึกษา
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/80">
+                            <Icon icon="solar:notebook-bold" className="text-sm" />
+                            {stats.sectionsCount} กลุ่มเรียน
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/80">
+                            <Icon icon="solar:user-speak-bold" className="text-sm" />
+                            {stats.instructorsCount} อาจารย์
+                        </div>
+                        <div className="flex items-center gap-1.5 bg-white/10 rounded-full px-3 py-1 text-xs text-white/80">
+                            <Icon icon="solar:star-bold" className="text-sm" />
+                            {stats.tasCount} ผู้ช่วยสอน
+                        </div>
                     </div>
-                </CardHeader>
-                <CardBody className="px-6 py-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                </CardBody>
+            </Card>
+
+            {/* ── Course Info ──────────────────────────────────────────────── */}
+            <Card className="shadow-sm border border-slate-200">
+                <SectionCardHeader
+                    icon="solar:document-text-bold"
+                    title="ข้อมูลรายวิชา"
+                    subtitle="แก้ไขข้อมูลพื้นฐานของรายวิชา"
+                    gradientFrom="from-blue-500"
+                    gradientTo="to-indigo-600"
+                />
+                <CardBody className="p-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Course Code */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">รหัสวิชา</label>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">รหัสวิชา</label>
                             {isEditing ? (
                                 <Input
                                     value={formData.code}
-                                    onValueChange={(val) => onUpdateField("code", val)}
+                                    onValueChange={(v) => onUpdateField("code", v)}
                                     placeholder="เช่น 01076001"
                                     variant="bordered"
-                                    size="lg"
-                                    startContent={
-                                        <Icon icon="solar:hashtag-bold" className="text-slate-400" />
-                                    }
+                                    size="sm"
+                                    startContent={<Icon icon="solar:hashtag-bold" className="text-slate-400 text-sm" />}
+                                    classNames={{ inputWrapper: "border-slate-300" }}
                                 />
                             ) : (
-                                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                                    <Icon icon="solar:hashtag-bold" className="text-slate-400" />
-                                    <span className="text-slate-800 font-medium">{course.code}</span>
-                                </div>
+                                <ReadField icon="solar:hashtag-bold" value={course.code} />
                             )}
                         </div>
 
                         {/* Course Name */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">ชื่อวิชา</label>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">ชื่อวิชา</label>
                             {isEditing ? (
                                 <Input
                                     value={formData.name}
-                                    onValueChange={(val) => onUpdateField("name", val)}
+                                    onValueChange={(v) => onUpdateField("name", v)}
                                     placeholder="ชื่อรายวิชา"
                                     variant="bordered"
-                                    size="lg"
-                                    startContent={
-                                        <Icon icon="solar:book-bold" className="text-slate-400" />
-                                    }
+                                    size="sm"
+                                    startContent={<Icon icon="solar:book-bold" className="text-slate-400 text-sm" />}
+                                    classNames={{ inputWrapper: "border-slate-300" }}
                                 />
                             ) : (
-                                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                                    <Icon icon="solar:book-bold" className="text-slate-400" />
-                                    <span className="text-slate-800 font-medium">{course.name}</span>
-                                </div>
+                                <ReadField icon="solar:book-bold" value={course.name} />
                             )}
                         </div>
 
                         {/* Academic Year */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">ปีการศึกษา</label>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">ปีการศึกษา</label>
                             {isEditing ? (
                                 <Input
                                     type="number"
                                     value={String(formData.year)}
-                                    onValueChange={(val) => onUpdateField("year", parseInt(val) || formData.year)}
+                                    onValueChange={(v) => onUpdateField("year", parseInt(v) || formData.year)}
                                     placeholder="พ.ศ."
                                     variant="bordered"
-                                    size="lg"
-                                    startContent={
-                                        <Icon icon="solar:calendar-bold" className="text-slate-400" />
-                                    }
+                                    size="sm"
+                                    startContent={<Icon icon="solar:calendar-bold" className="text-slate-400 text-sm" />}
+                                    classNames={{ inputWrapper: "border-slate-300" }}
                                 />
                             ) : (
-                                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                                    <Icon icon="solar:calendar-bold" className="text-slate-400" />
-                                    <span className="text-slate-800 font-medium">{course.year}</span>
-                                </div>
+                                <ReadField icon="solar:calendar-bold" value={String(course.year)} />
                             )}
                         </div>
 
                         {/* Semester */}
-                        <div className="space-y-2">
-                            <label className="text-sm font-medium text-slate-700">ภาคเรียน</label>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">ภาคเรียน</label>
                             {isEditing ? (
                                 <div className="flex gap-2">
                                     {[1, 2, 3].map((sem) => (
                                         <Button
                                             key={sem}
+                                            size="sm"
                                             variant={formData.semester === sem ? "solid" : "bordered"}
                                             color={formData.semester === sem ? "primary" : "default"}
+                                            className={formData.semester === sem ? "bg-gradient-to-r from-blue-400 to-indigo-500 text-white flex-1" : "flex-1 border-slate-300"}
                                             onPress={() => onUpdateField("semester", sem)}
-                                            className="flex-1"
                                         >
-                                            {sem === 3 ? "ฤดูร้อน" : "ภาคเรียนที่ "+sem}
+                                            {sem === 3 ? "ฤดูร้อน" : `ภาค ${sem}`}
                                         </Button>
                                     ))}
                                 </div>
                             ) : (
-                                <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg">
-                                    <Icon icon="solar:calendar-date-bold" className="text-slate-400" />
-                                    <span className="text-slate-800 font-medium">{getSemesterText(course.semester)}</span>
-                                </div>
+                                <ReadField icon="solar:calendar-date-bold" value={getSemesterText(course.semester)} />
                             )}
                         </div>
 
                         {/* Description */}
-                        <div className="space-y-2 md:col-span-2">
-                            <label className="text-sm font-medium text-slate-700">คำอธิบายรายวิชา</label>
+                        <div className="space-y-1.5 md:col-span-2">
+                            <label className="text-xs font-medium text-slate-500 uppercase tracking-wide">คำอธิบายรายวิชา</label>
                             {isEditing ? (
                                 <Textarea
                                     value={formData.description}
-                                    onValueChange={(val) => onUpdateField("description", val)}
-                                    placeholder="คำอธิบายเพิ่มเติมของรายวิชา (ไม่บังคับ)"
+                                    onValueChange={(v) => onUpdateField("description", v)}
+                                    placeholder="คำอธิบายเพิ่มเติม (ไม่บังคับ)"
                                     variant="bordered"
-                                    minRows={3}
+                                    minRows={2}
+                                    classNames={{ inputWrapper: "border-slate-300" }}
                                 />
                             ) : (
-                                <div className="p-3 bg-slate-50 rounded-lg min-h-[80px]">
-                                    {course.description ? (
-                                        <p className="text-slate-700">{course.description}</p>
-                                    ) : (
-                                        <p className="text-slate-400 italic">ไม่มีคำอธิบาย</p>
-                                    )}
+                                <div className="px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-200 min-h-[60px]">
+                                    {course.description
+                                        ? <p className="text-slate-700 text-sm">{course.description}</p>
+                                        : <p className="text-slate-400 italic text-sm">ไม่มีคำอธิบาย</p>
+                                    }
                                 </div>
                             )}
                         </div>
 
-                        {/* Warning when changing code/year/semester */}
+                        {/* Warning */}
                         {isEditing && hasWarningChanges && (
-                            <div className="md:col-span-2 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                                <div className="flex items-start gap-3">
-                                    <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
+                            <div className="md:col-span-2 p-3 bg-amber-50 border border-amber-200 rounded-xl">
+                                <div className="flex items-start gap-2">
+                                    <Icon icon="solar:info-circle-bold" className="text-lg text-amber-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-amber-700">
+                                        การเปลี่ยน<strong>รหัสวิชา / ปี / ภาคเรียน</strong> ระบบจะตรวจสอบว่าไม่มีรายวิชาซ้ำ หากพบรายวิชาซ้ำจะไม่สามารถบันทึกได้
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </CardBody>
+            </Card>
+
+            {/* ── Two-column row: Threshold + Status ──────────────────────── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+                {/* Attention Threshold */}
+                <Card className="shadow-sm border border-slate-200">
+                    <SectionCardHeader
+                        icon="solar:bell-bold"
+                        title="เกณฑ์การแจ้งเตือน"
+                        subtitle="ไฮไลท์นักศึกษาที่ต้องดูแลเป็นพิเศษ"
+                        gradientFrom="from-amber-500"
+                        gradientTo="to-orange-600"
+                    />
+                    <CardBody className="p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <p className="text-sm text-slate-600">นักศึกษาที่คะแนนรวมต่ำกว่า</p>
+                            <Chip size="sm" color={thresholdColor} variant="flat" className="font-bold">
+                                {formData.attention_threshold}%
+                            </Chip>
+                        </div>
+
+                        {isEditing ? (
+                            <Slider
+                                aria-label="Attention Threshold"
+                                step={5}
+                                minValue={0}
+                                maxValue={100}
+                                value={formData.attention_threshold}
+                                onChange={(v) => onUpdateField("attention_threshold", v as number)}
+                                color={thresholdColor}
+                                showTooltip
+                                marks={[
+                                    { value: 0, label: "0%" },
+                                    { value: 50, label: "50%" },
+                                    { value: 100, label: "100%" },
+                                ]}
+                                showSteps
+                            />
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${thresholdBarColor}`}
+                                        style={{ width: `${formData.attention_threshold}%` }}
+                                    />
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    จะถูกไฮไลท์ในรายการ &quot;นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม&quot;
+                                </p>
+                            </div>
+                        )}
+                    </CardBody>
+                </Card>
+
+                {/* Course Status */}
+                <Card className="shadow-sm border border-slate-200">
+                    <SectionCardHeader
+                        icon={formData.is_active ? "solar:check-circle-bold" : "solar:close-circle-bold"}
+                        title="สถานะรายวิชา"
+                        subtitle="เปิด/ปิดการใช้งานรายวิชา"
+                        gradientFrom={formData.is_active ? "from-emerald-500" : "from-red-500"}
+                        gradientTo={formData.is_active ? "to-teal-600" : "to-rose-600"}
+                    />
+                    <CardBody className="p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="font-medium text-slate-800 text-sm">
+                                    {formData.is_active ? "เปิดใช้งานอยู่" : "ปิดใช้งานอยู่"}
+                                </p>
+                                <p className="text-xs text-slate-500 mt-0.5">
+                                    {formData.is_active
+                                        ? "นักศึกษาและ TA สามารถเข้าถึงรายวิชาได้"
+                                        : "นักศึกษาและ TA ไม่สามารถเข้าถึงรายวิชาได้"}
+                                </p>
+                            </div>
+                            {isEditing ? (
+                                <Switch
+                                    isSelected={formData.is_active}
+                                    onValueChange={(v) => onUpdateField("is_active", v)}
+                                    color="success"
+                                    size="lg"
+                                />
+                            ) : (
+                                <Chip
+                                    color={formData.is_active ? "success" : "danger"}
+                                    variant="flat"
+                                    size="sm"
+                                    startContent={
+                                        <Icon icon={formData.is_active ? "solar:check-circle-bold" : "solar:close-circle-bold"} />
+                                    }
+                                >
+                                    {formData.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                                </Chip>
+                            )}
+                        </div>
+
+                        {isEditing && isDisablingCourse && (
+                            <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                                <div className="flex items-start gap-2">
+                                    <Icon icon="solar:danger-triangle-bold" className="text-lg text-red-600 mt-0.5 flex-shrink-0" />
                                     <div>
-                                        <p className="font-medium text-amber-800">หมายเหตุ: การเปลี่ยนรหัสวิชา/ปี/ภาคเรียน</p>
-                                        <p className="text-sm text-amber-700 mt-1">
-                                            ระบบจะตรวจสอบว่าไม่มีรายวิชาอื่นที่เปิดใช้งานอยู่ด้วยรหัสวิชา ปีการศึกษา ภาคเรียนเดียวกัน 
-                                            หากมีรายวิชาซ้ำจะไม่สามารถบันทึกได้ <span className="underline font-medium">มีข้อสงสัยกรุณาติดต่อผู้ดูแลระบบ</span>
-                                        </p>
+                                        <p className="text-sm font-medium text-red-800">คำเตือน: การปิดใช้งานรายวิชา</p>
+                                        <ul className="text-xs text-red-600 mt-1 space-y-0.5 list-disc list-inside">
+                                            <li>นักศึกษาจะไม่เห็นรายวิชาในรายการ</li>
+                                            <li>ผู้ช่วยสอนจะไม่สามารถเข้าถึงได้</li>
+                                            <li>ข้อมูลทั้งหมดยังคงอยู่ และสามารถเปิดได้อีกครั้ง</li>
+                                        </ul>
                                     </div>
                                 </div>
                             </div>
                         )}
+                    </CardBody>
+                </Card>
+            </div>
+
+            {/* ── Export Data ──────────────────────────────────────────────── */}
+            <Card className="shadow-sm border border-slate-200">
+                <SectionCardHeader
+                    icon="solar:download-bold"
+                    title="ส่งออกรายงาน"
+                    subtitle="ดาวน์โหลดรายงานครบถ้วนในรูปแบบ Excel บันทึกเดียว 6 แผ่น"
+                    gradientFrom="from-emerald-500"
+                    gradientTo="to-teal-600"
+                />
+                <CardBody className="p-5">
+                    {/* Sheet preview badges */}
+                    <div className="flex flex-wrap gap-2 mb-4">
+                        {[
+                            { label: "คะแนนแลป",        icon: "solar:monitor-bold",                  color: "bg-blue-100 text-blue-700" },
+                            { label: "คะแนนการบ้าน",    icon: "solar:document-text-bold",              color: "bg-indigo-100 text-indigo-700" },
+                            { label: "คะแนนกลุ่ม",      icon: "solar:users-group-two-rounded-bold",    color: "bg-violet-100 text-violet-700" },
+                            { label: "เช็คชื่อ",         icon: "solar:check-square-bold",               color: "bg-emerald-100 text-emerald-700" },
+                            { label: "การทำงานทีเอ",    icon: "solar:star-bold",                       color: "bg-amber-100 text-amber-700" },
+                            { label: "สรุปคะแนน",       icon: "solar:chart-2-bold",                    color: "bg-rose-100 text-rose-700" },
+                        ].map(({ label, icon, color }) => (
+                            <div key={label} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium ${color}`}>
+                                <Icon icon={icon} className="text-sm" />
+                                {label}
+                            </div>
+                        ))}
                     </div>
+
+
+                    <Button
+                        className="w-full bg-gradient-to-r from-emerald-400 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
+                        size="md"
+                        startContent={!isExporting && <Icon icon="solar:file-download-bold" className="text-lg" />}
+                        isLoading={isExporting}
+                        onPress={onExportAll}
+                    >
+                        {isExporting ? "กำลังสร้างไฟล์รายงาน..." : "ดาวน์โหลดรายงาน Excel (.xlsx)"}
+                    </Button>
+
+                    <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+                        <Icon icon="solar:info-circle-linear" className="text-sm" />
+                        ไฟล์ .xlsx เปิดด้วย Microsoft Excel, Google Sheets หรือ LibreOffice Calc ได้ทันที
+                    </p>
                 </CardBody>
             </Card>
-
-            {/* Attention Threshold Card */}
-            <Card className="shadow-md">
-                <CardHeader className="flex gap-3 px-6 py-4 border-b border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                        <Icon icon="solar:bell-bold" className="text-xl text-amber-600" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800">การตั้งค่าการแจ้งเตือน</h3>
-                        <p className="text-sm text-slate-500">กำหนดเกณฑ์คะแนนสำหรับแจ้งเตือนนักศึกษาที่ต้องดูแลเป็นพิเศษ</p>
-                    </div>
-                </CardHeader>
-                <CardBody className="px-6 py-5">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="font-medium text-slate-800">เกณฑ์ควรให้ความสนใจ</p>
-                                <p className="text-sm text-slate-500">นักศึกษาที่คะแนนรวมต่ำกว่าเกณฑ์นี้จะถูกไฮไลท์</p>
-                            </div>
-                            <Chip 
-                                size="lg" 
-                                color={formData.attention_threshold < 50 ? "danger" : formData.attention_threshold < 70 ? "warning" : "success"}
-                                variant="flat"
-                            >
-                                {formData.attention_threshold}%
-                            </Chip>
+            <Card className="shadow-sm border border-slate-200">
+                <SectionCardHeader
+                    icon="solar:info-circle-bold"
+                    title="ข้อมูลระบบ"
+                    subtitle="ข้อมูลเพิ่มเติมของรายวิชาในระบบ"
+                    gradientFrom="from-slate-500"
+                    gradientTo="to-slate-700"
+                />
+                <CardBody className="p-5">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                            <p className="text-xs text-slate-400">รหัสรายวิชา (ID)</p>
+                            <p className="font-semibold text-slate-800 text-sm">{course.code}</p>
                         </div>
-                        
-                        {isEditing ? (
-                            <div className="space-y-3">
-                                <Slider
-                                    aria-label="Attention Threshold"
-                                    step={5}
-                                    minValue={0}
-                                    maxValue={100}
-                                    value={formData.attention_threshold}
-                                    onChange={(val) => onUpdateField("attention_threshold", val as number)}
-                                    className="max-w-full"
-                                    color={formData.attention_threshold < 50 ? "danger" : formData.attention_threshold < 70 ? "warning" : "success"}
-                                    showTooltip
-                                    marks={[
-                                        { value: 0, label: "0%" },
-                                        { value: 25, label: "25%" },
-                                        { value: 50, label: "50%" },
-                                        { value: 75, label: "75%" },
-                                        { value: 100, label: "100%" },
-                                    ]}
-                                    showSteps={true}
-                                />
-                            </div>
-                        ) : (
-                            <div className="p-4 bg-slate-50 rounded-xl">
-                                <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full rounded-full transition-all ${
-                                            formData.attention_threshold < 50 ? "bg-red-500" : 
-                                            formData.attention_threshold < 70 ? "bg-amber-500" : "bg-green-500"
-                                        }`}
-                                        style={{ width: `${formData.attention_threshold}%` }}
-                                    />
-                                </div>
-                                <p className="text-sm text-slate-500 mt-3">
-                                    นักศึกษาที่คะแนนรวมต่ำกว่า {formData.attention_threshold}% จะแสดงในรายการ &quot;นักศึกษาที่ควรได้รับการดูแลเพิ่มเติม&quot;
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </CardBody>
-            </Card>
-
-            {/* Course Status Card */}
-            <Card className="shadow-md">
-                <CardHeader className="flex gap-3 px-6 py-4 border-b border-slate-100">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                        formData.is_active ? "bg-green-100" : "bg-red-100"
-                    }`}>
-                        <Icon 
-                            icon={formData.is_active ? "solar:check-circle-bold" : "solar:close-circle-bold"} 
-                            className={`text-xl ${formData.is_active ? "text-green-600" : "text-red-600"}`}
-                        />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800">สถานะรายวิชา</h3>
-                        <p className="text-sm text-slate-500">เปิด/ปิดการใช้งานรายวิชา</p>
-                    </div>
-                </CardHeader>
-                <CardBody className="px-6 py-5">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="font-medium text-slate-800">
-                                {formData.is_active ? "เปิดใช้งานอยู่" : "ปิดใช้งานอยู่"}
-                            </p>
-                            <p className="text-sm text-slate-500">
-                                {formData.is_active 
-                                    ? "รายวิชานี้กำลังเปิดใช้งานและสามารถเข้าถึงได้" 
-                                    : "รายวิชานี้ถูกปิดใช้งาน นักศึกษาและผู้ช่วยสอนจะไม่สามารถเข้าถึงได้"
-                                }
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                            <p className="text-xs text-slate-400">อาจารย์หลัก</p>
+                            <p className="font-semibold text-slate-800 text-sm truncate">{stats.primaryInstructor}</p>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                            <p className="text-xs text-slate-400">วันที่สร้าง</p>
+                            <p className="font-semibold text-slate-800 text-sm">
+                                {course.created_at
+                                    ? new Date(course.created_at).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })
+                                    : "-"}
                             </p>
                         </div>
-                        {isEditing ? (
-                            <Switch
-                                isSelected={formData.is_active}
-                                onValueChange={(val) => onUpdateField("is_active", val)}
-                                color="success"
-                                size="lg"
-                            >
-                                <span className="sr-only">Toggle course status</span>
-                            </Switch>
-                        ) : (
-                            <Chip 
-                                color={formData.is_active ? "success" : "danger"} 
-                                variant="flat"
-                                startContent={
-                                    <Icon icon={formData.is_active ? "solar:check-circle-bold" : "solar:close-circle-bold"} />
-                                }
-                            >
-                                {formData.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน"}
-                            </Chip>
-                        )}
-                    </div>
-
-                    {/* Warning when disabling */}
-                    {isEditing && isDisablingCourse && (
-                        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-                            <div className="flex items-start gap-3">
-                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-red-600 mt-0.5" />
-                                <div>
-                                    <p className="font-medium text-red-800">คำเตือน: การปิดใช้งานรายวิชา</p>
-                                    <ul className="text-sm text-red-600 mt-1 space-y-1 list-disc list-inside">
-                                        <li>นักศึกษาจะไม่สามารถเห็นรายวิชานี้ในรายการวิชาของตน</li>
-                                        <li>ผู้ช่วยสอนจะไม่สามารถเข้าถึงรายวิชานี้ได้</li>
-                                        <li>ข้อมูลทั้งหมดจะยังคงอยู่และสามารถเปิดใช้งานได้อีกครั้ง</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </CardBody>
-            </Card>
-
-            {/* Course Statistics (Read-only) */}
-            <Card className="shadow-md">
-                <CardHeader className="flex gap-3 px-6 py-4 border-b border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center">
-                        <Icon icon="solar:chart-2-bold" className="text-xl text-indigo-600" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800">ข้อมูลสถิติ</h3>
-                        <p className="text-sm text-slate-500">ภาพรวมของรายวิชา</p>
-                    </div>
-                </CardHeader>
-                <CardBody className="px-6 py-5">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-4 bg-blue-50 rounded-xl text-center">
-                            <Icon icon="solar:users-group-rounded-bold" className="text-3xl text-blue-600 mx-auto mb-2" />
-                            <p className="text-2xl font-bold text-blue-800">{stats.totalStudents}</p>
-                            <p className="text-sm text-blue-600">นักศึกษา</p>
-                        </div>
-                        <div className="p-4 bg-emerald-50 rounded-xl text-center">
-                            <Icon icon="solar:notebook-bold" className="text-3xl text-emerald-600 mx-auto mb-2" />
-                            <p className="text-2xl font-bold text-emerald-800">{stats.sectionsCount}</p>
-                            <p className="text-sm text-emerald-600">กลุ่มเรียน</p>
-                        </div>
-                        <div className="p-4 bg-purple-50 rounded-xl text-center">
-                            <Icon icon="solar:user-speak-bold" className="text-3xl text-purple-600 mx-auto mb-2" />
-                            <p className="text-2xl font-bold text-purple-800">{stats.instructorsCount}</p>
-                            <p className="text-sm text-purple-600">อาจารย์</p>
-                        </div>
-                        <div className="p-4 bg-amber-50 rounded-xl text-center">
-                            <Icon icon="solar:star-bold" className="text-3xl text-amber-600 mx-auto mb-2" />
-                            <p className="text-2xl font-bold text-amber-800">{stats.tasCount}</p>
-                            <p className="text-sm text-amber-600">ผู้ช่วยสอน</p>
-                        </div>
-                    </div>
-                </CardBody>
-            </Card>
-
-            {/* Course Meta Info */}
-            <Card className="shadow-md">
-                <CardHeader className="flex gap-3 px-6 py-4 border-b border-slate-100">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center">
-                        <Icon icon="solar:info-circle-bold" className="text-xl text-slate-600" />
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800">ข้อมูลระบบ</h3>
-                        <p className="text-sm text-slate-500">ข้อมูลเพิ่มเติมของรายวิชาในระบบ</p>
-                    </div>
-                </CardHeader>
-                <CardBody className="px-6 py-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                            <Icon icon="solar:hashtag-bold" className="text-lg text-slate-400" />
-                            <div>
-                                <p className="text-xs text-slate-500">รหัสรายวิชา (ID)</p>
-                                <p className="font-medium text-slate-800">{course.id}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                            <Icon icon="solar:calendar-add-bold" className="text-lg text-slate-400" />
-                            <div>
-                                <p className="text-xs text-slate-500">วันที่สร้าง</p>
-                                <p className="font-medium text-slate-800">
-                                    {course.created_at 
-                                        ? new Date(course.created_at).toLocaleDateString('th-TH', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                        })
-                                        : '-'
-                                    }
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                            <Icon icon="solar:calendar-mark-bold" className="text-lg text-slate-400" />
-                            <div>
-                                <p className="text-xs text-slate-500">แก้ไขล่าสุด</p>
-                                <p className="font-medium text-slate-800">
-                                    {course.updated_at 
-                                        ? new Date(course.updated_at).toLocaleDateString('th-TH', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric',
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                        })
-                                        : '-'
-                                    }
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                            <Icon icon="solar:user-bold" className="text-lg text-slate-400" />
-                            <div>
-                                <p className="text-xs text-slate-500">อาจารย์หลัก</p>
-                                <p className="font-medium text-slate-800">{stats.primaryInstructor}</p>
-                            </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
+                            <p className="text-xs text-slate-400">แก้ไขล่าสุด</p>
+                            <p className="font-semibold text-slate-800 text-sm">
+                                {course.updated_at
+                                    ? new Date(course.updated_at).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })
+                                    : "-"}
+                            </p>
                         </div>
                     </div>
                 </CardBody>
@@ -469,5 +501,4 @@ function SettingsTabViewComponent({
     );
 }
 
-// Export memoized component to prevent unnecessary re-renders
 export const SettingsTabView = memo(SettingsTabViewComponent);

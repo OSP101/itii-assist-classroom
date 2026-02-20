@@ -80,6 +80,7 @@ export function useClassroomData(courseId: string) {
     const [userRole, setUserRole] = useState<string>("");
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
+    const [pendingAssignmentUpdate, setPendingAssignmentUpdate] = useState(false);
 
     // Loading states - separate for each resource
     const [loadingStates, setLoadingStates] = useState({
@@ -153,13 +154,13 @@ export function useClassroomData(courseId: string) {
     }, [courseId, isCacheValid, setLoading]);
 
     // Fetch assignments
-    const fetchAssignments = useCallback(async (forceRefresh = false) => {
+    const fetchAssignments = useCallback(async (forceRefresh = false, silent = false) => {
         if (!forceRefresh && isCacheValid(cache.current.assignments)) {
             setAssignments(cache.current.assignments!.data);
             return;
         }
 
-        setLoading("assignments", true);
+        if (!silent) setLoading("assignments", true);
         try {
             const data = await assignmentService.getAssignments(courseId);
             cache.current.assignments = { data, timestamp: Date.now() };
@@ -167,7 +168,7 @@ export function useClassroomData(courseId: string) {
         } catch (error) {
             console.error("Error fetching assignments:", error);
         } finally {
-            setLoading("assignments", false);
+            if (!silent) setLoading("assignments", false);
         }
     }, [courseId, isCacheValid, setLoading]);
 
@@ -367,8 +368,19 @@ export function useClassroomData(courseId: string) {
         }
     }, []);
 
+    // Acknowledge pending assignment update (clear banner + silent refresh)
+    // Inline cache deletion here to avoid any TDZ dependency on invalidateCache
+    const ackAssignmentUpdate = useCallback(async () => {
+        setPendingAssignmentUpdate(false);
+        delete cache.current['assignments'];
+        await fetchAssignments(true, true);
+    }, [fetchAssignments]);
+
     // Refresh data for specific tab (with force refresh)
     const refreshForTab = useCallback(async (tab: string) => {
+        // Dismiss any pending update notification when switching tabs
+        setPendingAssignmentUpdate(false);
+
         switch (tab) {
             case "overview":
                 await fetchOverview(true);
@@ -413,9 +425,11 @@ export function useClassroomData(courseId: string) {
             
             switch (data.resource) {
                 case "assignment":
+                    // Ignore events from other classrooms
+                    if (data.data?.courseId && String(data.data.courseId) !== String(courseId)) break;
                     invalidateCache('assignments');
                     invalidateCache('overview');
-                    fetchAssignments(true);
+                    setPendingAssignmentUpdate(true);
                     fetchOverview(true);
                     break;
                 case "score":
@@ -450,7 +464,7 @@ export function useClassroomData(courseId: string) {
             unsubscribe();
             unsubscribeFromUpdates();
         };
-    }, [subscribeToUpdates, unsubscribeFromUpdates, onDataUpdate, invalidateCache, fetchAssignments, fetchOverview, fetchAttendanceSessions, fetchCourse, fetchTeams, fetchAllSectionStudents]);
+    }, [subscribeToUpdates, unsubscribeFromUpdates, onDataUpdate, invalidateCache, fetchOverview, fetchAttendanceSessions, fetchCourse, fetchTeams, fetchAllSectionStudents]);
 
     return {
         // Data
@@ -483,6 +497,10 @@ export function useClassroomData(courseId: string) {
         isTeamsLoading: loadingStates.teams,
         isPeopleLoading: loadingStates.people,
         isStudentsLoading: loadingStates.students,
+
+        // Pending update flags
+        pendingAssignmentUpdate,
+        ackAssignmentUpdate,
 
         // Actions
         fetchCourse,

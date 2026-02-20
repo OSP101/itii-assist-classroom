@@ -56,6 +56,31 @@ const LocationPicker = lazy(() => import("@/components/map/LocationPicker"));
 // Custom DateTime Input (Native HTML styled like HeroUI)
 // ============================================================================
 
+/** Convert a DateValue to the "YYYY-MM-DDTHH:MM" string required by <input type="datetime-local"> */
+const toDateTimeLocalStr = (dateValue: DateValue): string => {
+    try {
+        const date = dateValue.toDate(getLocalTimeZone());
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const hours = String(date.getHours()).padStart(2, "0");
+        const minutes = String(date.getMinutes()).padStart(2, "0");
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    } catch {
+        return "";
+    }
+};
+
+/** Return "YYYY-MM-DDT23:59" for the same calendar day as the given DateValue */
+const endOfDayStr = (dateValue: DateValue): string => {
+    try {
+        const base = toDateTimeLocalStr(dateValue);
+        return base.slice(0, 11) + "23:59"; // keep date, replace time
+    } catch {
+        return "";
+    }
+};
+
 interface DateTimeInputProps {
     label: string;
     value: DateValue;
@@ -63,6 +88,10 @@ interface DateTimeInputProps {
     description?: string;
     isRequired?: boolean;
     colorScheme?: "blue" | "amber";
+    /** HTML datetime-local min constraint ("YYYY-MM-DDTHH:MM") */
+    min?: string;
+    /** HTML datetime-local max constraint ("YYYY-MM-DDTHH:MM") */
+    max?: string;
 }
 
 const DateTimeInput = memo(function DateTimeInput({
@@ -72,22 +101,9 @@ const DateTimeInput = memo(function DateTimeInput({
     description,
     isRequired = false,
     colorScheme = "blue",
+    min,
+    max,
 }: DateTimeInputProps) {
-    // Convert DateValue to datetime-local format (YYYY-MM-DDTHH:MM)
-    const toDateTimeLocal = (dateValue: DateValue): string => {
-        try {
-            const date = dateValue.toDate(getLocalTimeZone());
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, "0");
-            const day = String(date.getDate()).padStart(2, "0");
-            const hours = String(date.getHours()).padStart(2, "0");
-            const minutes = String(date.getMinutes()).padStart(2, "0");
-            return `${year}-${month}-${day}T${hours}:${minutes}`;
-        } catch {
-            return "";
-        }
-    };
-
     // Convert datetime-local string to DateValue
     const fromDateTimeLocal = (dateTimeStr: string): DateValue | null => {
         if (!dateTimeStr) return null;
@@ -121,8 +137,10 @@ const DateTimeInput = memo(function DateTimeInput({
             </label>
             <input
                 type="datetime-local"
-                value={toDateTimeLocal(value)}
+                value={toDateTimeLocalStr(value)}
                 onChange={handleChange}
+                min={min}
+                max={max}
                 className={`w-full px-3 py-2.5 rounded-xl bg-white border-2 ${borderColor} 
                     text-slate-800 text-sm transition-all duration-200
                     focus:outline-none focus:ring-4
@@ -1184,7 +1202,6 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                         </div>
 
                         {/* Section - Multi-select */}
-
                         <div>
                             <Select
                                 label="กลุ่มเรียน"
@@ -1262,6 +1279,8 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                                 onChange={setEndDateTime}
                                 isRequired
                                 colorScheme="blue"
+                                min={toDateTimeLocalStr(startDateTime)}
+                                max={endOfDayStr(startDateTime)}
                             />
                         </div>
 
@@ -1274,6 +1293,8 @@ export const CreateSessionModal = memo(function CreateSessionModal({
                                 isRequired
                                 colorScheme="amber"
                                 description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
+                                min={toDateTimeLocalStr(startDateTime)}
+                                max={toDateTimeLocalStr(endDateTime)}
                             />
                         </div>
 
@@ -1467,20 +1488,25 @@ export const EditSessionModal = memo(function EditSessionModal({
                                 onChange={setEndDateTime}
                                 isRequired
                                 colorScheme="amber"
+                                min={toDateTimeLocalStr(startDateTime)}
+                                max={endOfDayStr(startDateTime)}
                             />
                         </div>
 
                         {/* Late Threshold Time */}
                         <div className="">
                             <DateTimeInput
-                                label="เวลาตัดสาย"
+                                label="เวลาสำหรับเช็คสาย"
                                 value={lateThresholdTime}
                                 onChange={setLateThresholdTime}
                                 isRequired
                                 colorScheme="amber"
                                 description="เช็คอินหลังเวลานี้จะถูกนับเป็นสาย"
+                                min={toDateTimeLocalStr(startDateTime)}
+                                max={toDateTimeLocalStr(endDateTime)}
                             />
                         </div>
+
 
                         {/* Location Check */}
                         <Card className="border border-slate-200">
