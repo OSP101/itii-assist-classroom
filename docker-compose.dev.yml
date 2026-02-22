@@ -64,6 +64,8 @@ services:
       REDIS_PORT: 6379
     ports:
       - "3001:3001"
+    group_add:
+      - "988"    # docker group GID — ให้ expressjs user อ่าน docker.sock ได้
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
