@@ -30,6 +30,8 @@ services:
     restart: always
     ports:
       - "3011:3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - itii-network
     depends_on:

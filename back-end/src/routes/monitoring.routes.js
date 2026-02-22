@@ -15,6 +15,7 @@
  */
 
 const express = require('express');
+const http = require('http');
 const router = express.Router();
 const { authenticate, authorize } = require('../middlewares/auth');
 const { register } = require('../middlewares/metrics');
@@ -23,6 +24,9 @@ const { logger } = require('../utils');
 
 // Prometheus URL (internal Docker network)
 const PROMETHEUS_URL = process.env.PROMETHEUS_URL || 'http://itii-prometheus:9090';
+
+// Docker Socket path (mounted read-only for container metrics)
+const DOCKER_SOCKET = process.env.DOCKER_SOCKET || '/var/run/docker.sock';
 
 // ---------------------------------------------------------------------------
 // Helper: query Prometheus instant query API
@@ -191,52 +195,108 @@ router.get('/system', authenticate, authorize('admin'), async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Helper: call Docker Engine API via Unix socket
+// ---------------------------------------------------------------------------
+function dockerApiGet(path, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const options = {
+      socketPath: DOCKER_SOCKET,
+      path: `/v1.44${path}`,
+      method: 'GET',
+    };
+
+    const req = http.get(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { reject(new Error(`Docker API parse error: ${e.message}`)); }
+      });
+    });
+
+    req.on('error', (err) => reject(new Error(`Docker API error: ${err.message}`)));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      reject(new Error('Docker API timeout'));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Helper: compute CPU % from Docker stats snapshot
+// ---------------------------------------------------------------------------
+function calculateCpuPercent(stats) {
+  const cpuDelta = stats.cpu_stats.cpu_usage.total_usage - stats.precpu_stats.cpu_usage.total_usage;
+  const systemDelta = stats.cpu_stats.system_cpu_usage - stats.precpu_stats.system_cpu_usage;
+  const numCpus = stats.cpu_stats.online_cpus || stats.cpu_stats.cpu_usage.percpu_usage?.length || 1;
+
+  if (systemDelta > 0 && cpuDelta >= 0) {
+    return (cpuDelta / systemDelta) * numCpus * 100;
+  }
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // GET /api/monitoring/containers
 // Returns: per-container CPU, memory, restart count, status
+// Uses Docker Engine API directly (cAdvisor has issues with containerd
+// snapshotter on Docker v29+ where container `name` labels are missing)
 // ---------------------------------------------------------------------------
 router.get('/containers', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const [cpuResult, memResult, memLimitResult, restartResult] = await Promise.all([
-      // Container CPU usage (percentage of a single core)
-      queryPrometheus('rate(container_cpu_usage_seconds_total{name=~"itii-.*"}[5m]) * 100'),
-      // Container memory usage bytes
-      queryPrometheus('container_memory_usage_bytes{name=~"itii-.*"}'),
-      // Container memory limit bytes
-      queryPrometheus('container_spec_memory_limit_bytes{name=~"itii-.*"}'),
-      // Container restart count
-      queryPrometheus('container_restart_count{name=~"itii-.*"}'),
-    ]);
+    // Get list of all containers (running + stopped)
+    const containerList = await dockerApiGet('/containers/json?all=true');
 
-    // Build a map of container data
-    const containerMap = {};
+    // Filter only itii-* containers
+    const itiiContainers = containerList.filter((c) => {
+      const name = (c.Names?.[0] || '').replace(/^\//, '');
+      return name.startsWith('itii-');
+    });
 
-    // Helper to populate container map
-    function populateMap(result, field) {
-      if (!result) return;
-      result.forEach((r) => {
-        const name = r.metric.name;
-        if (!name) return;
-        if (!containerMap[name]) {
-          containerMap[name] = { name, cpuPercent: 0, memoryBytes: 0, memoryLimitBytes: 0, memoryPercent: 0, restarts: 0, status: 'running' };
+    // Fetch stats for each running container in parallel
+    const containers = await Promise.all(
+      itiiContainers.map(async (c) => {
+        const name = (c.Names?.[0] || '').replace(/^\//, '');
+        const isRunning = c.State === 'running';
+
+        let cpuPercent = 0;
+        let memoryBytes = 0;
+        let memoryLimitBytes = 0;
+        let memoryPercent = 0;
+
+        if (isRunning) {
+          try {
+            const stats = await dockerApiGet(`/containers/${c.Id}/stats?stream=false&one-shot=true`, 8000);
+
+            cpuPercent = calculateCpuPercent(stats);
+            memoryBytes = stats.memory_stats?.usage || 0;
+            memoryLimitBytes = stats.memory_stats?.limit || 0;
+            memoryPercent = memoryLimitBytes > 0 ? (memoryBytes / memoryLimitBytes) * 100 : 0;
+          } catch (statErr) {
+            logger.warn(`Failed to get stats for ${name}: ${statErr.message}`);
+          }
         }
-        containerMap[name][field] = parseFloat(r.value[1]) || 0;
-      });
-    }
 
-    populateMap(cpuResult, 'cpuPercent');
-    populateMap(memResult, 'memoryBytes');
-    populateMap(memLimitResult, 'memoryLimitBytes');
-    populateMap(restartResult, 'restarts');
+        return {
+          name,
+          cpuPercent: parseFloat(cpuPercent.toFixed(2)),
+          memoryBytes,
+          memoryLimitBytes,
+          memoryPercent: parseFloat(memoryPercent.toFixed(2)),
+          restarts: c.RestartCount || 0,
+          status: isRunning ? 'running' : c.State || 'stopped',
+          image: c.Image,
+          created: new Date(c.Created * 1000).toISOString(),
+        };
+      })
+    );
 
-    // Compute memory percentage and status
-    const containers = Object.values(containerMap).map((c) => ({
-      ...c,
-      cpuPercent: parseFloat(c.cpuPercent.toFixed(2)),
-      memoryPercent: c.memoryLimitBytes > 0
-        ? parseFloat(((c.memoryBytes / c.memoryLimitBytes) * 100).toFixed(2))
-        : null,
-      status: c.cpuPercent === 0 && c.memoryBytes === 0 ? 'stopped' : 'running',
-    }));
+    // Sort: running first, then by name
+    containers.sort((a, b) => {
+      if (a.status === 'running' && b.status !== 'running') return -1;
+      if (a.status !== 'running' && b.status === 'running') return 1;
+      return a.name.localeCompare(b.name);
+    });
 
     res.json({
       success: true,
@@ -244,13 +304,25 @@ router.get('/containers', authenticate, authorize('admin'), async (req, res) => 
         containers,
         total: containers.length,
         running: containers.filter((c) => c.status === 'running').length,
-        stopped: containers.filter((c) => c.status === 'stopped').length,
+        stopped: containers.filter((c) => c.status !== 'running').length,
         timestamp: new Date().toISOString(),
       },
     });
   } catch (error) {
     logger.error('Error fetching container metrics:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch container metrics' });
+
+    // Fallback: return empty but valid response if Docker socket unavailable
+    res.json({
+      success: true,
+      data: {
+        containers: [],
+        total: 0,
+        running: 0,
+        stopped: 0,
+        error: 'Docker socket unavailable — ensure /var/run/docker.sock is mounted',
+        timestamp: new Date().toISOString(),
+      },
+    });
   }
 });
 
