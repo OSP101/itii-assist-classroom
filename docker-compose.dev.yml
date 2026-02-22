@@ -64,6 +64,8 @@ services:
       REDIS_PORT: 6379
     ports:
       - "3001:3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - itii-network
     depends_on:
