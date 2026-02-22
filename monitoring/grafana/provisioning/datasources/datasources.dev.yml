@@ -1,0 +1,21 @@
+# =============================================================================
+# Grafana Datasource Provisioning — DEV SERVER
+# Container names have -dev suffix → itii-prometheus-dev, itii-loki-dev
+# =============================================================================
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://itii-prometheus-dev:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://itii-loki-dev:3100
+    editable: false
