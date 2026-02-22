@@ -1,0 +1,55 @@
+# =============================================================================
+# Alertmanager Configuration - LOCAL DEV
+# Values hardcoded (Alertmanager does not support env var substitution)
+# =============================================================================
+
+global:
+  smtp_smarthost: "smtp.resend.com:465"
+  smtp_from: "monitoring@itii.osp101.dev"
+  smtp_auth_username: "resend"
+  smtp_auth_password: "re_4Yj4zVmr_7rG891Yu1reqHCbpwePB3azb"
+  smtp_require_tls: false
+  resolve_timeout: 5m
+
+route:
+  receiver: "webhook-and-email"
+  group_by: ["alertname", "severity", "service"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  routes:
+    - match:
+        severity: critical
+      receiver: "webhook-and-email"
+      group_wait: 10s
+      repeat_interval: 1h
+
+    - match:
+        severity: warning
+      receiver: "webhook-only"
+      group_wait: 1m
+      repeat_interval: 4h
+
+receivers:
+  - name: "webhook-and-email"
+    webhook_configs:
+      - url: "http://itii-dev-backend:3001/api/monitoring/webhook"
+        send_resolved: true
+    email_configs:
+      - to: "supphitan.p@kkumail.com"
+        send_resolved: true
+        headers:
+          Subject: "[ITII Dev Alert] {{ .GroupLabels.alertname }} - {{ .GroupLabels.severity }}"
+
+  - name: "webhook-only"
+    webhook_configs:
+      - url: "http://itii-dev-backend:3001/api/monitoring/webhook"
+        send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "instance"]

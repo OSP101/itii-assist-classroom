@@ -61,6 +61,7 @@ export type {
   StudentCheckInData,
 } from './attendance.service';
 export { default as queueService } from './queue.service';
+export { monitoringService } from './monitoring.service';
 export type {
   QueueSession,
   QueueWorker,

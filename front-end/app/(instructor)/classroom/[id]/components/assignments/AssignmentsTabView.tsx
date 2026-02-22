@@ -53,6 +53,8 @@ interface AssignmentsTabViewProps {
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
     isCourseActive?: boolean;
+    hasPendingUpdate?: boolean;
+    onPendingUpdateAck?: () => void;
 }
 
 function AssignmentsTabViewComponent({
@@ -86,6 +88,8 @@ function AssignmentsTabViewComponent({
     onOpenScoreModal,
     onOpenBonusScoreModal,
     isCourseActive = true,
+    hasPendingUpdate,
+    onPendingUpdateAck,
 }: AssignmentsTabViewProps) {
     // Render grid card view
     const renderGridCard = (assignment: AssignmentType) => {
@@ -463,7 +467,8 @@ function AssignmentsTabViewComponent({
                 </>
             )}
 
-            {/* Delete Confirmation Modal */}
+
+            {/* Delete Confirmation Modal ยืนยันว่าจะลบมั้ย */}
             <Modal 
                 isOpen={isDeleteModalOpen} 
                 onClose={onCloseDeleteModal}

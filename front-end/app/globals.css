@@ -26,6 +26,22 @@ body {
   font-family: var(--font-sans), sans-serif;
 }
 
+/* Toast notification slide-up animation */
+@keyframes toast-slide-up {
+  0% {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-toast-slide-up {
+  animation: toast-slide-up 0.35s ease-out;
+}
+
 /* Hide scrollbar but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* IE and Edge */

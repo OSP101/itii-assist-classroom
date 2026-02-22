@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useEffect, useCallback } from "react";
+import { memo, useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
@@ -67,6 +67,13 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
   const [showUnlinkModal, setShowUnlinkModal] = useState(false);
   const [providerToUnlink, setProviderToUnlink] = useState<string | null>(null);
 
+  // Snapshot of linked provider keys before initiating a link — used to detect new links
+  const linkedBeforeLinkRef = useRef<Set<string>>(new Set());
+  // Timer ref for DB polling cleanup
+  const dbPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Safety timeout ref — auto-clears loading after 2 minutes
+  const linkingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Load 2FA status
   const load2FAStatus = useCallback(async () => {
     setIsLoading2FA(true);
@@ -102,15 +109,20 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     loadOAuthAccounts();
   }, [load2FAStatus, loadOAuthAccounts]);
 
-  // Listen for OAuth link result via BroadcastChannel.
-  // BroadcastChannel is more reliable than postMessage+window.opener because
-  // window.opener becomes null after cross-origin navigation (e.g. Google redirect chain).
+  // Listen for OAuth link result via BroadcastChannel (fast path — instant if tab can broadcast).
+  // Also poll DB as fallback (reliable even if BroadcastChannel or tab.close fails).
   useEffect(() => {
     const channel = new BroadcastChannel("oauth_link_channel");
 
     channel.onmessage = (event) => {
       const data = event.data;
       if (data?.type !== "oauth_link_result") return;
+
+      // Stop DB polling — we already know the result
+      if (dbPollRef.current) {
+        clearInterval(dbPollRef.current);
+        dbPollRef.current = null;
+      }
 
       if (data.success) {
         addToast({
@@ -130,13 +142,78 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
           shouldShowTimeoutProgress: true,
         });
       }
-      // Clear loading state and localStorage flag
       localStorage.removeItem("pending_oauth_link_provider");
       setLinkingProvider(null);
     };
 
     return () => channel.close();
   }, [loadOAuthAccounts]);
+
+  // Cleanup DB poll & safety timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (dbPollRef.current) {
+        clearInterval(dbPollRef.current);
+        dbPollRef.current = null;
+      }
+      if (linkingTimeoutRef.current) {
+        clearTimeout(linkingTimeoutRef.current);
+        linkingTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  // When user switches back to this tab while linking, check immediately
+  useEffect(() => {
+    if (!linkingProvider) return;
+
+    const provider = linkingProvider;
+    const providerName = provider === "github" ? "GitHub" : provider === "google" ? "Google" : provider;
+    let checking = false;
+
+    const handleTabFocus = async () => {
+      if (document.visibilityState === "hidden" || checking) return;
+      checking = true;
+      try {
+        const result = await oauthService.getLinkedAccounts();
+        if (!result.success || !result.data) return;
+
+        const nowLinked = result.data.some(acc => acc.provider === provider);
+        const wasLinked = linkedBeforeLinkRef.current.has(provider);
+
+        if (nowLinked && !wasLinked) {
+          // Stop DB poll & safety timeout
+          if (dbPollRef.current) { clearInterval(dbPollRef.current); dbPollRef.current = null; }
+          if (linkingTimeoutRef.current) { clearTimeout(linkingTimeoutRef.current); linkingTimeoutRef.current = null; }
+          localStorage.removeItem("pending_oauth_link_provider");
+
+          setLinkingProvider(prev => {
+            if (prev === provider) {
+              addToast({
+                title: "เชื่อมต่อสำเร็จ",
+                description: `เชื่อมต่อบัญชี ${providerName} เรียบร้อยแล้ว`,
+                color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+              });
+              loadOAuthAccounts();
+              return null;
+            }
+            return prev;
+          });
+        }
+      } catch { /* ignore */ } finally {
+        checking = false;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleTabFocus);
+    window.addEventListener("focus", handleTabFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", handleTabFocus);
+      window.removeEventListener("focus", handleTabFocus);
+    };
+  }, [linkingProvider, loadOAuthAccounts]);
 
   const getMethodLabel = (method: string | null) => {
     switch (method) {
@@ -207,61 +284,104 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
   };
 
 
-  // Handle link (initiate OAuth flow)
-  const handleLink = (provider: string) => {
+  // Start polling DB to detect when the provider appears in linked accounts.
+  // This is the reliable fallback — works even if BroadcastChannel fails.
+  // Checks immediately, then every 3s.
+  const startDbPoll = useCallback((provider: string) => {
+    // Stop any existing poll
+    if (dbPollRef.current) {
+      clearInterval(dbPollRef.current);
+    }
+
+    const providerName = provider === "github" ? "GitHub" : provider === "google" ? "Google" : provider;
+
+    const checkOnce = async () => {
+      try {
+        const result = await oauthService.getLinkedAccounts();
+        if (!result.success || !result.data) return;
+
+        const nowLinked = result.data.some(acc => acc.provider === provider);
+        const wasLinked = linkedBeforeLinkRef.current.has(provider);
+
+        if (nowLinked && !wasLinked) {
+          // New link detected in DB!
+          if (dbPollRef.current) {
+            clearInterval(dbPollRef.current);
+            dbPollRef.current = null;
+          }
+          localStorage.removeItem("pending_oauth_link_provider");
+
+          // Only show toast if BroadcastChannel hasn't already handled it
+          setLinkingProvider(prev => {
+            if (prev === provider) {
+              addToast({
+                title: "เชื่อมต่อสำเร็จ",
+                description: `เชื่อมต่อบัญชี ${providerName} เรียบร้อยแล้ว`,
+                color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+              });
+              loadOAuthAccounts();
+              return null;
+            }
+            return prev; // Already handled by BroadcastChannel
+          });
+        }
+      } catch {
+        // Network error — skip this cycle
+      }
+    };
+
+    // Check immediately after a short delay (give the backend time to persist)
+    setTimeout(checkOnce, 1500);
+    // Then keep polling every 3s
+    dbPollRef.current = setInterval(checkOnce, 3000);
+  }, [loadOAuthAccounts]);
+
+  // Open OAuth tab and start DB polling
+  const initiateOAuthLink = useCallback((provider: string) => {
+    // Snapshot current linked providers before starting
+    linkedBeforeLinkRef.current = new Set(linkedAccounts.map(a => a.provider));
     setLinkingProvider(provider);
+
     const tab = oauthService.initiateLink(provider);
     if (!tab) {
       setLinkingProvider(null);
+      addToast({
+        title: "ไม่สามารถเปิดหน้าต่างได้",
+        description: "กรุณาอนุญาต Popup ในเบราว์เซอร์แล้วลองใหม่อีกครั้ง",
+        color: "warning",
+        timeout: 5000,
+        shouldShowTimeoutProgress: true,
+      });
       return;
     }
-    // Wait 8s before polling — OAuth flow navigates through multiple domains
-    // which can make tab.closed temporarily appear true (cross-origin nav).
-    // Only after the flow should have settled do we start watching for manual close.
-    const startPoll = setTimeout(() => {
-      const poll = setInterval(() => {
-        try {
-          if (tab.closed) {
-            clearInterval(poll);
-            // Tab closed without postMessage → user aborted; clear the flag
-            localStorage.removeItem("pending_oauth_link_provider");
-            // Give postMessage 400ms to arrive before resetting
-            setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
-          }
-        } catch {
-          // Cross-origin access error — tab still navigating, keep waiting
+
+    // Start DB polling — will detect the link even if tab can't broadcast
+    startDbPoll(provider);
+
+    // Safety timeout: auto-clear loading after 2 minutes
+    if (linkingTimeoutRef.current) clearTimeout(linkingTimeoutRef.current);
+    linkingTimeoutRef.current = setTimeout(() => {
+      setLinkingProvider(prev => {
+        if (prev === provider) {
+          if (dbPollRef.current) { clearInterval(dbPollRef.current); dbPollRef.current = null; }
+          localStorage.removeItem("pending_oauth_link_provider");
+          return null;
         }
-      }, 800);
-    }, 8000);
+        return prev;
+      });
+      linkingTimeoutRef.current = null;
+    }, 120_000);
+  }, [linkedAccounts, startDbPoll]);
 
-    // Safety cleanup if component unmounts
-    return () => clearTimeout(startPoll);
-  };
+  const handleLink = useCallback((provider: string) => {
+    initiateOAuthLink(provider);
+  }, [initiateOAuthLink]);
 
-  // Handle re-authenticate (same as link but for existing connection)
-  const handleReAuthenticate = (provider: string) => {
-    setLinkingProvider(provider);
-    const tab = oauthService.initiateLink(provider);
-    if (!tab) {
-      setLinkingProvider(null);
-      return;
-    }
-    const startPoll = setTimeout(() => {
-      const poll = setInterval(() => {
-        try {
-          if (tab.closed) {
-            clearInterval(poll);
-            localStorage.removeItem("pending_oauth_link_provider");
-            setTimeout(() => setLinkingProvider(prev => prev === provider ? null : prev), 400);
-          }
-        } catch {
-          // Cross-origin access error — tab still navigating, keep waiting
-        }
-      }, 800);
-    }, 8000);
-
-    return () => clearTimeout(startPoll);
-  };
+  const handleReAuthenticate = useCallback((provider: string) => {
+    initiateOAuthLink(provider);
+  }, [initiateOAuthLink]);
 
   // Get provider management URL
   const getProviderManageUrl = (providerKey: string) => {
@@ -269,7 +389,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
     return provider?.manageUrl || '#';
   };
 
-
+  
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Security Warning Header */}
@@ -523,7 +643,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                               key="reauth"
                               startContent={<Icon icon="solar:refresh-linear" className="text-lg" />}
                               onPress={() => handleReAuthenticate(provider.key)}
-                              isDisabled={linkingProvider !== null}
+                              isDisabled={linkingProvider !== null && linkingProvider !== provider.key}
                             >
                               {linkingProvider === provider.key ? "กำลังดำเนินการ..." : "ยืนยันตัวตนใหม่"}
                             </DropdownItem>
@@ -547,7 +667,7 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                         className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-xs"
                         onPress={() => handleLink(provider.key)}
                         isLoading={linkingProvider === provider.key}
-                        isDisabled={linkingProvider !== null}
+                        isDisabled={linkingProvider !== null && linkingProvider !== provider.key}
                       >
                         {linkingProvider === provider.key ? "กำลังเชื่อมต่อ..." : "เชื่อมต่อ"}
                       </Button>

@@ -4,6 +4,7 @@ import type { Course } from "@/services/course.service";
 import { useSettingsTab, SettingsTabView } from "./settings";
 
 interface SettingsTabProps {
+    courseId: string;
     course: Course;
     onCourseUpdate: (updatedCourse: Course) => void;
 }
@@ -20,12 +21,13 @@ interface SettingsTabProps {
  * - Easier testing (can test hook and view separately)
  * - Reduced re-renders through React.memo in SettingsTabView
  */
-export default function SettingsTab({ course, onCourseUpdate }: SettingsTabProps) {
+export default function SettingsTab({ courseId, course, onCourseUpdate }: SettingsTabProps) {
     const {
         // State
         isEditing,
         isSaving,
         formData,
+        isExporting,
         // Computed
         hasWarningChanges,
         isDisablingCourse,
@@ -36,7 +38,8 @@ export default function SettingsTab({ course, onCourseUpdate }: SettingsTabProps
         handleCancel,
         startEditing,
         getSemesterText,
-    } = useSettingsTab({ course, onCourseUpdate });
+        handleExportAll,
+    } = useSettingsTab({ courseId, course, onCourseUpdate });
 
     return (
         <SettingsTabView
@@ -46,12 +49,14 @@ export default function SettingsTab({ course, onCourseUpdate }: SettingsTabProps
             formData={formData}
             hasWarningChanges={hasWarningChanges}
             isDisablingCourse={isDisablingCourse}
+            isExporting={isExporting}
             stats={stats}
             onUpdateField={updateField}
             onSave={handleSave}
             onCancel={handleCancel}
             onStartEditing={startEditing}
             getSemesterText={getSemesterText}
+            onExportAll={handleExportAll}
         />
     );
 }

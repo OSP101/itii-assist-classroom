@@ -128,8 +128,8 @@ export function useAssignmentsTab({
                 shouldShowTimeoutProgress: true,
             });
             
-            // Emit real-time update
-            emitDataUpdate("assignment", "delete", deleteTarget.id);
+            // Emit real-time update (include courseId so other classrooms can filter)
+            emitDataUpdate("assignment", "delete", deleteTarget.id, { courseId });
             
             // Callback to refresh overview data
             console.log("📊 Calling onAssignmentChanged callback");
@@ -176,13 +176,13 @@ export function useAssignmentsTab({
     const onAssignmentSaved = useCallback(() => {
         // Refresh assignments and overview
         onAssignmentChanged?.();
-        // Emit real-time update
+        // Emit real-time update (include courseId so other classrooms can filter)
         if (editingAssignment) {
-            emitDataUpdate("assignment", "update", editingAssignment.id);
+            emitDataUpdate("assignment", "update", editingAssignment.id, { courseId });
         } else {
-            emitDataUpdate("assignment", "create", undefined);
+            emitDataUpdate("assignment", "create", undefined, { courseId });
         }
-    }, [onAssignmentChanged, emitDataUpdate, editingAssignment]);
+    }, [onAssignmentChanged, emitDataUpdate, editingAssignment, courseId]);
 
     return {
         // State

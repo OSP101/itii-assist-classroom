@@ -1,0 +1,76 @@
+# =============================================================================
+# Alertmanager Configuration - PRODUCTION
+# Alertmanager does NOT support env var substitution — values are hardcoded.
+# Update these values directly when credentials change.
+# =============================================================================
+
+global:
+  smtp_smarthost: "smtp.resend.com:465"
+  smtp_from: "monitoring@itii.osp101.dev"
+  smtp_auth_username: "resend"
+  smtp_auth_password: "re_4Yj4zVmr_7rG891Yu1reqHCbpwePB3azb"
+  smtp_require_tls: false
+  resolve_timeout: 5m
+
+# Notification templates
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# =============================================================================
+# Alert Routing
+# =============================================================================
+route:
+  # Default receiver
+  receiver: "webhook-and-email"
+  # Group alerts by these labels
+  group_by: ["alertname", "severity", "service"]
+  # Wait before sending grouped alert
+  group_wait: 30s
+  # Interval between grouped notifications
+  group_interval: 5m
+  # Re-send interval for unresolved alerts
+  repeat_interval: 4h
+
+  # Route critical alerts immediately
+  routes:
+    - match:
+        severity: critical
+      receiver: "webhook-and-email"
+      group_wait: 10s
+      repeat_interval: 1h
+
+    - match:
+        severity: warning
+      receiver: "webhook-only"
+      group_wait: 1m
+      repeat_interval: 4h
+
+# =============================================================================
+# Receivers
+# =============================================================================
+receivers:
+  - name: "webhook-and-email"
+    webhook_configs:
+      - url: "http://itii-prod-backend:3001/api/monitoring/webhook"
+        send_resolved: true
+    email_configs:
+      - to: "supphitan.p@kkumail.com"
+        send_resolved: true
+        headers:
+          Subject: "[ITII Alert] {{ .GroupLabels.alertname }} - {{ .GroupLabels.severity }}"
+
+  - name: "webhook-only"
+    webhook_configs:
+      - url: "http://itii-prod-backend:3001/api/monitoring/webhook"
+        send_resolved: true
+
+# =============================================================================
+# Inhibition Rules - Prevent duplicate alerts
+# =============================================================================
+inhibit_rules:
+  # If critical is firing, suppress warning for same alertname
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname", "instance"]

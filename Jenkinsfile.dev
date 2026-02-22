@@ -61,6 +61,9 @@ pipeline {
                         // Email credentials (Resend API)
                         string(credentialsId: 'DEV_RESEND_API_KEY', variable: 'RESEND_API_KEY'),
                         string(credentialsId: 'DEV_SMTP_FROM', variable: 'SMTP_FROM'),
+                        // Monitoring
+                        string(credentialsId: 'DEV_PROMETHEUS_URL', variable: 'PROMETHEUS_URL'),
+                        string(credentialsId: 'DEV_ALERT_WEBHOOK_SECRET', variable: 'ALERT_WEBHOOK_SECRET'),
                     ]) {
                         sh '''
                         # Create backend .env.dev file
@@ -83,6 +86,8 @@ JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
 FIREBASE_SERVICE_ACCOUNT=$FIREBASE_SERVICE_ACCOUNT
 RESEND_API_KEY=$RESEND_API_KEY
 SMTP_FROM=$SMTP_FROM
+PROMETHEUS_URL=$PROMETHEUS_URL
+ALERT_WEBHOOK_SECRET=$ALERT_WEBHOOK_SECRET
 EOF
 
                         # Create frontend .env.local.dev file

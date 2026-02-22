@@ -11,7 +11,7 @@ import { authService } from "@/services";
 function AuthCallbackContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+    const [status, setStatus] = useState<"loading" | "success" | "error" | "link-success" | "link-error">("loading");
     const [message, setMessage] = useState("กำลังเข้าสู่ระบบ...");
 
     useEffect(() => {
@@ -25,26 +25,28 @@ function AuthCallbackContent() {
             // Check if this callback is from a link action initiated via new tab.
             // We use localStorage (shared across same-origin tabs) because backend cookies
             // can be silently dropped during cross-domain OAuth redirects.
+            // NOTE: Do NOT check window.opener here — it becomes null after cross-origin
+            // OAuth navigation (GitHub/Google), so localStorage is the only reliable signal.
             const pendingLinkProvider =
                 typeof window !== "undefined"
                     ? localStorage.getItem("pending_oauth_link_provider")
                     : null;
-            const isLinkTab =
-                !!pendingLinkProvider &&
-                typeof window !== "undefined" &&
-                !!window.opener &&
-                window.opener !== window;
-
-            // Handle error from backend
+            const isLinkTab = !!pendingLinkProvider;
+            
             if (error) {
-                // If opened as a popup (link action), postMessage error and close
                 if (isLinkTab) {
                     localStorage.removeItem("pending_oauth_link_provider");
-                    const channel = new BroadcastChannel("oauth_link_channel");
-                    channel.postMessage({ type: "oauth_link_result", success: false, error: decodeURIComponent(error) });
-                    setTimeout(() => channel.close(), 200);
-                    window.close();
-                    setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
+                    // Broadcast error to main tab
+                    try {
+                        const channel = new BroadcastChannel("oauth_link_channel");
+                        channel.postMessage({ type: "oauth_link_result", success: false, error: decodeURIComponent(error) });
+                        setTimeout(() => channel.close(), 500);
+                    } catch { /* BroadcastChannel not supported */ }
+                    // Delay close to let BroadcastChannel deliver the message first
+                    setTimeout(() => window.close(), 500);
+                    // If tab didn't close, show error page (main tab will detect via DB poll)
+                    setStatus("link-error");
+                    setMessage(decodeURIComponent(error));
                     return;
                 }
 
@@ -63,6 +65,7 @@ function AuthCallbackContent() {
                 setTimeout(() => router.replace(returnUrl || "/login"), 3000);
                 return;
             }
+
 
             // Handle 2FA required
             if (twoFactor) {
@@ -110,13 +113,17 @@ function AuthCallbackContent() {
                             : resolvedLinked === "google"
                               ? "Google"
                               : resolvedLinked;
-                    // Use BroadcastChannel — doesn't require window.opener
-                    const channel = new BroadcastChannel("oauth_link_channel");
-                    channel.postMessage({ type: "oauth_link_result", success: true, provider: resolvedLinked, providerName });
-                    setTimeout(() => channel.close(), 200);
-                    window.close();
-                    // Fallback redirect if tab doesn't close
-                    setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
+                    // Broadcast success to main tab
+                    try {
+                        const channel = new BroadcastChannel("oauth_link_channel");
+                        channel.postMessage({ type: "oauth_link_result", success: true, provider: resolvedLinked, providerName });
+                        setTimeout(() => channel.close(), 500);
+                    } catch { /* BroadcastChannel not supported */ }
+                    // Delay close to let BroadcastChannel deliver the message first
+                    setTimeout(() => window.close(), 500);
+                    // If tab didn't close, show success page (main tab will detect via DB poll)
+                    setStatus("link-success");
+                    setMessage(`เชื่อมต่อ ${providerName} สำเร็จแล้ว`);
                     return;
                 }
                 // ----------------------------------------
@@ -132,11 +139,16 @@ function AuthCallbackContent() {
                         // If opened as a link tab, broadcast result and close
                         if (typeof window !== "undefined" && pendingLinkProvider) {
                             localStorage.removeItem("pending_oauth_link_provider");
-                            const channel = new BroadcastChannel("oauth_link_channel");
-                            channel.postMessage({ type: "oauth_link_result", success: true, provider: linked, providerName });
-                            setTimeout(() => channel.close(), 200);
-                            window.close();
-                            setTimeout(() => { window.location.href = "/profile?tab=authentication"; }, 500);
+                            try {
+                                const channel = new BroadcastChannel("oauth_link_channel");
+                                channel.postMessage({ type: "oauth_link_result", success: true, provider: linked, providerName });
+                                setTimeout(() => channel.close(), 500);
+                            } catch { /* BroadcastChannel not supported */ }
+                            // Delay close to let BroadcastChannel deliver
+                            setTimeout(() => window.close(), 500);
+                            // If tab didn't close, show success page
+                            setStatus("link-success");
+                            setMessage(`เชื่อมต่อ ${providerName} สำเร็จแล้ว`);
                             return;
                         }
 
@@ -272,6 +284,48 @@ function AuthCallbackContent() {
                         <p className="text-slate-500">{message}</p>
                         <p className="text-sm text-slate-400 mt-2">
                             กำลังนำคุณกลับไปหน้าเข้าสู่ระบบ...
+                        </p>
+                    </div>
+                </>
+            )}
+
+            {status === "link-success" && (
+                <>
+                    <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+                        <Icon
+                            icon="solar:check-circle-bold"
+                            className="text-5xl text-green-500"
+                        />
+                    </div>
+                    <div className="text-center">
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">
+                            {message}
+                        </h2>
+                        <p className="text-slate-500">
+                            คุณสามารถปิดแท็บนี้ได้เลย
+                        </p>
+                        <p className="text-xs text-slate-400 mt-2">
+                            หน้าโปรไฟล์จะอัปเดตโดยอัตโนมัติ
+                        </p>
+                    </div>
+                </>
+            )}
+
+            {status === "link-error" && (
+                <>
+                    <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+                        <Icon
+                            icon="solar:close-circle-bold"
+                            className="text-5xl text-red-500"
+                        />
+                    </div>
+                    <div className="text-center">
+                        <h2 className="text-xl font-bold text-slate-800 mb-2">
+                            เชื่อมต่อไม่สำเร็จ
+                        </h2>
+                        <p className="text-slate-500">{message}</p>
+                        <p className="text-sm text-slate-400 mt-2">
+                            คุณสามารถปิดแท็บนี้และลองใหม่อีกครั้ง
                         </p>
                     </div>
                 </>

@@ -13,6 +13,8 @@ interface AssignmentsTabProps {
     onOpenBonusScoreModal?: () => void;
     onAssignmentChanged?: () => void;
     isCourseActive?: boolean;
+    hasPendingUpdate?: boolean;
+    onPendingUpdateAck?: () => void;
 }
 
 export default function AssignmentsTab({
@@ -25,6 +27,8 @@ export default function AssignmentsTab({
     onOpenBonusScoreModal,
     onAssignmentChanged,
     isCourseActive = true,
+    hasPendingUpdate,
+    onPendingUpdateAck,
 }: AssignmentsTabProps) {
     const {
         // State
@@ -94,6 +98,8 @@ export default function AssignmentsTab({
             onOpenScoreModal={onOpenScoreModal}
             onOpenBonusScoreModal={onOpenBonusScoreModal}
             isCourseActive={isCourseActive}
+            hasPendingUpdate={hasPendingUpdate}
+            onPendingUpdateAck={onPendingUpdateAck}
         />
     );
 }

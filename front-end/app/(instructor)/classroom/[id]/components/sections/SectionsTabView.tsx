@@ -28,10 +28,6 @@ import type {
     TeamFormationMethod,
 } from "./config";
 
-// ============================================
-// Props Interface
-// ============================================
-
 interface SectionsTabViewProps {
     // Data
     course: Course;

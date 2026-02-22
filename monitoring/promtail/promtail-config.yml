@@ -1,0 +1,55 @@
+# =============================================================================
+# Promtail Configuration - Ship container logs to Loki
+# =============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://itii-loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Docker container logs
+  # ---------------------------------------------------------------------------
+  - job_name: docker
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+
+    pipeline_stages:
+      # Parse Docker JSON log format
+      - docker: {}
+
+      # Extract container name from filename
+      - regex:
+          source: filename
+          expression: "/var/lib/docker/containers/(?P<container_id>[^/]+)/.*"
+
+      # Add labels
+      - labels:
+          container_id:
+
+  # ---------------------------------------------------------------------------
+  # System logs (syslog, auth, kern)
+  # ---------------------------------------------------------------------------
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: syslog
+          __path__: /var/log/syslog
+
+      - targets:
+          - localhost
+        labels:
+          job: authlog
+          __path__: /var/log/auth.log

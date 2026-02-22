@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useSocket } from "@/contexts/SocketContext";
 import { Card, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
@@ -113,6 +115,8 @@ const statusDisplay: Record<string, { label: string; color: "default" | "primary
 
 export default function QueueTab({ course, isLoading, isCourseActive = true }: QueueTabProps) {
     const router = useRouter();
+    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates } = useSocket();
+    const [pendingQueueUpdate, setPendingQueueUpdate] = useState(false);
     const [sessions, setSessions] = useState<QueueSession[]>([]);
     const [isSessionsLoading, setIsSessionsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -152,8 +156,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
     });
 
     // Fetch sessions
-    const fetchSessions = useCallback(async () => {
-        setIsSessionsLoading(true);
+    const fetchSessions = useCallback(async (silent = false) => {
+        if (!silent) setIsSessionsLoading(true);
         try {
             const data = await queueService.getQueueSessions(course.id);
             setSessions(data);
@@ -167,7 +171,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 shouldShowTimeoutProgress: true,
             });
         } finally {
-            setIsSessionsLoading(false);
+            if (!silent) setIsSessionsLoading(false);
         }
     }, [course.id]);
 
@@ -199,6 +203,17 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             fetchSessions();
         }
     }, [course.id, fetchSessions]);
+
+    // Subscribe to real-time socket events from OTHER users
+    useEffect(() => {
+        subscribeToUpdates();
+        const unsubscribe = onDataUpdate((data) => {
+            if (data.resource !== ("queue" as any)) return;
+            if (data.data?.courseId && String(data.data.courseId) !== String(course.id)) return;
+            setPendingQueueUpdate(true);
+        });
+        return () => { unsubscribe(); unsubscribeFromUpdates(); };
+    }, [onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, course.id]);
 
     // Reset form
     const resetForm = () => {
@@ -300,7 +315,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 });
                 setIsCreateModalOpen(false);
                 resetForm();
-                fetchSessions();
+                fetchSessions(true);
+                emitDataUpdate("queue" as any, "create", result.id, { courseId: course.id });
             }
         } catch (error: unknown) {
             console.error("Error creating queue session:", error);
@@ -337,7 +353,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 shouldShowTimeoutProgress: true,
             });
             setIsEditModalOpen(false);
-            fetchSessions();
+            fetchSessions(true);
+            emitDataUpdate("queue" as any, "update", editTarget.id, { courseId: course.id });
         } catch (error: unknown) {
             console.error("Error updating queue session:", error);
             addToast({
@@ -367,8 +384,9 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 shouldShowTimeoutProgress: true,
             });
             setIsDeleteModalOpen(false);
+            emitDataUpdate("queue" as any, "delete", deleteTarget.id, { courseId: course.id });
             setDeleteTarget(null);
-            fetchSessions();
+            fetchSessions(true);
         } catch (error: unknown) {
             console.error("Error deleting queue session:", error);
             addToast({
@@ -394,7 +412,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
-            fetchSessions();
+            fetchSessions(true);
         } catch (error: unknown) {
             console.error("Error changing status:", error);
             addToast({
@@ -432,7 +450,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             });
             setIsStartModalOpen(false);
             setStartTarget(null);
-            fetchSessions();
+            fetchSessions(true);
+            emitDataUpdate("queue" as any, "update", startTarget.id, { courseId: course.id });
         } catch (error: unknown) {
             console.error("Error starting queue:", error);
             addToast({
@@ -462,7 +481,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             });
             setIsPauseModalOpen(false);
             setPauseTarget(null);
-            fetchSessions();
+            fetchSessions(true);
+            emitDataUpdate("queue" as any, "update", pauseTarget.id, { courseId: course.id });
         } catch (error: unknown) {
             console.error("Error changing status:", error);
             addToast({
@@ -490,8 +510,8 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
         setIsPauseModalOpen(true);
     };
 
-    console.log("formData:", formData);
     return (
+        <>
         <div className="space-y-4">
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1645,5 +1665,31 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 </ModalContent>
             </Modal>
         </div>
+        {pendingQueueUpdate && createPortal(
+            <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 z-[9999] sm:max-w-sm sm:w-full animate-toast-slide-up">
+                <div className="bg-white/95 backdrop-blur-md border border-blue-200 rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="flex items-center gap-3 p-4">
+                        <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:bell-bing-bold" className="text-xl text-white animate-bounce" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-800">มีคิวอัปเดตใหม่</p>
+                            <p className="text-xs text-slate-500 mt-0.5">มีการเปลี่ยนแปลงข้อมูลคิวในชั้นเรียนนี้</p>
+                        </div>
+                        <Button
+                            size="sm"
+                            color="primary"
+                            className="shrink-0"
+                            startContent={<Icon icon="solar:refresh-bold" />}
+                            onPress={() => { setPendingQueueUpdate(false); fetchSessions(true); }}
+                        >
+                            โหลดใหม่
+                        </Button>
+                    </div>
+                </div>
+            </div>,
+            document.body
+        )}
+        </>
     );
 }

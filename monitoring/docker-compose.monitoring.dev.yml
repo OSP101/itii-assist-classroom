@@ -1,0 +1,134 @@
+# =============================================================================
+# Monitoring Stack - LOCAL DEV VERSION (Windows / Mac friendly)
+#
+# Differences from production:
+#   - No itii-network required (no external network dependency)
+#   - No node-exporter / cAdvisor (Linux-only mounts)
+#   - No promtail (no /var/log access needed)
+#   - Prometheus scrapes backend via host.docker.internal (your localhost)
+#   - Lighter, faster start for local testing
+#
+# Usage:
+#   docker compose -f docker-compose.monitoring.dev.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Prometheus
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: itii-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9090:9090"      # ผูกไว้กับ localhost เท่านั้น (SSH tunnel ถ้าต้องการเข้าถึง)
+    volumes:
+      - ./prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+      - prometheus-dev-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+      - "--web.enable-lifecycle"
+    networks:
+      - monitoring-dev-network
+      - itii-network      # เพื่อ scrape itii-dev-backend:3001 ได้
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Grafana — เข้าถึงผ่าน https://monitor.osp101.dev (Traefik)
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: itii-grafana-dev
+    restart: unless-stopped
+    # ไม่ expose port สาธารณะ — Traefik จัดการ routing
+    # หากต้องการ SSH tunnel: ssh -L 3030:localhost:3030 user@server
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: https://monitor.osp101.dev
+      GF_SERVER_SERVE_FROM_SUB_PATH: "false"
+      GF_SMTP_ENABLED: "false"    # ปิด email ตอน dev
+    volumes:
+      - grafana-dev-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - monitoring-dev-network
+      - itii-network       # ต้องอยู่ใน itii-network ให้ Traefik discover
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=itii-network"              # บอก Traefik ใช้ network นี้
+      - "traefik.http.routers.grafana-dev.rule=Host(`monitor.osp101.dev`)"
+      - "traefik.http.routers.grafana-dev.entrypoints=websecure"
+      - "traefik.http.routers.grafana-dev.tls.certresolver=devresolver"
+      - "traefik.http.services.grafana-dev.loadbalancer.server.port=3000"
+      # Middleware: Basic Auth เพิ่มเติม (ปิดไว้ก่อน Grafana มี auth เอง)
+      # - "traefik.http.routers.grafana-dev.middlewares=grafana-auth"
+      # - "traefik.http.middlewares.grafana-auth.basicauth.users=admin:$$apr1$$...."
+
+  # ---------------------------------------------------------------------------
+  # Loki - Log aggregation
+  # ---------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: itii-loki-dev
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-dev-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Alertmanager
+  # ---------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: itii-alertmanager-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9093:9093"      # localhost only
+    volumes:
+      - ./alertmanager/alertmanager.dev.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-dev-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    networks:
+      - monitoring-dev-network
+      - itii-network      # เพื่อส่ง webhook ไป itii-dev-backend:3001
+
+networks:
+  monitoring-dev-network:
+    driver: bridge
+  itii-network:
+    external: true    # ใช้ network เดียวกับ Traefik
+
+volumes:
+  prometheus-dev-data:
+    driver: local
+  grafana-dev-data:
+    driver: local
+  loki-dev-data:
+    driver: local
+  alertmanager-dev-data:
+    driver: local

@@ -66,6 +66,13 @@ export const API_ENDPOINTS = {
   // System Logs
   LOGS: '/logs',
   LOGS_STATS: '/logs/stats',
+
+  // Monitoring (Admin)
+  MONITORING: {
+    SYSTEM: '/monitoring/system',
+    CONTAINERS: '/monitoring/containers',
+    WEBSITE: '/monitoring/website',
+  },
 };
 
 export default {

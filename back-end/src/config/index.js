@@ -89,4 +89,10 @@ module.exports = {
     appName: process.env.TWO_FACTOR_APP_NAME || 'ITII Assist Classroom',
     issuer: process.env.TWO_FACTOR_ISSUER || 'ITII Assist Classroom',
   },
+
+  // Monitoring / Prometheus
+  monitoring: {
+    prometheusUrl: process.env.PROMETHEUS_URL || 'http://itii-prometheus:9090',
+    alertWebhookSecret: process.env.ALERT_WEBHOOK_SECRET || '',
+  },
 };
