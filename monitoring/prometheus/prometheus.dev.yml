@@ -42,9 +42,10 @@ scrape_configs:
           service: "loki"
 
   # Node Exporter - Host CPU, RAM, Disk, Network
+  # node-exporter ใช้ network_mode: host จึงต้อง scrape ผ่าน host.docker.internal
   - job_name: "node-exporter"
     static_configs:
-      - targets: ["itii-node-exporter-dev:9100"]
+      - targets: ["host.docker.internal:9100"]
         labels:
           service: "node-exporter"
           environment: "development"
