@@ -104,7 +104,7 @@ services:
   # cAdvisor - Container metrics (CPU, memory, restart count, etc.)
   # ---------------------------------------------------------------------------
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    image: gcr.io/cadvisor/cadvisor:v0.51.0
     container_name: itii-cadvisor
     restart: always
     ports:
@@ -115,6 +115,7 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     privileged: true
     devices:
       - /dev/kmsg:/dev/kmsg
