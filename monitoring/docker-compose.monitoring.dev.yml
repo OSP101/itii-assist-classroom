@@ -1,14 +1,20 @@
 # =============================================================================
-# Monitoring Stack - LOCAL DEV VERSION (Windows / Mac friendly)
+# Monitoring Stack - DEV SERVER (Linux)
 #
-# Differences from production:
-#   - No itii-network required (no external network dependency)
-#   - No node-exporter / cAdvisor (Linux-only mounts)
-#   - No promtail (no /var/log access needed)
-#   - Prometheus scrapes backend via host.docker.internal (your localhost)
-#   - Lighter, faster start for local testing
+# บน dev server (itii.osp101.dev) มี Traefik เป็น reverse proxy
+# Grafana เข้าถึงผ่าน https://monitor.osp101.dev
+#
+# Services: Prometheus, Grafana, node-exporter, cAdvisor, Loki, Alertmanager
+# Container names: itii-*-dev (e.g. itii-prometheus-dev)
+# Network: itii-network (shared with Traefik + app stack)
+#
+# Prerequisites:
+#   1. itii-network ต้องมี:  docker network create itii-network
+#   2. MySQL ต้องรัน:         docker compose -f docker-compose.db.yml up -d
+#   3. App stack ต้องรัน:     docker compose -f docker-compose.dev.yml up -d
 #
 # Usage:
+#   cd monitoring
 #   docker compose -f docker-compose.monitoring.dev.yml up -d
 # =============================================================================
 
@@ -58,7 +64,8 @@ services:
       GF_SMTP_ENABLED: "false"    # ปิด email ตอน dev
     volumes:
       - grafana-dev-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/provisioning/datasources/datasources.dev.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     networks:
       - monitoring-dev-network
