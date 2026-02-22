@@ -25,6 +25,8 @@ services:
       - "--storage.tsdb.retention.size=10GB"           # Max 10GB storage
       - "--web.enable-lifecycle"                        # Allow config reload via API
       - "--web.enable-admin-api"                        # Admin API for snapshots
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # ให้ Prometheus เข้าถึง node-exporter บน host ได้
     networks:
       - monitoring-network
       - itii-network
@@ -81,13 +83,14 @@ services:
   # ---------------------------------------------------------------------------
   # Node Exporter - Host/server hardware & OS metrics
   # Exposes CPU, RAM, disk, network, load average
+  # ต้องใช้ network_mode: host เพื่อให้เห็น network interface ของ host จริงๆ
   # ---------------------------------------------------------------------------
   node-exporter:
     image: prom/node-exporter:v1.7.0
     container_name: itii-node-exporter
     restart: always
-    ports:
-      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    network_mode: host
+    pid: host
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -97,8 +100,6 @@ services:
       - "--path.rootfs=/rootfs"
       - "--path.sysfs=/host/sys"
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-    networks:
-      - monitoring-network
 
   # ---------------------------------------------------------------------------
   # cAdvisor - Container metrics (CPU, memory, restart count, etc.)

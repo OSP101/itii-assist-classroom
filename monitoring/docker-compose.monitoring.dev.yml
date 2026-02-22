@@ -37,6 +37,8 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=7d"
       - "--web.enable-lifecycle"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # ให้ Prometheus เข้าถึง node-exporter บน host ได้
     networks:
       - monitoring-dev-network
       - itii-network      # เพื่อ scrape itii-dev-backend:3001 ได้
@@ -86,11 +88,13 @@ services:
 
   # ---------------------------------------------------------------------------
   # Node Exporter - Host CPU, Memory, Disk, Network metrics
+  # ต้องใช้ network_mode: host เพื่อให้เห็น network interface ของ host จริงๆ
   # ---------------------------------------------------------------------------
   node-exporter:
     image: prom/node-exporter:v1.7.0
     container_name: itii-node-exporter-dev
     restart: unless-stopped
+    network_mode: host
     pid: host
     volumes:
       - /proc:/host/proc:ro
@@ -101,8 +105,6 @@ services:
       - "--path.rootfs=/rootfs"
       - "--path.sysfs=/host/sys"
       - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
-    networks:
-      - monitoring-dev-network
 
   # ---------------------------------------------------------------------------
   # cAdvisor - Container CPU, Memory, Restart metrics

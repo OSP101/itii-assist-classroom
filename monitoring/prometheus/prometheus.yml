@@ -35,9 +35,10 @@ scrape_configs:
   # ---------------------------------------------------------------------------
   # Node Exporter - Server hardware metrics (CPU, RAM, disk, network)
   # ---------------------------------------------------------------------------
+  # node-exporter ใช้ network_mode: host จึงต้อง scrape ผ่าน host.docker.internal
   - job_name: "node-exporter"
     static_configs:
-      - targets: ["itii-node-exporter:9100"]
+      - targets: ["host.docker.internal:9100"]
         labels:
           service: "node-exporter"
           environment: "production"
