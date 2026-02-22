@@ -46,6 +46,9 @@ pipeline {
                         string(credentialsId: 'PROD_NEXT_PUBLIC_GOOGLE_CLIENT_ID', variable: 'NEXT_PUBLIC_GOOGLE_CLIENT_ID'),
                         string(credentialsId: 'PROD_JWT_ACCESS_EXPIRES_IN', variable: 'JWT_ACCESS_EXPIRES_IN'),
                         string(credentialsId: 'PROD_JWT_REFRESH_EXPIRES_IN', variable: 'JWT_REFRESH_EXPIRES_IN'),
+                        // Monitoring
+                        string(credentialsId: 'PROD_PROMETHEUS_URL', variable: 'PROMETHEUS_URL'),
+                        string(credentialsId: 'PROD_ALERT_WEBHOOK_SECRET', variable: 'ALERT_WEBHOOK_SECRET'),
                     ]) {
                         sh '''
                         # Create backend .env.prod file
@@ -62,6 +65,8 @@ GOOGLE_CALLBACK_URL=$GOOGLE_CALLBACK_URL
 FRONTEND_URL=$FRONTEND_URL
 JWT_ACCESS_EXPIRES_IN=$JWT_ACCESS_EXPIRES_IN
 JWT_REFRESH_EXPIRES_IN=$JWT_REFRESH_EXPIRES_IN
+PROMETHEUS_URL=$PROMETHEUS_URL
+ALERT_WEBHOOK_SECRET=$ALERT_WEBHOOK_SECRET
 EOF
 
                         # Create frontend .env.local.prod file

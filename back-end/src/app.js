@@ -9,6 +9,7 @@ const config = require('./config');
 const { testConnection } = require('./config/database');
 const passport = require('./config/passport');
 const routes = require('./routes');
+const { metricsMiddleware } = require('./middlewares/metrics');
 const { 
   notFoundHandler, 
   errorConverter, 
@@ -152,6 +153,9 @@ app.use('/uploads', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   next();
 }, express.static(path.join(__dirname, '../uploads')));
+
+// Prometheus metrics middleware (must be before routes to capture all requests)
+app.use(metricsMiddleware);
 
 // Request Logger Middleware (บันทึกเฉพาะการกระทำต่อระบบ ไม่บันทึกการเข้าหน้า)
 const { requestLogger } = require('./middlewares');

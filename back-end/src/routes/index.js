@@ -23,6 +23,7 @@ const notificationRoutes = require('./notification.routes');
 const courseActivityLogRoutes = require('./courseActivityLog.routes');
 const examScoreRoutes = require('./examScore.routes');
 const oauthRoutes = require('./oauth.routes');
+const monitoringRoutes = require('./monitoring.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -46,6 +47,10 @@ router.use('/scores', scoreRoutes);
 router.use('/score-edit-requests', scoreEditRequestRoutes);
 router.use('/attendance', attendanceRoutes);
 router.use('/bonus-scores', bonusScoreRoutes);
+
+// Monitoring & metrics routes (Prometheus scrape + admin API)
+router.use('/metrics', monitoringRoutes);
+router.use('/monitoring', monitoringRoutes);
 
 // Health check endpoint
 router.get('/health', (req, res) => {

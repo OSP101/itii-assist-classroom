@@ -64,6 +64,12 @@ const menuItems: MenuItem[] = [
         label: "System Logs",
         icon: "solar:document-text-bold",
         href: "/admin/logs",
+    },
+    {
+        key: "monitoring",
+        label: "Monitoring",
+        icon: "solar:monitor-smartphone-bold",
+        href: "/admin/monitoring",
     }
 ];
 
@@ -76,6 +82,7 @@ const pageTitles: Record<string, { title: string; subtitle?: string }> = {
     '/admin/classrooms': { title: 'จัดการห้องเรียน', subtitle: 'Classroom Management' },
     '/admin/feedback': { title: 'จัดการ Feedback', subtitle: 'รายงานข้อผิดพลาดและข้อเสนอแนะ' },
     '/admin/logs': { title: 'System Logs', subtitle: 'บันทึกการใช้งานระบบ' },
+    '/admin/monitoring': { title: 'System Monitoring', subtitle: 'Real-time Server & Website Health' },
     '/admin/settings': { title: 'ตั้งค่าระบบ', subtitle: 'System Settings' },
     '/admin/courses/': { title: 'จัดการรายวิชา', subtitle: 'Course Management' },
 };
