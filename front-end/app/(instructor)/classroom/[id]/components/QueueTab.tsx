@@ -977,9 +977,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                                                 onChange={setCurrentPage}
                                                 showControls
                                                 size="sm"
-                                                classNames={{
-                                                    cursor: "bg-blue-500",
-                                                }}
+                                                color="primary"
                                             />
                                         </div>
                                     )}

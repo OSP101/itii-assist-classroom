@@ -375,7 +375,7 @@ const googleCallback = asyncHandler(async (req, res, next) => {
         return res.redirect(redirectUrl);
         
       } catch (linkError) {
-        console.error('Link error:', linkError);
+        logger.error('Link error:', linkError);
         const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
         return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
       }
@@ -523,7 +523,7 @@ const githubCallback = asyncHandler(async (req, res, next) => {
         return res.redirect(redirectUrl);
         
       } catch (linkError) {
-        console.error('Link error:', linkError);
+        logger.error('Link error:', linkError);
         const errorMessage = encodeURIComponent('Failed to link account. Please try again.');
         return res.redirect(`${config.frontendUrl}/auth/link-callback?error=${errorMessage}`);
       }

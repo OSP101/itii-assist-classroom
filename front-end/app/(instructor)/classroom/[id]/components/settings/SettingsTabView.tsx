@@ -432,6 +432,7 @@ function SettingsTabViewComponent({
                             { label: "คะแนนแลป",        icon: "solar:monitor-bold",                  color: "bg-blue-100 text-blue-700" },
                             { label: "คะแนนการบ้าน",    icon: "solar:document-text-bold",              color: "bg-indigo-100 text-indigo-700" },
                             { label: "คะแนนกลุ่ม",      icon: "solar:users-group-two-rounded-bold",    color: "bg-violet-100 text-violet-700" },
+                            { label: "คะแนนสอบ",        icon: "solar:diploma-bold",                    color: "bg-orange-100 text-orange-700" },
                             { label: "เช็คชื่อ",         icon: "solar:check-square-bold",               color: "bg-emerald-100 text-emerald-700" },
                             { label: "การทำงานทีเอ",    icon: "solar:star-bold",                       color: "bg-amber-100 text-amber-700" },
                             { label: "สรุปคะแนน",       icon: "solar:chart-2-bold",                    color: "bg-rose-100 text-rose-700" },

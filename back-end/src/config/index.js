@@ -11,8 +11,10 @@ if (!process.env.DB_NAME) {
   }
 }
 
-// Debug: Log which database is being used
-console.log(`📦 Database config: ${process.env.DB_NAME} @ ${process.env.DB_HOST || 'localhost'}`);
+// Debug: Log which database is being used (console is acceptable here — logger not yet initialized)
+if (process.env.NODE_ENV !== 'test') {
+  console.info(`Database config: ${process.env.DB_NAME} @ ${process.env.DB_HOST || 'localhost'}`);
+}
 
 module.exports = {
   // Server
@@ -36,10 +38,18 @@ module.exports = {
     db: parseInt(process.env.REDIS_DB, 10) || 0,
   },
 
-  // JWT
+  // JWT — CRITICAL: ห้ามใช้ default secret ใน production
   jwt: {
-    accessSecret: process.env.JWT_ACCESS_SECRET || 'default-access-secret',
-    refreshSecret: process.env.JWT_REFRESH_SECRET || 'default-refresh-secret',
+    accessSecret: (() => {
+      const secret = process.env.JWT_ACCESS_SECRET;
+      if (!secret && process.env.NODE_ENV === 'production') throw new Error('JWT_ACCESS_SECRET is required in production');
+      return secret || 'dev-only-access-secret-do-not-use-in-prod';
+    })(),
+    refreshSecret: (() => {
+      const secret = process.env.JWT_REFRESH_SECRET;
+      if (!secret && process.env.NODE_ENV === 'production') throw new Error('JWT_REFRESH_SECRET is required in production');
+      return secret || 'dev-only-refresh-secret-do-not-use-in-prod';
+    })(),
     accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m',
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '1d',
   },
@@ -71,8 +81,12 @@ module.exports = {
   // Frontend
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
 
-  // Cookie
-  cookieSecret: process.env.COOKIE_SECRET || 'default-cookie-secret',
+  // Cookie — CRITICAL: ห้ามใช้ default secret ใน production
+  cookieSecret: (() => {
+    const secret = process.env.COOKIE_SECRET;
+    if (!secret && process.env.NODE_ENV === 'production') throw new Error('COOKIE_SECRET is required in production');
+    return secret || 'dev-only-cookie-secret-do-not-use-in-prod';
+  })(),
 
   // Email (for 2FA)
   email: {

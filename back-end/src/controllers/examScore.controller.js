@@ -122,7 +122,7 @@ exports.getExamScores = async (req, res, next) => {
                         id: student.id,
                         student_id: student.student_id,
                         full_name: student.full_name,
-                        section: section.section,
+                        section: section.section_no,
                     });
                 }
             });

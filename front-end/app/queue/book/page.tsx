@@ -206,6 +206,9 @@ function BookQueueContent() {
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const currentBookingIdRef = useRef<number | null>(null);
 
+    // Cancel booking confirmation modal
+    const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+
     // Notification (FCM)
     const { 
         isSupported: notificationSupported, 
@@ -1169,11 +1172,10 @@ function BookQueueContent() {
                                         color="danger"
                                         variant="flat"
                                         className="mt-4 w-full"
-                                        onPress={handleCancelBooking}
-                                        isLoading={isCancelling}
-                                        startContent={!isCancelling && <Icon icon="solar:close-circle-bold" className="text-lg" />}
+                                        onPress={() => setIsCancelConfirmOpen(true)}
+                                        startContent={<Icon icon="solar:close-circle-bold" className="text-lg" />}
                                     >
-                                        {isCancelling ? "กำลังยกเลิก..." : "ยกเลิกการจอง"}
+                                        ยกเลิกการจอง
                                     </Button>
                                 </>
                             )}
@@ -1307,6 +1309,46 @@ function BookQueueContent() {
                         </div>
                     </CardBody>
                 </Card>
+
+                {/* Cancel Booking Confirmation Modal */}
+                <Modal isOpen={isCancelConfirmOpen} onClose={() => setIsCancelConfirmOpen(false)} size="sm">
+                    <ModalContent>
+                        <ModalHeader className="px-6 pt-6 pb-4">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
+                                    <Icon icon="solar:close-circle-bold" className="text-2xl text-white" />
+                                </div>
+                                <h3 className="text-xl font-bold text-slate-800">ยืนยันการยกเลิกการจอง</h3>
+                            </div>
+                        </ModalHeader>
+                        <ModalBody className="px-6 py-6">
+                            <div className="bg-red-50 rounded-2xl p-5 border border-red-100 text-center">
+                                <p className="text-slate-700">คุณต้องการยกเลิกคิวหมายเลข</p>
+                                <p className="text-4xl font-bold text-red-500 my-2">{status.queue_number}</p>
+                                <p className="text-sm text-slate-500">หากยกเลิกแล้วสามารถจองใหม่ได้</p>
+                            </div>
+                        </ModalBody>
+                        <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
+                            <Button
+                                variant="flat"
+                                color="default"
+                                onPress={() => setIsCancelConfirmOpen(false)}
+                                className="font-medium flex-1"
+                            >
+                                ไม่ยกเลิก
+                            </Button>
+                            <Button
+                                color="danger"
+                                onPress={() => { setIsCancelConfirmOpen(false); handleCancelBooking(); }}
+                                isLoading={isCancelling}
+                                className="font-medium flex-1 bg-gradient-to-r from-red-500 to-rose-600"
+                                startContent={!isCancelling && <Icon icon="solar:close-circle-bold" className="text-lg" />}
+                            >
+                                ยกเลิกการจอง
+                            </Button>
+                        </ModalFooter>
+                    </ModalContent>
+                </Modal>
             </div>
         );
     }

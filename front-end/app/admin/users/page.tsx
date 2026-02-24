@@ -93,8 +93,10 @@ export default function UsersPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isToggleStatusModalOpen, setIsToggleStatusModalOpen] = useState(false);
     const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [userToToggle, setUserToToggle] = useState<User | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [newCredentials, setNewCredentials] = useState<{ username: string; password: string } | null>(null);
 
@@ -335,9 +337,18 @@ export default function UsersPage() {
         }
     };
 
-    // Handle toggle status
-    const handleToggleStatus = async (user: User) => {
+    // Open toggle status confirmation modal
+    const openToggleStatusModal = (user: User) => {
+        setUserToToggle(user);
+        setIsToggleStatusModalOpen(true);
+    };
+
+    // Handle toggle status (called from confirmation modal)
+    const handleToggleStatus = async () => {
+        if (!userToToggle) return;
+        const user = userToToggle;
         isUpdatingRef.current = true;
+        setIsToggleStatusModalOpen(false);
         try {
             const response = await userService.toggleStatus(user.id);
             if (response.success) {
@@ -533,7 +544,7 @@ export default function UsersPage() {
                                 isIconOnly
                                 size="sm"
                                 variant="light"
-                                onPress={() => handleToggleStatus(user)}
+                                onPress={() => openToggleStatusModal(user)}
                             >
                                 <Icon
                                     icon={user.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
@@ -968,7 +979,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1124,10 +1135,10 @@ export default function UsersPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="warning"
+                            color="primary"
                             onPress={handleUpdate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
                         >
                             บันทึกการแก้ไข
@@ -1137,6 +1148,59 @@ export default function UsersPage() {
             </Modal>
 
             {/* Delete Confirmation Modal */}
+            {/* Toggle Status Confirmation Modal */}
+            <Modal isOpen={isToggleStatusModalOpen} onClose={() => setIsToggleStatusModalOpen(false)} size="md">
+                <ModalContent>
+                    <ModalHeader className="px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg ${userToToggle?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                                <Icon icon={userToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {userToToggle?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
+                            </h3>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className={`rounded-2xl p-6 border ${userToToggle?.is_active ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${userToToggle?.is_active ? "bg-amber-100" : "bg-emerald-100"}`}>
+                                    <Icon icon="solar:user-bold" className={`text-2xl ${userToToggle?.is_active ? "text-amber-600" : "text-emerald-600"}`} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{userToToggle?.full_name}</p>
+                                    <p className="text-sm text-slate-500">@{userToToggle?.username}</p>
+                                    <p className="text-xs text-slate-400 mt-1">{userToToggle ? roleLabels[userToToggle.role] : ""}</p>
+                                </div>
+                            </div>
+                            <p className={`mt-4 text-sm ${userToToggle?.is_active ? "text-amber-700" : "text-emerald-700"}`}>
+                                {userToToggle?.is_active
+                                    ? "ผู้ใช้จะไม่สามารถเข้าสู่ระบบได้หลังจากปิดใช้งาน"
+                                    : "ผู้ใช้จะสามารถเข้าสู่ระบบได้หลังจากเปิดใช้งาน"}
+                            </p>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
+                        <Button
+                            variant="flat"
+                            color="default"
+                            onPress={() => setIsToggleStatusModalOpen(false)}
+                            className="font-medium px-6"
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color={userToToggle?.is_active ? "warning" : "success"}
+                            onPress={handleToggleStatus}
+                            className={`font-medium px-6 ${userToToggle?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            startContent={<Icon icon={userToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
+                        >
+                            {userToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
             <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} size="md">
                 <ModalContent>
                     <ModalHeader className="px-6 pt-6 pb-4">

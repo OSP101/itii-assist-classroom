@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * Concurrent Request Handler Utility
  * ป้องกันปัญหาจาก concurrent requests ที่อาจทำให้เกิด duplicate records หรือ race conditions
@@ -159,7 +160,7 @@ async function executeWithRetry(fn, maxRetries = 3, baseDelay = 100) {
             const delay = baseDelay * Math.pow(2, attempt - 1);
             await new Promise(resolve => setTimeout(resolve, delay));
             
-            console.warn(`[Retry] Attempt ${attempt}/${maxRetries} after ${delay}ms delay`);
+            logger.warn(`[Retry] Attempt ${attempt}/${maxRetries} after ${delay}ms delay`);
         }
     }
     

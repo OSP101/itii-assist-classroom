@@ -1173,7 +1173,7 @@ export default function CoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1187,7 +1187,7 @@ export default function CoursesPage() {
                             {/* Course Image Section */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Icon icon="solar:gallery-bold" className="text-lg text-amber-500" />
+                                    <Icon icon="solar:gallery-bold" className="text-lg text-blue-500" />
                                     <span className="text-sm font-semibold text-slate-700">รูปปกรายวิชา</span>
                                 </div>
                                 <div className="py-3">
@@ -1402,10 +1402,10 @@ export default function CoursesPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="warning"
+                            color="primary"
                             onPress={handleUpdate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:pen-bold" className="text-lg" />}
                         >
                             บันทึกการเปลี่ยนแปลง
@@ -1473,59 +1473,37 @@ export default function CoursesPage() {
                 size="md"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <ModalHeader className="px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${
-                                selectedCourse?.is_active 
-                                    ? "bg-gradient-to-br from-orange-500 to-red-600 shadow-orange-500/30"
-                                    : "bg-gradient-to-br from-green-500 to-emerald-600 shadow-green-500/30"
-                            }`}>
-                                <Icon 
-                                    icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} 
-                                    className="text-2xl text-white" 
-                                />
+                            <div className={`p-3 rounded-xl shadow-lg ${selectedCourse?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                                <Icon icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
                             </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-slate-800">
-                                    {selectedCourse?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
-                                </h3>
-                                <p className="text-sm text-slate-500 font-normal mt-1">
-                                    {selectedCourse?.code} - {selectedCourse?.name}
-                                </p>
-                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {selectedCourse?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
+                            </h3>
                         </div>
                     </ModalHeader>
                     <ModalBody className="px-6 py-6">
-                        <div className={`rounded-xl p-4 border ${
-                            selectedCourse?.is_active 
-                                ? "bg-orange-50 border-orange-100"
-                                : "bg-green-50 border-green-100"
-                        }`}>
-                            {selectedCourse?.is_active ? (
-                                <>
-                                    <p className="text-slate-700">
-                                        คุณต้องการ<span className="font-bold text-orange-600">ปิดใช้งาน</span>รายวิชานี้ใช่หรือไม่?
-                                    </p>
-                                    <p className="text-sm text-slate-500 mt-2">
-                                        รายวิชาที่ปิดใช้งานจะไม่แสดงในรายการสำหรับผู้ใช้ทั่วไป แต่ข้อมูลจะยังคงอยู่ในระบบ
-                                    </p>
-                                </>
-                            ) : (
-                                <>
-                                    <p className="text-slate-700">
-                                        คุณต้องการ<span className="font-bold text-green-600">เปิดใช้งาน</span>รายวิชานี้ใช่หรือไม่?
-                                    </p>
-                                    <p className="text-sm text-slate-500 mt-2">
-                                        <Icon icon="solar:info-circle-linear" className="inline mr-1" />
-                                        หากมีรายวิชาที่ใช้รหัส ปี และภาคเรียนเดียวกันเปิดใช้งานอยู่ ระบบจะไม่อนุญาตให้เปิด กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน
-                                    </p>
-                                </>
-                            )}
+                        <div className={`rounded-2xl p-6 border ${selectedCourse?.is_active ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${selectedCourse?.is_active ? "bg-amber-100" : "bg-emerald-100"}`}>
+                                    <Icon icon="solar:book-bold" className={`text-2xl ${selectedCourse?.is_active ? "text-amber-600" : "text-emerald-600"}`} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{selectedCourse?.code} - {selectedCourse?.name}</p>
+                                    <p className="text-sm text-slate-500">ปีการศึกษา {selectedCourse?.year} ภาค {selectedCourse?.semester}</p>
+                                </div>
+                            </div>
+                            <p className={`mt-4 text-sm ${selectedCourse?.is_active ? "text-amber-700" : "text-emerald-700"}`}>
+                                {selectedCourse?.is_active
+                                    ? "รายวิชาที่ปิดใช้งานจะไม่แสดงในรายการสำหรับผู้ใช้ทั่วไป แต่ข้อมูลจะยังคงอยู่ในระบบ"
+                                    : "หากมีรายวิชาที่ใช้รหัส ปี และภาคเรียนเดียวกันเปิดใช้งานอยู่ ระบบจะไม่อนุญาตให้เปิด กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน"}
+                            </p>
                         </div>
                     </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
                         <Button
-                            variant="light"
+                            variant="flat"
                             color="default"
                             onPress={() => {
                                 setIsToggleStatusModalOpen(false);
@@ -1539,17 +1517,8 @@ export default function CoursesPage() {
                             color={selectedCourse?.is_active ? "warning" : "success"}
                             onPress={handleToggleStatus}
                             isLoading={isSubmitting}
-                            className={`font-medium px-6 ${
-                                selectedCourse?.is_active 
-                                    ? "bg-gradient-to-r from-orange-500 to-red-600"
-                                    : "bg-gradient-to-r from-green-500 to-emerald-600"
-                            } text-white`}
-                            startContent={!isSubmitting && (
-                                <Icon 
-                                    icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} 
-                                    className="text-lg" 
-                                />
-                            )}
+                            className={`font-medium px-6 ${selectedCourse?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            startContent={!isSubmitting && <Icon icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
                         >
                             {selectedCourse?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                         </Button>

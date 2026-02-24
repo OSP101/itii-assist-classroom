@@ -43,6 +43,7 @@ interface SectionsTabViewProps {
     sectionStudents: Record<number, SectionStudent[]>;
     isCourseActive?: boolean;
 
+
     // Handlers
     onSubTabChange: (tab: SectionSubTab) => void;
     onSearchQueryChange: (query: string) => void;
@@ -731,7 +732,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                     color="primary"
                                     isIconOnly
                                     onPress={() => onOpenCreateTeamModal("permanent", "manual")}
-                                    className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 md:hidden"
+                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25 flex-shrink-0 md:hidden"
                                     size="md"
                                     isDisabled={isTeamsLoading || !isCourseActive}
                                 >
@@ -742,7 +743,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                 color="primary"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("permanent", "manual")}
-                                className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25 flex-shrink-0 hidden md:flex"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25 flex-shrink-0 hidden md:flex"
                                 size="md"
                                 isDisabled={isTeamsLoading || !isCourseActive}
                             >
@@ -802,7 +803,7 @@ const PermanentTeamsSubTab = React.memo(function PermanentTeamsSubTab({
                                 color="primary"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("permanent", "manual")}
-                                className="bg-gradient-to-r from-purple-500 to-indigo-500 shadow-lg shadow-purple-500/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                             >
                                 สร้างกลุ่มเอง
                             </Button>
@@ -1009,7 +1010,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                     isIconOnly
                                     isDisabled={!isCourseActive}
                                     onPress={() => onOpenCreateTeamModal("weekly", "manual")}
-                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 md:hidden"
+                                    className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25 flex-shrink-0 md:hidden"
                                 >
                                     <Icon icon="solar:add-circle-bold" className="text-lg" />
                                 </Button>
@@ -1020,7 +1021,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 isDisabled={!isCourseActive}
                                 onPress={() => onOpenCreateTeamModal("weekly", "manual")}
-                                className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25 flex-shrink-0 hidden md:flex"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25 flex-shrink-0 hidden md:flex"
                             >
                                 สร้างกลุ่ม
                             </Button>
@@ -1135,7 +1136,7 @@ const WeeklyTeamsSubTab = React.memo(function WeeklyTeamsSubTab({
                                 color="primary"
                                 startContent={<Icon icon="solar:add-circle-bold" />}
                                 onPress={() => onOpenCreateTeamModal("weekly", "manual")}
-                                className="bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                             >
                                 สร้างกลุ่มเอง
                             </Button>

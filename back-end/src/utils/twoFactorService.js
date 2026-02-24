@@ -1,6 +1,7 @@
 const { TOTP, generateSecret: generateOTPSecret, generateURI, verifySync } = require('otplib');
 const QRCode = require('qrcode');
 const crypto = require('crypto');
+const logger = require('./logger');
 const bcrypt = require('bcryptjs');
 const config = require('../config');
 
@@ -46,7 +47,7 @@ const generateQRCode = async (otpauth) => {
       },
     });
   } catch (error) {
-    console.error('Failed to generate QR code:', error);
+    logger.error('Failed to generate QR code:', error);
     throw error;
   }
 };
@@ -67,7 +68,7 @@ const verifyTOTP = (token, secret) => {
     });
     return result.valid === true;
   } catch (error) {
-    console.error('TOTP verification error:', error);
+    logger.error('TOTP verification error:', error);
     return false;
   }
 };
@@ -145,7 +146,7 @@ const decryptSecret = (encryptedSecret) => {
     decrypted += decipher.final('utf8');
     return decrypted;
   } catch (error) {
-    console.error('Failed to decrypt secret:', error);
+    logger.error('Failed to decrypt secret:', error);
     return null;
   }
 };

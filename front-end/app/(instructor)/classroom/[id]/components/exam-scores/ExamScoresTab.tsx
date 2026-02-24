@@ -385,11 +385,14 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                     placeholder="ค้นหารหัสหรือชื่อนักศึกษา..."
                                     value={searchQuery}
                                     onValueChange={setSearchQuery}
-                                    startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
+                                    startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
                                     className="w-full sm:max-w-sm"
                                     size="md"
                                     variant="bordered"
                                     isClearable
+                                    classNames={{
+                                        inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
+                                    }}
                                 />
                                 <div className="flex items-center gap-2">
                                     <Chip size="md" variant="flat" className="bg-slate-100">
@@ -504,139 +507,140 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                         </div>
                                     </div>
                                     
-                                    {/* Table Header */}
-                                    <div className="border-b border-slate-200">
-                                        <div className="flex items-center px-5 py-3">
-                                            <div className="w-32 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                                รหัสนักศึกษา
-                                            </div>
-                                            <div className="flex-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                                ชื่อ-นามสกุล
-                                            </div>
-                                            <div className="w-16 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
-                                                Section
-                                            </div>
-                                            <div className="w-28 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">
-                                                คะแนน
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {/* Table — horizontal scroll, sticky score column */}
+                                    <CardBody className="p-0 max-h-[400px] overflow-auto">
+                                        <table className="w-full border-collapse" style={{ minWidth: "520px" }}>
+                                            <thead className="sticky top-0 z-10">
+                                                <tr className="border-b border-slate-200 bg-slate-50">
+                                                    <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[128px]">
+                                                        รหัสนักศึกษา
+                                                    </th>
+                                                    <th className="px-2 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider min-w-[160px]">
+                                                        ชื่อ-นามสกุล
+                                                    </th>
+                                                    <th className="px-2 py-3 text-center text-xs font-semibold text-slate-500 tracking-wider w-16">
+                                                        Section
+                                                    </th>
+                                                    <th className="sticky right-0 px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-28 bg-slate-50 border-l border-slate-200">
+                                                        คะแนน
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredStudents.map((student, idx) => {
+                                                    const isEditing = editingScore?.settingId === setting.id && editingScore?.studentId === student.id;
+                                                    const scoreValue = getScoreDisplay(setting.id, student.id);
+                                                    const hasScore = scoreValue !== "";
+                                                    const rowBg = idx % 2 === 0 ? "bg-white" : "bg-slate-50";
 
-                                    {/* Table Body */}
-                                    <CardBody className="p-0 max-h-[400px] overflow-y-auto">
-                                        <div>
-                                            {filteredStudents.map((student, idx) => {
-                                                const isEditing = editingScore?.settingId === setting.id && editingScore?.studentId === student.id;
-                                                const scoreValue = getScoreDisplay(setting.id, student.id);
-                                                const hasScore = scoreValue !== "";
-                                                
-                                                return (
-                                                    <div 
-                                                        key={student.id} 
-                                                        className={`flex items-center px-5 py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
-                                                    >
-                                                        <div className="w-32">
-                                                            <span className="text-sm text-slate-600">
+                                                    return (
+                                                        <tr
+                                                            key={student.id}
+                                                            className={`border-b border-slate-100 last:border-b-0 hover:bg-blue-50/40 transition-colors ${rowBg}`}
+                                                        >
+                                                            <td className="px-5 py-3 text-sm text-slate-600 whitespace-nowrap">
                                                                 {student.student_id}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex-1 text-sm text-slate-700 truncate pr-4">
-                                                            {student.full_name}
-                                                        </div>
-                                                        <div className="w-16 text-center">
-                                                            {/* <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600"> */}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-sm text-slate-700">
+                                                                {student.full_name}
+                                                            </td>
+                                                            <td className="px-2 py-3 text-sm text-center text-slate-500">
                                                                 {student.section || "-"}
-                                                            {/* </Chip> */}
-                                                        </div>
-                                                        <div className="w-28 flex items-center justify-end gap-2">
-                                                            {isEditing ? (
-                                                                <div className="flex items-center gap-1">
-                                                                    <Input
-                                                                        type="number"
-                                                                        size="sm"
-                                                                        variant="bordered"
-                                                                        className="w-16"
-                                                                        classNames={{
-                                                                            input: "text-center font-semibold",
-                                                                            inputWrapper: "h-8 min-h-8",
-                                                                        }}
-                                                                        value={editingScore.value}
-                                                                        onValueChange={(v) => setEditingScore({...editingScore, value: v})}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') {
-                                                                                handleSaveScore(setting.id, student.id, editingScore.value);
-                                                                            } else if (e.key === 'Escape') {
-                                                                                setEditingScore(null);
-                                                                            }
-                                                                        }}
-                                                                        autoFocus
-                                                                    />
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        color="danger"
-                                                                        variant="flat"
-                                                                        className="min-w-7 w-7 h-7"
-                                                                        onPress={() => setEditingScore(null)}
-                                                                    >
-                                                                        <Icon icon="solar:close-circle-bold" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        isIconOnly
-                                                                        size="sm"
-                                                                        color="success"
-                                                                        variant="flat"
-                                                                        isLoading={isSaving}
-                                                                        className="min-w-7 w-7 h-7"
-                                                                        onPress={() => handleSaveScore(setting.id, student.id, editingScore.value)}
-                                                                    >
-                                                                        <Icon icon="solar:check-circle-bold" />
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <button
-                                                                    className="group flex items-center gap-2"
-                                                                    onClick={() => setEditingScore({
-                                                                        settingId: setting.id,
-                                                                        studentId: student.id,
-                                                                        value: scoreValue,
-                                                                    })}
-                                                                    disabled={!isCourseActive}
-                                                                >
-                                                                    {(() => {
-                                                                        const numScore = parseFloat(scoreValue);
-                                                                        const percent = hasScore ? (numScore / setting.max_score) * 100 : 0;
-                                                                        let colorClass = 'bg-slate-100 text-slate-400';
-                                                                        if (hasScore) {
-                                                                            if (percent >= 80) colorClass = 'bg-emerald-500 text-white';
-                                                                            else if (percent >= 60) colorClass = 'bg-blue-500 text-white';
-                                                                            else if (percent >= 40) colorClass = 'bg-amber-500 text-white';
-                                                                            else colorClass = 'bg-red-500 text-white';
-                                                                        }
-                                                                        return (
-                                                                            <span className={`inline-flex items-center justify-center min-w-[50px] px-2.5 py-1 rounded-md text-sm font-semibold ${colorClass}`}>
-                                                                                {hasScore ? parseFloat(scoreValue).toFixed(2) : "0.00"}
-                                                                            </span>
-                                                                        );
-                                                                    })()}
-                                                                    {isCourseActive && (
-                                                                        <Icon 
-                                                                            icon="solar:pen-2-linear" 
-                                                                            className="text-slate-400 group-hover:text-blue-500 transition-colors" 
-                                                                        />
+                                                            </td>
+                                                            <td className={`sticky right-0 px-4 py-3 border-l border-slate-100 ${rowBg}`}>
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    {isEditing ? (
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Input
+                                                                                type="number"
+                                                                                size="sm"
+                                                                                variant="bordered"
+                                                                                className="w-16"
+                                                                                classNames={{
+                                                                                    input: "text-center font-semibold",
+                                                                                    inputWrapper: "h-8 min-h-8",
+                                                                                }}
+                                                                                value={editingScore.value}
+                                                                                onValueChange={(v) => setEditingScore({...editingScore, value: v})}
+                                                                                onKeyDown={(e) => {
+                                                                                    if (e.key === 'Enter') {
+                                                                                        handleSaveScore(setting.id, student.id, editingScore.value);
+                                                                                    } else if (e.key === 'Escape') {
+                                                                                        setEditingScore(null);
+                                                                                    }
+                                                                                }}
+                                                                                autoFocus
+                                                                            />
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                color="danger"
+                                                                                variant="flat"
+                                                                                className="min-w-7 w-7 h-7"
+                                                                                onPress={() => setEditingScore(null)}
+                                                                            >
+                                                                                <Icon icon="solar:close-circle-bold" />
+                                                                            </Button>
+                                                                            <Button
+                                                                                isIconOnly
+                                                                                size="sm"
+                                                                                color="success"
+                                                                                variant="flat"
+                                                                                isLoading={isSaving}
+                                                                                className="min-w-7 w-7 h-7"
+                                                                                onPress={() => handleSaveScore(setting.id, student.id, editingScore.value)}
+                                                                            >
+                                                                                <Icon icon="solar:check-circle-bold" />
+                                                                            </Button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <button
+                                                                            className="group flex items-center gap-2"
+                                                                            onClick={() => setEditingScore({
+                                                                                settingId: setting.id,
+                                                                                studentId: student.id,
+                                                                                value: scoreValue,
+                                                                            })}
+                                                                            disabled={!isCourseActive}
+                                                                        >
+                                                                            {(() => {
+                                                                                const numScore = parseFloat(scoreValue);
+                                                                                const percent = hasScore ? (numScore / setting.max_score) * 100 : 0;
+                                                                                let colorClass = 'bg-slate-100 text-slate-400';
+                                                                                if (hasScore) {
+                                                                                    if (percent >= 80) colorClass = 'bg-emerald-500 text-white';
+                                                                                    else if (percent >= 60) colorClass = 'bg-blue-500 text-white';
+                                                                                    else if (percent >= 40) colorClass = 'bg-amber-500 text-white';
+                                                                                    else colorClass = 'bg-red-500 text-white';
+                                                                                }
+                                                                                return (
+                                                                                    <span className={`inline-flex items-center justify-center min-w-[50px] px-2.5 py-1 rounded-md text-sm font-semibold ${colorClass}`}>
+                                                                                        {hasScore ? parseFloat(scoreValue).toFixed(2) : "0.00"}
+                                                                                    </span>
+                                                                                );
+                                                                            })()}
+                                                                            {isCourseActive && (
+                                                                                <Icon
+                                                                                    icon="solar:pen-2-linear"
+                                                                                    className="text-slate-400 group-hover:text-blue-500 transition-colors"
+                                                                                />
+                                                                            )}
+                                                                        </button>
                                                                     )}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        {filteredStudents.length === 0 && (
-                                            <div className="text-center py-8 text-slate-500">
-                                                ไม่พบนักศึกษา
-                                            </div>
-                                        )}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                {filteredStudents.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan={4} className="text-center py-8 text-slate-500">
+                                                            ไม่พบนักศึกษา
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
                                     </CardBody>
                                 </Card>
                                 );
@@ -825,7 +829,13 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             </Modal>
 
             {/* Settings Modal */}
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} size="3xl">
+            <Modal
+                isOpen={isSettingsModalOpen}
+                onClose={() => setIsSettingsModalOpen(false)}
+                size="3xl"
+                scrollBehavior="inside"
+                classNames={{ base: "max-h-[90dvh] mx-2 sm:mx-auto" }}
+            >
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 rounded-lg">
@@ -962,7 +972,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                             ยกเลิก
                         </Button>
                         <Button 
-                            color="primary" 
+                            color="primary"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500"
                             onPress={handleSaveSettings}
                             isLoading={isSaving}
                             isDisabled={!isCourseActive}

@@ -795,6 +795,7 @@ export default function ClassroomDetailPage() {
             instructorId: userId,
             instructorName: instructor.full_name,
             instructorEmail: instructor.email || undefined,
+            instructorAvatar: instructor.avatar || undefined,
         } as any);
     }, [course?.instructors, modals.deleteModal]);
 
@@ -1736,12 +1737,12 @@ export default function ClassroomDetailPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="secondary"
+                            color="primary"
                             onPress={handleAddInstructors}
                             isLoading={modals.isSubmitting}
                             isDisabled={modals.instructorModal.selectedIds.length === 0}
                             startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
-                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
                             เพิ่มอาจารย์ {modals.instructorModal.selectedIds.length > 0 ? `(${modals.instructorModal.selectedIds.length} คน)` : ""}
                         </Button>
@@ -1936,18 +1937,18 @@ export default function ClassroomDetailPage() {
                                 isLoading={modals.isSubmitting}
                                 isDisabled={!modals.studentModal.studentId}
                                 startContent={!modals.isSubmitting && <Icon icon="solar:add-circle-bold" />}
-                                className="bg-gradient-to-r from-cyan-400 to-blue-500 shadow-lg shadow-cyan-400/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                             >
                                 เพิ่มนักศึกษา
                             </Button>
                         ) : (
                             <Button
-                                color="success"
+                                color="primary"
                                 onPress={handleBulkAddStudents}
                                 isLoading={modals.isSubmitting}
                                 isDisabled={modals.studentModal.parsedStudents.filter(p => p.status === "matched").length === 0}
                                 startContent={!modals.isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
-                                className="bg-gradient-to-r from-emerald-400 to-teal-500 shadow-lg shadow-emerald-400/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                             >
                                 เพิ่ม {modals.studentModal.parsedStudents.filter(p => p.status === "matched").length} คน
                             </Button>
@@ -2745,7 +2746,7 @@ export default function ClassroomDetailPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -2768,7 +2769,7 @@ export default function ClassroomDetailPage() {
                                 isRequired
                                 className="pt-3"
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -2789,10 +2790,10 @@ export default function ClassroomDetailPage() {
                                                 return (
                                                     <div
                                                         key={memberId}
-                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-amber-50"
+                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-blue-50"
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <Avatar name={student.full_name} size="sm" className="bg-amber-500" />
+                                                            <Avatar name={student.full_name} size="sm" className="bg-blue-500" />
                                                             <div>
                                                                 <p className="font-medium text-slate-800">{student.full_name}</p>
                                                                 <p className="text-sm text-slate-500">{student.student_id}</p>
@@ -2854,7 +2855,7 @@ export default function ClassroomDetailPage() {
                                                                 <p className="text-sm text-slate-500">{student.student_id}</p>
                                                             </div>
                                                         </div>
-                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-amber-500" />
+                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-blue-500" />
                                                     </div>
                                                 ))
                                         ) : (
@@ -2876,10 +2877,11 @@ export default function ClassroomDetailPage() {
                             ยกเลิก
                         </Button>
                         <Button
+                            color="primary"
                             onPress={saveEditedTeam}
                             isLoading={modals.isSubmitting}
                             isDisabled={!modals.editTeamModal.name.trim()}
-                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-400/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                             startContent={!modals.isSubmitting && <Icon icon="solar:diskette-bold" />}
                         >
                             บันทึก
@@ -2979,7 +2981,7 @@ export default function ClassroomDetailPage() {
                             isLoading={scores.isSaving}
                             isDisabled={!scores.selectedGroup}
                             startContent={!scores.isSaving && <Icon icon="solar:diskette-bold" />}
-                            className="bg-gradient-to-r from-indigo-400 to-purple-500 shadow-lg shadow-indigo-400/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
                         >
                             บันทึกคะแนน
                         </Button>

@@ -498,11 +498,12 @@ export default function SystemLogsPage() {
                 setSearch(value);
                 setPage(1);
               }}
-              startContent={<Icon icon="solar:magnifer-linear" className="text-default-400" />}
+              variant="bordered"
+              startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
               isClearable
               onClear={() => setSearch("")}
               classNames={{
-                inputWrapper: "bg-slate-50 border-slate-200 hover:border-slate-300",
+                inputWrapper: "border-blue-200 hover:border-blue-300 focus-within:!border-blue-400",
               }}
             />
             <div className="flex gap-2 flex-wrap">

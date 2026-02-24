@@ -382,11 +382,6 @@ export default function PeopleTab({
                                         showControls
                                         size="sm"
                                         color="primary"
-                                        classNames={{
-                                            wrapper: "gap-1",
-                                            item: "bg-transparent",
-                                            cursor: "bg-blue-500 text-white shadow-md",
-                                        }}
                                     />
                                 </div>
                             )}
