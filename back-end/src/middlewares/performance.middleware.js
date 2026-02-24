@@ -3,6 +3,8 @@
  * Request timeout, rate limiting, and response compression
  */
 
+const logger = require('../utils/logger');
+
 /**
  * Request timeout middleware
  * Prevents long-running requests from blocking the server

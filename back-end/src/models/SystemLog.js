@@ -143,15 +143,9 @@ const SystemLog = sequelize.define('SystemLog', {
   createdAt: 'created_at',
   updatedAt: false,
   indexes: [
-    { fields: ['log_type'] },
-    { fields: ['severity'] },
-    { fields: ['actor_user_id'] },
-    { fields: ['session_id'] },
-    { fields: ['http_method'] },
-    { fields: ['status_code'] },
     { fields: ['created_at'] },
     { fields: ['log_type', 'created_at'] },
-    { fields: ['severity', 'created_at'] },
+    { fields: ['actor_user_id', 'created_at'] },
   ],
 });
 

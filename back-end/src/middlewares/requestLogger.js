@@ -97,93 +97,72 @@ const requestLogger = (options = {}) => {
     logAllRequests = true,
   } = options;
 
-  return async (req, res, next) => {
+  return (req, res, next) => {
     // Skip excluded paths
     if (excludePaths.some(path => req.originalUrl.startsWith(path))) {
       return next();
     }
 
+    // Skip all processing for GET requests when logAllRequests is false
+    // This avoids unnecessary res.end patching and finish listeners
+    if (!logAllRequests && req.method === 'GET') {
+      return next();
+    }
+
     const startTime = Date.now();
-    const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Store request ID for tracking
-    req.requestId = requestId;
+    // On response finish, log the request (fire-and-forget, no await)
+    res.on('finish', () => {
+      const responseTime = Date.now() - startTime;
+      const statusCode = res.statusCode;
 
-    // Capture original end function
-    const originalEnd = res.end;
-    let responseBody = '';
+      const userAgentInfo = parseUserAgent(req.headers['user-agent']);
 
-    // Override end to capture response
-    res.end = function(chunk, encoding) {
-      if (chunk) {
-        responseBody = chunk.toString();
+      const logData = {
+        action: `${req.method} ${req.originalUrl.split('?')[0]}`,
+        http_method: req.method,
+        url: req.originalUrl,
+        query_params: Object.keys(req.query).length > 0 ? req.query : null,
+        status_code: statusCode,
+        response_time_ms: responseTime,
+        ip_address: getClientIp(req),
+        user_agent: req.headers['user-agent'],
+        referer: req.headers['referer'] || null,
+        ...userAgentInfo,
+        actor_user_id: req.user?.id || null,
+        session_id: req.headers['x-session-id'] || null,
+        auth_method: req.user ? (req.user.provider || 'jwt') : null,
+        request_size: parseInt(req.headers['content-length']) || null,
+        response_size: parseInt(res.getHeader('content-length')) || null,
+        severity: getSeverityByStatus(statusCode),
+      };
+
+      // Log request body if enabled (sanitized)
+      if (logBody && req.body && Object.keys(req.body).length > 0) {
+        logData.request_body = sanitizeObject(req.body);
       }
-      res.end = originalEnd;
-      return res.end(chunk, encoding);
-    };
 
-    // On response finish, log the request
-    res.on('finish', async () => {
-      try {
-        const responseTime = Date.now() - startTime;
-        const statusCode = res.statusCode;
-
-        // Skip logging GET requests entirely if logAllRequests is false
-        // Only log: non-GET methods (POST, PUT, DELETE, PATCH) that modify data
-        // This focuses on "actions" rather than "page views"
-        if (!logAllRequests && req.method === 'GET') {
-          return;
+      // Add resource info if available
+      if (req.params.id) {
+        logData.resource_id = req.params.id;
+        const urlParts = req.originalUrl.split('/');
+        const apiIndex = urlParts.indexOf('api');
+        if (apiIndex >= 0 && urlParts[apiIndex + 1]) {
+          logData.resource_type = urlParts[apiIndex + 1];
         }
+      }
 
-        const userAgentInfo = parseUserAgent(req.headers['user-agent']);
+      // Log error details for error responses
+      if (statusCode >= 400 && res.locals.error) {
+        logData.error_message = res.locals.error.message;
+        logData.error_stack = res.locals.error.stack;
+        logData.error_code = res.locals.error.code || `HTTP_${statusCode}`;
+      }
 
-        const logData = {
-          action: `${req.method} ${req.originalUrl.split('?')[0]}`,
-          http_method: req.method,
-          url: req.originalUrl,
-          query_params: Object.keys(req.query).length > 0 ? req.query : null,
-          status_code: statusCode,
-          response_time_ms: responseTime,
-          ip_address: getClientIp(req),
-          user_agent: req.headers['user-agent'],
-          referer: req.headers['referer'] || null,
-          ...userAgentInfo,
-          actor_user_id: req.user?.id || null,
-          session_id: req.headers['x-session-id'] || null,
-          auth_method: req.user ? (req.user.provider || 'jwt') : null,
-          request_size: parseInt(req.headers['content-length']) || null,
-          response_size: parseInt(res.getHeader('content-length')) || null,
-          severity: getSeverityByStatus(statusCode),
-        };
-
-        // Log request body if enabled (sanitized)
-        if (logBody && req.body && Object.keys(req.body).length > 0) {
-          logData.request_body = sanitizeObject(req.body);
-        }
-
-        // Add resource info if available
-        if (req.params.id) {
-          logData.resource_id = req.params.id;
-          // Try to extract resource type from URL
-          const urlParts = req.originalUrl.split('/');
-          const apiIndex = urlParts.indexOf('api');
-          if (apiIndex >= 0 && urlParts[apiIndex + 1]) {
-            logData.resource_type = urlParts[apiIndex + 1];
-          }
-        }
-
-        // Log error details for error responses
-        if (statusCode >= 400 && res.locals.error) {
-          logData.error_message = res.locals.error.message;
-          logData.error_stack = res.locals.error.stack;
-          logData.error_code = res.locals.error.code || `HTTP_${statusCode}`;
-        }
-
-        await SystemLog.logAccess(logData);
-      } catch (err) {
-        // Don't let logging errors break the application
+      // Fire-and-forget: don't await DB write
+      SystemLog.logAccess(logData).catch(err => {
         logger.error('Failed to log request:', err.message);
-      }
+      });
     });
 
     next();
