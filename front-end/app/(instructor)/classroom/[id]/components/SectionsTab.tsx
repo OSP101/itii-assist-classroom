@@ -240,7 +240,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                         <Button 
                             onPress={handleAddSection}
                             isLoading={isSubmitting}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-400/25"
                             startContent={!isSubmitting && <Icon icon="solar:add-circle-bold" />}
                         >
                             เพิ่มกลุ่มเรียน
@@ -259,7 +259,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -281,7 +281,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                 className="pb-3"
                                 isRequired
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -294,7 +294,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                 value={editSectionModal.note}
                                 onValueChange={editSectionModal.setNote}
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -308,7 +308,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                             onPress={handleEditSection}
                             isLoading={isSubmitting}
                             isDisabled={!editSectionModal.sectionNo.trim()}
-                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-400/25"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" />}
                         >
                             บันทึก
@@ -489,7 +489,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                 onPress={handleAddStudent}
                                 isLoading={isSubmitting}
                                 isDisabled={!studentModal.studentId}
-                                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-400/25"
                                 startContent={!isSubmitting && <Icon icon="solar:user-plus-bold" />}
                             >
                                 เพิ่มนักศึกษา
@@ -499,7 +499,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                 onPress={handleBulkAddStudents}
                                 isLoading={isSubmitting}
                                 isDisabled={studentModal.parsedStudents.filter(p => p.status === "matched").length === 0}
-                                className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25"
+                                className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-400/25"
                                 startContent={!isSubmitting && <Icon icon="solar:users-group-rounded-bold" />}
                             >
                                 เพิ่มนักศึกษา ({studentModal.parsedStudents.filter(p => p.status === "matched").length})
@@ -916,7 +916,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -939,7 +939,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                 isRequired
                                 className="pt-3"
                                 classNames={{
-                                    inputWrapper: "bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                    inputWrapper: "bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                     label: "text-slate-600 font-medium text-sm",
                                 }}
                             />
@@ -958,10 +958,10 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                                 return (
                                                     <div
                                                         key={memberId}
-                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-amber-50"
+                                                        className="flex items-center justify-between p-3 border-b border-slate-100 last:border-0 bg-blue-50"
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <Avatar name={student.full_name} size="sm" className="bg-amber-500" />
+                                                            <Avatar name={student.full_name} size="sm" className="bg-blue-500" />
                                                             <div>
                                                                 <p className="font-medium text-slate-800">{student.full_name}</p>
                                                                 <p className="text-sm text-slate-500">{student.student_id}</p>
@@ -1023,7 +1023,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                                                 <p className="text-sm text-slate-500">{student.student_id}</p>
                                                             </div>
                                                         </div>
-                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-amber-500" />
+                                                        <Icon icon="solar:add-circle-linear" className="text-xl text-blue-500" />
                                                     </div>
                                                 ))
                                         ) : (
@@ -1045,7 +1045,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                             onPress={handleSaveEditedTeam}
                             isLoading={isSubmitting}
                             isDisabled={!editTeamModal.name.trim() || editTeamModal.members.length === 0}
-                            className="bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-400/25"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-400/25"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" />}
                         >
                             บันทึก

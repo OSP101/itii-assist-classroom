@@ -33,20 +33,20 @@ const initializeRedis = () => {
   redisClient = new Redis(redisConfig);
   
   redisClient.on('connect', () => {
-    console.log('🔴 Redis connected');
+    logger.info('🔴 Redis connected');
   });
 
   redisClient.on('error', (err) => {
-    console.error('Redis connection error:', err.message);
+    logger.error('Redis connection error:', err.message);
   });
 
   redisClient.on('close', () => {
-    console.log('🔴 Redis connection closed');
+    logger.info('🔴 Redis connection closed');
   });
 
   // Connect
   redisClient.connect().catch((err) => {
-    console.error('Failed to connect to Redis:', err.message);
+    logger.error('Failed to connect to Redis:', err.message);
   });
 
   return redisClient;

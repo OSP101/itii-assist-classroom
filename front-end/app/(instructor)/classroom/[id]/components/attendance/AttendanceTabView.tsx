@@ -61,7 +61,7 @@ const Header = memo(function Header({ onCreateClick, isCourseActive = true }: He
                 startContent={<Icon icon="solar:add-circle-bold" />}
                 onPress={onCreateClick}
                 isDisabled={!isCourseActive}
-                className="bg-gradient-to-r from-blue-400 to-indigo-500 shadow-lg shadow-blue-400/25"
+                className="bg-gradient-to-r from-blue-400 to-indigo-500 "
             >
                 สร้างรอบเช็คชื่อ
             </Button>

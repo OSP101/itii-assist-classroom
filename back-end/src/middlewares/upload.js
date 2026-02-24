@@ -2,6 +2,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const logger = require('../utils/logger');
 
 // Ensure upload directory exists
 const uploadDir = path.join(__dirname, '../../uploads/score-edit-requests');
@@ -12,7 +13,32 @@ if (!fs.existsSync(uploadDir)) {
 // Use memory storage for image processing
 const memoryStorage = multer.memoryStorage();
 
-// File filter - only allow images
+// Known image magic bytes signatures
+const IMAGE_SIGNATURES = [
+    { mime: 'image/jpeg', bytes: [0xFF, 0xD8, 0xFF] },
+    { mime: 'image/png',  bytes: [0x89, 0x50, 0x4E, 0x47] },
+    { mime: 'image/gif',  bytes: [0x47, 0x49, 0x46, 0x38] },  // GIF87a / GIF89a
+    { mime: 'image/webp', bytes: [0x52, 0x49, 0x46, 0x46], offset4: [0x57, 0x45, 0x42, 0x50] }, // RIFF....WEBP
+];
+
+/**
+ * Validate file buffer magic bytes match an allowed image format.
+ * Returns true if the buffer starts with known image magic bytes.
+ */
+const validateImageMagicBytes = (buffer) => {
+    if (!buffer || buffer.length < 12) return false;
+    return IMAGE_SIGNATURES.some(sig => {
+        const headerMatch = sig.bytes.every((b, i) => buffer[i] === b);
+        if (!headerMatch) return false;
+        // WebP has additional check at offset 8
+        if (sig.offset4) {
+            return sig.offset4.every((b, i) => buffer[8 + i] === b);
+        }
+        return true;
+    });
+};
+
+// File filter - only allow images (checks client-provided MIME type)
 const fileFilter = (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (allowedTypes.includes(file.mimetype)) {
@@ -139,6 +165,16 @@ const handleScoreEditImageUpload = (req, res, next) => {
         // Process and compress images if any were uploaded
         if (req.files && req.files.length > 0) {
             try {
+                // Validate magic bytes before processing
+                for (const file of req.files) {
+                    if (!validateImageMagicBytes(file.buffer)) {
+                        return res.status(400).json({
+                            success: false,
+                            message: 'ไฟล์ที่อัปโหลดไม่ใช่ไฟล์รูปภาพที่ถูกต้อง',
+                        });
+                    }
+                }
+
                 const processedFiles = await Promise.all(
                     req.files.map(file => processImage(file))
                 );
@@ -146,14 +182,9 @@ const handleScoreEditImageUpload = (req, res, next) => {
                 // Replace req.files with processed file info
                 req.files = processedFiles;
                 
-                // Log compression stats
-                console.log('[Image Upload] Processed images:');
-                processedFiles.forEach((file, i) => {
-                    const originalSize = req.files[i]?.buffer?.length || 'N/A';
-                    console.log(`  - ${file.originalname}: ${file.size} bytes (compressed)`);
-                });
+                logger.info(`[Image Upload] Processed ${processedFiles.length} images`);
             } catch (processError) {
-                console.error('[Image Upload] Processing error:', processError);
+                logger.error('[Image Upload] Processing error:', processError);
                 return res.status(500).json({
                     success: false,
                     message: 'Failed to process uploaded images.',

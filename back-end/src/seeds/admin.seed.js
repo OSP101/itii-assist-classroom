@@ -15,13 +15,14 @@ const createAdmin = async () => {
     console.log('✅ Database connected');
 
     const adminData = {
-      username: 'admin',
-      password: 'osp101@admin',
+      username: process.env.ADMIN_USERNAME || 'admin',
+      password: process.env.ADMIN_PASSWORD || 'osp101@admin',
       role: 'admin',
       full_name: 'Administrator',
-      email: 'admin@osp101.com',
+      email: process.env.ADMIN_EMAIL || 'admin@osp101.com',
       provider: 'local',
       is_active: true,
+      must_change_password: true,
     };
 
     // Hash password
@@ -58,8 +59,8 @@ const createAdmin = async () => {
 
     console.log('');
     console.log('📋 Admin Credentials:');
-    console.log('   Username: admin');
-    console.log('   Password: osp101@admin');
+    console.log(`   Username: ${adminData.username}`);
+    console.log('   Password: (set via ADMIN_PASSWORD env var or default)');
     console.log('');
 
     process.exit(0);

@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { logCourseActivity } = require('../utils/courseActivityLogger');
+const logger = require('../utils/logger');
 
 /**
  * Helper: check if course is active, throw 403 if not
@@ -910,7 +911,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Build assignment type filter
     let assignmentTypeFilter = {};
-    console.log(`[getScoreSummaryMatrix] assignment_type param: "${assignment_type}"`);
+    logger.debug(`[getScoreSummaryMatrix] assignment_type param: "${assignment_type}"`);
     
     if (assignment_type === 'individual') {
         // Lab assignments (individual work done in class)
@@ -924,7 +925,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         };
     }
     
-    console.log(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
+    logger.debug(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
 
     // Get all assignments for this course
     const assignments = await Assignment.findAll({
@@ -943,7 +944,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         order: [['order_index', 'ASC']],
     });
 
-    console.log(`[getScoreSummaryMatrix] Found ${assignments.length} assignments with filter`);
+    logger.debug(`[getScoreSummaryMatrix] Found ${assignments.length} assignments with filter`);
 
     // Get all scores for these students and assignments
     const studentIds = studentsWithSection.map(s => s.id);

@@ -150,7 +150,7 @@ const slowQueryLogger = (thresholdMs = 1000) => {
             const duration = Date.now() - startTime;
             
             if (duration > thresholdMs) {
-                console.warn(`[SLOW REQUEST] ${req.method} ${req.originalUrl} took ${duration}ms`);
+                logger.warn(`[SLOW REQUEST] ${req.method} ${req.originalUrl} took ${duration}ms`);
             }
             
             return originalJson(data);
@@ -183,7 +183,7 @@ const memoryCheck = (thresholdMB = 512) => {
         const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
         
         if (heapUsedMB > thresholdMB) {
-            console.warn(`[MEMORY WARNING] Heap usage: ${heapUsedMB.toFixed(2)}MB (threshold: ${thresholdMB}MB)`);
+            logger.warn(`[MEMORY WARNING] Heap usage: ${heapUsedMB.toFixed(2)}MB (threshold: ${thresholdMB}MB)`);
         }
         
         next();

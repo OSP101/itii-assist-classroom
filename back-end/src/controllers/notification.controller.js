@@ -1,4 +1,5 @@
 const { FcmToken, NotificationLog, User, QueueBooking, QueueSession } = require('../models');
+const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
 /**
@@ -74,7 +75,7 @@ const registerToken = async (req, res) => {
       data: { id: token.id, created },
     });
   } catch (error) {
-    console.error('Error registering FCM token:', error);
+    logger.error('Error registering FCM token:', error);
     
     // Handle duplicate key error
     if (error.name === 'SequelizeUniqueConstraintError') {
@@ -104,7 +105,7 @@ const registerToken = async (req, res) => {
           });
         }
       } catch (updateError) {
-        console.error('Error updating existing token:', updateError);
+        logger.error('Error updating existing token:', updateError);
       }
     }
     
@@ -139,7 +140,7 @@ const unregisterToken = async (req, res) => {
       data: { deleted: deleted > 0 },
     });
   } catch (error) {
-    console.error('Error unregistering FCM token:', error);
+    logger.error('Error unregistering FCM token:', error);
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to unregister FCM token' },
@@ -172,7 +173,7 @@ const updateBookingForToken = async (req, res) => {
       data: { updated: updated > 0 },
     });
   } catch (error) {
-    console.error('Error updating booking for token:', error);
+    logger.error('Error updating booking for token:', error);
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to update booking for token' },
@@ -198,7 +199,7 @@ const getUserTokens = async (req, res) => {
       data: tokens,
     });
   } catch (error) {
-    console.error('Error getting user tokens:', error);
+    logger.error('Error getting user tokens:', error);
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to get user tokens' },
@@ -234,7 +235,7 @@ const getNotificationLogs = async (req, res) => {
       data: logs,
     });
   } catch (error) {
-    console.error('Error getting notification logs:', error);
+    logger.error('Error getting notification logs:', error);
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to get notification logs' },

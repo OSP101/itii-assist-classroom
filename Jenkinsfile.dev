@@ -35,6 +35,7 @@ pipeline {
                         string(credentialsId: 'DEV_DB_PASSWORD', variable: 'DB_PASSWORD'),
                         string(credentialsId: 'DEV_JWT_ACCESS_SECRET', variable: 'JWT_ACCESS_SECRET'),
                         string(credentialsId: 'DEV_JWT_REFRESH_SECRET', variable: 'JWT_REFRESH_SECRET'),
+                        string(credentialsId: 'DEV_COOKIE_SECRET', variable: 'COOKIE_SECRET'),
                         string(credentialsId: 'DEV_GOOGLE_CLIENT_ID', variable: 'GOOGLE_CLIENT_ID'),
                         string(credentialsId: 'DEV_GOOGLE_CLIENT_SECRET', variable: 'GOOGLE_CLIENT_SECRET'),
                         string(credentialsId: 'DEV_GITHUB_CLIENT_ID', variable: 'GITHUB_CLIENT_ID'),
@@ -74,6 +75,7 @@ DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASSWORD
 JWT_ACCESS_SECRET=$JWT_ACCESS_SECRET
 JWT_REFRESH_SECRET=$JWT_REFRESH_SECRET
+COOKIE_SECRET=$COOKIE_SECRET
 GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
 GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
 GOOGLE_CALLBACK_URL=$GOOGLE_CALLBACK_URL

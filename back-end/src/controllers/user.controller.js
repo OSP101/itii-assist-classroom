@@ -16,26 +16,35 @@ const crypto = require('crypto');
  * @returns {string} Generated password
  */
 const generatePassword = (length = 12) => {
+  const crypto = require('crypto');
   const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
   const lowercase = 'abcdefghjkmnpqrstuvwxyz';
   const numbers = '23456789';
   const special = '!@#$%';
   
-  // Ensure at least one of each type
+  // Ensure at least one of each type using crypto
+  const randomByte = () => crypto.randomBytes(1)[0];
+  const randomFrom = (str) => str[randomByte() % str.length];
+  
   let password = '';
-  password += uppercase[Math.floor(Math.random() * uppercase.length)];
-  password += lowercase[Math.floor(Math.random() * lowercase.length)];
-  password += numbers[Math.floor(Math.random() * numbers.length)];
-  password += special[Math.floor(Math.random() * special.length)];
+  password += randomFrom(uppercase);
+  password += randomFrom(lowercase);
+  password += randomFrom(numbers);
+  password += randomFrom(special);
   
   // Fill the rest
   const allChars = uppercase + lowercase + numbers + special;
   for (let i = password.length; i < length; i++) {
-    password += allChars[Math.floor(Math.random() * allChars.length)];
+    password += randomFrom(allChars);
   }
   
-  // Shuffle the password
-  return password.split('').sort(() => Math.random() - 0.5).join('');
+  // Shuffle the password using Fisher-Yates with crypto
+  const arr = password.split('');
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = randomByte() % (i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join('');
 };
 
 /**
@@ -53,7 +62,14 @@ const getUsers = asyncHandler(async (req, res) => {
     sortOrder = 'desc',
   } = req.query;
 
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  // Validate sortBy against allowlist to prevent injection
+  const validSortColumns = ['created_at', 'updated_at', 'username', 'full_name', 'email', 'role', 'is_active', 'last_login_at'];
+  const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
+  const safeSortOrder = ['asc', 'desc'].includes(sortOrder.toLowerCase()) ? sortOrder : 'desc';
+
+  // Cap limit to prevent dumping entire table
+  const safeLimit = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+  const offset = (Math.max(parseInt(page) || 1, 1) - 1) * safeLimit;
 
   // Build where clause
   const whereClause = {};
@@ -80,8 +96,8 @@ const getUsers = asyncHandler(async (req, res) => {
   const { count, rows: users } = await User.findAndCountAll({
     where: whereClause,
     attributes: { exclude: ['password_hash'] },
-    order: [[sortBy, sortOrder.toUpperCase()]],
-    limit: parseInt(limit),
+    order: [[safeSortBy, safeSortOrder.toUpperCase()]],
+    limit: safeLimit,
     offset: offset,
   });
 
@@ -91,9 +107,9 @@ const getUsers = asyncHandler(async (req, res) => {
       users: users.map(user => user.toSafeObject()),
       pagination: {
         total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(count / parseInt(limit)),
+        page: Math.max(parseInt(page) || 1, 1),
+        limit: safeLimit,
+        totalPages: Math.ceil(count / safeLimit),
       },
     },
   });

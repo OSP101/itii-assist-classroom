@@ -25,7 +25,7 @@ export interface Student {
     id: number;
     student_id: string;
     full_name: string;
-    section: string;
+    section: number | string | null;
 }
 
 export interface ExamScore {

@@ -1,5 +1,6 @@
 const UAParser = require('ua-parser-js');
 const SystemLog = require('../models/SystemLog');
+const logger = require('../utils/logger');
 
 /**
  * Middleware: Request Logger
@@ -181,7 +182,7 @@ const requestLogger = (options = {}) => {
         await SystemLog.logAccess(logData);
       } catch (err) {
         // Don't let logging errors break the application
-        console.error('Failed to log request:', err.message);
+        logger.error('Failed to log request:', err.message);
       }
     });
 

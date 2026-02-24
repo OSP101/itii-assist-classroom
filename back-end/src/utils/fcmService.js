@@ -4,6 +4,7 @@
  */
 
 const admin = require('firebase-admin');
+const logger = require('./logger');
 const { FcmToken, NotificationLog } = require('../models');
 const { Op } = require('sequelize');
 
@@ -25,22 +26,22 @@ const initializeFirebase = () => {
         credential: admin.credential.cert(credentials),
       });
       
-      console.log('✅ Firebase Admin SDK initialized successfully');
+      logger.info('✅ Firebase Admin SDK initialized successfully');
     } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       // Use default credentials from file
       firebaseApp = admin.initializeApp({
         credential: admin.credential.applicationDefault(),
       });
       
-      console.log('✅ Firebase Admin SDK initialized with default credentials');
+      logger.info('✅ Firebase Admin SDK initialized with default credentials');
     } else {
-      console.warn('⚠️ Firebase Admin SDK not configured. Push notifications will not work.');
+      logger.warn('⚠️ Firebase Admin SDK not configured. Push notifications will not work.');
       return null;
     }
     
     return firebaseApp;
   } catch (error) {
-    console.error('❌ Error initializing Firebase Admin SDK:', error);
+    logger.error('❌ Error initializing Firebase Admin SDK:', error);
     return null;
   }
 };
@@ -53,7 +54,7 @@ initializeFirebase();
  */
 const sendToToken = async (token, notification, data = {}) => {
   if (!firebaseApp) {
-    console.warn('Firebase not initialized, skipping push notification');
+    logger.warn('Firebase not initialized, skipping push notification');
     return { success: false, error: 'Firebase not initialized' };
   }
 
@@ -85,11 +86,11 @@ const sendToToken = async (token, notification, data = {}) => {
     };
 
     const response = await admin.messaging().send(message);
-    console.log('✅ Push notification sent:', response);
+    logger.info('✅ Push notification sent:', response);
     
     return { success: true, messageId: response };
   } catch (error) {
-    console.error('❌ Error sending push notification:', error);
+    logger.error('❌ Error sending push notification:', error);
     
     // Handle invalid token
     if (
@@ -142,7 +143,7 @@ const sendToWorker = async (userId, sessionId, notification, data = {}) => {
   });
 
   if (tokens.length === 0) {
-    console.log(`No FCM tokens found for worker ${userId}`);
+    logger.info(`No FCM tokens found for worker ${userId}`);
     return { success: false, error: 'No tokens found' };
   }
 
@@ -181,7 +182,7 @@ const sendToStudent = async (bookingId, notification, data = {}, notificationTyp
   });
 
   if (tokens.length === 0) {
-    console.log(`No FCM tokens found for booking ${bookingId}`);
+    logger.info(`No FCM tokens found for booking ${bookingId}`);
     return { success: false, error: 'No tokens found' };
   }
 

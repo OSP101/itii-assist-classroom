@@ -10,9 +10,15 @@ const studentController = require('../controllers/student.controller');
 /**
  * @route   GET /api/students/lookup/:student_id
  * @desc    Lookup student scores by student_id (public endpoint for students)
- * @access  Public - no authentication required
+ * @access  Public - ต้องใช้รหัสนักศึกษาที่ถูกต้อง + rate limited
  */
-router.get('/lookup/:student_id', studentController.lookupStudentScores);
+const rateLimit = require('express-rate-limit');
+const lookupLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 15, // 15 lookups per minute per IP
+  message: { success: false, error: { message: 'ค้นหาบ่อยเกินไป กรุณาลองใหม่ภายหลัง' } },
+});
+router.get('/lookup/:student_id', lookupLimiter, studentController.lookupStudentScores);
 
 // All routes below require authentication
 router.use(authenticate);

@@ -68,7 +68,9 @@ export default function StudentsPage() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isToggleStatusModalOpen, setIsToggleStatusModalOpen] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const [studentToToggle, setStudentToToggle] = useState<Student | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form data
@@ -324,9 +326,18 @@ export default function StudentsPage() {
         }
     };
 
-    // Handle toggle status
-    const handleToggleStatus = async (student: Student) => {
+    // Open toggle status confirmation modal
+    const openToggleStatusModal = (student: Student) => {
+        setStudentToToggle(student);
+        setIsToggleStatusModalOpen(true);
+    };
+
+    // Handle toggle status (called from confirmation modal)
+    const confirmToggleStatus = async () => {
+        if (!studentToToggle) return;
+        const student = studentToToggle;
         isUpdatingRef.current = true;
+        setIsToggleStatusModalOpen(false);
         try {
             const response = await studentService.toggleStatus(student.id);
             if (response.success) {
@@ -540,7 +551,7 @@ export default function StudentsPage() {
                                 isIconOnly
                                 size="sm"
                                 variant="light"
-                                onPress={() => handleToggleStatus(student)}
+                                onPress={() => openToggleStatusModal(student)}
                             >
                                 <Icon
                                     icon={student.is_active ? "solar:eye-closed-linear" : "solar:eye-linear"}
@@ -859,7 +870,7 @@ export default function StudentsPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -872,7 +883,7 @@ export default function StudentsPage() {
                         <div className="space-y-5">
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Icon icon="solar:user-id-bold" className="text-lg text-amber-500" />
+                                    <Icon icon="solar:user-id-bold" className="text-lg text-blue-500" />
                                     <span className="text-sm font-semibold text-slate-700">ข้อมูลนักศึกษา</span>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 py-3">
@@ -885,9 +896,9 @@ export default function StudentsPage() {
                                         value={formData.student_id}
                                         onValueChange={(value) => setFormData({ ...formData, student_id: value })}
                                         isRequired
-                                        startContent={<Icon icon="solar:hashtag-linear" className="text-amber-400 text-xl" />}
+                                        startContent={<Icon icon="solar:hashtag-linear" className="text-blue-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -900,9 +911,9 @@ export default function StudentsPage() {
                                         value={formData.full_name}
                                         onValueChange={(value) => setFormData({ ...formData, full_name: value })}
                                         isRequired
-                                        startContent={<Icon icon="solar:user-linear" className="text-amber-400 text-xl" />}
+                                        startContent={<Icon icon="solar:user-linear" className="text-blue-400 text-xl" />}
                                         classNames={{
-                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                            inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                             label: "text-slate-600 font-medium text-sm",
                                         }}
                                     />
@@ -917,9 +928,9 @@ export default function StudentsPage() {
                                     value={formData.email}
                                     onValueChange={(value) => setFormData({ ...formData, email: value })}
                                     isRequired
-                                    startContent={<Icon icon="solar:letter-linear" className="text-amber-400 text-xl" />}
+                                    startContent={<Icon icon="solar:letter-linear" className="text-blue-400 text-xl" />}
                                     classNames={{
-                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-amber-300 focus-within:!border-amber-400",
+                                        inputWrapper: "h-12 bg-white border-slate-200 hover:border-blue-300 focus-within:!border-blue-400",
                                         label: "text-slate-600 font-medium text-sm",
                                     }}
                                 />
@@ -936,13 +947,66 @@ export default function StudentsPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="warning"
+                            color="primary"
                             onPress={handleUpdate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
                         >
                             บันทึกการแก้ไข
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Toggle Status Confirmation Modal */}
+            <Modal isOpen={isToggleStatusModalOpen} onClose={() => setIsToggleStatusModalOpen(false)} size="md">
+                <ModalContent>
+                    <ModalHeader className="px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg ${studentToToggle?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                                <Icon icon={studentToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {studentToToggle?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
+                            </h3>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className={`rounded-2xl p-6 border ${studentToToggle?.is_active ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${studentToToggle?.is_active ? "bg-amber-100" : "bg-emerald-100"}`}>
+                                    <Icon icon="solar:user-bold" className={`text-2xl ${studentToToggle?.is_active ? "text-amber-600" : "text-emerald-600"}`} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{studentToToggle?.full_name}</p>
+                                    <p className="text-sm text-slate-500">{studentToToggle?.student_id}</p>
+                                    <p className="text-xs text-slate-400 mt-1">{studentToToggle?.email || "ไม่ระบุอีเมล"}</p>
+                                </div>
+                            </div>
+                            <p className={`mt-4 text-sm ${studentToToggle?.is_active ? "text-amber-700" : "text-emerald-700"}`}>
+                                {studentToToggle?.is_active
+                                    ? "นักศึกษาจะไม่สามารถเข้าสู่ระบบได้หลังจากปิดใช้งาน"
+                                    : "นักศึกษาจะสามารถเข้าสู่ระบบได้หลังจากเปิดใช้งาน"}
+                            </p>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
+                        <Button
+                            variant="flat"
+                            color="default"
+                            onPress={() => setIsToggleStatusModalOpen(false)}
+                            className="font-medium px-6"
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color={studentToToggle?.is_active ? "warning" : "success"}
+                            onPress={confirmToggleStatus}
+                            className={`font-medium px-6 ${studentToToggle?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            startContent={<Icon icon={studentToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
+                        >
+                            {studentToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                         </Button>
                     </ModalFooter>
                 </ModalContent>

@@ -554,41 +554,45 @@ export default function HomePage() {
         <div className="space-y-6">
             {/* 2FA Reminder Banner */}
             {show2FABanner && !is2FAEnabled && (
-                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
-                            <Icon icon="solar:shield-warning-bold" className="text-xl text-amber-600" />
+                <div className="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-3.5">
+                    <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center mt-0.5">
+                            <Icon icon="solar:shield-warning-bold" className="text-base text-amber-600" />
                         </div>
-                        <div>
-                            <p className="font-medium text-amber-900">
-                                เพิ่มความปลอดภัยให้บัญชีของคุณ
-                            </p>
-                            <p className="text-sm text-amber-700">
-                                เราแนะนำให้เปิดใช้งานการยืนยันตัวตนสองขั้นตอน (2FA) เพื่อป้องกันบัญชีของคุณ
-                            </p>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-semibold text-amber-900 text-sm">
+                                            เพิ่มความปลอดภัยให้บัญชีของคุณ
+                                        </p>
+                                        <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                                            เราแนะนำให้เปิดใช้งานการยืนยันตัวตนสองขั้นตอน (2FA) เพื่อป้องกันบัญชีของคุณ
+                                        </p>
+                                    </div>
+                                    <Button
+                                        as={Link}
+                                        href="/profile?tab=authentication"
+                                        size="sm"
+                                        color="warning"
+                                        variant="solid"
+                                        className="bg-amber-500 text-white h-7 text-xs px-3 flex-shrink-0 self-start sm:self-auto"
+                                        startContent={<Icon icon="solar:lock-keyhole-bold" className="text-sm" />}
+                                    >
+                                        เปิดใช้งาน 2FA
+                                    </Button>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="light"
+                                    isIconOnly
+                                    onPress={dismiss2FABanner}
+                                    className="text-amber-400 hover:bg-amber-100 flex-shrink-0 -mt-1 -mr-1.5 min-w-7 w-7 h-7"
+                                >
+                                    <Icon icon="solar:close-circle-linear" className="text-lg" />
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <Button
-                            as={Link}
-                            href="/profile?tab=authentication"
-                            size="sm"
-                            color="warning"
-                            variant="solid"
-                            className="bg-amber-500 text-white"
-                            startContent={<Icon icon="solar:lock-keyhole-bold" className="text-lg" />}
-                        >
-                            เปิดใช้งาน
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="light"
-                            isIconOnly
-                            onPress={dismiss2FABanner}
-                            className="text-amber-600 hover:bg-amber-100"
-                        >
-                            <Icon icon="solar:close-circle-linear" className="text-xl" />
-                        </Button>
                     </div>
                 </div>
             )}
@@ -846,7 +850,7 @@ export default function HomePage() {
                                                             }
                                                             color={course.is_active ? "warning" : "success"}
                                                         >
-                                                            {course.is_active ? "เก็บชั้นเรียน" : "เปิดใช้งาน"}
+                                                            {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                                                         </DropdownItem>
                                                     </DropdownMenu>
                                                 </Dropdown>
@@ -892,6 +896,7 @@ export default function HomePage() {
                                 page={currentPage}
                                 onChange={setCurrentPage}
                                 showControls
+                                size="sm"
                                 color="primary"
                             />
                         </div>
@@ -981,7 +986,7 @@ export default function HomePage() {
                                                                 }
                                                                 color={course.is_active ? "warning" : "success"}
                                                             >
-                                                                {course.is_active ? "เก็บชั้นเรียน" : "เปิดใช้งาน"}
+                                                                {course.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                                                             </DropdownItem>
                                                         </DropdownMenu>
                                                     </Dropdown>
@@ -1017,6 +1022,7 @@ export default function HomePage() {
                                 page={currentPage}
                                 onChange={setCurrentPage}
                                 showControls
+                                size="sm"
                                 color="primary"
                             />
                         </div>
@@ -1321,7 +1327,7 @@ export default function HomePage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -1337,7 +1343,7 @@ export default function HomePage() {
                             {/* Course Image Section */}
                             <div className="bg-slate-50 rounded-xl p-5 space-y-5">
                                 <div className="flex items-center gap-2 mb-1">
-                                    <Icon icon="solar:gallery-bold" className="text-lg text-amber-500" />
+                                    <Icon icon="solar:gallery-bold" className="text-lg text-blue-500" />
                                     <span className="text-sm font-semibold text-slate-700">รูปปกรายวิชา</span>
                                 </div>
                                 <div className="py-3">
@@ -1577,10 +1583,10 @@ export default function HomePage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="warning"
+                            color="primary"
                             onPress={handleUpdate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
                         >
                             บันทึกการแก้ไข
@@ -1599,95 +1605,52 @@ export default function HomePage() {
                 size="md"
             >
                 <ModalContent>
-                    <ModalHeader className="flex flex-col gap-1 pb-2">
-                        <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl ${courseToToggle?.is_active ? 'bg-amber-100' : 'bg-green-100'}`}>
-                                <Icon
-                                    icon={courseToToggle?.is_active ? "solar:archive-bold" : "solar:eye-bold"}
-                                    className={`text-xl ${courseToToggle?.is_active ? 'text-amber-600' : 'text-green-600'}`}
-                                />
+                    <ModalHeader className="px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg ${courseToToggle?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                                <Icon icon={courseToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
                             </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-slate-800">
-                                    {courseToToggle?.is_active ? "ปิดใช้งานรายวิชา" : "เปิดใช้งานรายวิชา"}
-                                </h3>
-                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {courseToToggle?.is_active ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
+                            </h3>
                         </div>
                     </ModalHeader>
-                    <ModalBody className="py-4">
-                        {courseToToggle?.is_active ? (
-                            <div className="space-y-4">
-                                {/* Info items like in the image */}
-                                <div className="space-y-3">
-                                    <div className="flex items-start gap-3">
-                                        <Icon icon="solar:square-academic-cap-bold" className="text-xl text-blue-500 mt-0.5" />
-                                        <p className="text-slate-600 text-sm">
-                                            อาจารย์หรือผู้ช่วยสอนจะแก้ไขชั้นเรียนที่ปิดใช้งานไม่ได้ เว้นแต่ชั้นเรียนจะได้รับการกู้คืน
-                                        </p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <Icon icon="solar:eye-bold" className="text-xl text-blue-500 mt-0.5" />
-                                        <p className="text-slate-600 text-sm">
-                                            อาจารย์ยังคงดูตัวอย่างและส่งออกรายงานได้
-                                        </p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <Icon icon="solar:eye-closed-linear" className="text-xl text-blue-500 mt-0.5" />
-                                        <p className="text-slate-600 text-sm">
-                                            นักศึกษาจะไม่สามารถค้นหาของนักศึกษาในคะแนนของรายวิชาที่ปิดใช้งานได้
-                                        </p>
-                                    </div>
+                    <ModalBody className="px-6 py-6">
+                        <div className={`rounded-2xl p-6 border ${courseToToggle?.is_active ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${courseToToggle?.is_active ? "bg-amber-100" : "bg-emerald-100"}`}>
+                                    <Icon icon="solar:book-bold" className={`text-2xl ${courseToToggle?.is_active ? "text-amber-600" : "text-emerald-600"}`} />
                                 </div>
-
-                                {/* Course info card */}
-                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                                    <div className="flex items-center gap-3">
-                                        {/* <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
-                                            {courseToToggle?.semester}
-                                        </div> */}
-                                        <div>
-                                            <p className="font-semibold text-slate-800">
-                                                {courseToToggle?.year}/{courseToToggle?.code} {courseToToggle?.name}
-                                            </p>
-                                            <p className="text-sm text-slate-500">
-                                                {courseToToggle?.sections?.length ?? 0} Section • {courseToToggle?.instructor?.full_name || 'ผู้สอน'}
-                                            </p>
-                                        </div>
-                                    </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{courseToToggle?.code} - {courseToToggle?.name}</p>
+                                    <p className="text-sm text-slate-500">ปีการศึกษา {courseToToggle?.year} ภาค {courseToToggle?.semester}</p>
                                 </div>
-
-                                <p className="text-slate-500 text-sm">
-                                    ระบบจะย้ายชั้นเรียนต่อไปนี้ไปยังชั้นเรียนที่ปิดใช้งาน
-                                </p>
                             </div>
-                        ) : (
-                            <div>
-                                <p className="text-slate-600">
-                                    คุณต้องการเปิดใช้งานรายวิชา{" "}
-                                    <span className="font-semibold">{courseToToggle?.code} - {courseToToggle?.name}</span>{" "}
-                                    หรือไม่?
-                                </p>
-                                <p className="text-sm text-green-600 mt-2">
-                                    * เมื่อเปิดใช้งาน นักศึกษาและผู้ช่วยสอนจะสามารถเข้าถึงรายวิชานี้ได้อีกครั้ง
-                                </p>
-                            </div>
-                        )}
+                            <p className={`mt-4 text-sm ${courseToToggle?.is_active ? "text-amber-700" : "text-emerald-700"}`}>
+                                {courseToToggle?.is_active
+                                    ? "รายวิชาที่ปิดใช้งานจะไม่แสดงในรายการสำหรับผู้ใช้ทั่วไป แต่ข้อมูลจะยังคงอยู่ในระบบ"
+                                    : "หากมีรายวิชาที่ใช้รหัส ปี และภาคเรียนเดียวกันเปิดใช้งานอยู่ ระบบจะไม่อนุญาตให้เปิด กรุณาปิดใช้งานรายวิชาดังกล่าวก่อน"}
+                            </p>
+                        </div>
                     </ModalBody>
-                    <ModalFooter>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
                         <Button
-                            variant="light"
+                            variant="flat"
+                            color="default"
                             onPress={() => {
                                 setIsToggleStatusModalOpen(false);
                                 setCourseToToggle(null);
                             }}
+                            className="font-medium px-6"
                         >
                             ยกเลิก
                         </Button>
                         <Button
-                            color={courseToToggle?.is_active ? "primary" : "success"}
+                            color={courseToToggle?.is_active ? "warning" : "success"}
                             onPress={handleToggleStatus}
                             isLoading={isSubmitting}
-                            className={`${courseToToggle?.is_active && "bg-gradient-to-r from-blue-400 to-indigo-500"}`}
+                            className={`font-medium px-6 ${courseToToggle?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            startContent={!isSubmitting && <Icon icon={courseToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
                         >
                             {courseToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                         </Button>

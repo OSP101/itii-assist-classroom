@@ -1,5 +1,6 @@
 const { Sequelize } = require('sequelize');
 const config = require('./index');
+const logger = require('../utils/logger');
 
 const sequelize = new Sequelize(
   config.db.name,
@@ -9,7 +10,7 @@ const sequelize = new Sequelize(
     host: config.db.host,
     port: config.db.port,
     dialect: 'mysql',
-    logging: config.nodeEnv === 'development' ? console.log : false,
+    logging: false,
     timezone: '+07:00', // Thailand timezone
     define: {
       timestamps: true,
@@ -29,9 +30,9 @@ const sequelize = new Sequelize(
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
-    console.log('✅ Database connection established successfully.');
+    logger.info('✅ Database connection established successfully.');
   } catch (error) {
-    console.error('❌ Unable to connect to the database:', error.message);
+    logger.error('❌ Unable to connect to the database:', error.message);
     process.exit(1);
   }
 };

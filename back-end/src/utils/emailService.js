@@ -1,5 +1,6 @@
 const { Resend } = require('resend');
 const nodemailer = require('nodemailer');
+const logger = require('./logger');
 const config = require('../config');
 
 // Get email provider at runtime (not module load time)
@@ -19,7 +20,7 @@ const getResendClient = () => {
 // Create nodemailer transporter
 const createTransporter = () => {
   if (!config.email.user || !config.email.pass) {
-    console.log('⚠️ Email service: No SMTP credentials configured. Emails will be logged to console.');
+    logger.info('⚠️ Email service: No SMTP credentials configured. Emails will be logged to console.');
     return null;
   }
 
@@ -387,10 +388,10 @@ const sendWithSMTP = async (options) => {
   const emailTransporter = getTransporter();
   if (!emailTransporter) {
     // Dev mode - log to console
-    console.log('📧 [DEV] Email would be sent:');
-    console.log('   To:', options.to);
-    console.log('   Subject:', options.subject);
-    if (options.code) console.log('   Code:', options.code);
+    logger.info('📧 [DEV] Email would be sent:');
+    logger.info('   To:', options.to);
+    logger.info('   Subject:', options.subject);
+    if (options.code) logger.info('   Code:', options.code);
     return { success: true, messageId: 'dev-mode' };
   }
 
@@ -416,7 +417,7 @@ const sendEmail = async (options) => {
     }
     return await sendWithSMTP(options);
   } catch (error) {
-    console.error('📧 Failed to send email:', error);
+    logger.error('📧 Failed to send email:', error);
     throw error;
   }
 };
@@ -431,10 +432,10 @@ const send2FACode = async (to, code, userName) => {
 
   try {
     const result = await sendEmail({ to, subject, html, text, code });
-    console.log('📧 2FA email sent to:', to, 'MessageID:', result.messageId);
+    logger.info('📧 2FA email sent to:', to, 'MessageID:', result.messageId);
     return result;
   } catch (error) {
-    console.error('📧 Failed to send 2FA email:', error);
+    logger.error('📧 Failed to send 2FA email:', error);
     throw error;
   }
 };
@@ -450,10 +451,10 @@ const send2FASetupEmail = async (to, method, userName) => {
 
   try {
     const result = await sendEmail({ to, subject, html, text });
-    console.log('📧 2FA setup email sent to:', to);
+    logger.info('📧 2FA setup email sent to:', to);
     return result;
   } catch (error) {
-    console.error('📧 Failed to send 2FA setup email:', error);
+    logger.error('📧 Failed to send 2FA setup email:', error);
     // Don't throw - this is not critical
     return { success: false, error };
   }
@@ -607,10 +608,10 @@ const sendPasswordResetEmail = async (to, resetUrl, userName) => {
 
   try {
     const result = await sendEmail({ to, subject, html, text });
-    console.log('📧 Password reset email sent to:', to, 'MessageID:', result.messageId);
+    logger.info('📧 Password reset email sent to:', to, 'MessageID:', result.messageId);
     return result;
   } catch (error) {
-    console.error('📧 Failed to send password reset email:', error);
+    logger.error('📧 Failed to send password reset email:', error);
     throw error;
   }
 };

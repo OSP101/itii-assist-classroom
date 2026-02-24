@@ -21,6 +21,7 @@ const { Op } = require('sequelize');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { logCourseActivity } = require('../utils/courseActivityLogger');
+const logger = require('../utils/logger');
 const { cache, CACHE_TTL } = require('../utils/cache');
 const { 
   batchCount, 
@@ -317,10 +318,10 @@ const createCourse = asyncHandler(async (req, res) => {
   // Admin must specify instructors explicitly
 
   // Debug log
-  console.log('createCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
-  console.log('createCourse - instructor_ids from request:', instructor_ids);
-  console.log('createCourse - instructor_id from request:', instructor_id);
-  console.log('createCourse - final instructorIdList:', instructorIdList);
+  logger.debug('createCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
+  logger.debug('createCourse - instructor_ids from request:', instructor_ids);
+  logger.debug('createCourse - instructor_id from request:', instructor_id);
+  logger.debug('createCourse - final instructorIdList:', instructorIdList);
 
   // Validate all instructors
   if (instructorIdList.length > 0) {
@@ -453,9 +454,9 @@ const updateCourse = asyncHandler(async (req, res) => {
   }
 
   // Debug log
-  console.log('updateCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
-  console.log('updateCourse - instructor_ids from request:', instructor_ids);
-  console.log('updateCourse - final instructorIdList:', instructorIdList);
+  logger.debug('updateCourse - currentUser:', { id: currentUser.id, role: currentUser.role });
+  logger.debug('updateCourse - instructor_ids from request:', instructor_ids);
+  logger.debug('updateCourse - final instructorIdList:', instructorIdList);
 
   // Validate all instructors if updating
   if (shouldUpdateInstructors && instructorIdList.length > 0) {
@@ -1457,7 +1458,7 @@ const getMyCourses = asyncHandler(async (req, res) => {
   } = req.query;
 
   // Debug log
-  console.log('getMyCourses params:', { page, limit, search, year, semester, status, userId, userRole });
+  logger.debug('getMyCourses params:', { page, limit, search, year, semester, status, userId, userRole });
 
   // Build where clause with proper AND/OR structure
   const whereConditions = [];
@@ -1495,8 +1496,8 @@ const getMyCourses = asyncHandler(async (req, res) => {
   const where = whereConditions.length > 0 ? { [Op.and]: whereConditions } : {};
 
   // Debug log
-  console.log('getMyCourses whereConditions:', JSON.stringify(whereConditions, null, 2));
-  console.log('getMyCourses final where:', JSON.stringify(where, null, 2));
+  logger.debug('getMyCourses whereConditions:', JSON.stringify(whereConditions, null, 2));
+  logger.debug('getMyCourses final where:', JSON.stringify(where, null, 2));
 
   // Calculate offset
   const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -1688,7 +1689,7 @@ const getMyCoursesStats = asyncHandler(async (req, res) => {
 const getCourseOverview = asyncHandler(async (req, res) => {
   const { id } = req.params;
   
-  console.log(`[Overview] Fetching overview for course: ${id}`);
+  logger.debug(`[Overview] Fetching overview for course: ${id}`);
   const startTime = Date.now();
 
   // Get course with sections and TAs
@@ -2181,7 +2182,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   });
   
   const endTime = Date.now();
-  console.log(`[Overview] Completed for course ${id} in ${endTime - startTime}ms`);
+  logger.debug(`[Overview] Completed for course ${id} in ${endTime - startTime}ms`);
 });
 
 module.exports = {

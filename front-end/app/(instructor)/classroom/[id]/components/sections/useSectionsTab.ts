@@ -992,6 +992,21 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 
                 emitUpdate("student", "create", studentModalState.studentId);
                 studentModal.reset();
+            } else {
+                const errObj = response.error as unknown;
+                const errMsg =
+                    (typeof errObj === "object" && errObj !== null && "message" in errObj
+                        ? (errObj as { message: string }).message
+                        : null) ||
+                    response.message ||
+                    "ไม่สามารถเพิ่มนักศึกษาได้";
+                addToast({
+                    title: "เกิดข้อผิดพลาด",
+                    description: errMsg,
+                    color: "danger",
+                    timeout: 5000,
+                    shouldShowTimeoutProgress: true,
+                });
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -1036,6 +1051,21 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 
                 emitUpdate("student", "bulk");
                 studentModal.reset();
+            } else {
+                const errObj = response.error as unknown;
+                const errMsg =
+                    (typeof errObj === "object" && errObj !== null && "message" in errObj
+                        ? (errObj as { message: string }).message
+                        : null) ||
+                    response.message ||
+                    "ไม่สามารถเพิ่มนักศึกษาได้";
+                addToast({
+                    title: "เกิดข้อผิดพลาด",
+                    description: errMsg,
+                    color: "danger",
+                    timeout: 5000,
+                    shouldShowTimeoutProgress: true,
+                });
             }
         } catch (error: unknown) {
             const err = error as { message?: string };
@@ -1045,11 +1075,12 @@ export function useSectionsTab(courseId: string): UseSectionsTabReturn {
                 color: "danger",
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
-            });
+                });
         } finally {
             setIsSubmitting(false);
         }
     }, [courseId, studentModalState.sectionId, studentModalState.parsedStudents, fetchAllSectionStudents, fetchCourse, studentModal, emitUpdate]);
+    
     
     const handleRemoveStudent = useCallback(async () => {
         const target = deleteModalState.target;

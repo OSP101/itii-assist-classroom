@@ -193,7 +193,7 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
             <ModalContent>
                 <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg">
+                        <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                             <Icon icon="solar:star-bold" className="text-2xl text-white" />
                         </div>
                         <div>
@@ -208,7 +208,7 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                 <ModalBody className="px-6 py-4">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Spinner size="lg" color="warning" />
+                            <Spinner size="lg" color="primary" />
                         </div>
                     ) : (
                         <Tabs
@@ -217,9 +217,9 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                             variant="underlined"
                             classNames={{
                                 tabList: "gap-6",
-                                cursor: "bg-amber-500",
+                                cursor: "bg-blue-500",
                                 tab: "px-0 h-10",
-                                tabContent: "group-data-[selected=true]:text-amber-600 text-slate-500 font-medium",
+                                tabContent: "group-data-[selected=true]:text-blue-600 text-slate-500 font-medium",
                             }}
                         >
                             {/* Give Score Tab */}
@@ -310,14 +310,14 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                                                 {recentBonuses.map((item, index) => (
                                                     <Card
                                                         key={`${item.student.id}-${index}`}
-                                                        className="border border-amber-200 bg-amber-50/50 shadow-sm"
+                                                        className="border border-blue-200 bg-blue-50/50 shadow-sm"
                                                     >
                                                         <CardBody className="p-3">
                                                             <div className="flex items-center gap-3">
                                                                 <Avatar
                                                                     name={item.student.full_name}
                                                                     size="md"
-                                                                    className="bg-gradient-to-br from-amber-500 to-orange-600 text-white shrink-0"
+                                                                    className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white shrink-0"
                                                                 />
                                                                 <div className="flex-1 min-w-0">
                                                                     <p className="font-semibold text-slate-800 truncate">
@@ -412,7 +412,7 @@ export default function BonusScoreModal({ isOpen, onClose, courseId }: BonusScor
                                                                 <Avatar
                                                                     name={data.student.full_name}
                                                                     size="md"
-                                                                    className="bg-gradient-to-br from-amber-500 to-orange-600 text-white"
+                                                                    className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white"
                                                                 />
                                                                 <div>
                                                                     <p className="font-semibold text-slate-800">

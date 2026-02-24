@@ -163,7 +163,7 @@ class ClassroomService {
    * Toggle classroom active status
    */
   async toggleStatus(id: string) {
-    return apiService.patch<{ success: boolean; message: string; data: Classroom }>(`/classrooms/${id}/toggle-status`);
+    return apiService.patch<Classroom>(`/classrooms/${id}/toggle-status`);
   }
 
   /**

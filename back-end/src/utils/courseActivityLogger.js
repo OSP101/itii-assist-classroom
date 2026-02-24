@@ -5,6 +5,7 @@
  */
 
 const { CourseActivityLog } = require('../models');
+const logger = require('./logger');
 
 /**
  * Log a course activity.
@@ -40,7 +41,7 @@ function logCourseActivity({
     target_name: targetName,
     detail,
   }).catch((err) => {
-    console.error('[CourseActivityLog] Failed to log activity:', err.message);
+    logger.error('[CourseActivityLog] Failed to log activity:', err.message);
   });
 }
 
