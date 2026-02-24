@@ -8,19 +8,11 @@ const { asyncHandler } = require('../utils');
  * @access Admin only
  */
 const getSystemMetrics = asyncHandler(async (req, res) => {
-  // Get CPU usage (returns via callback)
-  const cpuUsage = await new Promise((resolve) => {
-    osUtils.cpuUsage((usage) => {
-      resolve(usage);
-    });
-  });
-
-  // Get CPU free percentage
-  const cpuFree = await new Promise((resolve) => {
-    osUtils.cpuFree((free) => {
-      resolve(free);
-    });
-  });
+  // Get CPU usage and free percentage in parallel (each takes ~1s to sample)
+  const [cpuUsage, cpuFree] = await Promise.all([
+    new Promise((resolve) => osUtils.cpuUsage((usage) => resolve(usage))),
+    new Promise((resolve) => osUtils.cpuFree((free) => resolve(free))),
+  ]);
 
   // Memory info
   const totalMemory = os.totalmem();
