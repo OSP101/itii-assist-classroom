@@ -15,8 +15,7 @@ const client = require('prom-client');
 const register = new client.Registry();
 
 // Add default Node.js metrics (event loop lag, heap, GC, etc.)
-// Collect every 30s instead of default 10s to reduce overhead
-client.collectDefaultMetrics({ register, prefix: 'nodejs_', timeout: 30000 });
+client.collectDefaultMetrics({ register, prefix: 'nodejs_' });
 
 // ---------------------------------------------------------------------------
 // Custom HTTP Metrics

@@ -429,10 +429,9 @@ function SettingsTabViewComponent({
                     {/* Sheet preview badges */}
                     <div className="flex flex-wrap gap-2 mb-4">
                         {[
-                            { label: "คะแนนแลป",        icon: "solar:monitor-bold",                  color: "bg-blue-100 text-blue-700" },
+                            { label: "คะแนนแลป",        icon: "solar:test-tube-bold",                  color: "bg-blue-100 text-blue-700" },
                             { label: "คะแนนการบ้าน",    icon: "solar:document-text-bold",              color: "bg-indigo-100 text-indigo-700" },
                             { label: "คะแนนกลุ่ม",      icon: "solar:users-group-two-rounded-bold",    color: "bg-violet-100 text-violet-700" },
-                            { label: "คะแนนสอบ",        icon: "solar:diploma-bold",                    color: "bg-orange-100 text-orange-700" },
                             { label: "เช็คชื่อ",         icon: "solar:check-square-bold",               color: "bg-emerald-100 text-emerald-700" },
                             { label: "การทำงานทีเอ",    icon: "solar:star-bold",                       color: "bg-amber-100 text-amber-700" },
                             { label: "สรุปคะแนน",       icon: "solar:chart-2-bold",                    color: "bg-rose-100 text-rose-700" },
@@ -444,6 +443,27 @@ function SettingsTabViewComponent({
                         ))}
                     </div>
 
+                    {/* Description */}
+                    <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 space-y-2 mb-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:check-circle-bold" className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>คะแนน Lab, การบ้าน, งานกลุ่ม แยกย่อยเป็นรายชิ้น</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:check-circle-bold" className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>การเช็คชื่อทุก Session รายนักศึกษา (มา/สาย/ลา/ขาด)</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:check-circle-bold" className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>สส.การทำงานของทีเอแต่ละคน + log กิจกรรมทั้งหมด</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                                <Icon icon="solar:check-circle-bold" className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <span>สรุป: คะแนนสอบกลางภาค/ปลายภาค + คะแนนพิเศษ</span>
+                            </div>
+                        </div>
+                    </div>
 
                     <Button
                         className="w-full bg-gradient-to-r from-emerald-400 to-teal-500 text-white shadow-lg shadow-emerald-500/20"
@@ -461,6 +481,7 @@ function SettingsTabViewComponent({
                     </p>
                 </CardBody>
             </Card>
+            {/* ── System Info ──────────────────────────────────────────────── */}
             <Card className="shadow-sm border border-slate-200">
                 <SectionCardHeader
                     icon="solar:info-circle-bold"
@@ -473,7 +494,7 @@ function SettingsTabViewComponent({
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
                             <p className="text-xs text-slate-400">รหัสรายวิชา (ID)</p>
-                            <p className="font-semibold text-slate-800 text-sm">{course.code}</p>
+                            <p className="font-semibold text-slate-800 text-sm">{course.id}</p>
                         </div>
                         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-0.5">
                             <p className="text-xs text-slate-400">อาจารย์หลัก</p>
@@ -502,4 +523,6 @@ function SettingsTabViewComponent({
     );
 }
 
+
+// Export memoized component to prevent unnecessary re-renders
 export const SettingsTabView = memo(SettingsTabViewComponent);

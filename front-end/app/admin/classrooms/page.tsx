@@ -169,12 +169,6 @@ export default function ClassroomsPage() {
     });
     const [editingClassroomId, setEditingClassroomId] = useState<string | null>(null);
 
-    // Confirmation modal states
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [isPermanentDeleteModalOpen, setIsPermanentDeleteModalOpen] = useState(false);
-    const [isToggleStatusModalOpen, setIsToggleStatusModalOpen] = useState(false);
-    const [classroomToAction, setClassroomToAction] = useState<Classroom | null>(null);
-
     // Undo/Redo history (stores desk snapshots)
     const [undoStack, setUndoStack] = useState<Desk[][]>([]);
     const [redoStack, setRedoStack] = useState<Desk[][]>([]);
@@ -411,19 +405,10 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Handle delete (soft delete) - opens confirmation modal
-    const handleDelete = (id: string) => {
-        const classroom = classrooms.find(c => c.id === id);
-        if (!classroom) return;
-        setClassroomToAction(classroom);
-        setIsDeleteModalOpen(true);
-    };
+    // Handle delete (soft delete)
+    const handleDelete = async (id: string) => {
+        if (!confirm("คุณต้องการลบห้องเรียนนี้ใช่หรือไม่?")) return;
 
-    // Confirm delete (soft delete) - called from modal
-    const confirmDelete = async () => {
-        if (!classroomToAction) return;
-        const id = classroomToAction.id;
-        setIsDeleteModalOpen(false);
         try {
             await classroomService.deleteClassroom(id);
             setClassrooms((prev) =>
@@ -449,8 +434,6 @@ export default function ClassroomsPage() {
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
-        } finally {
-            setClassroomToAction(null);
         }
     };
 
@@ -484,30 +467,19 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Handle toggle status (enable/disable) - opens confirmation modal
-    const handleToggleStatus = (id: string) => {
-        const classroom = classrooms.find(c => c.id === id);
-        if (!classroom) return;
-        setClassroomToAction(classroom);
-        setIsToggleStatusModalOpen(true);
-    };
-
-    // Confirm toggle status - called from modal
-    const confirmToggleStatus = async () => {
-        if (!classroomToAction) return;
-        const id = classroomToAction.id;
-        setIsToggleStatusModalOpen(false);
+    // Handle toggle status (enable/disable)
+    const handleToggleStatus = async (id: string) => {
         try {
             const response = await classroomService.toggleStatus(id);
             if (response.success && response.data) {
-                const updatedClassroom = transformClassroomFromAPI(response.data);
+                const updatedClassroom = transformClassroomFromAPI(response.data.data);
                 setClassrooms((prev) =>
                     prev.map((c) => (c.id === id ? updatedClassroom : c))
                 );
 
                 addToast({
                     title: "สำเร็จ",
-                    description: response.message || (updatedClassroom.isActive ? "เปิดใช้งานห้องเรียนแล้ว" : "ปิดใช้งานห้องเรียนแล้ว"),
+                    description: response.data.message,
                     color: "success",
                     timeout: 3000,
                 shouldShowTimeoutProgress: true,
@@ -522,24 +494,17 @@ export default function ClassroomsPage() {
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
-        } finally {
-            setClassroomToAction(null);
         }
     };
 
-    // Handle permanent delete - opens confirmation modal
-    const handlePermanentDelete = (id: string) => {
-        const classroom = classrooms.find(c => c.id === id);
-        if (!classroom) return;
-        setClassroomToAction(classroom);
-        setIsPermanentDeleteModalOpen(true);
-    };
-
-    // Confirm permanent delete - called from modal
-    const confirmPermanentDelete = async () => {
-        if (!classroomToAction) return;
-        const id = classroomToAction.id;
-        setIsPermanentDeleteModalOpen(false);
+    // Handle permanent delete
+    const handlePermanentDelete = async (id: string) => {
+        if (
+            !confirm(
+                "คุณต้องการลบห้องเรียนนี้ถาวรใช่หรือไม่? (ไม่สามารถกู้คืนได้)"
+            )
+        )
+            return;
 
         try {
             await classroomService.deleteClassroom(id, true);
@@ -564,8 +529,6 @@ export default function ClassroomsPage() {
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
-        } finally {
-            setClassroomToAction(null);
         }
     };
 
@@ -999,7 +962,7 @@ export default function ClassroomsPage() {
                                         onPress={() => handleToggleStatus(classroom.id)}
                                     >
                                         <Icon 
-                                            icon={classroom.isActive ? "solar:eye-closed-linear" : "solar:eye-linear"} 
+                                            icon={classroom.isActive ? "solar:power-bold" : "solar:power-linear"} 
                                             className="text-lg" 
                                         />
                                     </Button>
@@ -1069,9 +1032,9 @@ export default function ClassroomsPage() {
         }
     };
 
-
     return (
         <div className="space-y-4 sm:space-y-6">
+            {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
                 <div>
                     <h1 className="text-xl sm:text-2xl font-bold text-default-900">
@@ -2072,141 +2035,6 @@ export default function ClassroomsPage() {
                         </Button>
                         <Button color="primary" onPress={handleAddZone} isDisabled={!zoneForm.name.trim()}>
                             {editingZone ? "บันทึก" : "เพิ่มโซน"}
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
-
-            {/* Toggle Status Confirmation Modal */}
-            <Modal isOpen={isToggleStatusModalOpen} onClose={() => setIsToggleStatusModalOpen(false)} size="md">
-                <ModalContent>
-                    <ModalHeader className="px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${classroomToAction?.isActive ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
-                                <Icon icon={classroomToAction?.isActive ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold text-slate-800">
-                                {classroomToAction?.isActive ? "ยืนยันการปิดใช้งาน" : "ยืนยันการเปิดใช้งาน"}
-                            </h3>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-6">
-                        <div className={`rounded-2xl p-6 border ${classroomToAction?.isActive ? "bg-amber-50 border-amber-100" : "bg-emerald-50 border-emerald-100"}`}>
-                            <div className="flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${classroomToAction?.isActive ? "bg-amber-100" : "bg-emerald-100"}`}>
-                                    <Icon icon="solar:door-open-bold" className={`text-2xl ${classroomToAction?.isActive ? "text-amber-600" : "text-emerald-600"}`} />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-800">{classroomToAction?.name}</p>
-                                    <p className="text-sm text-slate-500">อาคาร {classroomToAction?.building} ชั้น {classroomToAction?.floor}</p>
-                                </div>
-                            </div>
-                            <p className={`mt-4 text-sm ${classroomToAction?.isActive ? "text-amber-700" : "text-emerald-700"}`}>
-                                {classroomToAction?.isActive
-                                    ? "ห้องเรียนจะไม่สามารถใช้งานได้หลังจากปิดใช้งาน"
-                                    : "ห้องเรียนจะสามารถใช้งานได้หลังจากเปิดใช้งาน"}
-                            </p>
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button variant="flat" color="default" onPress={() => setIsToggleStatusModalOpen(false)} className="font-medium px-6">
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color={classroomToAction?.isActive ? "warning" : "success"}
-                            onPress={confirmToggleStatus}
-                            className={`font-medium px-6 ${classroomToAction?.isActive ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
-                            startContent={<Icon icon={classroomToAction?.isActive ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
-                        >
-                            {classroomToAction?.isActive ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
-            {/* Delete Classroom Confirmation Modal */}
-            <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} size="md">
-                <ModalContent>
-                    <ModalHeader className="px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
-                                <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold text-slate-800">ยืนยันการลบห้องเรียน</h3>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-6">
-                        <div className="bg-red-50 rounded-2xl p-6 border border-red-100">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <Icon icon="solar:door-open-bold" className="text-2xl text-red-500" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-800">{classroomToAction?.name}</p>
-                                    <p className="text-sm text-slate-500">อาคาร {classroomToAction?.building} ชั้น {classroomToAction?.floor}</p>
-                                </div>
-                            </div>
-                            <p className="mt-4 text-sm text-slate-600">ห้องเรียนจะถูกย้ายไปยังถังขยะ สามารถกู้คืนได้ภายหลัง</p>
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button variant="flat" color="default" onPress={() => setIsDeleteModalOpen(false)} className="font-medium px-6">
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="danger"
-                            onPress={confirmDelete}
-                            className="font-medium px-6 bg-gradient-to-r from-red-500 to-rose-600"
-                            startContent={<Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
-                        >
-                            ลบห้องเรียน
-                        </Button>
-                    </ModalFooter>
-                </ModalContent>
-            </Modal>
-
-            {/* Permanent Delete Classroom Confirmation Modal */}
-            <Modal isOpen={isPermanentDeleteModalOpen} onClose={() => setIsPermanentDeleteModalOpen(false)} size="md">
-                <ModalContent>
-                    <ModalHeader className="px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-600 to-rose-700 rounded-xl shadow-lg shadow-red-600/30">
-                                <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold text-slate-800">ยืนยันการลบถาวร</h3>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-6">
-                        <div className="bg-red-50 rounded-2xl p-6 border border-red-100 space-y-4">
-                            <div className="flex items-center gap-4">
-                                <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                                    <Icon icon="solar:door-open-bold" className="text-2xl text-red-500" />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-800">{classroomToAction?.name}</p>
-                                    <p className="text-sm text-slate-500">อาคาร {classroomToAction?.building} ชั้น {classroomToAction?.floor}</p>
-                                </div>
-                            </div>
-                            <div className="p-3 bg-red-100 rounded-xl border border-red-200">
-                                <div className="flex items-start gap-2">
-                                    <Icon icon="solar:danger-triangle-bold" className="text-red-600 text-lg mt-0.5" />
-                                    <p className="text-sm text-red-700 font-medium">การลบถาวรไม่สามารถย้อนกลับได้ ข้อมูลห้องเรียนและผังโต๊ะทั้งหมดจะถูกลบอย่างถาวร</p>
-                                </div>
-                            </div>
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button variant="flat" color="default" onPress={() => setIsPermanentDeleteModalOpen(false)} className="font-medium px-6">
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="danger"
-                            onPress={confirmPermanentDelete}
-                            className="font-medium px-6 bg-gradient-to-r from-red-600 to-rose-700"
-                            startContent={<Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
-                        >
-                            ลบถาวร
                         </Button>
                     </ModalFooter>
                 </ModalContent>

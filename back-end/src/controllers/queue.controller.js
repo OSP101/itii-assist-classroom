@@ -161,7 +161,7 @@ const getQueueSessions = async (req, res) => {
             data: sessionsWithStats,
         });
     } catch (error) {
-        logger.error('Error getting queue sessions:', error);
+        console.error('Error getting queue sessions:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -263,7 +263,7 @@ const getQueueSession = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error getting queue session:', error);
+        console.error('Error getting queue session:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -356,7 +356,7 @@ const createQueueSession = async (req, res) => {
         });
     } catch (error) {
         await transaction.rollback();
-        logger.error('Error creating queue session:', error);
+        console.error('Error creating queue session:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -395,7 +395,7 @@ const updateQueueSession = async (req, res) => {
             data: session,
         });
     } catch (error) {
-        logger.error('Error updating queue session:', error);
+        console.error('Error updating queue session:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -463,7 +463,7 @@ const updateQueueSessionStatus = async (req, res) => {
             data: session,
         });
     } catch (error) {
-        logger.error('Error updating queue session status:', error);
+        console.error('Error updating queue session status:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -512,7 +512,7 @@ const deleteQueueSession = async (req, res) => {
             message: 'ลบ Queue Session สำเร็จ',
         });
     } catch (error) {
-        logger.error('Error deleting queue session:', error);
+        console.error('Error deleting queue session:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -552,7 +552,7 @@ const regeneratePIN = async (req, res) => {
             data: { pin_code: newPIN },
         });
     } catch (error) {
-        logger.error('Error regenerating PIN:', error);
+        console.error('Error regenerating PIN:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -645,7 +645,7 @@ const joinAsWorker = async (req, res) => {
             // Note: assignedBooking is now handled asynchronously via socket
         });
     } catch (error) {
-        logger.error('Error joining as worker:', error);
+        console.error('Error joining as worker:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -730,7 +730,7 @@ const leaveAsWorker = async (req, res) => {
             message: 'ออกจากการรับงานสำเร็จ',
         });
     } catch (error) {
-        logger.error('Error leaving as worker:', error);
+        console.error('Error leaving as worker:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -762,7 +762,7 @@ const getWorkers = async (req, res) => {
             data: workers,
         });
     } catch (error) {
-        logger.error('Error getting workers:', error);
+        console.error('Error getting workers:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -832,7 +832,7 @@ const getWorkerCurrentBooking = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error getting worker current booking:', error);
+        console.error('Error getting worker current booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -1222,7 +1222,7 @@ const createBooking = async (req, res) => {
         });
     } catch (error) {
         await transaction.rollback();
-        logger.error('Error creating booking:', error);
+        console.error('Error creating booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -1614,7 +1614,7 @@ const getBookingStatus = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error getting booking status:', error);
+        console.error('Error getting booking status:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -1755,7 +1755,7 @@ const cancelBooking = async (req, res) => {
         });
     } catch (error) {
         await transaction.rollback();
-        logger.error('Error cancelling booking:', error);
+        console.error('Error cancelling booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2048,7 +2048,7 @@ const completeBooking = async (req, res) => {
         });
     } catch (error) {
         await transaction.rollback();
-        logger.error('Error completing booking:', error);
+        console.error('Error completing booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2111,7 +2111,7 @@ const tryAssignNextBooking = async (sessionId, workerId, io) => {
             logger.info('No waiting bookings found');
         }
     } catch (error) {
-        logger.error('Error assigning next booking:', error);
+        console.error('Error assigning next booking:', error);
     }
 };
 
@@ -2232,7 +2232,7 @@ const skipBooking = async (req, res) => {
         });
     } catch (error) {
         await transaction.rollback();
-        logger.error('Error skipping booking:', error);
+        console.error('Error skipping booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2305,7 +2305,7 @@ const getSessionBookings = async (req, res) => {
             data: enrichedBookings,
         });
     } catch (error) {
-        logger.error('Error getting session bookings:', error);
+        console.error('Error getting session bookings:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2434,7 +2434,7 @@ const getDeskStatuses = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error getting desk statuses:', error);
+        console.error('Error getting desk statuses:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2494,7 +2494,7 @@ const verifyPIN = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error verifying PIN:', error);
+        console.error('Error verifying PIN:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2766,7 +2766,7 @@ const validateBookingInfo = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error validating booking info:', error);
+        console.error('Error validating booking info:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2853,7 +2853,7 @@ const checkExistingBooking = async (req, res) => {
             },
         });
     } catch (error) {
-        logger.error('Error checking existing booking:', error);
+        console.error('Error checking existing booking:', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },
@@ -2864,12 +2864,12 @@ const checkExistingBooking = async (req, res) => {
 /**
  * Update queue session status (Public - for projector view)
  * Only allows pause/resume transitions (active ↔ paused)
- * Requires PIN verification to prevent unauthorized access.
+ * Does not require authentication — safe because it only toggles pause state.
  */
 const updateQueueSessionStatusPublic = async (req, res) => {
     try {
         const { sessionId } = req.params;
-        const { status, pin } = req.body;
+        const { status } = req.body;
 
         // Only allow pause/resume from projector
         if (!['active', 'paused'].includes(status)) {
@@ -2884,14 +2884,6 @@ const updateQueueSessionStatusPublic = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 error: { message: 'ไม่พบ Queue Session' },
-            });
-        }
-
-        // Verify PIN to authorize this action
-        if (!pin || String(pin) !== String(session.pin_code)) {
-            return res.status(403).json({
-                success: false,
-                error: { message: 'PIN ไม่ถูกต้อง' },
             });
         }
 
@@ -2937,7 +2929,7 @@ const updateQueueSessionStatusPublic = async (req, res) => {
             data: session,
         });
     } catch (error) {
-        logger.error('Error updating queue session status (projector):', error);
+        console.error('Error updating queue session status (projector):', error);
         res.status(500).json({
             success: false,
             error: { message: error.message },

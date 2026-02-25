@@ -532,7 +532,6 @@ export default function FeedbackPage() {
                                             onChange={setPage}
                                             showControls
                                             size="sm"
-                                            color="primary"
                                         />
                                     </div>
                                 ) : null
@@ -736,68 +735,30 @@ export default function FeedbackPage() {
             <Modal
                 isOpen={isDeleteModalOpen}
                 onClose={() => setIsDeleteModalOpen(false)}
-                size="md"
+                size="sm"
             >
                 <ModalContent>
-                    <ModalHeader className="px-6 pt-6 pb-4">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
-                                <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold text-slate-800">ยืนยันการลบ Feedback</h3>
-                        </div>
-                    </ModalHeader>
-                    <ModalBody className="px-6 py-6">
-                        <div className="bg-red-50 rounded-2xl p-6 border border-red-100 space-y-3">
-                            <div className="flex items-start gap-3">
-                                <div className={`p-2 rounded-lg flex-shrink-0 ${selectedFeedback?.type === 'bug' ? 'bg-red-100' :
-                                    selectedFeedback?.type === 'feature' ? 'bg-blue-100' :
-                                        selectedFeedback?.type === 'improvement' ? 'bg-amber-100' : 'bg-default-100'
-                                    }`}>
-                                    <Icon
-                                        icon={
-                                            selectedFeedback?.type === 'bug' ? 'solar:bug-bold' :
-                                                selectedFeedback?.type === 'feature' ? 'solar:star-bold' :
-                                                    selectedFeedback?.type === 'improvement' ? 'solar:lightbulb-bold' : 'solar:chat-round-dots-bold'
-                                        }
-                                        className={`text-lg ${selectedFeedback?.type === 'bug' ? 'text-red-600' :
-                                            selectedFeedback?.type === 'feature' ? 'text-blue-600' :
-                                                selectedFeedback?.type === 'improvement' ? 'text-amber-600' : 'text-default-600'
-                                            }`}
-                                    />
-                                </div>
-                                <div>
-                                    <p className="font-semibold text-slate-800">{selectedFeedback?.title}</p>
-                                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{selectedFeedback?.description}</p>
-                                </div>
-                            </div>
-                            <div className="p-3 bg-red-100 rounded-xl border border-red-200">
-                                <div className="flex items-center gap-2">
-                                    <Icon icon="solar:danger-triangle-bold" className="text-red-600 text-lg" />
-                                    <p className="text-sm text-red-700 font-medium">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
-                                </div>
-                            </div>
-                        </div>
-                    </ModalBody>
-                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
-                        <Button
-                            variant="flat"
-                            color="default"
-                            onPress={() => setIsDeleteModalOpen(false)}
-                            className="font-medium px-6"
-                        >
-                            ยกเลิก
-                        </Button>
-                        <Button
-                            color="danger"
-                            onPress={handleDelete}
-                            isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-red-500 to-rose-600"
-                            startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
-                        >
-                            ลบ Feedback
-                        </Button>
-                    </ModalFooter>
+                    {(onClose) => (
+                        <>
+                            <ModalHeader>ยืนยันการลบ</ModalHeader>
+                            <ModalBody>
+                                <p>คุณต้องการลบ Feedback นี้หรือไม่?</p>
+                                <p className="font-medium">{selectedFeedback?.title}</p>
+                            </ModalBody>
+                            <ModalFooter>
+                                <Button variant="light" onPress={onClose}>
+                                    ยกเลิก
+                                </Button>
+                                <Button
+                                    color="danger"
+                                    onPress={handleDelete}
+                                    isLoading={isSubmitting}
+                                >
+                                    ลบ
+                                </Button>
+                            </ModalFooter>
+                        </>
+                    )}
                 </ModalContent>
             </Modal>
         </div>

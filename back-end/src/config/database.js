@@ -10,7 +10,7 @@ const sequelize = new Sequelize(
     host: config.db.host,
     port: config.db.port,
     dialect: 'mysql',
-    logging: false,
+    logging: config.nodeEnv === 'development' ? console.log : false,
     timezone: '+07:00', // Thailand timezone
     define: {
       timestamps: true,

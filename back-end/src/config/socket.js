@@ -4,9 +4,7 @@
  */
 
 const { Server } = require('socket.io');
-const jwt = require('jsonwebtoken');
 const config = require('./index');
-const logger = require('../utils/logger');
 
 let io = null;
 
@@ -42,7 +40,7 @@ io = new Server(httpServer, {
         return callback(null, true);
       }
       
-      logger.warn(`Socket.IO CORS rejected origin: ${origin}`);
+      console.log(`⚠️ Socket.IO CORS rejected origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     },
     methods: ["GET", "POST"],
@@ -53,98 +51,62 @@ io = new Server(httpServer, {
   transports: ["polling", "websocket"],
 });
 
-  // ========== Authentication Middleware ==========
-  // Optionally verify JWT on handshake — attaches user info to socket
-  // Public clients (projector, queue student view) connect without a token
-  io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (!token) {
-      // Allow unauthenticated connections (projector, public queue)
-      socket.user = null;
-      return next();
-    }
-    try {
-      const decoded = jwt.verify(token, config.jwt.accessSecret);
-      socket.user = decoded; // { userId, role, ... }
-      return next();
-    } catch (err) {
-      // Invalid token — reject connection
-      return next(new Error('Authentication error: invalid token'));
-    }
-  });
-
-  // Helper: require authentication for a socket event
-  const requireAuth = (socket, eventName) => {
-    if (!socket.user) {
-      socket.emit('error', { message: `Authentication required for ${eventName}` });
-      return false;
-    }
-    return true;
-  };
 
   // Connection handler
   io.on('connection', (socket) => {
-    logger.info(`Socket connected: ${socket.id} (user: ${socket.user?.userId || 'anonymous'})`);
+    console.log(`🔌 Socket connected: ${socket.id}`);
 
     // ========== Attendance Rooms ==========
-    // Join attendance room (public — students check in here)
+    // Join attendance room
     socket.on('join-attendance', (sessionId) => {
-      if (!sessionId) return;
       const room = `attendance-${sessionId}`;
       socket.join(room);
-      logger.debug(`Socket ${socket.id} joined room: ${room}`);
+      console.log(`👤 Socket ${socket.id} joined room: ${room}`);
     });
 
     // Leave attendance room
     socket.on('leave-attendance', (sessionId) => {
-      if (!sessionId) return;
       const room = `attendance-${sessionId}`;
       socket.leave(room);
-      logger.debug(`Socket ${socket.id} left room: ${room}`);
+      console.log(`👤 Socket ${socket.id} left room: ${room}`);
     });
 
-    // Instructor room — REQUIRES AUTH (instructor/admin/ta only)
+    // Instructor room (for receiving updates)
     socket.on('join-instructor', (sessionId) => {
-      if (!requireAuth(socket, 'join-instructor')) return;
-      if (!sessionId) return;
       const room = `instructor-${sessionId}`;
       socket.join(room);
-      logger.debug(`Instructor ${socket.id} joined room: ${room}`);
+      console.log(`🎓 Instructor ${socket.id} joined room: ${room}`);
     });
 
     // Leave instructor room
     socket.on('leave-instructor', (sessionId) => {
-      if (!sessionId) return;
       const room = `instructor-${sessionId}`;
       socket.leave(room);
-      logger.debug(`Instructor ${socket.id} left room: ${room}`);
+      console.log(`🎓 Instructor ${socket.id} left room: ${room}`);
     });
 
     // ========== Course Sync Rooms ==========
-    // Join user's course updates room — REQUIRES AUTH
+    // Join user's course updates room
     socket.on('join-user-courses', (userId) => {
-      if (!requireAuth(socket, 'join-user-courses')) return;
-      // Only allow joining own room
-      if (String(userId) !== String(socket.user.userId)) return;
       const room = `user-courses-${userId}`;
       socket.join(room);
+      // Also join global course updates room
       socket.join('global-courses');
-      logger.debug(`Socket ${socket.id} joined course updates room: ${room}`);
+      console.log(`📚 Socket ${socket.id} joined course updates room: ${room}`);
     });
 
     // Leave user's course updates room
     socket.on('leave-user-courses', (userId) => {
-      if (!userId) return;
       const room = `user-courses-${userId}`;
       socket.leave(room);
       socket.leave('global-courses');
-      logger.debug(`Socket ${socket.id} left course updates room: ${room}`);
+      console.log(`📚 Socket ${socket.id} left course updates room: ${room}`);
     });
 
-    // Handle course change event — REQUIRES AUTH
+    // Handle course change event - broadcast to all connected clients
     socket.on('course-change', (data) => {
-      if (!requireAuth(socket, 'course-change')) return;
-      logger.debug(`Course change event from ${socket.user.userId}:`, data);
+      console.log(`📢 Course change event:`, data);
+      // Broadcast to all clients in global-courses room (except sender)
       socket.to('global-courses').emit('course-updated', {
         ...data,
         timestamp: Date.now(),
@@ -152,28 +114,25 @@ io = new Server(httpServer, {
     });
 
     // ========== Classroom Sync Rooms ==========
-    // Join classroom room — REQUIRES AUTH
+    // Join classroom room for real-time updates
     socket.on('join-classroom', (classroomId) => {
-      if (!requireAuth(socket, 'join-classroom')) return;
-      if (!classroomId) return;
       const room = `classroom-${classroomId}`;
       socket.join(room);
-      logger.debug(`Socket ${socket.id} joined classroom room: ${room}`);
+      console.log(`🏫 Socket ${socket.id} joined classroom room: ${room}`);
     });
 
     // Leave classroom room
     socket.on('leave-classroom', (classroomId) => {
-      if (!classroomId) return;
       const room = `classroom-${classroomId}`;
       socket.leave(room);
-      logger.debug(`Socket ${socket.id} left classroom room: ${room}`);
+      console.log(`🏫 Socket ${socket.id} left classroom room: ${room}`);
     });
 
-    // Handle classroom data change — REQUIRES AUTH
+    // Handle classroom data change
     socket.on('classroom-change', (data) => {
-      if (!requireAuth(socket, 'classroom-change')) return;
       const { classroomId, type, payload } = data;
-      logger.debug(`Classroom ${classroomId} change from ${socket.user.userId}:`, type);
+      console.log(`📢 Classroom ${classroomId} change:`, type);
+      // Broadcast to all clients in the classroom room (except sender)
       socket.to(`classroom-${classroomId}`).emit('classroom-updated', {
         type,
         payload,
@@ -182,78 +141,71 @@ io = new Server(httpServer, {
     });
 
     // ========== Global Updates Room ==========
-    // Join global updates room — REQUIRES AUTH
+    // Join global updates room (for all resources)
     socket.on('join-global-updates', () => {
-      if (!requireAuth(socket, 'join-global-updates')) return;
       socket.join('global-updates');
-      logger.debug(`Socket ${socket.id} joined global updates room`);
+      console.log(`🌐 Socket ${socket.id} joined global updates room`);
     });
 
     // Leave global updates room
     socket.on('leave-global-updates', () => {
       socket.leave('global-updates');
-      logger.debug(`Socket ${socket.id} left global updates room`);
+      console.log(`🌐 Socket ${socket.id} left global updates room`);
     });
 
     // ========== Queue System Rooms ==========
-    // Join queue session room (public — projector + students)
+    // Join queue session room (for students and instructors)
     socket.on('join-queue', (sessionId) => {
-      if (!sessionId) return;
       const room = `queue-${sessionId}`;
       socket.join(room);
-      logger.debug(`Socket ${socket.id} joined queue room: ${room}`);
+      console.log(`📋 Socket ${socket.id} joined queue room: ${room}`);
     });
 
     // Leave queue session room
     socket.on('leave-queue', (sessionId) => {
-      if (!sessionId) return;
       const room = `queue-${sessionId}`;
       socket.leave(room);
-      logger.debug(`Socket ${socket.id} left queue room: ${room}`);
+      console.log(`📋 Socket ${socket.id} left queue room: ${room}`);
     });
 
-    // Join worker room — REQUIRES AUTH (only own room)
+    // Join worker room (for receiving new tasks)
     socket.on('join-worker', (userId) => {
-      if (!requireAuth(socket, 'join-worker')) return;
-      // Only allow joining own worker room
-      if (String(userId) !== String(socket.user.userId)) return;
+      // Ensure userId is string for consistent room naming
       const room = `worker-${String(userId)}`;
       socket.join(room);
-      logger.debug(`Worker ${socket.id} joined room: ${room}`);
+      console.log(`👷 Worker ${socket.id} joined room: ${room}`);
+      // Also store the userId on socket for debugging
       socket.userId = String(userId);
     });
 
     // Leave worker room
     socket.on('leave-worker', (userId) => {
-      if (!userId) return;
       const room = `worker-${String(userId)}`;
       socket.leave(room);
-      logger.debug(`Worker ${socket.id} left room: ${room}`);
+      console.log(`👷 Worker ${socket.id} left room: ${room}`);
     });
 
-    // Join booking room (public — students track their own booking)
+    // Join booking room (for students to receive updates on their booking)
     socket.on('join-booking', (bookingId) => {
-      if (!bookingId) return;
       const room = `booking-${bookingId}`;
       socket.join(room);
-      logger.debug(`Socket ${socket.id} joined booking room: ${room}`);
+      console.log(`🎫 Socket ${socket.id} joined booking room: ${room}`);
     });
 
     // Leave booking room
     socket.on('leave-booking', (bookingId) => {
-      if (!bookingId) return;
       const room = `booking-${bookingId}`;
       socket.leave(room);
-      logger.debug(`Socket ${socket.id} left booking room: ${room}`);
+      console.log(`🎫 Socket ${socket.id} left booking room: ${room}`);
     });
 
     // ========== Generic Data Change Event ==========
-    // Handle any data change — REQUIRES AUTH
+    // Handle any data change and broadcast to all clients
     socket.on('data-change', (data) => {
-      if (!requireAuth(socket, 'data-change')) return;
       const { resource, action, id, data: payload } = data;
-      logger.debug(`Data change from ${socket.user.userId} - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
+      console.log(`📢 Data change event - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
       
+      // Broadcast to all clients in global-updates room (except sender)
       socket.to('global-updates').emit('data-updated', {
         resource,
         action,
@@ -262,6 +214,7 @@ io = new Server(httpServer, {
         timestamp: Date.now(),
       });
 
+      // Also broadcast to global-courses room for backward compatibility
       if (resource === 'course') {
         socket.to('global-courses').emit('course-updated', {
           action,
@@ -273,7 +226,7 @@ io = new Server(httpServer, {
 
     // Handle disconnection
     socket.on('disconnect', (reason) => {
-      logger.info(`Socket disconnected: ${socket.id}, reason: ${reason}`);
+      console.log(`🔌 Socket disconnected: ${socket.id}, reason: ${reason}`);
     });
   });
 
@@ -352,7 +305,7 @@ const emitDataUpdate = (resource, action, id = null, data = null) => {
       data,
       timestamp: Date.now(),
     });
-    logger.debug(`Data update emitted - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
+    console.log(`📢 Data update emitted - Resource: ${resource}, Action: ${action}, ID: ${id || 'N/A'}`);
   }
 };
 

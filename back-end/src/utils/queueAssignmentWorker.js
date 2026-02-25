@@ -46,8 +46,8 @@ const loadModels = () => {
 };
 
 // Worker configuration
-const POLL_INTERVAL_MS = 200; // Poll every 200ms when busy
-const IDLE_INTERVAL_MS = 2000; // Poll every 2s when idle (was 500ms)
+const POLL_INTERVAL_MS = 100; // Poll every 100ms
+const IDLE_INTERVAL_MS = 500; // Slow down when no work
 const MAX_BATCH_SIZE = 10; // Process up to 10 assignments per cycle
 
 let isRunning = false;

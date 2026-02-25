@@ -131,9 +131,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         const socketUrl = getSocketUrl();
         console.log("🔌 Connecting to Socket.IO at:", socketUrl);
         
-        // Send JWT token for authenticated socket rooms
-        const accessToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-        
         const socketInstance = io(socketUrl, {
             path: "/socket.io",
             transports: ["polling", "websocket"],
@@ -142,7 +139,6 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             reconnectionDelay: 1000,
             timeout: 30000,
             withCredentials: true,
-            auth: accessToken ? { token: accessToken } : undefined,
         });
 
         socketInstance.on("connect", () => {

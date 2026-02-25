@@ -497,7 +497,9 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
                 onChange={(page) => fetchLogs(page)}
                 showControls
                 size="sm"
-                color="primary"
+                classNames={{
+                  cursor: "bg-blue-500",
+                }}
               />
             </div>
           )}
