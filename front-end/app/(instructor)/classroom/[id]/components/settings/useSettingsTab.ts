@@ -188,7 +188,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             // ── Style helpers ─────────────────────────────────────────────────
             // Score → ARGB fill color (intensity based on percentage)
             const scoreArgb = (score: number | null, maxScore: number): string | null => {
-                if (score === null || score === undefined) return null; // null = not graded → leave cell empty
+                if (score === null || score === undefined) return "FFE2E8F0"; // slate-200 = not graded
                 if (maxScore === 0) return null;
                 const pct = score / maxScore;
                 if (pct >= 0.9)  return "FF16A34A"; // green-600
@@ -225,12 +225,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             const applyHdr1 = (cell: ExcelJS.Cell) => { cell.fill = HDR1_FILL; cell.font = HDR1_FONT; cell.alignment = CENTER_ALIGN; cell.border = THIN_BORDER; };
             const applyHdr2 = (cell: ExcelJS.Cell) => { cell.fill = HDR2_FILL; cell.font = HDR2_FONT; cell.alignment = CENTER_ALIGN; cell.border = THIN_BORDER; };
 
-            // ── Helper: hide all rows/cols outside the used data area ─────────
-            const trimSheet = (ws: ExcelJS.Worksheet, lastDataRow: number, lastDataCol: number) => {
-                for (let c = lastDataCol + 1; c <= 50; c++) ws.getColumn(c).hidden = true;
-                for (let r = lastDataRow + 1; r <= lastDataRow + 500; r++) ws.getRow(r).hidden = true;
-            };
-
             // ── Helper: build a styled score worksheet ────────────────────────
             type ColDef = { key: string; asgmtTitle: string; asgmtMax: number; subLabel: string | null; asgmtStart: boolean };
             const buildScoreSheet = (
@@ -256,6 +250,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     }
                 }
                 const totalCols = FIXED + scoreCols.length + 2;
+
                 // Column widths (1-indexed)
                 ws.getColumn(1).width = 16;
                 ws.getColumn(2).width = 28;
@@ -324,14 +319,13 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                         const scoreObj = stu.scores[col.key];
                         const val = scoreObj?.score ?? null;
                         const cell = r.getCell(FIXED + scIdx + 1);
-                        if (val === null) return; // leave cell completely empty (no border, no fill)
                         cell.value = val;
                         cell.alignment = CENTER_ALIGN;
                         cell.border = THIN_BORDER;
                         const argb = scoreArgb(val, col.asgmtMax);
                         if (argb) {
                             cell.fill = solidFill(argb);
-                            cell.font = { color: { argb: scoreWhite(val, col.asgmtMax) ? "FFFFFFFF" : "FF1E293B" }, size: 10, bold: val / col.asgmtMax >= 0.9 };
+                            cell.font = { color: { argb: scoreWhite(val, col.asgmtMax) ? "FFFFFFFF" : "FF1E293B" }, size: 10, bold: val !== null && val / col.asgmtMax >= 0.9 };
                         } else {
                             cell.font = { size: 10, color: { argb: "FF64748B" } };
                         }
@@ -369,7 +363,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 });
 
                 ws.views = [{ state: "frozen", xSplit: 3, ySplit: 2 }];
-                trimSheet(ws, 2 + matrix.students.length, totalCols);
                 return ws;
             };
 
@@ -442,21 +435,14 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     closedSessions.map(s => attendanceService.getRecords(s.id))
                 );
 
-                // Helper: format ISO check_in_time → "HH:MM" in Thai locale
-                const fmtCheckIn = (t: string | null): string => {
-                    if (!t) return "";
-                    try { return new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }); }
-                    catch { return ""; }
-                };
-
-                type AttEntry = { full_name: string; records: Record<number, { status: string; time: string | null }> };
+                type AttEntry = { full_name: string; records: Record<number, string> };
                 const attMap = new Map<string, AttEntry>();
                 allRecords.forEach((records, sIdx) => {
                     const sessionId = closedSessions[sIdx].id;
                     for (const rec of records) {
                         const sid = rec.student?.student_id ?? String(rec.student_id);
                         if (!attMap.has(sid)) attMap.set(sid, { full_name: rec.student?.full_name ?? sid, records: {} });
-                        attMap.get(sid)!.records[sessionId] = { status: rec.status, time: rec.check_in_time ?? null };
+                        attMap.get(sid)!.records[sessionId] = rec.status;
                     }
                 });
 
@@ -507,10 +493,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 Array.from(attMap.entries()).forEach(([sid, data], rowOffset) => {
                     // If student has NO record for a session → they were not targeted → show "-"
                     const statuses = closedSessions.map(s =>
-                        s.id in data.records ? TH[data.records[s.id].status] ?? "ขาด" : "-"
-                    );
-                    const checkInTimes = closedSessions.map(s =>
-                        s.id in data.records ? data.records[s.id].time : null
+                        s.id in data.records ? TH[data.records[s.id]] ?? "ขาด" : "-"
                     );
                     // Only count sessions the student was actually targeted in
                     const targeted = statuses.filter(x => x !== "-");
@@ -528,13 +511,15 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     r.getCell(2).border = THIN_BORDER;
 
                     statuses.forEach((st, i) => {
-                        if (st === "-") return; // student not targeted in this session → leave cell empty
                         const cell = r.getCell(AFIXED + i + 1);
-                        const t = fmtCheckIn(checkInTimes[i]);
-                        cell.value = t ? `${st}\n${t}` : st;
-                        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: !!t };
+                        cell.value = st;
+                        cell.alignment = CENTER_ALIGN;
                         cell.border = THIN_BORDER;
-                        if (ATT_COLOR[st]) {
+                        if (st === "-") {
+                            // Not applicable — light gray, italic
+                            cell.fill = solidFill("FFF1F5F9");
+                            cell.font = { color: { argb: "FFCBD5E1" }, italic: true, size: 10 };
+                        } else if (ATT_COLOR[st]) {
                             cell.fill = solidFill(ATT_COLOR[st]);
                             cell.font = { color: { argb: ATT_TEXT[st] ?? "FF000000" }, size: 10, bold: st === "มา" };
                         }
@@ -557,7 +542,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 });
 
                 attWs.views = [{ state: "frozen", xSplit: 2, ySplit: 2 }];
-                trimSheet(attWs, 2 + attMap.size, ATOTAL);
             } else {
                 const ws = wb.addWorksheet("การเช็คชื่อ");
                 ws.addRow(["ยังไม่มีการเช็คชื่อในรายวิชานี้"]);
@@ -613,7 +597,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 totalRow.getCell(1).alignment = LEFT_ALIGN;
 
                 taWs.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
-                trimSheet(taWs, 1 + taList.length + 1, 4);
             } catch {
                 const ws = wb.addWorksheet("การทำงานของทีเอ");
                 ws.addRow(["ไม่สามารถโหลดข้อมูลกิจกรรมได้"]);
@@ -627,18 +610,11 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 bonusScoreService.getBonusScoresByCourse(courseId),
             ]);
 
-            // Build lookup: DB numeric student ID → string student_id (e.g. "6404001")
-            // Necessary because score.student may not be populated by the API
-            const studentLookup = new Map<number, string>();
-            for (const stu of examResp?.students ?? []) {
-                studentLookup.set(stu.id, stu.student_id);
-            }
-
             type ExamEntry = { midterm_lab: number | null; midterm_lecture: number | null; final_lab: number | null; final_lecture: number | null };
             const examMap = new Map<string, ExamEntry>();
             for (const setting of examResp?.settings ?? []) {
                 for (const score of setting.scores ?? []) {
-                    const sid = score.student?.student_id ?? studentLookup.get(score.student_id) ?? "";
+                    const sid = score.student?.student_id ?? "";
                     if (!sid) continue;
                     if (!examMap.has(sid)) examMap.set(sid, { midterm_lab: null, midterm_lecture: null, final_lab: null, final_lecture: null });
                     const e = examMap.get(sid)!;
@@ -663,20 +639,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             const labMax   = firstEntry?.total_lab_max   ?? 0;
             const hwMax    = firstEntry?.total_hw_max    ?? 0;
             const groupMax = firstEntry?.total_group_max ?? 0;
-
-            // Ensure students who have only exam scores (missing from score matrices) still appear
-            for (const stu of examResp?.students ?? []) {
-                if (!summaryMap.has(stu.student_id)) {
-                    summaryMap.set(stu.student_id, {
-                        full_name: stu.full_name,
-                        section: parseInt(String(stu.section ?? 0)) || 0,
-                        total_lab: 0, total_lab_max: labMax,
-                        total_hw:  0, total_hw_max:  hwMax,
-                        total_group: 0, total_group_max: groupMax,
-                        bonus: 0,
-                    });
-                }
-            }
 
             const sumWs = wb.addWorksheet("สรุปคะแนน");
             // Col widths
@@ -726,9 +688,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 const maxes = [null, null, null, labMax, hwMax, groupMax, mLabMax, mLecMax, fLabMax, fLecMax, null];
 
                 vals.forEach((v, i) => {
-                    // Exam score columns (6-9): skip cell entirely when null
-                    const isExamCol = i >= 6 && i <= 9;
-                    if (isExamCol && v === null) return;
                     const cell = r.getCell(i + 1);
                     cell.value = v;
                     cell.border = THIN_BORDER;
@@ -756,7 +715,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             });
 
             sumWs.views = [{ state: "frozen", xSplit: 2, ySplit: 2 }];
-            trimSheet(sumWs, 2 + summaryMap.size, 11);
 
             // ── Download ────────────────────────────────────────────────────
             const buffer = await wb.xlsx.writeBuffer();

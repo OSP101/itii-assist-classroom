@@ -627,7 +627,6 @@ export default function ClosedCoursesPage() {
                                 page={currentPage}
                                 onChange={setCurrentPage}
                                 showControls
-                                size="sm"
                                 color="primary"
                             />
                         </div>
@@ -755,7 +754,6 @@ export default function ClosedCoursesPage() {
                                 page={currentPage}
                                 onChange={setCurrentPage}
                                 showControls
-                                size="sm"
                                 color="primary"
                             />
                         </div>

@@ -291,7 +291,7 @@ export const FiltersCard = memo(function FiltersCard({
                         placeholder="ค้นหาชื่อรอบการเช็คชื่อ..."
                         value={searchQuery}
                         onValueChange={onSearchChange}
-                        startContent={<Icon icon="solar:magnifer-linear" className="text-blue-400" />}
+                        startContent={<Icon icon="solar:magnifer-linear" className="text-slate-400" />}
                         className="flex-1"
                         size="md"
                         variant="bordered"
@@ -880,6 +880,11 @@ export const SessionsTable = memo(function SessionsTable({
                                 showControls
                                 size="sm"
                                 color="primary"
+                                classNames={{
+                                    wrapper: "gap-1",
+                                    item: "bg-transparent",
+                                    cursor: "bg-blue-500 text-white shadow-md",
+                                }}
                             />
                         </div>
                     )}

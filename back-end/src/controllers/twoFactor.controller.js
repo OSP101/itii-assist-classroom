@@ -589,7 +589,7 @@ const completeLogin = asyncHandler(async (req, res) => {
       }
     }
   } catch (verifyError) {
-    logger.error('2FA verification error:', verifyError);
+    console.error('2FA verification error:', verifyError);
     // Don't expose internal error - just treat as invalid code
     isValid = false;
   }

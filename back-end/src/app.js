@@ -71,10 +71,10 @@ const limiter = rateLimit({
   max: 120, // 120 requests per minute per IP (เพียงพอสำหรับ SPA ที่เรียก API หลายตัวพร้อมกัน)
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  // Skip rate limiting for specific paths only (not all of development)
+  // Skip rate limiting for certain conditions
   skip: (req) => {
-    // Skip for health checks and metrics scraping
-    if (req.path === '/api/health' || req.path === '/api/metrics/prometheus') return true;
+    // Skip rate limiting in development
+    if (config.nodeEnv === 'development') return true;
     return false;
   },
   message: {
@@ -130,6 +130,7 @@ if (config.nodeEnv === 'development') {
 // Performance middleware
 const { 
   requestTimeout, 
+  slowQueryLogger, 
   requestId 
 } = require('./middlewares/performance.middleware');
 
@@ -139,17 +140,17 @@ app.use(requestId());
 // Add request timeout (30 seconds)
 app.use(requestTimeout(30000));
 
+// Log slow requests (> 2 seconds)
+app.use(slowQueryLogger(2000));
+
 // Initialize Passport
 app.use(passport.initialize());
 
-// Serve uploaded files (static) — restrict CORS to known origins
+// Serve uploaded files (static) with CORS support
 const path = require('path');
 app.use('/uploads', (req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-  }
+  res.setHeader('Access-Control-Allow-Origin', '*');
   next();
 }, express.static(path.join(__dirname, '../uploads')));
 

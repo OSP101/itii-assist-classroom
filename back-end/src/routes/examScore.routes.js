@@ -1,11 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const examScoreController = require('../controllers/examScore.controller');
-const { authenticate, authorize, checkCourseActive } = require('../middlewares/auth');
+const { authenticate, checkCourseActive } = require('../middlewares/auth');
 
-// All routes require authentication + instructor/admin/ta role
+// All routes require authentication
 router.use(authenticate);
-router.use(authorize('admin', 'instructor', 'ta'));
 
 // ============================================
 // Exam Settings Routes
