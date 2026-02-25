@@ -8,7 +8,7 @@ import type { Course } from "@/services/course.service";
 import scoreService from "@/services/score.service";
 import attendanceService from "@/services/attendance.service";
 import bonusScoreService from "@/services/bonusScore.service";
-import { getExamScores } from "@/services/examScore.service";
+import examScoreService from "@/services/examScore.service";
 import { getTAStats } from "@/services/courseActivityLog.service";
 
 export interface SettingsFormData {
@@ -606,7 +606,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             // Sheet 6: สรุปคะแนน
             // ════════════════════════════════════════════════════════════════
             const [examResp, bonusResp] = await Promise.all([
-                getExamScores(courseId),
+                examScoreService.getExamScores(courseId),
                 bonusScoreService.getBonusScoresByCourse(courseId),
             ]);
 

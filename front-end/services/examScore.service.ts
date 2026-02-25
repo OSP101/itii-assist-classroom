@@ -34,6 +34,7 @@ export interface ExamScore {
     grader_name?: string;
     created_at: string;
     updated_at: string;
+    student?: Student;
 }
 
 export interface ExamScoreWithSetting extends ExamSetting {

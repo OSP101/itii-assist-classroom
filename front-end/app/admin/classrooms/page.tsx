@@ -472,14 +472,14 @@ export default function ClassroomsPage() {
         try {
             const response = await classroomService.toggleStatus(id);
             if (response.success && response.data) {
-                const updatedClassroom = transformClassroomFromAPI(response.data.data);
+                const updatedClassroom = transformClassroomFromAPI(response.data);
                 setClassrooms((prev) =>
                     prev.map((c) => (c.id === id ? updatedClassroom : c))
                 );
 
                 addToast({
                     title: "สำเร็จ",
-                    description: response.data.message,
+                    description: response.message || "เปลี่ยนสถานะสำเร็จ",
                     color: "success",
                     timeout: 3000,
                 shouldShowTimeoutProgress: true,

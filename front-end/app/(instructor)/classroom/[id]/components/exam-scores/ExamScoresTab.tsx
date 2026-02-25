@@ -545,7 +545,7 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                                         </div>
                                                         <div className="w-16 text-center">
                                                             {/* <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600"> */}
-                                                                {student.section || "-"}
+                                                                {student.section_no || "-"}
                                                             {/* </Chip> */}
                                                         </div>
                                                         <div className="w-28 flex items-center justify-end gap-2">
