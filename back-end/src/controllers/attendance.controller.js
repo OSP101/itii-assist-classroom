@@ -794,6 +794,18 @@ const updateAttendanceSession = asyncHandler(async (req, res) => {
 
     // Update junction table if section IDs were provided
     if (sectionIds !== null) {
+      // Get old section IDs for comparison
+      const oldSectionLinks = await AttendanceSessionSection.findAll({
+        where: { attendance_session_id: id },
+        attributes: ['course_section_id'],
+        transaction,
+      });
+      const oldSectionIds = oldSectionLinks.map(l => l.course_section_id);
+      const newSectionIds = sectionIds;
+
+      const addedSectionIds = newSectionIds.filter(sid => !oldSectionIds.includes(sid));
+      const removedSectionIds = oldSectionIds.filter(sid => !newSectionIds.includes(sid));
+
       // Delete existing section links
       await AttendanceSessionSection.destroy({
         where: { attendance_session_id: id },
@@ -807,6 +819,82 @@ const updateAttendanceSession = asyncHandler(async (req, res) => {
           course_section_id: sectionId,
         }));
         await AttendanceSessionSection.bulkCreate(sectionLinks, { transaction });
+      }
+
+      // ── Handle removed sections: delete records for students ONLY in removed sections ──
+      if (removedSectionIds.length > 0) {
+        // Get students in removed sections
+        const removedEnrollments = await CourseSectionStudent.findAll({
+          where: { course_section_id: { [Op.in]: removedSectionIds } },
+          attributes: ['student_id'],
+          transaction,
+        });
+        const removedStudentIds = [...new Set(removedEnrollments.map(e => e.student_id))];
+
+        if (removedStudentIds.length > 0 && newSectionIds.length > 0) {
+          // Get students that are ALSO in the remaining sections (should keep their records)
+          const remainingEnrollments = await CourseSectionStudent.findAll({
+            where: { course_section_id: { [Op.in]: newSectionIds } },
+            attributes: ['student_id'],
+            transaction,
+          });
+          const remainingStudentIds = new Set(remainingEnrollments.map(e => e.student_id));
+
+          // Only delete records for students not in any remaining section
+          const studentIdsToRemove = removedStudentIds.filter(sid => !remainingStudentIds.has(sid));
+
+          if (studentIdsToRemove.length > 0) {
+            await AttendanceRecord.destroy({
+              where: {
+                attendance_session_id: id,
+                student_id: { [Op.in]: studentIdsToRemove },
+              },
+              transaction,
+            });
+          }
+        } else if (removedStudentIds.length > 0 && newSectionIds.length === 0) {
+          // All sections removed — delete all records for students from removed sections
+          await AttendanceRecord.destroy({
+            where: {
+              attendance_session_id: id,
+              student_id: { [Op.in]: removedStudentIds },
+            },
+            transaction,
+          });
+        }
+      }
+
+      // ── Handle added sections: create records for new students ──
+      if (addedSectionIds.length > 0) {
+        const addedEnrollments = await CourseSectionStudent.findAll({
+          where: { course_section_id: { [Op.in]: addedSectionIds } },
+          attributes: ['student_id'],
+          transaction,
+        });
+        const addedStudentIds = [...new Set(addedEnrollments.map(e => e.student_id))];
+
+        if (addedStudentIds.length > 0) {
+          // Check which students already have records (e.g., they're in another section that was already selected)
+          const existingRecords = await AttendanceRecord.findAll({
+            where: {
+              attendance_session_id: id,
+              student_id: { [Op.in]: addedStudentIds },
+            },
+            attributes: ['student_id'],
+            transaction,
+          });
+          const existingStudentIds = new Set(existingRecords.map(r => r.student_id));
+
+          const newStudentIds = addedStudentIds.filter(sid => !existingStudentIds.has(sid));
+          if (newStudentIds.length > 0) {
+            const newRecords = newStudentIds.map(student_id => ({
+              attendance_session_id: parseInt(id),
+              student_id,
+              status: 'absent',
+            }));
+            await AttendanceRecord.bulkCreate(newRecords, { transaction });
+          }
+        }
       }
     }
 
@@ -997,6 +1085,11 @@ const getAttendanceRecords = asyncHandler(async (req, res) => {
         model: Student,
         as: 'student',
         attributes: ['id', 'student_id', 'full_name', 'email'],
+      },
+      {
+        model: User,
+        as: 'updater',
+        attributes: ['id', 'full_name'],
       },
     ],
     order: [
@@ -1264,6 +1357,153 @@ const verifyStudent = asyncHandler(async (req, res) => {
   });
 });
 
+// ============================================================================
+// Preview Section Change
+// POST /api/attendance/:id/preview-section-change
+// ============================================================================
+
+/**
+ * Preview which students will lose their check-in data when sections are removed.
+ * Does NOT modify any data — safe to call repeatedly.
+ */
+const previewSectionChange = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { course_section_ids } = req.body;
+
+  const session = await AttendanceSession.findByPk(id);
+  if (!session) throw new ApiError(404, 'ไม่พบรอบการเช็คชื่อ');
+
+  if (!Array.isArray(course_section_ids)) {
+    throw new ApiError(400, 'course_section_ids must be an array');
+  }
+
+  // Get current session's sections
+  const currentSectionLinks = await AttendanceSessionSection.findAll({
+    where: { attendance_session_id: id },
+    attributes: ['course_section_id'],
+  });
+  const currentSectionIds = currentSectionLinks.map(l => l.course_section_id);
+  const newSectionIds = course_section_ids;
+
+  // Find removed sections
+  const removedSectionIds = currentSectionIds.filter(sid => !newSectionIds.includes(sid));
+
+  if (removedSectionIds.length === 0) {
+    return res.json({
+      success: true,
+      data: {
+        session_id: parseInt(id),
+        session_title: session.title,
+        removed_sections: [],
+        affected_students: [],
+        total_affected: 0,
+        has_checked_in_students: false,
+      },
+    });
+  }
+
+  // Get section details for display
+  const removedSections = await CourseSection.findAll({
+    where: { id: { [Op.in]: removedSectionIds } },
+    attributes: ['id', 'section_no'],
+  });
+
+  // Get students in removed sections
+  const removedEnrollments = await CourseSectionStudent.findAll({
+    where: { course_section_id: { [Op.in]: removedSectionIds } },
+    attributes: ['student_id', 'course_section_id'],
+  });
+  const removedStudentIds = [...new Set(removedEnrollments.map(e => e.student_id))];
+
+  if (removedStudentIds.length === 0) {
+    return res.json({
+      success: true,
+      data: {
+        session_id: parseInt(id),
+        session_title: session.title,
+        removed_sections: removedSections.map(s => ({ id: s.id, section_no: s.section_no })),
+        affected_students: [],
+        total_affected: 0,
+        has_checked_in_students: false,
+      },
+    });
+  }
+
+  // Filter out students that are also in remaining sections (they won't be deleted)
+  let studentIdsToCheck = removedStudentIds;
+  if (newSectionIds.length > 0) {
+    const remainingEnrollments = await CourseSectionStudent.findAll({
+      where: { course_section_id: { [Op.in]: newSectionIds } },
+      attributes: ['student_id'],
+    });
+    const remainingStudentIds = new Set(remainingEnrollments.map(e => e.student_id));
+    studentIdsToCheck = removedStudentIds.filter(sid => !remainingStudentIds.has(sid));
+  }
+
+  if (studentIdsToCheck.length === 0) {
+    return res.json({
+      success: true,
+      data: {
+        session_id: parseInt(id),
+        session_title: session.title,
+        removed_sections: removedSections.map(s => ({ id: s.id, section_no: s.section_no })),
+        affected_students: [],
+        total_affected: 0,
+        has_checked_in_students: false,
+      },
+    });
+  }
+
+  // Get attendance records for these students that have actually checked in (not absent)
+  const affectedRecords = await AttendanceRecord.findAll({
+    where: {
+      attendance_session_id: id,
+      student_id: { [Op.in]: studentIdsToCheck },
+      status: { [Op.ne]: 'absent' },
+    },
+    include: [{
+      model: Student,
+      as: 'student',
+      attributes: ['id', 'student_id', 'full_name'],
+    }],
+  });
+
+  // Build section lookup for each student
+  const studentSectionMap = {};
+  for (const enrollment of removedEnrollments) {
+    if (studentIdsToCheck.includes(enrollment.student_id)) {
+      if (!studentSectionMap[enrollment.student_id]) {
+        studentSectionMap[enrollment.student_id] = [];
+      }
+      const section = removedSections.find(s => s.id === enrollment.course_section_id);
+      if (section) {
+        studentSectionMap[enrollment.student_id].push(section.section_no);
+      }
+    }
+  }
+
+  const affectedStudents = affectedRecords.map(record => ({
+    record_id: record.id,
+    student_id: record.student?.student_id || null,
+    student_name: record.student?.full_name || null,
+    status: record.status,
+    check_in_time: record.check_in_time,
+    section_no: studentSectionMap[record.student_id]?.join(', ') || '-',
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      session_id: parseInt(id),
+      session_title: session.title,
+      removed_sections: removedSections.map(s => ({ id: s.id, section_no: s.section_no })),
+      affected_students: affectedStudents,
+      total_affected: affectedStudents.length,
+      has_checked_in_students: affectedStudents.length > 0,
+    },
+  });
+});
+
 module.exports = {
   // Instructor/TA
   getAttendanceSessions,
@@ -1271,6 +1511,7 @@ module.exports = {
   createAttendanceSession,
   updateAttendanceSession,
   previewTimeChange,
+  previewSectionChange,
   applyTimeChange,
   activateSession,
   closeSession,

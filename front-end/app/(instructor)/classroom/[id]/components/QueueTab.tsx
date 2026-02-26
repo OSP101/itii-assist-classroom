@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useSocket } from "@/contexts/SocketContext";
@@ -115,7 +115,7 @@ const statusDisplay: Record<string, { label: string; color: "default" | "primary
 
 export default function QueueTab({ course, isLoading, isCourseActive = true }: QueueTabProps) {
     const router = useRouter();
-    const { emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates } = useSocket();
+    const { emit, on, emitDataUpdate, onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates } = useSocket();
     const [pendingQueueUpdate, setPendingQueueUpdate] = useState(false);
     const [sessions, setSessions] = useState<QueueSession[]>([]);
     const [isSessionsLoading, setIsSessionsLoading] = useState(true);
@@ -144,6 +144,9 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
     const [assignments, setAssignments] = useState<Assignment[]>([]);
     const [attendanceSessions, setAttendanceSessions] = useState<AttendanceSession[]>([]);
     const [isOptionsLoading, setIsOptionsLoading] = useState(false);
+
+    // Ref to track which queue rooms we've joined
+    const joinedQueueRoomsRef = useRef<Set<string>>(new Set());
 
     // Form states
     const [formData, setFormData] = useState<CreateQueueSessionData>({
@@ -214,6 +217,39 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
         });
         return () => { unsubscribe(); unsubscribeFromUpdates(); };
     }, [onDataUpdate, subscribeToUpdates, unsubscribeFromUpdates, course.id]);
+
+    // Join/leave queue socket rooms when sessions change (for real-time status sync)
+    useEffect(() => {
+        if (!emit) return;
+
+        const activeIds = new Set(
+            sessions.filter(s => s.status !== 'closed').map(s => String(s.id))
+        );
+
+        // Join new rooms
+        activeIds.forEach(id => {
+            if (!joinedQueueRoomsRef.current.has(id)) {
+                emit('join-queue', id);
+                joinedQueueRoomsRef.current.add(id);
+            }
+        });
+
+        // Leave rooms for sessions that are now closed
+        Array.from(joinedQueueRoomsRef.current).forEach(id => {
+            if (!activeIds.has(id)) {
+                emit('leave-queue', id);
+                joinedQueueRoomsRef.current.delete(id);
+            }
+        });
+    }, [emit, sessions]);
+
+    // Listen for session-status-changed from projector/worker → auto-refresh
+    useEffect(() => {
+        const unsubscribe = on('session-status-changed', () => {
+            fetchSessions(true);
+        });
+        return unsubscribe;
+    }, [on, fetchSessions]);
 
     // Reset form
     const resetForm = () => {
@@ -1303,7 +1339,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1538,7 +1574,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                             color="primary"
                             onPress={handleUpdateSession}
                             isLoading={isSubmitting}
-                            className="bg-gradient-to-r from-amber-400 to-orange-500"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             บันทึกการแก้ไข
                         </Button>
@@ -1549,7 +1585,12 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             {/* Delete Confirmation Modal */}
             <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)}>
                 <ModalContent>
-                    <ModalHeader>ยืนยันการลบ</ModalHeader>
+                    <ModalHeader className="flex items-center gap-3">
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:trash-bin-trash-bold" className="text-xl text-white" />
+                        </div>
+                        <span className="text-lg font-bold text-slate-800">ยืนยันการลบ</span>
+                    </ModalHeader>
                     <ModalBody>
                         <p>คุณต้องการลบการจองคิว <span className="font-semibold">{deleteTarget?.title}</span> ใช่หรือไม่?</p>
                         <p className="text-sm text-slate-500">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
@@ -1558,7 +1599,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                         <Button variant="light" onPress={() => setIsDeleteModalOpen(false)}>
                             ยกเลิก
                         </Button>
-                        <Button color="danger" onPress={handleDeleteSession} isLoading={isSubmitting} className="bg-red-500">
+                        <Button color="primary" onPress={handleDeleteSession} isLoading={isSubmitting} className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white">
                             ลบ
                         </Button>
                     </ModalFooter>
@@ -1569,7 +1610,9 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             <Modal isOpen={isStartModalOpen} onClose={() => setIsStartModalOpen(false)}>
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-2">
-                        <Icon icon="solar:play-circle-bold" className="text-emerald-500 text-2xl" />
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:play-circle-bold" className="text-xl text-white" />
+                        </div>
                         <span>ยืนยันเริ่มการจองคิว</span>
                     </ModalHeader>
                     <ModalBody>
@@ -1593,9 +1636,10 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                             ยกเลิก
                         </Button>
                         <Button 
-                            color="success" 
+                            color="primary" 
                             onPress={handleStartQueue} 
                             isLoading={isSubmitting}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={<Icon icon="solar:play-bold" />}
                         >
                             เริ่มการจองคิว
@@ -1608,10 +1652,12 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
             <Modal isOpen={isPauseModalOpen} onClose={() => setIsPauseModalOpen(false)}>
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-2">
-                        <Icon 
-                            icon={pauseAction === 'paused' ? "solar:pause-circle-bold" : "solar:play-circle-bold"} 
-                            className={pauseAction === 'paused' ? "text-amber-500 text-2xl" : "text-emerald-500 text-2xl"} 
-                        />
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon 
+                                icon={pauseAction === 'paused' ? "solar:pause-circle-bold" : "solar:play-circle-bold"} 
+                                className="text-xl text-white" 
+                            />
+                        </div>
                         <span>{pauseAction === 'paused' ? 'ยืนยันหยุดรับคิว' : 'ยืนยันเปิดรับคิว'}</span>
                     </ModalHeader>
                     <ModalBody>
@@ -1654,9 +1700,10 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                             ยกเลิก
                         </Button>
                         <Button 
-                            color={pauseAction === 'paused' ? 'warning' : 'success'} 
+                            color="primary" 
                             onPress={handlePauseResumeQueue} 
                             isLoading={isSubmitting}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={<Icon icon={pauseAction === 'paused' ? "solar:pause-bold" : "solar:play-bold"} />}
                         >
                             {pauseAction === 'paused' ? 'หยุดรับคิว' : 'เปิดรับคิว'}
@@ -1679,7 +1726,7 @@ export default function QueueTab({ course, isLoading, isCourseActive = true }: Q
                         <Button
                             size="sm"
                             color="primary"
-                            className="shrink-0"
+                            className="shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
                             startContent={<Icon icon="solar:refresh-bold" />}
                             onPress={() => { setPendingQueueUpdate(false); fetchSessions(true); }}
                         >

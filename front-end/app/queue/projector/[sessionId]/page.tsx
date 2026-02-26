@@ -791,7 +791,9 @@ export default function ProjectorViewPage() {
             <Modal isOpen={isDeskModalOpen} onClose={() => setIsDeskModalOpen(false)}>
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-2">
-                        <Icon icon="solar:square-bold" className="text-blue-500 text-2xl" />
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:square-bold" className="text-xl text-white" />
+                        </div>
                         <span>โต๊ะ {selectedDesk?.number}</span>
                     </ModalHeader>
                     <ModalBody>
@@ -843,9 +845,10 @@ export default function ProjectorViewPage() {
                             ปิด
                         </Button>
                         <Button
-                            color="danger"
+                            color="primary"
                             onPress={handleCancelDeskBooking}
                             isLoading={isCancelling}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={<Icon icon="solar:trash-bin-trash-bold" />}
                         >
                             ยกเลิกการจอง

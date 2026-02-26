@@ -582,20 +582,14 @@ export default function FeedbackPage() {
                         <>
                             <ModalHeader className="border-b border-default-100">
                                 <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${selectedFeedback?.type === 'bug' ? 'bg-red-100' :
-                                        selectedFeedback?.type === 'feature' ? 'bg-blue-100' :
-                                            selectedFeedback?.type === 'improvement' ? 'bg-amber-100' : 'bg-default-100'
-                                        }`}>
+                                    <div className="p-2 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 shadow-lg shadow-blue-500/30">
                                         <Icon
                                             icon={
                                                 selectedFeedback?.type === 'bug' ? 'solar:bug-bold' :
                                                     selectedFeedback?.type === 'feature' ? 'solar:star-bold' :
                                                         selectedFeedback?.type === 'improvement' ? 'solar:lightbulb-bold' : 'solar:chat-round-dots-bold'
                                             }
-                                            className={`text-xl ${selectedFeedback?.type === 'bug' ? 'text-red-600' :
-                                                selectedFeedback?.type === 'feature' ? 'text-blue-600' :
-                                                    selectedFeedback?.type === 'improvement' ? 'text-amber-600' : 'text-default-600'
-                                                }`}
+                                            className="text-xl text-white"
                                         />
                                     </div>
                                     <div>
@@ -740,19 +734,28 @@ export default function FeedbackPage() {
                 <ModalContent>
                     {(onClose) => (
                         <>
-                            <ModalHeader>ยืนยันการลบ</ModalHeader>
-                            <ModalBody>
+                            <ModalHeader className="px-6 pt-6 pb-4">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
+                                        <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-800">ยืนยันการลบ</h3>
+                                </div>
+                            </ModalHeader>
+                            <ModalBody className="px-6 py-6">
                                 <p>คุณต้องการลบ Feedback นี้หรือไม่?</p>
                                 <p className="font-medium">{selectedFeedback?.title}</p>
                             </ModalBody>
-                            <ModalFooter>
-                                <Button variant="light" onPress={onClose}>
+                            <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
+                                <Button variant="flat" color="default" onPress={onClose} className="font-medium px-6">
                                     ยกเลิก
                                 </Button>
                                 <Button
-                                    color="danger"
+                                    color="primary"
                                     onPress={handleDelete}
                                     isLoading={isSubmitting}
+                                    className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
+                                    startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
                                 >
                                     ลบ
                                 </Button>

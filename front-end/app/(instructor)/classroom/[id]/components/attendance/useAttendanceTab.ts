@@ -9,7 +9,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { addToast } from "@heroui/toast";
 import { now, getLocalTimeZone, parseAbsolute, type DateValue } from "@internationalized/date";
-import attendanceService, { type AttendanceSession, type CreateAttendanceData, type TimeChangePreview } from "@/services/attendance.service";
+import attendanceService, { type AttendanceSession, type CreateAttendanceData, type TimeChangePreview, type SectionChangePreview } from "@/services/attendance.service";
 import { useSocket } from "@/contexts/SocketContext";
 import {
     type Course,
@@ -87,6 +87,12 @@ export interface UseAttendanceTabReturn {
     closeTimeChangePreview: () => void;
     confirmApplyTimeChange: () => Promise<void>;
 
+    // Section Change Preview
+    sectionChangePreview: SectionChangePreview | null;
+    isSectionChangePreviewOpen: boolean;
+    closeSectionChangePreview: () => void;
+    confirmSectionChange: () => Promise<void>;
+
     // Pending update notification (for other users' changes)
     pendingAttendanceUpdate: boolean;
     ackAttendanceUpdate: () => Promise<void>;
@@ -161,6 +167,10 @@ export function useAttendanceTab(
     const [isTimeChangePreviewOpen, setIsTimeChangePreviewOpen] = useState(false);
     const [isApplyingTimeChange, setIsApplyingTimeChange] = useState(false);
     const pendingUpdateDataRef = useRef<Partial<CreateAttendanceData> | null>(null);
+
+    // Section Change Preview State
+    const [sectionChangePreview, setSectionChangePreview] = useState<SectionChangePreview | null>(null);
+    const [isSectionChangePreviewOpen, setIsSectionChangePreviewOpen] = useState(false);
 
     const [editTarget, setEditTarget] = useState<AttendanceSession | null>(null);
     const [deleteTarget, setDeleteTarget] = useState<AttendanceSession | null>(null);
@@ -409,6 +419,17 @@ export function useAttendanceTab(
             return;
         }
 
+        if (!formData.course_section_ids || formData.course_section_ids.length === 0) {
+            addToast({
+                title: "กรุณาเลือกกลุ่มเรียน",
+                description: "ต้องเลือกกลุ่มเรียนอย่างน้อย 1 กลุ่ม",
+                color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+
         // Validate time ordering
         const _startDate = startDateTime.toDate(getLocalTimeZone());
         const _endDate   = endDateTime.toDate(getLocalTimeZone());
@@ -494,6 +515,17 @@ export function useAttendanceTab(
             return;
         }
 
+        if (!formData.course_section_ids || formData.course_section_ids.length === 0) {
+            addToast({
+                title: "กรุณาเลือกกลุ่มเรียน",
+                description: "ต้องเลือกกลุ่มเรียนอย่างน้อย 1 กลุ่ม",
+                color: "warning",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+            return;
+        }
+
         // Validate time ordering
         const _startDate = startDateTime.toDate(getLocalTimeZone());
         const _endDate   = endDateTime.toDate(getLocalTimeZone());
@@ -549,6 +581,27 @@ export function useAttendanceTab(
             } else {
                 data.course_section_ids = [];
                 data.course_section_id = null;
+            }
+
+            // ── Check if any sections were removed ──
+            const oldSectionIds = (editTarget.sections || []).map(s => s.id);
+            const newSectionIds = data.course_section_ids || [];
+            const removedSections = oldSectionIds.filter(sid => !newSectionIds.includes(sid));
+
+            if (removedSections.length > 0) {
+                // Preview which students will be affected
+                const preview = await attendanceService.previewSectionChange(editTarget.id, {
+                    course_section_ids: newSectionIds,
+                });
+
+                if (preview && preview.has_checked_in_students) {
+                    // Store pending data and show section change warning
+                    pendingUpdateDataRef.current = data;
+                    setSectionChangePreview(preview);
+                    setIsSectionChangePreviewOpen(true);
+                    setIsSubmitting(false);
+                    return; // Don't apply yet — wait for confirmation
+                }
             }
 
             // Check if any time fields changed
@@ -680,6 +733,46 @@ export function useAttendanceTab(
         setTimeChangePreview(null);
         pendingUpdateDataRef.current = null;
     }, []);
+
+    // Section Change Preview handlers
+    const closeSectionChangePreview = useCallback(() => {
+        setIsSectionChangePreviewOpen(false);
+        setSectionChangePreview(null);
+        pendingUpdateDataRef.current = null;
+    }, []);
+
+    const confirmSectionChange = useCallback(async () => {
+        if (!editTarget || !pendingUpdateDataRef.current) return;
+
+        setIsSubmitting(true);
+        try {
+            const result = await attendanceService.updateSession(editTarget.id, pendingUpdateDataRef.current);
+            if (result) {
+                addToast({
+                    title: "สำเร็จ",
+                    description: "แก้ไขรอบการเช็คชื่อเรียบร้อยแล้ว",
+                    color: "success",
+                    timeout: 3000,
+                    shouldShowTimeoutProgress: true,
+                });
+                closeSectionChangePreview();
+                closeEditModal();
+                fetchSessions(false);
+                emitDataUpdate("attendance", "update", editTarget.id, { courseId: course.id });
+            }
+        } catch (error: unknown) {
+            console.error("Error updating session after section change confirmation:", error);
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: error instanceof Error ? error.message : "ไม่สามารถแก้ไขรอบการเช็คชื่อได้",
+                color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
+    }, [editTarget, course.id, closeEditModal, fetchSessions, emitDataUpdate, closeSectionChangePreview]);
 
     const handleDeleteSession = useCallback(async () => {
         if (!deleteTarget) return;
@@ -909,6 +1002,12 @@ export function useAttendanceTab(
         isApplyingTimeChange,
         closeTimeChangePreview,
         confirmApplyTimeChange,
+
+        // Section Change Preview
+        sectionChangePreview,
+        isSectionChangePreviewOpen,
+        closeSectionChangePreview,
+        confirmSectionChange,
 
         // Pending update notification
         pendingAttendanceUpdate,

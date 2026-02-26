@@ -69,14 +69,18 @@ export interface AttendanceRecord {
     distance_meters: number | null;
     note: string | null;
     updated_by: number | null;
-    created_at: string;
     updated_at: string;
+    created_at: string;
     student?: {
         id: number;
         student_id: string;
         full_name: string;
         email: string;
     };
+    updater?: {
+        id: number;
+        full_name: string;
+    } | null;
 }
 
 export interface CreateAttendanceData {
@@ -162,6 +166,28 @@ export interface TimeChangeImpact {
         old_status: string;
         new_status: string;
     }>;
+}
+
+// ============================================
+// Section Change Preview Types
+// ============================================
+
+export interface SectionChangeAffectedStudent {
+    record_id: number;
+    student_id: string | null;
+    student_name: string | null;
+    status: string;
+    check_in_time: string | null;
+    section_no: string;
+}
+
+export interface SectionChangePreview {
+    session_id: number;
+    session_title: string;
+    removed_sections: Array<{ id: number; section_no: string }>;
+    affected_students: SectionChangeAffectedStudent[];
+    total_affected: number;
+    has_checked_in_students: boolean;
 }
 
 const attendanceService = {
@@ -329,6 +355,26 @@ const attendanceService = {
     ): Promise<TimeChangePreview | null> {
         const response = await api.post<TimeChangePreview>(
             `/attendance/${sessionId}/preview-time-change`,
+            data
+        );
+        return response.data || null;
+    },
+
+    // ============================================
+    // Section Change Preview
+    // ============================================
+
+    /**
+     * Preview impact of removing sections from an attendance session.
+     * Shows which checked-in students will lose their records.
+     * Does NOT modify any data — safe to call repeatedly.
+     */
+    async previewSectionChange(
+        sessionId: number,
+        data: { course_section_ids: number[] }
+    ): Promise<SectionChangePreview | null> {
+        const response = await api.post<SectionChangePreview>(
+            `/attendance/${sessionId}/preview-section-change`,
             data
         );
         return response.data || null;

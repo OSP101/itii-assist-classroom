@@ -773,8 +773,8 @@ export default function ClosedCoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-green-100">
-                                <Icon icon="solar:refresh-bold" className="text-xl text-green-600" />
+                            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:refresh-bold" className="text-xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">เปิดใช้งานรายวิชาอีกครั้ง</h3>
@@ -802,9 +802,10 @@ export default function ClosedCoursesPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="success"
+                            color="primary"
                             onPress={handleRestoreCourse}
                             isLoading={isSubmitting}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             เปิดใช้งาน
                         </Button>
@@ -825,8 +826,8 @@ export default function ClosedCoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 rounded-xl bg-red-100">
-                                <Icon icon="solar:trash-bin-trash-bold" className="text-xl text-red-600" />
+                            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:trash-bin-trash-bold" className="text-xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">ลบรายวิชาถาวร</h3>
@@ -880,10 +881,11 @@ export default function ClosedCoursesPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="danger"
+                            color="primary"
                             onPress={handleDeleteCourse}
                             isLoading={isSubmitting}
                             isDisabled={!deleteConfirmChecked}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             ลบถาวร
                         </Button>
@@ -904,8 +906,8 @@ export default function ClosedCoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-amber-100 rounded-xl">
-                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600" />
+                            <div className="p-2.5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">ไม่สามารถเปิดใช้งานได้</h3>
@@ -934,6 +936,7 @@ export default function ClosedCoursesPage() {
                                 setDuplicateCourse(null);
                                 setSelectedCourse(null);
                             }}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             เข้าใจแล้ว
                         </Button>

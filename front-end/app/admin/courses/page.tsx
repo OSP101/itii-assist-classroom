@@ -1419,7 +1419,7 @@ export default function CoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1451,10 +1451,10 @@ export default function CoursesPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="danger"
+                            color="primary"
                             onPress={handleDelete}
                             isLoading={isSubmitting}
-                            className="font-medium px-6"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
                         >
                             ลบรายวิชา
@@ -1475,7 +1475,7 @@ export default function CoursesPage() {
                 <ModalContent>
                     <ModalHeader className="px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${selectedCourse?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                            <div className="p-3 rounded-xl shadow-lg bg-gradient-to-br from-blue-400 to-indigo-500 shadow-blue-500/30">
                                 <Icon icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
                             </div>
                             <h3 className="text-xl font-bold text-slate-800">
@@ -1514,10 +1514,10 @@ export default function CoursesPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color={selectedCourse?.is_active ? "warning" : "success"}
+                            color="primary"
                             onPress={handleToggleStatus}
                             isLoading={isSubmitting}
-                            className={`font-medium px-6 ${selectedCourse?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon={selectedCourse?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
                         >
                             {selectedCourse?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
@@ -1539,7 +1539,7 @@ export default function CoursesPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1579,7 +1579,7 @@ export default function CoursesPage() {
                                 setSelectedCourse(null);
                                 setDuplicateCourse(null);
                             }}
-                            className="font-medium px-6"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             รับทราบ
                         </Button>
