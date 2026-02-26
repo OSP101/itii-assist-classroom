@@ -315,6 +315,15 @@ export interface ScoreSummaryMatrixStudent {
             graded_at?: string | null;
             updated_at?: string | null;
             comment?: string | null;
+            edit_requests?: {
+                old_score: number | null;
+                new_score: number;
+                reason: string | null;
+                requester: string | null;
+                reviewer: string | null;
+                reviewed_at: string | null;
+                review_comment: string | null;
+            }[];
         };
     };
     total_score: number;

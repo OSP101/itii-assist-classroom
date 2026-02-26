@@ -143,8 +143,8 @@ function TwoFactorDisableModal({
     >
       <ModalContent>
         <ModalHeader className="flex items-center gap-3 border-b border-default-200">
-          <div className="p-2 bg-danger-100 rounded-lg">
-            <Icon icon="solar:shield-warning-bold" className="text-xl text-danger" />
+          <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+            <Icon icon="solar:shield-warning-bold" className="text-xl text-white" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">ปิดการยืนยันตัวตนสองขั้นตอน</h2>
@@ -333,10 +333,11 @@ function TwoFactorDisableModal({
             ยกเลิก
           </Button>
           <Button 
-            color="danger" 
+            color="primary" 
             onPress={handleDisable} 
             isLoading={isLoading}
             isDisabled={!password.trim()}
+            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
           >
             ปิดการใช้งาน 2FA
           </Button>

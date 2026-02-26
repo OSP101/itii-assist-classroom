@@ -1019,14 +1019,14 @@ export default function ScoreModal({
 
     // Get assignment type info
     const getTypeInfo = () => {
-        if (!assignment) return { icon: "solar:document-bold", color: "from-slate-500 to-slate-600" };
+        if (!assignment) return { icon: "solar:document-bold", color: "from-blue-400 to-indigo-500" };
         switch (assignment.assignment_type) {
             case "individual":
-                return { icon: "solar:user-bold", color: "from-indigo-500 to-purple-600" };
+                return { icon: "solar:user-bold", color: "from-blue-400 to-indigo-500" };
             case "permanent_group":
-                return { icon: "solar:users-group-two-rounded-bold", color: "from-purple-500 to-pink-600" };
+                return { icon: "solar:users-group-two-rounded-bold", color: "from-blue-400 to-indigo-500" };
             default:
-                return { icon: "solar:users-group-rounded-bold", color: "from-emerald-500 to-teal-600" };
+                return { icon: "solar:users-group-rounded-bold", color: "from-blue-400 to-indigo-500" };
         }
     };
 

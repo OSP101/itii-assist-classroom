@@ -1227,7 +1227,7 @@ export default function ClassroomsPage() {
                 <ModalContent>
                     <ModalHeader>
                         <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon
                                     icon="solar:display-bold"
                                     className="text-xl sm:text-2xl text-white"
@@ -1383,7 +1383,7 @@ export default function ClassroomsPage() {
                     <ModalHeader className="border-b border-slate-200 p-3 sm:p-4">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between w-full gap-2 sm:gap-4 pr-0 sm:pr-4">
                             <div className="flex items-center gap-2 sm:gap-3">
-                                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg sm:rounded-xl">
+                                <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg sm:rounded-xl shadow-lg shadow-blue-500/30">
                                     <Icon
                                         icon="solar:display-bold"
                                         className="text-lg sm:text-2xl text-white"
@@ -1770,15 +1770,7 @@ export default function ClassroomsPage() {
                 <ModalContent>
                     <ModalHeader>
                         <div className="flex items-center gap-2 sm:gap-3">
-                            <div
-                                className={`p-1.5 sm:p-2 rounded-xl ${
-                                    selectedDesk?.type === "computer"
-                                        ? "bg-blue-500"
-                                        : selectedDesk?.type === "teacher"
-                                        ? "bg-amber-500"
-                                        : "bg-emerald-500"
-                                }`}
-                            >
+                            <div className="p-1.5 sm:p-2 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 shadow-lg shadow-blue-500/30">
                                 <Icon
                                     icon={
                                         selectedDesk?.type === "computer"
@@ -1918,7 +1910,7 @@ export default function ClassroomsPage() {
                 <ModalContent>
                     <ModalHeader>
                         <div className="flex items-center gap-2 sm:gap-3">
-                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl">
+                            <div className="p-1.5 sm:p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -1996,7 +1988,7 @@ export default function ClassroomsPage() {
                 <ModalContent>
                     <ModalHeader>
                         <div className="flex items-center gap-2">
-                            <div className="p-1.5 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-xl">
+                            <div className="p-1.5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:widget-5-bold" className="text-xl text-white" />
                             </div>
                             <h3 className="text-lg font-bold text-slate-800">

@@ -984,15 +984,49 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Create score lookup map with full info: { `${student_id}_${assignment_id}_${sub_item_id}`: scoreObj }
     const scoreMap = {};
+    const scoreIdToKeyMap = {}; // score.id -> scoreMap key
     for (const score of scores) {
         const key = `${score.student_id}_${score.assignment_id}_${score.sub_item_id || 'main'}`;
         scoreMap[key] = {
+            score_id: score.id,
             score: parseFloat(score.score) || 0,
             graded_by: score.grader?.full_name || null,
             graded_at: score.graded_at || score.createdAt,
             updated_at: score.updatedAt,
             comment: score.comment || null,
+            edit_requests: [],
         };
+        scoreIdToKeyMap[score.id] = key;
+    }
+
+    // Fetch approved score edit requests for all scores in this matrix
+    const scoreIds = scores.map(s => s.id);
+    if (scoreIds.length > 0) {
+        const editRequests = await ScoreEditRequest.findAll({
+            where: {
+                score_id: { [Op.in]: scoreIds },
+                status: 'approved',
+            },
+            include: [
+                { model: User, as: 'requester', attributes: ['id', 'full_name'] },
+                { model: User, as: 'reviewer', attributes: ['id', 'full_name'] },
+            ],
+            order: [['reviewed_at', 'DESC']],
+        });
+        for (const er of editRequests) {
+            const mapKey = scoreIdToKeyMap[er.score_id];
+            if (mapKey && scoreMap[mapKey]) {
+                scoreMap[mapKey].edit_requests.push({
+                    old_score: er.old_score !== null ? parseFloat(er.old_score) : null,
+                    new_score: parseFloat(er.new_score),
+                    reason: er.reason || null,
+                    requester: er.requester?.full_name || null,
+                    reviewer: er.reviewer?.full_name || null,
+                    reviewed_at: er.reviewed_at || null,
+                    review_comment: er.review_comment || null,
+                });
+            }
+        }
     }
 
     // Build matrix data
@@ -1033,6 +1067,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                         graded_at: scoreObj?.graded_at || null,
                         updated_at: scoreObj?.updated_at || null,
                         comment: scoreObj?.comment || null,
+                        edit_requests: scoreObj?.edit_requests || [],
                     };
 
                     if (scoreObj?.score !== undefined) {
@@ -1058,6 +1093,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                     graded_at: scoreObj?.graded_at || null,
                     updated_at: scoreObj?.updated_at || null,
                     comment: scoreObj?.comment || null,
+                    edit_requests: scoreObj?.edit_requests || [],
                 };
 
                 if (scoreObj?.score !== undefined) {

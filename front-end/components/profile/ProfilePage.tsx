@@ -464,7 +464,12 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
       {/* Revoke All Sessions Modal */}
       <Modal isOpen={showRevokeAllModal} onClose={() => setShowRevokeAllModal(false)}>
         <ModalContent>
-          <ModalHeader>ยืนยันการออกจากระบบ</ModalHeader>
+          <ModalHeader className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+              <Icon icon="solar:logout-3-bold" className="text-xl text-white" />
+            </div>
+            <span>ยืนยันการออกจากระบบ</span>
+          </ModalHeader>
           <ModalBody>
             <p className="text-default-600">
               คุณต้องการออกจากระบบทุกอุปกรณ์ยกเว้นอุปกรณ์นี้หรือไม่? การกระทำนี้จะทำให้อุปกรณ์อื่นๆ ต้องเข้าสู่ระบบใหม่
@@ -474,7 +479,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
             <Button variant="light" onPress={() => setShowRevokeAllModal(false)}>
               ยกเลิก
             </Button>
-            <Button color="danger" onPress={handleRevokeAllSessions} isLoading={isRevokingAll}>
+            <Button color="primary" onPress={handleRevokeAllSessions} isLoading={isRevokingAll} className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white">
               ออกจากระบบทั้งหมด
             </Button>
           </ModalFooter>

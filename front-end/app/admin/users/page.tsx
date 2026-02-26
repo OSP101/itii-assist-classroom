@@ -1153,7 +1153,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${userToToggle?.is_active ? "bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/30" : "bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30"}`}>
+                            <div className="p-3 rounded-xl shadow-lg bg-gradient-to-br from-blue-400 to-indigo-500 shadow-blue-500/30">
                                 <Icon icon={userToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
                             </div>
                             <h3 className="text-xl font-bold text-slate-800">
@@ -1190,9 +1190,9 @@ export default function UsersPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color={userToToggle?.is_active ? "warning" : "success"}
+                            color="primary"
                             onPress={handleToggleStatus}
-                            className={`font-medium px-6 ${userToToggle?.is_active ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white" : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white"}`}
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={<Icon icon={userToToggle?.is_active ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
                         >
                             {userToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
@@ -1205,7 +1205,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg shadow-red-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:trash-bin-trash-bold" className="text-2xl text-white" />
                             </div>
                             <h3 className="text-xl font-bold text-slate-800">ยืนยันการลบ</h3>
@@ -1235,10 +1235,10 @@ export default function UsersPage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="danger"
+                            color="primary"
                             onPress={handleDelete}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-red-500 to-rose-600"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />}
                         >
                             ลบผู้ใช้
@@ -1261,7 +1261,7 @@ export default function UsersPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg shadow-green-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:check-circle-bold" className="text-2xl text-white" />
                             </div>
                             <div>

@@ -47,7 +47,7 @@ import {
     formatDate,
     formatTime,
 } from "../config";
-import { type AttendanceSession, type TimeChangePreview, type TimeChangeRecord } from "@/services/attendance.service";
+import { type AttendanceSession, type TimeChangePreview, type TimeChangeRecord, type SectionChangePreview } from "@/services/attendance.service";
 
 // Lazy load LocationPicker
 const LocationPicker = lazy(() => import("@/components/map/LocationPicker"));
@@ -2057,6 +2057,168 @@ export const TimeChangePreviewModal = memo(function TimeChangePreviewModal({
                         startContent={!isApplying ? <Icon icon={hasDestructiveChanges ? 'solar:shield-warning-bold' : 'solar:check-circle-bold'} /> : undefined}
                     >
                         {hasDestructiveChanges ? 'ยืนยันการเปลี่ยนแปลง' : 'บันทึกการแก้ไข'}
+                    </Button>
+                </ModalFooter>
+            </ModalContent>
+        </Modal>
+    );
+});
+
+// ============================================================================
+// Section Change Warning Modal
+// Shows which checked-in students will lose their data when sections are removed
+// ============================================================================
+
+const STATUS_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+    present: { label: 'มาเรียน', color: 'text-emerald-600', icon: 'solar:check-circle-bold' },
+    late: { label: 'สาย', color: 'text-amber-600', icon: 'solar:clock-circle-bold' },
+    leave: { label: 'ลา', color: 'text-purple-600', icon: 'solar:letter-bold' },
+};
+
+interface SectionChangeWarningModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    preview: SectionChangePreview | null;
+    isSubmitting: boolean;
+    onConfirm: () => Promise<void>;
+}
+
+export const SectionChangeWarningModal = memo(function SectionChangeWarningModal({
+    isOpen,
+    onClose,
+    preview,
+    isSubmitting,
+    onConfirm,
+}: SectionChangeWarningModalProps) {
+    if (!preview) return null;
+
+    const { removed_sections, affected_students, total_affected } = preview;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} size="2xl" scrollBehavior="inside" isDismissable={false}>
+            <ModalContent>
+                <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                            <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                คำเตือน: มีนักศึกษาที่เช็คชื่อแล้ว
+                            </h3>
+                            <p className="text-sm text-slate-500 font-normal mt-1">
+                                {preview.session_title}
+                            </p>
+                        </div>
+                    </div>
+                </ModalHeader>
+
+                <ModalBody className="px-6 py-4 space-y-4">
+                    {/* Removed Sections */}
+                    <div className="space-y-2">
+                        <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                            <Icon icon="solar:minus-circle-bold" className="text-red-500" />
+                            กลุ่มเรียนที่จะถูกนำออก
+                        </h4>
+                        <div className="flex flex-wrap gap-2">
+                            {removed_sections.map(section => (
+                                <Chip
+                                    key={section.id}
+                                    size="sm"
+                                    variant="flat"
+                                    className="bg-red-50 text-red-700 border border-red-200"
+                                    startContent={<Icon icon="solar:users-group-rounded-bold" width={14} />}
+                                >
+                                    กลุ่ม {section.section_no}
+                                </Chip>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Warning Box */}
+                    <div className="p-4 bg-red-100 rounded-xl border border-red-200">
+                        <div className="flex items-start gap-3">
+                            <Icon icon="solar:shield-warning-bold" className="text-2xl text-red-600 mt-0.5 shrink-0" />
+                            <div className="space-y-1.5">
+                                <p className="font-semibold text-red-800">
+                                    ข้อมูลการเช็คชื่อของนักศึกษา {total_affected} คนจะถูกลบออก
+                                </p>
+                                <p className="text-sm text-red-600">
+                                    นักศึกษาในกลุ่มที่ถูกนำออกซึ่งเช็คชื่อแล้วจะสูญเสียข้อมูลการเช็คชื่อทั้งหมดในรอบนี้
+                                    การดำเนินการนี้ไม่สามารถย้อนกลับได้
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Affected Students Table */}
+                    {affected_students.length > 0 && (
+                        <div className="space-y-2">
+                            <h4 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Icon icon="solar:users-group-rounded-bold" className="text-slate-500" />
+                                นักศึกษาที่ได้รับผลกระทบ ({total_affected} คน)
+                            </h4>
+                            <div className="overflow-x-auto">
+                                <Table removeWrapper aria-label="นักศึกษาที่ได้รับผลกระทบ" classNames={{ th: "bg-slate-50 text-xs", td: "text-sm" }}>
+                                    <TableHeader>
+                                        <TableColumn>นักศึกษา</TableColumn>
+                                        <TableColumn align="center">กลุ่ม</TableColumn>
+                                        <TableColumn align="center">สถานะ</TableColumn>
+                                        <TableColumn align="center">เวลาเช็คอิน</TableColumn>
+                                    </TableHeader>
+                                    <TableBody items={affected_students.slice(0, 30)}>
+                                        {(student) => {
+                                            const cfg = STATUS_LABELS[student.status] || STATUS_LABELS.present;
+                                            return (
+                                                <TableRow key={student.record_id}>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium text-slate-800">{student.student_name || '-'}</p>
+                                                            <p className="text-xs text-slate-400">{student.student_id || ''}</p>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-slate-600">{student.section_no}</span>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Chip size="sm" variant="flat" className={`${cfg.color} gap-1`} startContent={<Icon icon={cfg.icon} width={14} />}>
+                                                            {cfg.label}
+                                                        </Chip>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-slate-600">
+                                                            {student.check_in_time
+                                                                ? new Date(student.check_in_time).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                                                : '-'}
+                                                        </span>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        }}
+                                    </TableBody>
+                                </Table>
+                                {affected_students.length > 30 && (
+                                    <p className="text-xs text-slate-400 text-center mt-2">
+                                        แสดง 30 จาก {affected_students.length} รายการ
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </ModalBody>
+
+                <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                    <Button variant="light" onPress={onClose} isDisabled={isSubmitting}>
+                        ยกเลิก
+                    </Button>
+                    <Button
+                        color="danger"
+                        onPress={onConfirm}
+                        isLoading={isSubmitting}
+                        className="bg-red-500"
+                        startContent={!isSubmitting ? <Icon icon="solar:shield-warning-bold" /> : undefined}
+                    >
+                        ยืนยันการนำกลุ่มออก
                     </Button>
                 </ModalFooter>
             </ModalContent>

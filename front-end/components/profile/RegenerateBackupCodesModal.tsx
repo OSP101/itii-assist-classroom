@@ -159,10 +159,11 @@ ${backupCodes.map((code, i) => `${i + 1}. ${code}`).join("\n")}
           ยกเลิก
         </Button>
         <Button 
-          color="warning" 
+          color="primary" 
           onPress={handleRegenerate} 
           isLoading={isLoading}
           isDisabled={!password.trim()}
+          className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
         >
           สร้างรหัสใหม่
         </Button>
@@ -174,8 +175,8 @@ ${backupCodes.map((code, i) => `${i + 1}. ${code}`).join("\n")}
     <>
       <ModalBody className="py-6">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 mx-auto mb-4 bg-success-100 rounded-full flex items-center justify-center">
-            <Icon icon="solar:shield-keyhole-bold" className="text-3xl text-success" />
+          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <Icon icon="solar:shield-keyhole-bold" className="text-3xl text-white" />
           </div>
           <h3 className="text-lg font-semibold text-default-900">รหัสสำรองใหม่</h3>
           <p className="text-sm text-default-500 mt-1">
@@ -248,8 +249,8 @@ ${backupCodes.map((code, i) => `${i + 1}. ${code}`).join("\n")}
     >
       <ModalContent>
         <ModalHeader className="flex items-center gap-3 border-b border-default-200">
-          <div className="p-2 bg-warning-100 rounded-lg">
-            <Icon icon="solar:refresh-bold" className="text-xl text-warning" />
+          <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+            <Icon icon="solar:refresh-bold" className="text-xl text-white" />
           </div>
           <div>
             <h2 className="text-lg font-semibold">

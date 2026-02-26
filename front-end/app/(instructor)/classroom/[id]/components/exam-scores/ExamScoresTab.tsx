@@ -504,27 +504,26 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                         </div>
                                     </div>
                                     
-                                    {/* Table Header */}
-                                    <div className="border-b border-slate-200">
-                                        <div className="flex items-center px-5 py-3">
-                                            <div className="w-32 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                    {/* Table - single scroll container for synced horizontal/vertical scroll */}
+                                    <CardBody className="p-0 max-h-[450px] overflow-auto">
+                                      <div className="min-w-[500px]">
+                                        {/* Table Header - sticky top */}
+                                        <div className="flex items-center sticky top-0 bg-white z-20 border-b border-slate-200">
+                                            <div className="flex-shrink-0 w-32 px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                                 รหัสนักศึกษา
                                             </div>
-                                            <div className="flex-1 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                            <div className="flex-1 min-w-[140px] px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                                 ชื่อ-นามสกุล
                                             </div>
-                                            <div className="w-16 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
+                                            <div className="flex-shrink-0 w-20 px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">
                                                 Section
                                             </div>
-                                            <div className="w-28 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">
+                                            <div className="flex-shrink-0 w-32 px-3 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right sticky right-0 bg-white z-30 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)]">
                                                 คะแนน
                                             </div>
                                         </div>
-                                    </div>
 
-                                    {/* Table Body */}
-                                    <CardBody className="p-0 max-h-[400px] overflow-y-auto">
-                                        <div>
+                                        {/* Table Body */}
                                             {filteredStudents.map((student, idx) => {
                                                 const isEditing = editingScore?.settingId === setting.id && editingScore?.studentId === student.id;
                                                 const scoreValue = getScoreDisplay(setting.id, student.id);
@@ -533,22 +532,20 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                                 return (
                                                     <div 
                                                         key={student.id} 
-                                                        className={`flex items-center px-5 py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
+                                                        className={`flex items-center border-b border-slate-100 last:border-b-0 hover:bg-slate-50/80 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}
                                                     >
-                                                        <div className="w-32">
+                                                        <div className="flex-shrink-0 w-32 px-3 py-3">
                                                             <span className="text-sm text-slate-600">
                                                                 {student.student_id}
                                                             </span>
                                                         </div>
-                                                        <div className="flex-1 text-sm text-slate-700 truncate pr-4">
+                                                        <div className="flex-1 min-w-[140px] px-3 py-3 text-sm text-slate-700 truncate">
                                                             {student.full_name}
                                                         </div>
-                                                        <div className="w-16 text-center">
-                                                            {/* <Chip size="sm" variant="flat" className="bg-slate-100 text-slate-600"> */}
-                                                                {student.section_no || "-"}
-                                                            {/* </Chip> */}
+                                                        <div className="flex-shrink-0 w-20 px-3 py-3 text-center text-sm text-slate-600">
+                                                            {student.section_no || "-"}
                                                         </div>
-                                                        <div className="w-28 flex items-center justify-end gap-2">
+                                                        <div className={`flex-shrink-0 w-32 px-3 py-3 flex items-center justify-end gap-2 sticky right-0 z-10 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.08)] ${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}`}>
                                                             {isEditing ? (
                                                                 <div className="flex items-center gap-1">
                                                                     <Input
@@ -631,12 +628,13 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                                     </div>
                                                 );
                                             })}
-                                        </div>
+
                                         {filteredStudents.length === 0 && (
                                             <div className="text-center py-8 text-slate-500">
                                                 ไม่พบนักศึกษา
                                             </div>
                                         )}
+                                      </div>
                                     </CardBody>
                                 </Card>
                                 );
@@ -672,8 +670,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             >
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
-                        <div className="p-2 bg-emerald-100 rounded-lg">
-                            <Icon icon="solar:import-bold" className="text-xl text-emerald-600" />
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:import-bold" className="text-xl text-white" />
                         </div>
                         <div>
                             <h3 className="text-lg font-semibold">นำเข้าคะแนนจาก Excel</h3>
@@ -812,7 +810,8 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                             ยกเลิก
                         </Button>
                         <Button 
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white shadow-md"
+                            color="primary"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-md"
                             onPress={handleBulkImport}
                             isLoading={isBulkSaving}
                             isDisabled={parsedBulkData.filter(p => p.status === "valid").length === 0}
@@ -825,11 +824,11 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
             </Modal>
 
             {/* Settings Modal */}
-            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} size="3xl">
+            <Modal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} size="3xl" scrollBehavior="inside">
                 <ModalContent>
                     <ModalHeader className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Icon icon="solar:settings-bold" className="text-xl text-blue-600" />
+                        <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                            <Icon icon="solar:settings-bold" className="text-xl text-white" />
                         </div>
                         <div>
                             <h3 className="text-lg font-semibold">ตั้งค่าการสอบ</h3>

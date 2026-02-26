@@ -552,8 +552,8 @@ function TwoFactorSetupModal({
         >
             <ModalContent>
                 <ModalHeader className="flex items-center gap-3 border-b border-default-200">
-                    <div className="p-2 bg-primary-100 rounded-lg">
-                        <Icon icon="solar:shield-check-bold" className="text-xl text-primary" />
+                    <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                        <Icon icon="solar:shield-check-bold" className="text-xl text-white" />
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold">

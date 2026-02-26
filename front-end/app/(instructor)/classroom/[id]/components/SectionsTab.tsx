@@ -191,8 +191,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
-                                <Icon icon="solar:notebook-bold" className="text-2xl text-white" />
+                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
                             </div>
                             <div>
                                 <h3 className="text-xl font-bold text-slate-800">เพิ่มกลุ่มเรียน</h3>
@@ -520,11 +519,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6">
                         <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl shadow-lg ${
-                                teamModal.type === "permanent" 
-                                    ? "bg-gradient-to-br from-purple-500 to-indigo-600"
-                                    : "bg-gradient-to-br from-emerald-500 to-teal-600"
-                            }`}>
+                            <div className="p-3 rounded-xl shadow-lg bg-gradient-to-br from-blue-400 to-indigo-500 shadow-blue-500/30">
                                 <Icon icon="solar:users-group-two-rounded-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -890,10 +885,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                     ? !teamModal.name.trim() || teamModal.members.length === 0
                                     : getUnassignedStudents(teamModal.type, teamModal.type === "weekly" ? selectedWeek : undefined).length === 0
                             }
-                            className={teamModal.type === "permanent" 
-                                ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg shadow-purple-500/25"
-                                : "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/25"
-                            }
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white shadow-lg shadow-blue-500/25"
                             startContent={!isSubmitting && <Icon icon={teamModal.formationMethod === "random" ? "solar:shuffle-bold" : "solar:add-circle-bold"} />}
                         >
                             {teamModal.formationMethod === "random"
@@ -1065,7 +1057,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1234,7 +1226,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                             ยกเลิก
                         </Button>
                         <Button 
-                            color="danger"
+                            color="primary"
                             onPress={() => {
                                 if (deleteModal.target?.type === "section") {
                                     confirmRemoveSection();
@@ -1250,7 +1242,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                                     ? deleteModal.confirmInput !== deleteModal.target?.sectionNo
                                     : false
                             }
-                            className="bg-red-500"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             {deleteModal.target?.type === "section" && "ลบกลุ่มเรียน"}
                             {deleteModal.target?.type === "student" && "นำออก"}
@@ -1271,7 +1263,7 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-red-500 to-rose-600 rounded-xl shadow-lg">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:danger-triangle-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -1350,10 +1342,10 @@ export default function SectionsTab({ courseId, isCourseActive = true }: Section
                             ยกเลิก
                         </Button>
                         <Button 
-                            color="danger"
+                            color="primary"
                             onPress={handleBulkDeleteTeams}
                             isLoading={isSubmitting}
-                            className="bg-red-500"
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             ลบทั้งหมด
                         </Button>

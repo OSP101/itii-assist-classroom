@@ -2991,7 +2991,7 @@ export default function ClassroomDetailPage() {
             {pendingAssignmentUpdate && createPortal(
                 <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:bottom-6 z-[9999] sm:max-w-sm sm:w-full animate-toast-slide-up">
                     <div className="bg-white/95 backdrop-blur-md border border-blue-200 rounded-2xl shadow-2xl overflow-hidden">
-                        <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+                        {/* <div className="h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" /> */}
                         <div className="flex items-center gap-3 p-4">
                             <div className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:bell-bing-bold" className="text-xl text-white animate-bounce" />
@@ -3003,7 +3003,7 @@ export default function ClassroomDetailPage() {
                             <Button
                                 size="sm"
                                 color="primary"
-                                className="shrink-0"
+                                className="shrink-0 bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
                                 startContent={<Icon icon="solar:refresh-bold" />}
                                 onPress={() => ackAssignmentUpdate()}
                             >

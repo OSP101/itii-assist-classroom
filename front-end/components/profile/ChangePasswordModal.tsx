@@ -134,8 +134,13 @@ function ChangePasswordModal({ isOpen, onClose }: ChangePasswordModalProps) {
     <Modal isOpen={isOpen} onClose={handleClose} size="md">
       <ModalContent>
         <ModalHeader className="flex flex-col gap-1">
-          <h3>เปลี่ยนรหัสผ่าน</h3>
-          <p className="text-sm text-default-500 font-normal">กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่</p>
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+              <Icon icon="solar:key-bold" className="text-xl text-white" />
+            </div>
+            <span>เปลี่ยนรหัสผ่าน</span>
+          </div>
+          <p className="text-sm text-default-500 font-normal ml-12">กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่</p>
         </ModalHeader>
         <ModalBody className="gap-4">
           <Input

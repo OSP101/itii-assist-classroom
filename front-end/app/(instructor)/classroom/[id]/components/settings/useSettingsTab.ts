@@ -319,7 +319,6 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                         const scoreObj = stu.scores[col.key];
                         const val = scoreObj?.score ?? null;
                         const cell = r.getCell(FIXED + scIdx + 1);
-                        cell.value = val;
                         cell.alignment = CENTER_ALIGN;
                         cell.border = THIN_BORDER;
                         const argb = scoreArgb(val, col.asgmtMax);
@@ -328,6 +327,35 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                             cell.font = { color: { argb: scoreWhite(val, col.asgmtMax) ? "FFFFFFFF" : "FF1E293B" }, size: 10, bold: val !== null && val / col.asgmtMax >= 0.9 };
                         } else {
                             cell.font = { size: 10, color: { argb: "FF64748B" } };
+                        }
+
+                        // Build note for edit requests and comments
+                        const noteLines: string[] = [];
+                        const editReqs = scoreObj?.edit_requests ?? [];
+                        if (editReqs.length > 0) {
+                            for (const er of editReqs) {
+                                const oldStr = er.old_score !== null && er.old_score !== undefined ? String(er.old_score) : "-";
+                                noteLines.push(`แก้ไขคะแนน: ${oldStr} → ${er.new_score}`);
+                                if (er.reason) noteLines.push(`เหตุผล: ${er.reason}`);
+                                if (er.requester) noteLines.push(`ผู้ขอแก้ไข: ${er.requester}`);
+                                if (er.reviewer) noteLines.push(`ผู้อนุมัติ: ${er.reviewer}`);
+                                if (er.reviewed_at) {
+                                    try {
+                                        const dt = new Date(er.reviewed_at);
+                                        noteLines.push(`อนุมัติเมื่อ: ${dt.toLocaleDateString("th-TH")} ${dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`);
+                                    } catch { /* ignore */ }
+                                }
+                                if (er.review_comment) noteLines.push(`ความเห็น: ${er.review_comment}`);
+                                noteLines.push(""); // separator between multiple requests
+                            }
+                        }
+                        if (scoreObj?.comment) noteLines.push(`หมายเหตุ: ${scoreObj.comment}`);
+
+                        const hasNote = noteLines.filter(l => l.length > 0).length > 0;
+                        // Display value: append asterisk if there are edit requests or comments
+                        cell.value = hasNote && val !== null ? `${val} *` : val;
+                        if (hasNote) {
+                            cell.note = noteLines.join("\n").trim();
                         }
                     });
 
@@ -435,28 +463,52 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     closedSessions.map(s => attendanceService.getRecords(s.id))
                 );
 
-                type AttEntry = { full_name: string; records: Record<number, string> };
+                type AttEntry = {
+                    full_name: string;
+                    section: number;
+                    records: Record<number, string>;
+                    checkInTimes: Record<number, string | null>;
+                    updaters: Record<number, string | null>;
+                    updatedAts: Record<number, string | null>;
+                    notes: Record<number, string | null>;
+                };
                 const attMap = new Map<string, AttEntry>();
                 allRecords.forEach((records, sIdx) => {
                     const sessionId = closedSessions[sIdx].id;
                     for (const rec of records) {
                         const sid = rec.student?.student_id ?? String(rec.student_id);
-                        if (!attMap.has(sid)) attMap.set(sid, { full_name: rec.student?.full_name ?? sid, records: {} });
-                        attMap.get(sid)!.records[sessionId] = rec.status;
+                        if (!attMap.has(sid)) {
+                            const sectionNum = summaryMap.get(sid)?.section ?? 0;
+                            attMap.set(sid, { full_name: rec.student?.full_name ?? sid, section: sectionNum, records: {}, checkInTimes: {}, updaters: {}, updatedAts: {}, notes: {} });
+                        }
+                        const entry = attMap.get(sid)!;
+                        entry.records[sessionId] = rec.status;
+                        entry.checkInTimes[sessionId] = rec.check_in_time ?? null;
+                        entry.updaters[sessionId] = rec.updater?.full_name ?? null;
+                        entry.updatedAts[sessionId] = rec.updated_by ? (rec.updated_at ?? null) : null;
+                        entry.notes[sessionId] = rec.note ?? null;
                     }
                 });
 
                 const TH: Record<string, string> = { present: "มา", late: "สาย", leave: "ลา", absent: "ขาด" };
+
+                // Sort attendance entries by section, then student_id
+                const sortedAttEntries = Array.from(attMap.entries()).sort(([sidA, a], [sidB, b]) => {
+                    if (a.section !== b.section) return a.section - b.section;
+                    return sidA.localeCompare(sidB);
+                });
+
                 const attWs = wb.addWorksheet("การเช็คชื่อ");
-                const AFIXED = 2;
+                const AFIXED = 3;
                 const ASUM = 6; // summary cols
                 const ATOTAL = AFIXED + closedSessions.length + ASUM;
 
                 // Column widths
                 attWs.getColumn(1).width = 16;
                 attWs.getColumn(2).width = 28;
-                for (let c = 3; c < 3 + closedSessions.length; c++) attWs.getColumn(c).width = 13;
-                for (let c = 3 + closedSessions.length; c <= ATOTAL; c++) attWs.getColumn(c).width = 10;
+                attWs.getColumn(3).width = 10;
+                for (let c = 4; c < 4 + closedSessions.length; c++) attWs.getColumn(c).width = 15;
+                for (let c = 4 + closedSessions.length; c <= ATOTAL; c++) attWs.getColumn(c).width = 10;
                 attWs.getRow(1).height = 36; // taller for possible section label wrap
                 attWs.getRow(2).height = 18;
 
@@ -464,6 +516,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 const ar1 = attWs.getRow(1);
                 ar1.getCell(1).value = "รหัสนักศึกษา";
                 ar1.getCell(2).value = "ชื่อ-นามสกุล";
+                ar1.getCell(3).value = "กลุ่มเรียน";
                 closedSessions.forEach((s, i) => {
                     // Resolve which sections this session targets
                     const sectionNos: number[] = s.sections?.map(sec => sec.section_no) ?? [];
@@ -487,10 +540,11 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 // Merges: fixed cols + summary cols span rows 1-2
                 attWs.mergeCells(1, 1, 2, 1);
                 attWs.mergeCells(1, 2, 2, 2);
+                attWs.mergeCells(1, 3, 2, 3);
                 for (let c = AFIXED + closedSessions.length + 1; c <= ATOTAL; c++) attWs.mergeCells(1, c, 2, c);
 
                 // Data rows
-                Array.from(attMap.entries()).forEach(([sid, data], rowOffset) => {
+                sortedAttEntries.forEach(([sid, data], rowOffset) => {
                     // If student has NO record for a session → they were not targeted → show "-"
                     const statuses = closedSessions.map(s =>
                         s.id in data.records ? TH[data.records[s.id]] ?? "ขาด" : "-"
@@ -502,26 +556,65 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     const leave   = targeted.filter(x => x === "ลา").length;
                     const absent  = targeted.filter(x => x === "ขาด").length;
                     const r = attWs.getRow(3 + rowOffset);
+                    r.height = 30; // accommodate status + time on two lines
 
                     r.getCell(1).value = sid;
                     r.getCell(2).value = data.full_name;
+                    r.getCell(3).value = data.section || "-";
                     r.getCell(1).alignment = LEFT_ALIGN;
                     r.getCell(2).alignment = LEFT_ALIGN;
+                    r.getCell(3).alignment = CENTER_ALIGN;
                     r.getCell(1).border = THIN_BORDER;
                     r.getCell(2).border = THIN_BORDER;
+                    r.getCell(3).border = THIN_BORDER;
+
+                    // Build check-in time strings for each session
+                    const checkInTimes = closedSessions.map(s => {
+                        const t = data.checkInTimes[s.id];
+                        if (!t) return null;
+                        try {
+                            return new Date(t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+                        } catch { return null; }
+                    });
+
+                    // Build updater info for each session
+                    const updaterInfos = closedSessions.map(s => {
+                        const updaterName = data.updaters[s.id];
+                        if (!updaterName) return null;
+                        const updatedAt = data.updatedAts[s.id];
+                        const note = data.notes[s.id];
+                        let info = `แก้ไขโดย: ${updaterName}`;
+                        if (updatedAt) {
+                            try {
+                                const dt = new Date(updatedAt);
+                                info += `\nเมื่อ: ${dt.toLocaleDateString("th-TH")} ${dt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })}`;
+                            } catch { /* ignore */ }
+                        }
+                        if (note) info += `\nหมายเหตุ: ${note}`;
+                        return info;
+                    });
 
                     statuses.forEach((st, i) => {
                         const cell = r.getCell(AFIXED + i + 1);
-                        cell.value = st;
-                        cell.alignment = CENTER_ALIGN;
+                        const timeStr = checkInTimes[i];
+                        const updaterInfo = updaterInfos[i];
+                        // Show status with check-in time (e.g. "มา\n10:30")
+                        let displayVal = st === "-" ? st : timeStr ? `${st}\n${timeStr}` : st;
+                        // If manually edited, append asterisk
+                        if (updaterInfo) displayVal += " *";
+                        cell.value = displayVal;
+                        cell.alignment = { ...CENTER_ALIGN, wrapText: true };
                         cell.border = THIN_BORDER;
                         if (st === "-") {
-                            // Not applicable — light gray, italic
                             cell.fill = solidFill("FFF1F5F9");
                             cell.font = { color: { argb: "FFCBD5E1" }, italic: true, size: 10 };
                         } else if (ATT_COLOR[st]) {
                             cell.fill = solidFill(ATT_COLOR[st]);
                             cell.font = { color: { argb: ATT_TEXT[st] ?? "FF000000" }, size: 10, bold: st === "มา" };
+                        }
+                        // Add Excel comment/note if manually edited
+                        if (updaterInfo) {
+                            cell.note = updaterInfo;
                         }
                     });
 
@@ -538,10 +631,11 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     if (rowOffset % 2 === 1) {
                         r.getCell(1).fill = solidFill("FFF8FAFC");
                         r.getCell(2).fill = solidFill("FFF8FAFC");
+                        r.getCell(3).fill = solidFill("FFF8FAFC");
                     }
                 });
 
-                attWs.views = [{ state: "frozen", xSplit: 2, ySplit: 2 }];
+                attWs.views = [{ state: "frozen", xSplit: 3, ySplit: 2 }];
             } else {
                 const ws = wb.addWorksheet("การเช็คชื่อ");
                 ws.addRow(["ยังไม่มีการเช็คชื่อในรายวิชานี้"]);
@@ -612,9 +706,17 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
 
             type ExamEntry = { midterm_lab: number | null; midterm_lecture: number | null; final_lab: number | null; final_lecture: number | null };
             const examMap = new Map<string, ExamEntry>();
+
+            // Build mapping: integer student PK → string student_id (e.g. "66010001")
+            const studentIdMap = new Map<number, string>();
+            for (const stu of examResp?.students ?? []) {
+                studentIdMap.set(stu.id, stu.student_id);
+            }
+
             for (const setting of examResp?.settings ?? []) {
                 for (const score of setting.scores ?? []) {
-                    const sid = score.student?.student_id ?? "";
+                    // score.student_id is the integer FK — resolve to string student_id
+                    const sid = studentIdMap.get(score.student_id) ?? "";
                     if (!sid) continue;
                     if (!examMap.has(sid)) examMap.set(sid, { midterm_lab: null, midterm_lecture: null, final_lab: null, final_lecture: null });
                     const e = examMap.get(sid)!;
@@ -715,6 +817,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             });
 
             sumWs.views = [{ state: "frozen", xSplit: 2, ySplit: 2 }];
+
 
             // ── Download ────────────────────────────────────────────────────
             const buffer = await wb.xlsx.writeBuffer();

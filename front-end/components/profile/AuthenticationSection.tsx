@@ -748,7 +748,9 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
               <>
                 <ModalHeader className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
-                    <Icon icon="solar:danger-triangle-bold" className="text-danger text-xl" />
+                    <div className="p-2 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg shadow-lg shadow-blue-500/30">
+                      <Icon icon="solar:danger-triangle-bold" className="text-white text-xl" />
+                    </div>
                     <span>ยกเลิกการเชื่อมต่อ {providerName}</span>
                   </div>
                 </ModalHeader>
@@ -803,9 +805,10 @@ function AuthenticationSection({ onOpenPasswordModal, userEmail }: Authenticatio
                     ยกเลิก
                   </Button>
                   <Button 
-                    color="danger" 
+                    color="primary" 
                     onPress={handleConfirmUnlink}
                     startContent={<Icon icon="solar:link-broken-linear" />}
+                    className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                   >
                     ยกเลิกการเชื่อมต่อ
                   </Button>

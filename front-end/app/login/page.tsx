@@ -552,7 +552,7 @@ export default function LoginPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:key-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -704,7 +704,7 @@ export default function LoginPage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:key-bold" className="text-2xl text-white" />
                             </div>
                             <div>
@@ -804,11 +804,11 @@ export default function LoginPage() {
                                     ยกเลิก
                                 </Button>
                                 <Button
-                                    color="warning"
+                                    color="primary"
                                     onPress={handleForgotPassword}
                                     isLoading={isSendingResetEmail}
                                     isDisabled={!forgotPasswordEmail}
-                                    className="flex-1 font-medium bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+                                    className="flex-1 font-medium bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                                     startContent={!isSendingResetEmail && <Icon icon="solar:letter-bold" className="text-lg" />}
                                 >
                                     ส่งลิงก์รีเซ็ต

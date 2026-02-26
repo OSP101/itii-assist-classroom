@@ -1321,7 +1321,7 @@ export default function HomePage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4">
                         <div className="flex items-center gap-3 sm:gap-4">
-                            <div className="p-2 sm:p-3 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl shadow-lg shadow-amber-500/30">
+                            <div className="p-2 sm:p-3 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
                                 <Icon icon="solar:pen-new-square-bold" className="text-xl sm:text-2xl text-white" />
                             </div>
                             <div>
@@ -1577,10 +1577,10 @@ export default function HomePage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color="warning"
+                            color="primary"
                             onPress={handleUpdate}
                             isLoading={isSubmitting}
-                            className="font-medium px-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white"
+                            className="font-medium px-6 bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                             startContent={!isSubmitting && <Icon icon="solar:diskette-bold" className="text-lg" />}
                         >
                             บันทึกการแก้ไข
@@ -1601,10 +1601,10 @@ export default function HomePage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1 pb-2">
                         <div className="flex items-center gap-3">
-                            <div className={`p-2.5 rounded-xl ${courseToToggle?.is_active ? 'bg-amber-100' : 'bg-green-100'}`}>
+                            <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500 shadow-lg shadow-blue-500/30">
                                 <Icon
                                     icon={courseToToggle?.is_active ? "solar:archive-bold" : "solar:eye-bold"}
-                                    className={`text-xl ${courseToToggle?.is_active ? 'text-amber-600' : 'text-green-600'}`}
+                                    className="text-xl text-white"
                                 />
                             </div>
                             <div>
@@ -1684,10 +1684,10 @@ export default function HomePage() {
                             ยกเลิก
                         </Button>
                         <Button
-                            color={courseToToggle?.is_active ? "primary" : "success"}
+                            color="primary"
                             onPress={handleToggleStatus}
                             isLoading={isSubmitting}
-                            className={`${courseToToggle?.is_active && "bg-gradient-to-r from-blue-400 to-indigo-500"}`}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             {courseToToggle?.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                         </Button>
@@ -1708,8 +1708,8 @@ export default function HomePage() {
                 <ModalContent>
                     <ModalHeader className="flex flex-col gap-1">
                         <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-amber-100 rounded-xl">
-                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600" />
+                            <div className="p-2.5 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/30">
+                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-white" />
                             </div>
                             <div>
                                 <h3 className="text-lg font-bold text-slate-800">ไม่สามารถเปิดใช้งานได้</h3>
@@ -1738,6 +1738,7 @@ export default function HomePage() {
                                 setDuplicateCourse(null);
                                 setCourseToToggle(null);
                             }}
+                            className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white"
                         >
                             เข้าใจแล้ว
                         </Button>

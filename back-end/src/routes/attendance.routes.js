@@ -69,6 +69,13 @@ router.get('/:id', attendanceController.getAttendanceSession);
 router.put('/:id', attendanceController.updateAttendanceSession);
 
 /**
+ * @route   POST /api/attendance/:id/preview-section-change
+ * @desc    Preview impact of removing sections (which checked-in students will be affected)
+ * @access  Instructor, TA
+ */
+router.post('/:id/preview-section-change', attendanceController.previewSectionChange);
+
+/**
  * @route   POST /api/attendance/:id/preview-time-change
  * @desc    Preview impact of changing attendance time rules on existing check-ins
  * @access  Instructor, TA
