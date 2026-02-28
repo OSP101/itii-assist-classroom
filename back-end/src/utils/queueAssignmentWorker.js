@@ -49,9 +49,14 @@ const loadModels = () => {
 const POLL_INTERVAL_MS = 100; // Poll every 100ms
 const IDLE_INTERVAL_MS = 500; // Slow down when no work
 const MAX_BATCH_SIZE = 10; // Process up to 10 assignments per cycle
+const SESSION_CACHE_TTL_MS = 30 * 1000; // Refresh active sessions list every 30s
 
 let isRunning = false;
 let pollInterval = null;
+
+// In-memory cache for active session IDs to avoid DB query every poll cycle
+let activeSessionsCache = null;
+let cacheExpiresAt = 0;
 
 /**
  * Start the assignment worker
@@ -132,10 +137,15 @@ const processAssignments = async () => {
  * Get active sessions that have waiting bookings
  */
 const getActiveSessionsWithWork = async () => {
-  // For now, we'll get sessions from MySQL that are active
-  // In production, you might want to maintain a Redis SET of active sessions
+  const now = Date.now();
+
+  // Return cached list if still valid
+  if (activeSessionsCache !== null && now < cacheExpiresAt) {
+    return activeSessionsCache;
+  }
+
+  // Cache expired — refresh from MySQL
   loadModels();
-  
   try {
     const { QueueSession } = require('../models');
     const sessions = await QueueSession.findAll({
@@ -143,11 +153,21 @@ const getActiveSessionsWithWork = async () => {
       attributes: ['id'],
       raw: true,
     });
-    return sessions.map(s => s.id);
+    activeSessionsCache = sessions.map(s => s.id);
+    cacheExpiresAt = now + SESSION_CACHE_TTL_MS;
+    return activeSessionsCache;
   } catch (error) {
     logger.error('[AssignmentWorker] Error getting active sessions:', error);
-    return [];
+    return activeSessionsCache || []; // fall back to stale cache on error
   }
+};
+
+/**
+ * Invalidate the active sessions cache.
+ * Call this whenever a session's status changes so the next poll picks up the change immediately.
+ */
+const invalidateSessionCache = () => {
+  cacheExpiresAt = 0;
 };
 
 /**
@@ -355,4 +375,5 @@ module.exports = {
   startAssignmentWorker,
   stopAssignmentWorker,
   triggerAssignmentForSession,
+  invalidateSessionCache,
 };
