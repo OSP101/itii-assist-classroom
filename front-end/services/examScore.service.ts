@@ -125,8 +125,13 @@ const examScoreService = {
      * Bulk save exam scores (from Excel import)
      */
     async bulkSaveExamScores(courseId: string, data: BulkSaveDto): Promise<BulkSaveResult> {
-        const response = await apiService.post<BulkSaveResult>(`/courses/${courseId}/exam-scores/bulk`, data);
-        return response.data || { success: true, message: 'บันทึกสำเร็จ', saved: 0, errors: [] };
+        const response = await apiService.post<{ saved: number; errors: Array<{ student_id: string; reason: string }> }>(`/courses/${courseId}/exam-scores/bulk`, data);
+        return {
+            success: response.success,
+            message: response.message || 'บันทึกสำเร็จ',
+            saved: response.data?.saved ?? 0,
+            errors: response.data?.errors ?? [],
+        };
     },
 
     /**
