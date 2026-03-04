@@ -908,7 +908,7 @@ export default function ClassroomDetailPage() {
             // , badge: assignments.length > 0 ? assignments.length : undefined 
         },
         { key: "scores", label: "คะแนนในชั้นเรียน", icon: "solar:chart-square-bold" },
-        { key: "exam-scores", label: "คะแนนสอบ", icon: "solar:diploma-bold", badge: "NEW", badgeColor: "success" as const },
+        { key: "exam-scores", label: "คะแนนสอบ", icon: "solar:diploma-bold" },
         ...(userRole === 'instructor' || userRole === 'ta' ? [{
             key: "approval",
             label: userRole === 'ta' ? "สถานะคำร้องคะแนน" : "อนุมัติคะแนน",
@@ -1055,7 +1055,7 @@ export default function ClassroomDetailPage() {
                                 >
                                     <Icon icon={item.icon} className="text-xl" />
                                     <span className="font-medium">{item.label}</span>
-                                    {item.badge && (
+                                    {/* {item.badge && (
                                         <Chip
                                             size="sm"
                                             variant="flat"
@@ -1064,7 +1064,7 @@ export default function ClassroomDetailPage() {
                                         >
                                             {item.badge}
                                         </Chip>
-                                    )}
+                                    )} */}
                                 </button>
                             ))}
                         </nav>
@@ -1093,7 +1093,7 @@ export default function ClassroomDetailPage() {
                             >
                                 <Icon icon={item.icon} className={`text-lg ${activeTab === item.key ? "text-blue-500" : "text-slate-400"}`} />
                                 <span className="text-sm">{item.label}</span>
-                                {item.badge && (
+                                {/* {item.badge && (
                                     <Chip
                                         size="sm"
                                         variant="flat"
@@ -1102,7 +1102,7 @@ export default function ClassroomDetailPage() {
                                     >
                                         {item.badge}
                                     </Chip>
-                                )}
+                                )} */}
                             </button>
                         ))}
                     </nav>

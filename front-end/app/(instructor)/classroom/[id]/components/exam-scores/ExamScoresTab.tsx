@@ -246,9 +246,9 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                 scores,
             });
 
-            addToast({ title: result.message, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
+            addToast({ title: "สำเร็จ", description: result.message || `บันทึกคะแนน ${result.saved} รายการสำเร็จ`, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
             if (result.errors.length > 0) {
-                addToast({ title: `มี ${result.errors.length} รายการที่ไม่สำเร็จ`, color: "warning", timeout: 3000, shouldShowTimeoutProgress: true });
+                addToast({ title: "เตือน", description: `มี ${result.errors.length} รายการที่ไม่สำเร็จ`, color: "warning", timeout: 3000, shouldShowTimeoutProgress: true });
             }
 
             // Reload data
