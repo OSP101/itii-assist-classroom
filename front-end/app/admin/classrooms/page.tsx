@@ -186,6 +186,16 @@ export default function ClassroomsPage() {
     const [editingZone, setEditingZone] = useState<Zone | null>(null);
     const [zoneForm, setZoneForm] = useState({ name: "" });
 
+    // Delete confirmation modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string; type: 'soft' | 'permanent' } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    // Toggle status modal state
+    const [showToggleStatusModal, setShowToggleStatusModal] = useState(false);
+    const [toggleTarget, setToggleTarget] = useState<Classroom | null>(null);
+    const [isToggling, setIsToggling] = useState(false);
+
     // Search and filter state
     const [searchQuery, setSearchQuery] = useState("");
     const [floorFilter, setFloorFilter] = useState<string>("all");
@@ -405,26 +415,43 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Handle delete (soft delete)
-    const handleDelete = async (id: string) => {
-        if (!confirm("คุณต้องการลบห้องเรียนนี้ใช่หรือไม่?")) return;
 
+    // Handle delete (soft delete) - open confirmation modal
+    const handleDelete = (id: string, name: string) => {
+        setDeleteTarget({ id, name, type: 'soft' });
+        setShowDeleteModal(true);
+    };
+
+    // Confirm delete action from modal
+    const confirmDeleteAction = async () => {
+        if (!deleteTarget) return;
+
+        setIsDeleting(true);
         try {
-            await classroomService.deleteClassroom(id);
-            setClassrooms((prev) =>
-                prev.map((c) => (c.id === id ? { ...c, isDeleted: true } : c))
-            );
-
-            // Refresh stats in background
+            if (deleteTarget.type === 'soft') {
+                await classroomService.deleteClassroom(deleteTarget.id);
+                setClassrooms((prev) =>
+                    prev.map((c) => (c.id === deleteTarget.id ? { ...c, isDeleted: true } : c))
+                );
+                addToast({
+                    title: "สำเร็จ",
+                    description: "ลบห้องเรียนเรียบร้อยแล้ว",
+                    color: "success",
+                    timeout: 3000,
+                    shouldShowTimeoutProgress: true,
+                });
+            } else {
+                await classroomService.deleteClassroom(deleteTarget.id, true);
+                setClassrooms((prev) => prev.filter((c) => c.id !== deleteTarget.id));
+                addToast({
+                    title: "สำเร็จ",
+                    description: "ลบห้องเรียนถาวรเรียบร้อยแล้ว",
+                    color: "success",
+                    timeout: 3000,
+                    shouldShowTimeoutProgress: true,
+                });
+            }
             refreshStats();
-
-            addToast({
-                title: "สำเร็จ",
-                description: "ลบห้องเรียนเรียบร้อยแล้ว",
-                color: "success",
-                timeout: 3000,
-                shouldShowTimeoutProgress: true,
-            });
         } catch (error: any) {
             console.error("Failed to delete classroom:", error);
             addToast({
@@ -434,6 +461,10 @@ export default function ClassroomsPage() {
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteModal(false);
+            setDeleteTarget(null);
         }
     };
 
@@ -467,22 +498,31 @@ export default function ClassroomsPage() {
         }
     };
 
-    // Handle toggle status (enable/disable)
-    const handleToggleStatus = async (id: string) => {
+    // Open toggle status modal
+    const openToggleStatusModal = (classroom: Classroom) => {
+        setToggleTarget(classroom);
+        setShowToggleStatusModal(true);
+    };
+
+    // Confirm toggle status from modal
+    const confirmToggleStatus = async () => {
+        if (!toggleTarget) return;
+
+        setIsToggling(true);
         try {
-            const response = await classroomService.toggleStatus(id);
+            const response = await classroomService.toggleStatus(toggleTarget.id);
             if (response.success && response.data) {
                 const updatedClassroom = transformClassroomFromAPI(response.data);
                 setClassrooms((prev) =>
-                    prev.map((c) => (c.id === id ? updatedClassroom : c))
+                    prev.map((c) => (c.id === toggleTarget.id ? updatedClassroom : c))
                 );
 
                 addToast({
                     title: "สำเร็จ",
-                    description: response.message || "เปลี่ยนสถานะสำเร็จ",
+                    description: toggleTarget.isActive ? "ปิดใช้งานห้องเรียนแล้ว" : "เปิดใช้งานห้องเรียนแล้ว",
                     color: "success",
                     timeout: 3000,
-                shouldShowTimeoutProgress: true,
+                    shouldShowTimeoutProgress: true,
                 });
             }
         } catch (error: any) {
@@ -494,42 +534,17 @@ export default function ClassroomsPage() {
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,
             });
+        } finally {
+            setIsToggling(false);
+            setShowToggleStatusModal(false);
+            setToggleTarget(null);
         }
     };
 
-    // Handle permanent delete
-    const handlePermanentDelete = async (id: string) => {
-        if (
-            !confirm(
-                "คุณต้องการลบห้องเรียนนี้ถาวรใช่หรือไม่? (ไม่สามารถกู้คืนได้)"
-            )
-        )
-            return;
-
-        try {
-            await classroomService.deleteClassroom(id, true);
-            setClassrooms((prev) => prev.filter((c) => c.id !== id));
-
-            // Refresh stats in background
-            refreshStats();
-
-            addToast({
-                title: "สำเร็จ",
-                description: "ลบห้องเรียนถาวรเรียบร้อยแล้ว",
-                color: "success",
-                timeout: 3000,
-                shouldShowTimeoutProgress: true,
-            });
-        } catch (error: any) {
-            console.error("Failed to permanently delete classroom:", error);
-            addToast({
-                title: "เกิดข้อผิดพลาด",
-                description: error.message || "ไม่สามารถลบห้องเรียนถาวรได้",
-                color: "danger",
-                timeout: 3000,
-                shouldShowTimeoutProgress: true,
-            });
-        }
+    // Handle permanent delete - open confirmation modal
+    const handlePermanentDelete = (id: string, name: string) => {
+        setDeleteTarget({ id, name, type: 'permanent' });
+        setShowDeleteModal(true);
     };
 
     // Open layout editor
@@ -959,10 +974,10 @@ export default function ClassroomsPage() {
                                         size="sm"
                                         variant="light"
                                         color={classroom.isActive ? "warning" : "success"}
-                                        onPress={() => handleToggleStatus(classroom.id)}
+                                        onPress={() => openToggleStatusModal(classroom)}
                                     >
                                         <Icon 
-                                            icon={classroom.isActive ? "solar:power-bold" : "solar:power-linear"} 
+                                            icon={classroom.isActive ? "solar:eye-closed-linear" : "solar:eye-linear"} 
                                             className="text-lg" 
                                         />
                                     </Button>
@@ -993,7 +1008,7 @@ export default function ClassroomsPage() {
                                         size="sm"
                                         variant="light"
                                         color="danger"
-                                        onPress={() => handleDelete(classroom.id)}
+                                        onPress={() => handleDelete(classroom.id, classroom.name)}
                                     >
                                         <Icon icon="solar:trash-bin-trash-linear" className="text-lg" />
                                     </Button>
@@ -1018,7 +1033,7 @@ export default function ClassroomsPage() {
                                         size="sm"
                                         variant="light"
                                         color="danger"
-                                        onPress={() => handlePermanentDelete(classroom.id)}
+                                        onPress={() => handlePermanentDelete(classroom.id, classroom.name)}
                                     >
                                         <Icon icon="solar:trash-bin-trash-bold" className="text-lg" />
                                     </Button>
@@ -2027,6 +2042,136 @@ export default function ClassroomsPage() {
                         </Button>
                         <Button color="primary" onPress={handleAddZone} isDisabled={!zoneForm.name.trim()}>
                             {editingZone ? "บันทึก" : "เพิ่มโซน"}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Delete Confirmation Modal */}
+            <Modal isOpen={showDeleteModal} onOpenChange={(open) => { if (!open) { setShowDeleteModal(false); setDeleteTarget(null); } }} size="md">
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                            <Icon
+                                icon={deleteTarget?.type === 'permanent' ? "solar:danger-triangle-bold" : "solar:trash-bin-trash-bold"}
+                                className={`text-2xl ${deleteTarget?.type === 'permanent' ? 'text-danger' : 'text-warning'}`}
+                            />
+                            {deleteTarget?.type === 'permanent' ? 'ลบห้องเรียนถาวร' : 'ลบห้องเรียน'}
+                        </div>
+                    </ModalHeader>
+                    <ModalBody>
+                        {deleteTarget?.type === 'soft' ? (
+                            <div className="space-y-3">
+                                <p>คุณต้องการลบห้องเรียน <strong>&quot;{deleteTarget?.name}&quot;</strong> ใช่หรือไม่?</p>
+                                <div className="bg-warning-50 dark:bg-warning-50/10 border border-warning-200 dark:border-warning-200/20 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <Icon icon="solar:info-circle-bold" className="text-warning text-lg mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm text-warning-700 dark:text-warning-400">
+                                            <p className="font-medium">ห้องเรียนจะถูกย้ายไปยังถังขยะ</p>
+                                            <ul className="mt-1 list-disc list-inside space-y-0.5">
+                                                <li>สามารถ<strong>กู้คืน</strong>ห้องเรียนจากถังขยะได้</li>
+                                                <li>สามารถ<strong>ลบถาวร</strong>ออกจากระบบได้ภายหลัง</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <p>คุณต้องการลบห้องเรียน <strong>&quot;{deleteTarget?.name}&quot;</strong> ออกจากระบบถาวรใช่หรือไม่?</p>
+                                <div className="bg-danger-50 dark:bg-danger-50/10 border border-danger-200 dark:border-danger-200/20 rounded-lg p-3">
+                                    <div className="flex items-start gap-2">
+                                        <Icon icon="solar:danger-triangle-bold" className="text-danger text-lg mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm text-danger-700 dark:text-danger-400">
+                                            <p className="font-medium">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                                            <ul className="mt-1 list-disc list-inside space-y-0.5">
+                                                <li>ห้องเรียนจะถูก<strong>ลบออกจากระบบทั้งหมด</strong></li>
+                                                <li><strong>ไม่สามารถกู้คืน</strong>ได้อีก</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <ModalFooter>
+                        <Button
+                            variant="light"
+                            onPress={() => { setShowDeleteModal(false); setDeleteTarget(null); }}
+                            isDisabled={isDeleting}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="danger"
+                            onPress={confirmDeleteAction}
+                            isLoading={isDeleting}
+                        >
+                            {deleteTarget?.type === 'permanent' ? 'ลบถาวร' : 'ลบห้องเรียน'}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Toggle Status Confirmation Modal */}
+            <Modal
+                isOpen={showToggleStatusModal}
+                onClose={() => {
+                    setShowToggleStatusModal(false);
+                    setToggleTarget(null);
+                }}
+                size="md"
+            >
+                <ModalContent>
+                    <ModalHeader className="px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-4">
+                            <div className={`p-3 rounded-xl shadow-lg bg-gradient-to-br ${toggleTarget?.isActive ? 'from-amber-400 to-orange-500 shadow-amber-500/30' : 'from-emerald-400 to-green-500 shadow-emerald-500/30'}`}>
+                                <Icon icon={toggleTarget?.isActive ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-2xl text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-800">
+                                {toggleTarget?.isActive ? 'ยืนยันการปิดใช้งาน' : 'ยืนยันการเปิดใช้งาน'}
+                            </h3>
+                        </div>
+                    </ModalHeader>
+                    <ModalBody className="px-6 py-6">
+                        <div className={`rounded-2xl p-6 border ${toggleTarget?.isActive ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                            <div className="flex items-center gap-4">
+                                <div className={`w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0 ${toggleTarget?.isActive ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+                                    <Icon icon="solar:buildings-3-bold" className={`text-2xl ${toggleTarget?.isActive ? 'text-amber-600' : 'text-emerald-600'}`} />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{toggleTarget?.name}</p>
+                                    <p className="text-sm text-slate-500">อาคาร {toggleTarget?.building} ชั้น {toggleTarget?.floor}</p>
+                                </div>
+                            </div>
+                            <p className={`mt-4 text-sm ${toggleTarget?.isActive ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                {toggleTarget?.isActive
+                                    ? 'ห้องเรียนที่ปิดใช้งานจะไม่สามารถใช้ในระบบจองคิวตรวจงานได้ แต่ข้อมูลจะยังคงอยู่ในระบบ'
+                                    : 'เปิดใช้งานห้องเรียนเพื่อให้สามารถใช้ในระบบจองคิวตรวจงานได้'}
+                            </p>
+                        </div>
+                    </ModalBody>
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100 gap-3">
+                        <Button
+                            variant="flat"
+                            color="default"
+                            onPress={() => {
+                                setShowToggleStatusModal(false);
+                                setToggleTarget(null);
+                            }}
+                            className="font-medium px-6"
+                            isDisabled={isToggling}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color={toggleTarget?.isActive ? 'warning' : 'success'}
+                            onPress={confirmToggleStatus}
+                            isLoading={isToggling}
+                            className={`font-medium px-6 ${toggleTarget?.isActive ? '' : 'bg-gradient-to-r from-emerald-400 to-green-500 text-white'}`}
+                            startContent={!isToggling && <Icon icon={toggleTarget?.isActive ? "solar:eye-closed-bold" : "solar:eye-bold"} className="text-lg" />}
+                        >
+                            {toggleTarget?.isActive ? 'ปิดใช้งาน' : 'เปิดใช้งาน'}
                         </Button>
                     </ModalFooter>
                 </ModalContent>
