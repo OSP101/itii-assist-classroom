@@ -75,7 +75,7 @@ const enrichBookingWithZone = async (booking, classroomId) => {
 
 // Redis Queue Service - handles real-time states
 const redisQueue = require('../utils/redisQueueService');
-const { triggerAssignmentForSession } = require('../utils/queueAssignmentWorker');
+const { triggerAssignmentForSession, invalidateSessionCache } = require('../utils/queueAssignmentWorker');
 
 // ============================================
 // Queue Session Management (Instructor/TA)
@@ -446,6 +446,7 @@ const updateQueueSessionStatus = async (req, res) => {
         }
 
         await session.update(updateData);
+        invalidateSessionCache();
 
         logCourseActivity({ courseId: session.course_id, actorUserId: req.user.id, action: `queue_session_${status}`, category: 'queue', targetType: 'queue_session', targetId: sessionId, targetName: session.title, detail: { status } });
 
@@ -2903,6 +2904,7 @@ const updateQueueSessionStatusPublic = async (req, res) => {
         }
 
         await session.update({ status });
+        invalidateSessionCache();
 
         logCourseActivity({
             courseId: session.course_id,
