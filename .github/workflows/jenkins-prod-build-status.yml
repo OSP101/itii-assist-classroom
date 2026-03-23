@@ -1,0 +1,71 @@
+name: Jenkins Prod Build Status
+
+on:
+  push:
+    branches:
+      - prod
+      - production
+  pull_request:
+    branches:
+      - prod
+      - production
+  workflow_dispatch:
+
+concurrency:
+  group: jenkins-prod-build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-prod:
+    name: Build (prod)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare temporary env files
+        shell: bash
+        run: |
+          cat > back-end/.env.prod <<'EOF'
+          DB_NAME=ci_db
+          DB_USER=ci_user
+          DB_PASSWORD=ci_password
+          JWT_ACCESS_SECRET=ci_access_secret
+          JWT_REFRESH_SECRET=ci_refresh_secret
+          GOOGLE_CLIENT_ID=ci_google_client_id
+          GOOGLE_CLIENT_SECRET=ci_google_client_secret
+          GOOGLE_CALLBACK_URL=http://localhost:3001/api/auth/google/callback
+          FRONTEND_URL=http://localhost:3000
+          JWT_ACCESS_EXPIRES_IN=1h
+          JWT_REFRESH_EXPIRES_IN=7d
+          PROMETHEUS_URL=http://localhost:9090
+          ALERT_WEBHOOK_SECRET=ci_webhook_secret
+          EOF
+
+          cat > front-end/.env.local.prod <<'EOF'
+          NEXT_PUBLIC_API_URL=http://localhost:3001/api
+          NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+          NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
+          NEXT_PUBLIC_CLOUD=ci_cloud
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID=ci_google_client_id
+          EOF
+
+          cat > .env <<'EOF'
+          NEXT_PUBLIC_API_URL=http://localhost:3001/api
+          NEXT_PUBLIC_SOCKET_URL=http://localhost:3001
+          NEXT_PUBLIC_FRONTEND_URL=http://localhost:3000
+          NEXT_PUBLIC_CLOUD=ci_cloud
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID=ci_google_client_id
+          EOF
+
+      - name: Build with docker compose (Jenkins parity)
+        run: docker compose -p itii-prod -f docker-compose.prod.yml build --no-cache
+
+      - name: Show image summary
+        if: always()
+        run: docker images --format 'table {{.Repository}}\t{{.Tag}}\t{{.Size}}' | head -n 20

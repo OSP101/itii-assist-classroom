@@ -19,6 +19,9 @@ router.post('/', handleScoreEditImageUpload, checkCourseActive, scoreEditRequest
 // Create batch edit request for group (TA) - with optional image upload
 router.post('/batch', handleScoreEditImageUpload, checkCourseActive, scoreEditRequestController.createBatchEditRequest);
 
+// Cancel pending edit request (requester only)
+router.delete('/:id/cancel', scoreEditRequestController.cancelEditRequest);
+
 // Batch approve edit requests (instructor only) - for group approval
 router.post('/batch-approve', checkCourseActive, scoreEditRequestController.batchApproveEditRequests);
 

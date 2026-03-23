@@ -5,7 +5,8 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const GitHubStrategy = require('passport-github2').Strategy;
 const AppleStrategy = require('passport-apple').Strategy;
 const config = require('./index');
-const { User } = require('../models');
+const { User, RefreshToken } = require('../models');
+const { Op } = require('sequelize');
 
 /**
  * JWT Strategy - for protected routes
@@ -18,10 +19,30 @@ const jwtOptions = {
 passport.use(
   new JwtStrategy(jwtOptions, async (payload, done) => {
     try {
-      const user = await User.findByPk(payload.userId);
+      if (!payload?.jti) {
+        return done(null, false, { message: 'Invalid session token' });
+      }
+
+      const [user, session] = await Promise.all([
+        User.findByPk(payload.userId),
+        RefreshToken.findOne({
+          where: {
+            jti: payload.jti,
+            user_id: payload.userId,
+            revoked: false,
+            expires_at: {
+              [Op.gt]: new Date(),
+            },
+          },
+        }),
+      ]);
       
       if (!user) {
         return done(null, false, { message: 'User not found' });
+      }
+
+      if (!session) {
+        return done(null, false, { message: 'Session revoked or expired' });
       }
       
       if (!user.is_active) {
@@ -49,7 +70,7 @@ passport.use(
         const user = await User.findOne({ where: { username } });
         
         if (!user) {
-          return done(null, false, { message: 'Invalid username or password' });
+          return done(null, false, { message: 'Invalid Username' });
         }
         
         if (!user.is_active) {
@@ -59,7 +80,7 @@ passport.use(
         const isMatch = await user.comparePassword(password);
         
         if (!isMatch) {
-          return done(null, false, { message: 'Invalid username or password' });
+          return done(null, false, { message: 'Invalid Password' });
         }
         
         return done(null, user);

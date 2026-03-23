@@ -1996,7 +1996,7 @@ const getCourseOverview = asyncHandler(async (req, res) => {
   }));
 
   // ========================================
-  // Get score distribution for chart
+  // Get score distribution for chart การคำนวณการกระจายคะแนนโดยใช้ข้อมูลคะแนนที่มีอยู่แล้ว
   // ========================================
   const scoreDistribution = {
     excellent: 0, // >= 80%

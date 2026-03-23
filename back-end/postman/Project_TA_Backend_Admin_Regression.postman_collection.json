@@ -1,0 +1,516 @@
+{
+  "info": {
+    "name": "Project TA Backend Admin Regression",
+    "description": "Admin-focused CRUD regression collection for Project TA backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "00 Setup",
+      "item": [
+        {
+          "name": "GET Health",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        },
+        {
+          "name": "POST Login (Admin)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "if (json?.data?.accessToken) pm.environment.set('access_token', json.data.accessToken);",
+                  "if (json?.data?.refreshToken) pm.environment.set('refresh_token', json.data.refreshToken);",
+                  "if (json?.data?.user?.id) pm.environment.set('user_id', String(json.data.user.id));",
+                  "if (json?.data?.user?.role) pm.environment.set('user_role', String(json.data.user.role));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Instructors (for course create)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/courses/instructors",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "instructors"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const first = json?.data?.[0];",
+                  "if (first?.id) pm.environment.set('instructor_id', String(first.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Active Course Seed (for assignment)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/courses?status=active&page=1&limit=1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses"],
+              "query": [
+                { "key": "status", "value": "active" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "1" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "const json = pm.response.json();",
+                  "const first = json?.data?.courses?.[0];",
+                  "if (first?.id) pm.environment.set('course_id_for_assignment', String(first.id));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 Courses CRUD",
+      "item": [
+        {
+          "name": "POST Create Course",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"API{{$timestamp}}\",\n  \"name\": \"Postman Course {{$timestamp}}\",\n  \"year\": 2569,\n  \"semester\": 1,\n  \"instructor_id\": \"{{instructor_id}}\",\n  \"description\": \"Created by Admin Regression collection\",\n  \"attention_threshold\": 60\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/courses",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "const id = json?.data?.id;",
+                  "if (id) {",
+                  "  pm.environment.set('course_id_created', String(id));",
+                  "  pm.environment.set('course_id_for_assignment', String(id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Course By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT Update Course",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Course Updated {{$timestamp}}\",\n  \"description\": \"Updated by Admin Regression collection\",\n  \"attention_threshold\": 65\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Toggle Course Status",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id_created}}/toggle-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id_created}}", "toggle-status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 Classrooms CRUD",
+      "item": [
+        {
+          "name": "POST Create Classroom",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"LAB {{$timestamp}}\",\n  \"building\": \"A\",\n  \"floor\": \"3\",\n  \"description\": \"Created by Postman regression\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/classrooms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "const id = json?.data?.id;",
+                  "if (id) pm.environment.set('classroom_id_created', String(id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Classroom By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT Update Classroom",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated {{$timestamp}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Toggle Classroom Status",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}/toggle-status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}", "toggle-status"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Classroom (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "POST Restore Classroom",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}/restore",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}", "restore"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Classroom (Permanent)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/classrooms/{{classroom_id_created}}?permanent=true",
+              "host": ["{{base_url}}"],
+              "path": ["api", "classrooms", "{{classroom_id_created}}"],
+              "query": [
+                { "key": "permanent", "value": "true" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 Students CRUD",
+      "item": [
+        {
+          "name": "POST Create Student",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"student_id\": \"9{{$timestamp}}\",\n  \"full_name\": \"Postman Student {{$timestamp}}\",\n  \"email\": \"student{{$timestamp}}@example.com\",\n  \"extra\": \"created-by-postman\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/students",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json?.data?.id) pm.environment.set('student_id_created', String(json.data.id));",
+                  "if (json?.data?.student_id) pm.environment.set('student_code_created', String(json.data.student_id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Student By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/{{student_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", "{{student_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT Update Student",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"student_id\": \"{{student_code_created}}\",\n  \"full_name\": \"Postman Student Updated {{$timestamp}}\",\n  \"email\": \"student{{$timestamp}}@example.com\",\n  \"extra\": \"updated-by-postman\",\n  \"is_active\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/students/{{student_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", "{{student_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PATCH Toggle Student Status",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/{{student_id_created}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", "{{student_id_created}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Student",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/students/{{student_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "students", "{{student_id_created}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "40 Assignments CRUD",
+      "item": [
+        {
+          "name": "GET Assignments By Course",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/assignments?course_id={{course_id_for_assignment}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assignments"],
+              "query": [
+                { "key": "course_id", "value": "{{course_id_for_assignment}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST Create Assignment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"course_id\": \"{{course_id_for_assignment}}\",\n  \"name\": \"Postman Assignment {{$timestamp}}\",\n  \"description\": \"Created by regression collection\",\n  \"assignment_type\": \"individual\",\n  \"max_score\": 10,\n  \"is_score_visible\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/assignments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assignments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "const json = pm.response.json();",
+                  "if (json?.data?.id) pm.environment.set('assignment_id_created', String(json.data.id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Assignment By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/assignments/{{assignment_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assignments", "{{assignment_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT Update Assignment",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Assignment Updated {{$timestamp}}\",\n  \"description\": \"Updated by regression collection\",\n  \"max_score\": 20,\n  \"is_score_visible\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/assignments/{{assignment_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assignments", "{{assignment_id_created}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE Assignment (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/assignments/{{assignment_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "assignments", "{{assignment_id_created}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "90 Cleanup",
+      "item": [
+        {
+          "name": "DELETE Course Created",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id_created}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id_created}}"]
+            },
+            "description": "Run this at the end if course was created successfully."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3001" }
+  ]
+}

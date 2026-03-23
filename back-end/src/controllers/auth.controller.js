@@ -26,7 +26,6 @@ const login = asyncHandler(async (req, res, next) => {
     try {
       // Check if 2FA is enabled
       if (user.two_factor_enabled) {
-        // Return partial response - user needs to complete 2FA
         return res.json({
           success: true,
           message: 'Two-factor authentication required',

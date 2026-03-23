@@ -425,20 +425,19 @@ export default function ExamScoresTab({ courseId, isCourseActive = true }: ExamS
                                 return (
                                 <Card key={setting.id} className="shadow-lg border-0 overflow-hidden">
                                     {/* Header */}
-                                    <CardHeader className={`px-5 py-4 border-b-0 ${
-                                        setting.component === 'lab' 
-                                            ? 'bg-emerald-500' 
-                                            : 'bg-blue-500'
-                                    }`}>
+                                    <CardHeader className={`px-5 py-4 border-b-0 
+                                     
+                                    `}>
+                                        {/* ${setting.component === 'lab' ? 'bg-emerald-500' : 'bg-blue-500'} */}
                                         <div className="flex items-center justify-between w-full">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-11 h-11 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                                <div className="w-6 h-6 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                                     <Icon 
                                                         icon={setting.component === 'lab' ? 'solar:monitor-bold' : 'solar:book-bold'} 
-                                                        className="text-2xl text-white" 
+                                                        className={`text-2xl ${setting.component === 'lab' ? 'text-emerald-500' : 'text-blue-500'}`} 
                                                     />
                                                 </div>
-                                                <div className="text-white">
+                                                <div className="text-black">
                                                     <p className="font-bold text-lg">
                                                         {setting.component === 'lab' ? 'ปฏิบัติการ (Lab)' : 'บรรยาย (Lecture)'}
                                                     </p>
