@@ -14,6 +14,7 @@ export interface ActivityLogActor {
   full_name: string;
   email?: string;
   role: string;
+  avatar?: string | null;
 }
 
 export interface ActivityLog {
@@ -40,7 +41,7 @@ export interface Pagination {
 export interface ActivityLogFilters {
   categories: string[];
   actions: { action: string; category: string }[];
-  actors: { id: number; fullName: string; role: string }[];
+  actors: { id: number; fullName: string; role: string; avatar?: string | null }[];
 }
 
 export interface ActivityLogStats {
@@ -48,7 +49,7 @@ export interface ActivityLogStats {
   period: number;
   categoryStats: { category: string; count: number }[];
   actionStats: { action: string; count: number }[];
-  actorStats: { userId: number; fullName: string; role: string; count: number }[];
+  actorStats: { userId: number; fullName: string; role: string; avatar?: string | null; count: number }[];
   timeline: { date: string; count: number }[];
 }
 

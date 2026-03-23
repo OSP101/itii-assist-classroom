@@ -64,6 +64,8 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
   const [revokingSessionId, setRevokingSessionId] = useState<number | null>(null);
   const [isRevokingAll, setIsRevokingAll] = useState(false);
   const [showRevokeAllModal, setShowRevokeAllModal] = useState(false);
+  const [showRevokeSessionModal, setShowRevokeSessionModal] = useState(false);
+  const [selectedSession, setSelectedSession] = useState<Session | null>(null);
   
   // Load user data
   useEffect(() => {
@@ -262,13 +264,24 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
     }
   };
 
+  // Handle session revoke confirmation
+  const confirmRevokeSession = (session: Session) => {
+    setSelectedSession(session);
+    setShowRevokeSessionModal(true);
+  };
+
   // Handle session revoke
-  const handleRevokeSession = async (sessionId: number) => {
+  const handleRevokeSession = async () => {
+    if (!selectedSession) return;
+
+    const sessionId = selectedSession.id;
     setRevokingSessionId(sessionId);
     try {
       const result = await authService.revokeSession(sessionId);
       if (result.success) {
         setSessions(prev => prev.filter(s => s.id !== sessionId));
+        setShowRevokeSessionModal(false);
+        setSelectedSession(null);
         addToast({
           title: "สำเร็จ",
           description: "ยกเลิกการเข้าสู่ระบบเรียบร้อยแล้ว",
@@ -392,7 +405,7 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
               sessions={sessions}
               isLoadingSessions={isLoadingSessions}
               revokingSessionId={revokingSessionId}
-              onRevokeSession={handleRevokeSession}
+              onRevokeSession={confirmRevokeSession}
               onShowRevokeAllModal={() => setShowRevokeAllModal(true)}
             />
           </Suspense>
@@ -481,6 +494,57 @@ export default function ProfilePage({ variant = "admin", onBack }: ProfilePagePr
             </Button>
             <Button color="primary" onPress={handleRevokeAllSessions} isLoading={isRevokingAll} className="bg-gradient-to-r from-blue-400 to-indigo-500 text-white">
               ออกจากระบบทั้งหมด
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Revoke Single Session Modal */}
+      <Modal
+        isOpen={showRevokeSessionModal}
+        onClose={() => {
+          if (!revokingSessionId) {
+            setShowRevokeSessionModal(false);
+            setSelectedSession(null);
+          }
+        }}
+      >
+        <ModalContent>
+          <ModalHeader className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-red-500 to-red-500 rounded-lg shadow-lg shadow-rose-500/30">
+              <Icon icon="solar:logout-2-bold" className="text-xl text-white" />
+            </div>
+            <span>ยืนยันการออกจากระบบอุปกรณ์นี้</span>
+          </ModalHeader>
+          <ModalBody>
+            <p className="text-default-600">
+              คุณต้องการบังคับให้อุปกรณ์ที่เลือกออกจากระบบใช่หรือไม่?
+            </p>
+            {selectedSession && (
+              <div className="mt-2 rounded-lg border border-default-200 bg-default-50 p-3 text-sm text-default-600 space-y-1">
+                <p><span className="font-medium text-default-800">ระบบปฏิบัติการ:</span> {selectedSession.os}</p>
+                <p><span className="font-medium text-default-800">เบราว์เซอร์:</span> {selectedSession.browser}</p>
+                <p><span className="font-medium text-default-800">IP:</span> {selectedSession.ip}</p>
+              </div>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="light"
+              onPress={() => {
+                setShowRevokeSessionModal(false);
+                setSelectedSession(null);
+              }}
+              isDisabled={!!revokingSessionId}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              color="danger"
+              onPress={handleRevokeSession}
+              isLoading={!!revokingSessionId}
+            >
+              ออกจากระบบเครื่องนี้
             </Button>
           </ModalFooter>
         </ModalContent>

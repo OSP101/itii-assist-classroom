@@ -3,6 +3,37 @@ const { Op } = require('sequelize');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 
+const getRequesterDisplayName = (requester) => requester?.full_name || requester?.username || `user_id:${requester?.id ?? '-'}`;
+
+const findPendingRequestForStudentAssignment = async (assignmentId, studentId) => {
+    return ScoreEditRequest.findOne({
+        where: { status: 'pending' },
+        include: [
+            {
+                model: Score,
+                as: 'score',
+                required: true,
+                where: {
+                    assignment_id: assignmentId,
+                    student_id: studentId,
+                },
+                include: [
+                    {
+                        model: Student,
+                        as: 'student',
+                        attributes: ['id', 'full_name'],
+                    },
+                ],
+            },
+            {
+                model: User,
+                as: 'requester',
+                attributes: ['id', 'username', 'full_name'],
+            },
+        ],
+    });
+};
+
 /**
  * Get all score edit requests for a course (instructor or TA of this course)
  * - Instructor: sees all requests
@@ -289,16 +320,13 @@ const createEditRequest = asyncHandler(async (req, res) => {
         throw new ApiError(400, `Score must be between 0 and ${maxScore}`);
     }
 
-    // Check if there's already a pending request for this score
-    const existingRequest = await ScoreEditRequest.findOne({
-        where: {
-            score_id,
-            status: 'pending',
-        },
-    });
+    // Block duplicate pending requests at assignment-level for this student.
+    const existingRequest = await findPendingRequestForStudentAssignment(score.assignment_id, score.student_id);
 
     if (existingRequest) {
-        throw new ApiError(400, 'There is already a pending edit request for this score');
+        const studentName = existingRequest.score?.student?.full_name || `student_id:${score.student_id}`;
+        const requesterName = getRequesterDisplayName(existingRequest.requester);
+        throw new ApiError(400, `นักศึกษา ${studentName} มีคำร้องแก้ไขคะแนนที่รออนุมัติอยู่แล้ว (ส่งโดย ${requesterName})`);
     }
 
     // Process uploaded images
@@ -395,16 +423,54 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
         throw new ApiError(400, `Score must be between 0 and ${maxScore}`);
     }
 
-    // Check for existing pending requests
+    const assignmentIds = [...new Set(scores.map(score => score.assignment_id))];
+    if (assignmentIds.length !== 1) {
+        throw new ApiError(400, 'All score_ids must belong to the same assignment');
+    }
+
+    // Check for existing pending requests by assignment + student.
+    const studentIds = [...new Set(scores.map(score => score.student_id))];
     const existingRequests = await ScoreEditRequest.findAll({
         where: {
-            score_id: { [Op.in]: score_ids },
             status: 'pending',
         },
+        include: [
+            {
+                model: Score,
+                as: 'score',
+                required: true,
+                where: {
+                    assignment_id: assignmentIds[0],
+                    student_id: { [Op.in]: studentIds },
+                },
+                include: [
+                    {
+                        model: Student,
+                        as: 'student',
+                        attributes: ['id', 'full_name'],
+                    },
+                ],
+            },
+            {
+                model: User,
+                as: 'requester',
+                attributes: ['id', 'username', 'full_name'],
+            },
+        ],
     });
 
     if (existingRequests.length > 0) {
-        throw new ApiError(400, `There are already pending edit requests for ${existingRequests.length} score(s)`);
+        const pendingDetails = new Map();
+        for (const request of existingRequests) {
+            const studentId = request.score?.student_id;
+            if (!pendingDetails.has(studentId)) {
+                const studentName = request.score?.student?.full_name || `student_id:${studentId}`;
+                const requesterName = getRequesterDisplayName(request.requester);
+                pendingDetails.set(studentId, `${studentName} (ส่งโดย ${requesterName})`);
+            }
+        }
+
+        throw new ApiError(400, `มีคำร้องแก้ไขคะแนนที่รออนุมัติอยู่แล้ว: ${[...pendingDetails.values()].join(', ')}`);
     }
 
     // Process uploaded images - same images for all batch requests
@@ -585,6 +651,35 @@ const rejectEditRequest = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Cancel a pending score edit request (requester only)
+ */
+const cancelEditRequest = asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const editRequest = await ScoreEditRequest.findByPk(id);
+
+    if (!editRequest) {
+        throw new ApiError(404, 'Edit request not found');
+    }
+
+    if (String(editRequest.requested_by) !== String(userId)) {
+        throw new ApiError(403, 'Only the requester can cancel this edit request');
+    }
+
+    if (editRequest.status !== 'pending') {
+        throw new ApiError(400, 'Only pending edit requests can be cancelled');
+    }
+
+    await editRequest.destroy();
+
+    res.json({
+        success: true,
+        message: 'Score edit request cancelled',
+    });
+});
+
+/**
  * Batch approve multiple score edit requests (instructor only)
  * Used for approving group edit requests at once
  */
@@ -761,6 +856,7 @@ module.exports = {
     getPendingCount,
     createEditRequest,
     createBatchEditRequest,
+    cancelEditRequest,
     approveEditRequest,
     rejectEditRequest,
     batchApproveEditRequests,

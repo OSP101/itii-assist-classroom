@@ -303,7 +303,7 @@ function TwoFactorSetupModal({
                 <Button variant="light" onPress={onClose}>
                     ยกเลิก
                 </Button>
-                <Button color="primary" onPress={handleStartSetup} isLoading={isLoading}>
+                <Button color="primary" onPress={handleStartSetup} isLoading={isLoading} className="bg-gradient-to-br from-blue-400 to-indigo-500">
                     ดำเนินการต่อ
                 </Button>
             </ModalFooter>
@@ -402,6 +402,7 @@ function TwoFactorSetupModal({
                     onPress={() => handleVerify()}
                     isLoading={isLoading}
                     isDisabled={verificationCode.length !== 6}
+                    className="bg-gradient-to-br from-blue-400 to-indigo-500"
                 >
                     ยืนยัน
                 </Button>
@@ -465,6 +466,7 @@ function TwoFactorSetupModal({
                     onPress={() => handleVerify()}
                     isLoading={isLoading}
                     isDisabled={verificationCode.length !== 6}
+                    className="bg-gradient-to-br from-blue-400 to-indigo-500"
                 >
                     ยืนยัน
                 </Button>

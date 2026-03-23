@@ -79,67 +79,27 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
     }>({ isOpen: false, type: "approve", request: null, group: null, selectedIds: [] });
     const [actionComment, setActionComment] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [cancellingRequestId, setCancellingRequestId] = useState<number | null>(null);
+    const [cancelModalRequest, setCancelModalRequest] = useState<ScoreEditRequest | null>(null);
 
     // Image preview modal
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-    // Group requests by assignment + new_score + reason + created_at (within 1 minute)
+    // Keep each request as its own item to avoid incorrectly merging different students.
     const groupedRequests = useMemo(() => {
-        const groups: RequestGroup[] = [];
-        const processed = new Set<number>();
-
-        for (const req of requests) {
-            if (processed.has(req.id)) continue;
-
-            // Find related requests (same assignment, same new_score, same reason, similar time)
-            const related = requests.filter(r => {
-                if (processed.has(r.id)) return false;
-                if (r.assignment.id !== req.assignment.id) return false;
-                if (r.new_score !== req.new_score) return false;
-                if (r.reason !== req.reason) return false;
-                if (r.status !== req.status) return false;
-                if (r.sub_item?.id !== req.sub_item?.id) return false;
-                // Check if created within 1 minute of each other
-                const timeDiff = Math.abs(new Date(r.created_at).getTime() - new Date(req.created_at).getTime());
-                return timeDiff < 60000; // 1 minute
-            });
-
-            related.forEach(r => processed.add(r.id));
-
-            if (related.length > 1) {
-                // This is a group
-                groups.push({
-                    key: `group-${req.id}`,
-                    requests: related,
-                    assignment: req.assignment,
-                    sub_item: req.sub_item,
-                    new_score: req.new_score,
-                    old_score: req.old_score,
-                    reason: req.reason,
-                    images: req.images,
-                    requester: req.requester,
-                    created_at: req.created_at,
-                    status: req.status,
-                });
-            } else {
-                // Single request
-                groups.push({
-                    key: `single-${req.id}`,
-                    requests: [req],
-                    assignment: req.assignment,
-                    sub_item: req.sub_item,
-                    new_score: req.new_score,
-                    old_score: req.old_score,
-                    reason: req.reason,
-                    images: req.images,
-                    requester: req.requester,
-                    created_at: req.created_at,
-                    status: req.status,
-                });
-            }
-        }
-
-        return groups;
+        return requests.map((req) => ({
+            key: `single-${req.id}`,
+            requests: [req],
+            assignment: req.assignment,
+            sub_item: req.sub_item,
+            new_score: req.new_score,
+            old_score: req.old_score,
+            reason: req.reason,
+            images: req.images,
+            requester: req.requester,
+            created_at: req.created_at,
+            status: req.status,
+        }));
     }, [requests]);
 
     // Fetch requests
@@ -268,6 +228,38 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
             });
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // Allow requester (TA view) to cancel their own pending request.
+    const confirmCancelRequest = async () => {
+        if (!cancelModalRequest) {
+            return;
+        }
+
+        setCancellingRequestId(cancelModalRequest.id);
+        try {
+            await scoreEditRequestService.cancelEditRequest(cancelModalRequest.id);
+            addToast({
+                title: "ยกเลิกคำร้องสำเร็จ",
+                description: "คำร้องแก้ไขคะแนนถูกยกเลิกแล้ว",
+                color: "success",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+            setCancelModalRequest(null);
+            fetchRequests();
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "ไม่สามารถยกเลิกคำร้องได้";
+            addToast({
+                title: "เกิดข้อผิดพลาด",
+                description: errorMessage,
+                color: "danger",
+                timeout: 3000,
+                shouldShowTimeoutProgress: true,
+            });
+        } finally {
+            setCancellingRequestId(null);
         }
     };
 
@@ -664,6 +656,19 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                                 </Button>
                                             </div>
                                         )}
+
+                                        {group.status === "pending" && isReadOnly && (
+                                            <Button
+                                                color="warning"
+                                                variant="flat"
+                                                size="sm"
+                                                startContent={<Icon icon="solar:close-square-bold" />}
+                                                isLoading={cancellingRequestId === firstRequest.id}
+                                                onPress={() => setCancelModalRequest(firstRequest)}
+                                            >
+                                                ยกเลิกคำร้อง
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </AccordionItem>
@@ -888,6 +893,93 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                         >
                             {actionModal.type === "approve" ? "อนุมัติ" : "ปฏิเสธ"}
                             {actionModal.group && actionModal.selectedIds.length > 0 && ` (${actionModal.selectedIds.length} คน)`}
+                        </Button>
+                    </ModalFooter>
+                </ModalContent>
+            </Modal>
+
+            {/* Cancel Request Confirmation Modal */}
+            <Modal
+                isOpen={!!cancelModalRequest}
+                onClose={() => {
+                    if (cancellingRequestId !== null) {
+                        return;
+                    }
+                    setCancelModalRequest(null);
+                }}
+                size="lg"
+            >
+                <ModalContent>
+                    <ModalHeader className="flex flex-col gap-1 px-6 pt-6 pb-4">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+                                <Icon icon="solar:danger-triangle-bold" className="text-xl text-amber-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-800">ยืนยันการยกเลิกคำร้อง</h3>
+                                <p className="text-sm text-slate-500">กรุณาตรวจสอบข้อมูลก่อนยืนยัน</p>
+                            </div>
+                        </div>
+                    </ModalHeader>
+                    <Divider />
+                    <ModalBody className="py-4">
+                        {cancelModalRequest && (
+                            <div className="space-y-3">
+                                <Card className="border border-slate-200 bg-slate-50/60 shadow-none">
+                                    <CardBody className="py-3 px-4 space-y-2">
+                                        <p className="text-sm">
+                                            <span className="text-slate-500">งาน:</span>{" "}
+                                            <span className="font-medium text-slate-800">{cancelModalRequest.assignment.name}</span>
+                                            {cancelModalRequest.sub_item && (
+                                                <span className="text-slate-500"> - {cancelModalRequest.sub_item.name}</span>
+                                            )}
+                                        </p>
+                                        <p className="text-sm">
+                                            <span className="text-slate-500">นักศึกษา:</span>{" "}
+                                            <span className="font-medium text-slate-800">
+                                                {cancelModalRequest.student.student_id} - {cancelModalRequest.student.full_name}
+                                            </span>
+                                        </p>
+                                        <p className="text-sm">
+                                            <span className="text-slate-500">คะแนน:</span>{" "}
+                                            <span className="text-slate-600">{cancelModalRequest.old_score ?? "-"}</span>
+                                            <span className="mx-2 text-slate-400">→</span>
+                                            <span className="font-semibold text-emerald-600">{cancelModalRequest.new_score}</span>
+                                            <span className="text-slate-400"> / {cancelModalRequest.sub_item?.max_score ?? cancelModalRequest.assignment.max_score}</span>
+                                        </p>
+                                    </CardBody>
+                                </Card>
+
+                                <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+                                    <div className="flex items-start gap-3">
+                                        <Icon icon="solar:info-circle-bold" className="text-xl text-amber-600 mt-0.5" />
+                                        <div>
+                                            <p className="font-medium text-amber-800">ต้องการยกเลิกคำร้องนี้ใช่หรือไม่?</p>
+                                            <p className="text-sm text-amber-700 mt-1">
+                                                หลังยกเลิกแล้ว คำร้องนี้จะหายจากรายการรออนุมัติ และสามารถส่งคำร้องใหม่ได้อีกครั้ง
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </ModalBody>
+                    <Divider />
+                    <ModalFooter className="px-6 py-4 border-t border-slate-100">
+                        <Button
+                            variant="light"
+                            onPress={() => setCancelModalRequest(null)}
+                            isDisabled={cancellingRequestId !== null}
+                        >
+                            ยกเลิก
+                        </Button>
+                        <Button
+                            color="warning"
+                            onPress={confirmCancelRequest}
+                            isLoading={cancellingRequestId !== null}
+                            startContent={<Icon icon="solar:close-square-bold" />}
+                        >
+                            ยืนยันยกเลิกคำร้อง
                         </Button>
                     </ModalFooter>
                 </ModalContent>

@@ -8,6 +8,7 @@ import { Chip } from "@heroui/chip";
 import { Spinner } from "@heroui/spinner";
 import { Tabs, Tab } from "@heroui/tabs";
 import { Tooltip } from "@heroui/tooltip";
+import { Avatar } from "@heroui/avatar";
 import {
   Table,
   TableHeader,
@@ -405,10 +406,34 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
                 <Table
                   aria-label="Activity log table"
                   removeWrapper
+                  bottomContent={
+                    pagination.totalPages > 1 ? (
+                      <div className="flex flex-col gap-2 px-1 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-slate-400">
+                          หน้า {pagination.page} จาก {pagination.totalPages}
+                        </p>
+                        <Pagination
+                          total={pagination.totalPages}
+                          page={pagination.page}
+                          onChange={(nextPage) => {
+                            void fetchLogs(nextPage);
+                          }}
+                          showControls
+                          isCompact
+                          size="sm"
+                          classNames={{
+                            cursor: "bg-blue-500 text-white",
+                          }}
+                        />
+                      </div>
+                    ) : null
+                  }
+                  bottomContentPlacement="outside"
                   classNames={{
                     base: "min-w-[900px]",
                     th: "bg-slate-50 text-slate-600 font-semibold text-sm whitespace-nowrap",
                     td: "py-3 whitespace-nowrap",
+                    tr: "hover:bg-slate-50/70",
                   }}
                 >
                   <TableHeader>
@@ -429,9 +454,12 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
                         <TableRow key={log.id}>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${catConf.bgClass}`}>
-                                <Icon icon="solar:user-bold" className={`text-sm ${catConf.iconClass}`} />
-                              </div>
+                              <Avatar
+                                name={log.actor?.full_name || "Unknown"}
+                                size="sm"
+                                src={log.actor?.avatar || undefined}
+                                className={`flex-shrink-0 ${catConf.bgClass} `}
+                              />
                               <div>
                                 <p className="text-sm font-medium text-slate-800">
                                   {log.actor?.full_name || "Unknown"}
@@ -487,22 +515,6 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
               )}
             </CardBody>
           </Card>
-
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="flex justify-center py-4">
-              <Pagination
-                total={pagination.totalPages}
-                page={pagination.page}
-                onChange={(page) => fetchLogs(page)}
-                showControls
-                size="sm"
-                classNames={{
-                  cursor: "bg-blue-500",
-                }}
-              />
-            </div>
-          )}
         </div>
       )}
 
@@ -677,9 +689,12 @@ export default function ActivityLogTab({ courseId }: ActivityLogTabProps) {
                         <TableRow key={actor.userId}>
                           <TableCell>
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                <Icon icon="solar:user-bold" className="text-sm text-blue-600" />
-                              </div>
+                              <Avatar
+                                name={actor.fullName}
+                                size="sm"
+                                src={actor.avatar || undefined}
+                                className="bg-blue-100 flex-shrink-0"
+                              />
                               <span className="text-sm font-medium text-slate-800">{actor.fullName}</span>
                             </div>
                           </TableCell>

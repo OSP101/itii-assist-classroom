@@ -651,16 +651,40 @@ const requestScoreEdit = asyncHandler(async (req, res) => {
         await ensureCourseActive(scoreAssignment.course_id);
     }
 
-    // Check if there's a pending request already
+    // Check if there's already a pending request for this student in this assignment
     const pendingRequest = await ScoreEditRequest.findOne({
         where: {
-            score_id,
             status: 'pending',
         },
+        include: [
+            {
+                model: Score,
+                as: 'score',
+                required: true,
+                where: {
+                    assignment_id: existingScore.assignment_id,
+                    student_id: existingScore.student_id,
+                },
+                include: [
+                    {
+                        model: Student,
+                        as: 'student',
+                        attributes: ['id', 'full_name'],
+                    },
+                ],
+            },
+            {
+                model: User,
+                as: 'requester',
+                attributes: ['id', 'full_name'],
+            },
+        ],
     });
 
     if (pendingRequest) {
-        throw new ApiError(400, 'There is already a pending edit request for this score');
+        const studentName = pendingRequest.score?.student?.full_name || `student_id:${existingScore.student_id}`;
+        const requesterName = pendingRequest.requester?.full_name || `user_id:${pendingRequest.requested_by}`;
+        throw new ApiError(400, `นักศึกษา ${studentName} มีคำร้องแก้ไขคะแนนที่รออนุมัติอยู่แล้ว (ส่งโดย ${requesterName})`);
     }
 
     const editRequest = await ScoreEditRequest.create({

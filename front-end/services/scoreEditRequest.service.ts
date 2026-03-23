@@ -4,6 +4,32 @@
 
 import api from './api.service';
 
+const getApiErrorMessage = (response: { message?: unknown; error?: unknown }): string => {
+    if (typeof response.message === "string" && response.message.trim()) {
+        return response.message;
+    }
+
+    if (response.message && typeof response.message === "object") {
+        const nested = (response.message as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) {
+            return nested;
+        }
+    }
+
+    if (typeof response.error === "string" && response.error.trim()) {
+        return response.error;
+    }
+
+    if (response.error && typeof response.error === "object") {
+        const nested = (response.error as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) {
+            return nested;
+        }
+    }
+
+    return "เกิดข้อผิดพลาดในการยกเลิกคำร้อง";
+};
+
 export interface ScoreEditRequestStudent {
     id: number;
     student_id: string;
@@ -135,6 +161,17 @@ const scoreEditRequestService = {
      */
     rejectEditRequest: async (requestId: number, comment: string): Promise<{ success: boolean; message: string }> => {
         const response = await api.post<{ success: boolean; message: string }>(`/score-edit-requests/${requestId}/reject`, { comment });
+        return response as unknown as { success: boolean; message: string };
+    },
+
+    /**
+     * Cancel a pending edit request (requester only)
+     */
+    cancelEditRequest: async (requestId: number): Promise<{ success: boolean; message: string }> => {
+        const response = await api.delete<{ success: boolean; message: string }>(`/score-edit-requests/${requestId}/cancel`);
+        if (!response.success) {
+            throw new Error(getApiErrorMessage(response));
+        }
         return response as unknown as { success: boolean; message: string };
     },
 };

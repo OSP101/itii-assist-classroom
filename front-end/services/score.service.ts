@@ -118,6 +118,32 @@ interface ApiResponse<T> {
     error?: string;
 }
 
+const getApiErrorMessage = (response: { message?: unknown; error?: unknown }): string => {
+    if (typeof response.message === "string" && response.message.trim()) {
+        return response.message;
+    }
+
+    if (response.message && typeof response.message === "object") {
+        const nested = (response.message as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) {
+            return nested;
+        }
+    }
+
+    if (typeof response.error === "string" && response.error.trim()) {
+        return response.error;
+    }
+
+    if (response.error && typeof response.error === "object") {
+        const nested = (response.error as { message?: unknown }).message;
+        if (typeof nested === "string" && nested.trim()) {
+            return nested;
+        }
+    }
+
+    return "เกิดข้อผิดพลาดในการส่งคำขอ";
+};
+
 const scoreService = {
     /**
      * Get scores for an assignment
@@ -213,10 +239,16 @@ const scoreService = {
                 formData.append('images', image);
             });
             const response = await api.post<unknown>('/score-edit-requests', formData);
-            return response.success;
+            if (!response.success) {
+                throw new Error(getApiErrorMessage(response));
+            }
+            return true;
         }
         const response = await api.post<unknown>('/score-edit-requests', data);
-        return response.success;
+        if (!response.success) {
+            throw new Error(getApiErrorMessage(response));
+        }
+        return true;
     },
 
     /**
@@ -237,10 +269,16 @@ const scoreService = {
                 formData.append('images', image);
             });
             const response = await api.post<unknown>('/score-edit-requests/batch', formData);
-            return response.success;
+            if (!response.success) {
+                throw new Error(getApiErrorMessage(response));
+            }
+            return true;
         }
         const response = await api.post<unknown>('/score-edit-requests/batch', data);
-        return response.success;
+        if (!response.success) {
+            throw new Error(getApiErrorMessage(response));
+        }
+        return true;
     },
 
     /**

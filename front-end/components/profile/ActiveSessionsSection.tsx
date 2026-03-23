@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
 import { Chip } from "@heroui/chip";
@@ -14,7 +14,7 @@ interface ActiveSessionsSectionProps {
   sessions: Session[];
   isLoadingSessions: boolean;
   revokingSessionId: number | null;
-  onRevokeSession: (sessionId: number) => void;
+  onRevokeSession: (session: Session) => void;
   onShowRevokeAllModal: () => void;
 }
 
@@ -25,6 +25,11 @@ function ActiveSessionsSection({
   onRevokeSession,
   onShowRevokeAllModal,
 }: ActiveSessionsSectionProps) {
+  const orderedSessions = useMemo(
+    () => [...sessions].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent)),
+    [sessions]
+  );
+
   const getDeviceIcon = useCallback((device: string, os: string) => {
     const osLower = os.toLowerCase();
     if (osLower.includes('windows')) return "solar:laptop-minimalistic-bold";
@@ -45,7 +50,7 @@ function ActiveSessionsSection({
               <h3 className="font-semibold">Active Sessions</h3>
               <p className="text-sm text-default-500 mt-0.5">อุปกรณ์และเซสชันที่เข้าสู่ระบบอยู่</p>
             </div>
-            {sessions.filter(s => !s.isCurrent).length > 0 && (
+            {orderedSessions.filter(s => !s.isCurrent).length > 0 && (
               <Button
                 size="sm"
                 color="danger"
@@ -70,7 +75,7 @@ function ActiveSessionsSection({
             </div>
           ) : (
             <div className="divide-y divide-default-100">
-              {sessions.map((session) => (
+              {orderedSessions.map((session) => (
                 <div
                   key={session.id}
                   className="flex items-start gap-4 px-6 py-4 hover:bg-default-50 transition-colors"
@@ -112,7 +117,7 @@ function ActiveSessionsSection({
                       color="danger"
                       variant="light"
                       isIconOnly
-                      onPress={() => onRevokeSession(session.id)}
+                      onPress={() => onRevokeSession(session)}
                       isLoading={revokingSessionId === session.id}
                     >
                       <Icon icon="solar:logout-2-linear" className="text-lg" />

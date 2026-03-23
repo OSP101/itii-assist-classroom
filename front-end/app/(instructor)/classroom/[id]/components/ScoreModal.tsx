@@ -982,7 +982,7 @@ export default function ScoreModal({
 
                 addToast({
                     title: "ส่งคำขอแก้ไขสำเร็จ",
-                    description: "คำขอแก้ไขคะแนนถูกส่งไปยังผู้ดูแลแล้ว",
+                    description: "คำขอแก้ไขคะแนนถูกส่งไปยังอาจารย์แล้ว",
                     color: "success",
                     timeout: 3000,
                 shouldShowTimeoutProgress: true,
@@ -1005,9 +1005,10 @@ export default function ScoreModal({
             setGroupMemberScores([]);
             setEditGroupMode("all");
         } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : "ไม่สามารถส่งคำขอแก้ไขได้";
             addToast({
                 title: "เกิดข้อผิดพลาด",
-                description: "ไม่สามารถส่งคำขอแก้ไขได้",
+                description: errorMessage,
                 color: "danger",
                 timeout: 3000,
                 shouldShowTimeoutProgress: true,

@@ -16,6 +16,7 @@ import {
   TableRow,
   TableCell,
 } from "@heroui/table";
+import { Pagination } from "@heroui/pagination";
 import { Dropdown, DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/dropdown";
 import { addToast } from "@heroui/toast";
 import { Icon } from "@iconify/react";
@@ -356,7 +357,16 @@ function TADetailView({
   return (
     <div className="space-y-4">
       {/* Detail Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-start gap-1">
+         <Button
+          size="sm"
+          variant="flat"
+          onPress={onClose}
+          startContent={<Icon icon="solar:arrow-left-linear" width={16} />}
+          className="bg-slate-100 text-slate-600 hover:bg-slate-200"
+          isIconOnly
+        >
+        </Button>
         <div className="flex items-center gap-3">
           <Avatar
             name={ta.fullName}
@@ -367,7 +377,7 @@ function TADetailView({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-slate-800">{ta.fullName}</h3>
-              {ta.performanceScore != null && (
+              {/* {ta.performanceScore != null && (
                 <Chip
                   size="sm"
                   variant="flat"
@@ -375,31 +385,23 @@ function TADetailView({
                 >
                   {ta.performanceScore} — {getScoreLabel(ta.performanceScore)}
                 </Chip>
-              )}
+              )} */}
             </div>
             <p className="text-xs text-slate-500">{ta.email}</p>
           </div>
         </div>
-        <Button
-          size="sm"
-          variant="flat"
-          onPress={onClose}
-          startContent={<Icon icon="solar:arrow-left-linear" width={16} />}
-          className="bg-slate-100 text-slate-600 hover:bg-slate-200"
-        >
-          กลับ
-        </Button>
+       
       </div>
 
       {/* KPI Breakdown (only when data is present) */}
-      {ta.kpiBreakdown && (
+      {/* {ta.kpiBreakdown && (
         <KPIBreakdownCard kpi={ta.kpiBreakdown} confidenceLevel={ta.confidenceLevel} />
-      )}
+      )} */}
 
       {/* Anomaly Flags (only when data is present) */}
-      {ta.anomalies && ta.anomalies.length > 0 && (
+      {/* {ta.anomalies && ta.anomalies.length > 0 && (
         <AnomalyFlagsCard anomalies={ta.anomalies} />
-      )}
+      )} */}
 
       {/* Per-Assignment Stats Table */}
       <Card className="shadow-sm border border-slate-200">
@@ -490,7 +492,7 @@ function TADetailView({
       </Card>
 
       {/* Queue Stats */}
-      {ta.queueStats && (
+      {/* {ta.queueStats && (
         <Card className="shadow-sm border border-slate-200">
           <CardBody className="p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -561,7 +563,7 @@ function TADetailView({
             </div>
           </CardBody>
         </Card>
-      )}
+      )} */}
 
       {/* Score History Table */}
       <Card className="shadow-sm border border-slate-200">
@@ -611,9 +613,31 @@ function TADetailView({
                 <Table
                   aria-label="Score history table"
                   removeWrapper
+                  bottomContent={
+                    detail && detail.pagination.totalPages > 1 ? (
+                      <div className="flex flex-col gap-2 px-1 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-slate-400">
+                          หน้า {page} จาก {detail.pagination.totalPages}
+                        </p>
+                        <Pagination
+                          page={page}
+                          total={detail.pagination.totalPages}
+                          onChange={setPage}
+                          showControls
+                          isCompact
+                          size="sm"
+                          classNames={{
+                            cursor: "bg-blue-500 text-white",
+                          }}
+                        />
+                      </div>
+                    ) : null
+                  }
+                  bottomContentPlacement="outside"
                   classNames={{
                     th: "bg-slate-50 text-slate-600 font-semibold text-sm",
                     td: "py-3",
+                    tr: "hover:bg-slate-50/70",
                   }}
                 >
                   <TableHeader>
@@ -666,39 +690,11 @@ function TADetailView({
                 </Table>
               </div>
 
-              {/* Pagination */}
-              {detail && detail.pagination.totalPages > 1 && (
-                <div className="flex justify-center gap-2 pt-4 pb-2">
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    isDisabled={page <= 1}
-                    onPress={() => setPage(page - 1)}
-                    startContent={<Icon icon="solar:arrow-left-linear" width={16} />}
-                    className="bg-slate-100 text-slate-600"
-                  >
-                    ก่อนหน้า
-                  </Button>
-                  <Chip variant="flat" size="sm" className="bg-slate-100 text-slate-600">
-                    หน้า {page} / {detail.pagination.totalPages}
-                  </Chip>
-                  <Button
-                    size="sm"
-                    variant="flat"
-                    isDisabled={page >= detail.pagination.totalPages}
-                    onPress={() => setPage(page + 1)}
-                    endContent={<Icon icon="solar:arrow-right-linear" width={16} />}
-                    className="bg-slate-100 text-slate-600"
-                  >
-                    ถัดไป
-                  </Button>
-                </div>
-              )}
             </>
           )}
 
           {/* Timeline chart */}
-          {detail && detail.timeline.length > 0 && (
+          {/* {detail && detail.timeline.length > 0 && (
             <div className="px-3 pb-3 pt-2 border-t border-slate-100">
               <h4 className="text-sm font-medium text-slate-700 mb-2">จำนวนการตรวจรายวัน</h4>
               <div className="flex items-end gap-1 h-16">
@@ -725,7 +721,7 @@ function TADetailView({
                 <span>{detail.timeline[detail.timeline.length - 1]?.date}</span>
               </div>
             </div>
-          )}
+          )} */}
         </CardBody>
       </Card>
     </div>
@@ -740,7 +736,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
   const [data, setData] = useState<TAStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTA, setSelectedTA] = useState<TAStat | null>(null);
-  const [sortField, setSortField] = useState<'name' | 'score' | 'workload'>('score');
+  const [sortField, setSortField] = useState<'name' | 'score' | 'workload'>('workload');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const fetchData = useCallback(async () => {
@@ -956,10 +952,10 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
 
           {/* Section 2: Anomaly & Warning Indicators */}
           {/* Suspicious Behavior Alerts */}
-          <SuspiciousAlert taStats={data.taStats} assignments={data.assignments} />
+          {/* <SuspiciousAlert taStats={data.taStats} assignments={data.assignments} /> */}
 
           {/* Section 3: Workload Distribution — horizontal bar chart for fairness evaluation */}
-          {data.taStats.length > 0 && analytics && analytics.expectedShare > 0 && (
+          {/* {data.taStats.length > 0 && analytics && analytics.expectedShare > 0 && (
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -1003,7 +999,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 </div>
               </CardBody>
             </Card>
-          )}
+          )} */}
 
           {/* Section 4: Per-TA Comparison Table */}
           <Card className="shadow-sm border border-slate-200">
@@ -1063,7 +1059,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                   >
                     <TableHeader>
                       <TableColumn>ชื่อ-นามสกุล</TableColumn>
-                      <TableColumn align="center">คะแนนประเมิน</TableColumn>
+                      {/* <TableColumn align="center">คะแนนประเมิน</TableColumn> */}
                       <TableColumn align="center">ตรวจทั้งหมด</TableColumn>
                       <TableColumn align="center">งานที่ตรวจ</TableColumn>
                       <TableColumn align="center">คิวสำเร็จ</TableColumn>
@@ -1079,7 +1075,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                                 name={ta.fullName}
                                 size="sm"
                                 src={ta.avatar || undefined}
-                                className="bg-gradient-to-br from-emerald-500 to-teal-500"
+                                className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white"
                               />
                               <div>
                                 <p className="font-medium text-slate-800">{ta.fullName}</p>
@@ -1087,7 +1083,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          {/* <TableCell>
                             {ta.performanceScore != null ? (
                               <Tooltip
                                 content={
@@ -1131,7 +1127,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                             ) : (
                               <span className="text-slate-300 text-sm">-</span>
                             )}
-                          </TableCell>
+                          </TableCell> */}
                           <TableCell>
                             <div className="flex flex-col items-center gap-0.5">
                               <span className="text-sm font-bold text-blue-600">{ta.totalScoresGraded}</span>
@@ -1262,7 +1258,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
           </Card>
 
           {/* Section 6: Evaluation Methodology — transparency & explainability */}
-          <Card className="shadow-sm border border-slate-200">
+          {/* <Card className="shadow-sm border border-slate-200">
             <CardBody className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-2 bg-slate-100 rounded-xl">
@@ -1298,7 +1294,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 คะแนนรวม (0–100) = Σ(น้ำหนัก × คะแนนแต่ละมิติ) · ความน่าเชื่อถือ: สูง (≥20 รายการ), ปานกลาง (10–19), ต่ำ (&lt;10) · ดัชนีความเท่าเทียมคำนวณจาก 1 − สัมประสิทธิ์ความแปรปรวน (CV) ของปริมาณงาน
               </p>
             </CardBody>
-          </Card>
+          </Card> */}
         </>
       )}
     </div>

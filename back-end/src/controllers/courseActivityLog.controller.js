@@ -54,7 +54,7 @@ const getActivityLogs = asyncHandler(async (req, res) => {
       {
         model: User,
         as: 'actor',
-        attributes: ['id', 'full_name', 'email', 'role'],
+        attributes: ['id', 'full_name', 'email', 'role', 'avatar'],
       },
     ],
     order: [['created_at', 'DESC']],
@@ -134,7 +134,7 @@ const getActivityStats = asyncHandler(async (req, res) => {
   const actorUsers = actorUserIds.length > 0
     ? await User.findAll({
         where: { id: { [Op.in]: actorUserIds } },
-        attributes: ['id', 'full_name', 'role'],
+        attributes: ['id', 'full_name', 'role', 'avatar'],
         raw: true,
       })
     : [];
@@ -151,6 +151,7 @@ const getActivityStats = asyncHandler(async (req, res) => {
         userId: a.actor_user_id,
         fullName: userMap[a.actor_user_id]?.full_name || 'Unknown',
         role: userMap[a.actor_user_id]?.role || 'unknown',
+        avatar: userMap[a.actor_user_id]?.avatar || null,
         count: parseInt(a.count),
       })),
       timeline,
@@ -192,7 +193,7 @@ const getActivityFilters = asyncHandler(async (req, res) => {
   const actorUsers = actorUserIds.length > 0
     ? await User.findAll({
         where: { id: { [Op.in]: actorUserIds } },
-        attributes: ['id', 'full_name', 'role'],
+        attributes: ['id', 'full_name', 'role', 'avatar'],
         raw: true,
       })
     : [];
@@ -207,6 +208,7 @@ const getActivityFilters = asyncHandler(async (req, res) => {
         id: uid,
         fullName: userMap[uid]?.full_name || 'Unknown',
         role: userMap[uid]?.role || 'unknown',
+        avatar: userMap[uid]?.avatar || null,
       })),
     },
   });
@@ -230,7 +232,7 @@ const getTAStats = asyncHandler(async (req, res) => {
   // Get all TAs for this course
   const tas = await CourseTA.findAll({
     where: { course_id: courseId },
-    include: [{ model: User, as: 'taUser', attributes: ['id', 'full_name', 'email'] }],
+    include: [{ model: User, as: 'taUser', attributes: ['id', 'full_name', 'email', 'avatar'] }],
   });
 
   // Get all assignments for this course
@@ -384,6 +386,7 @@ const getTAStats = asyncHandler(async (req, res) => {
       userId: taId,
       fullName: ta.taUser?.full_name || 'Unknown',
       email: ta.taUser?.email || '',
+      avatar: ta.taUser?.avatar || null,
       totalScoresGraded: taScoreList.length,
       assignmentsGraded: perAssignment.length,
       perAssignment,
