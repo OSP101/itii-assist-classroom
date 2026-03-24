@@ -876,8 +876,8 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
       ) : (
         <>
           {/* Section 1: Course Health Overview — 4 key indicators */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Total TAs */}
+          {/* <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="p-4">
                 <div className="flex items-center gap-3">
@@ -891,7 +891,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 </div>
               </CardBody>
             </Card>
-            {/* Average Performance Score */}
+
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="p-4">
                 <div className="flex items-center gap-3">
@@ -910,7 +910,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 </div>
               </CardBody>
             </Card>
-            {/* Workload Fairness Index */}
+
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="p-4">
                 <div className="flex items-center gap-3">
@@ -931,7 +931,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 </div>
               </CardBody>
             </Card>
-            {/* Total Graded */}
+
             <Card className="shadow-sm border border-slate-200">
               <CardBody className="p-4">
                 <div className="flex items-center gap-3">
@@ -948,7 +948,7 @@ export default function TAStatsTab({ courseId }: TAStatsTabProps) {
                 </div>
               </CardBody>
             </Card>
-          </div>
+          </div> */}
 
           {/* Section 2: Anomaly & Warning Indicators */}
           {/* Suspicious Behavior Alerts */}
