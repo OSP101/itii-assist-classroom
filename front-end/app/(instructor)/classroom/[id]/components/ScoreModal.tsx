@@ -119,6 +119,8 @@ export default function ScoreModal({
     const [selectedEditSubItemId, setSelectedEditSubItemId] = useState<number | null>(null);
     // For group editing - store all member scores
     const [groupMemberScores, setGroupMemberScores] = useState<{ studentId: number; studentName: string; scoreId: number | null; score: number | null; selected: boolean; hasPendingEdit: boolean }[]>([]);
+    // For group editing with sub-items - map studentId → [{subItemId, scoreId}]
+    const [groupMemberSubItemScores, setGroupMemberSubItemScores] = useState<Map<number, { subItemId: number; scoreId: number | null }[]>>(new Map());
     const [editGroupMode, setEditGroupMode] = useState<"all" | "selected">("all"); // "all" = edit all members, "selected" = edit selected members only
 
     // Existing score states (for checking duplicates)
@@ -221,6 +223,7 @@ export default function ScoreModal({
         setSubItemExistingScores([]);
         setGroupSearchQuery("");
         setGroupMemberScores([]);
+        setGroupMemberSubItemScores(new Map());
         setEditGroupMode("all");
     };
 
@@ -817,6 +820,7 @@ export default function ScoreModal({
             setEditSubItemScores([]);
             setSelectedEditSubItemId(null);
             setGroupMemberScores([]);
+            setGroupMemberSubItemScores(new Map());
             setEditGroupMode("all");
             return;
         }
@@ -844,7 +848,7 @@ export default function ScoreModal({
                 }
 
                 // Collect scores for ALL members in the group
-                const memberScoresData = group.members.map(member => {
+        const memberScoresData = group.members.map(member => {
                     const studentScore = scoresData?.student_scores.find(
                         ss => ss.student.id === member.id
                     );
@@ -859,6 +863,19 @@ export default function ScoreModal({
                     };
                 });
                 setGroupMemberScores(memberScoresData);
+
+                // Build sub-item score map for all members
+                const subItemMap = new Map<number, { subItemId: number; scoreId: number | null }[]>();
+                for (const member of group.members) {
+                    const studentScore = scoresData?.student_scores.find(ss => ss.student.id === member.id);
+                    if (studentScore?.sub_item_scores && studentScore.sub_item_scores.length > 0) {
+                        subItemMap.set(member.id, studentScore.sub_item_scores.map(si => ({
+                            subItemId: si.sub_item_id,
+                            scoreId: si.score_id,
+                        })));
+                    }
+                }
+                setGroupMemberSubItemScores(subItemMap);
 
                 // Get score from first member (for display purposes)
                 const memberScore = scoresData?.student_scores.find(
@@ -916,7 +933,21 @@ export default function ScoreModal({
         // Check if reason is valid
         const hasValidReason = editReasonType !== "" && (editReasonType !== "other" || editReasonCustom.trim() !== "");
 
-        // For sub-items
+        // Group + sub-items: check that at least one selected member has a score for the selected sub-item
+        if (isGroupAssignment && editSelectedGroup && hasSubItems && selectedEditSubItemId !== null) {
+            const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
+            if (!hasValidReason) return false;
+            const maxScore = assignment?.subItems?.find(si => si.id === selectedEditSubItemId)?.max_score || 0;
+            if (!subItem || subItem.newScore === "" || !validateScore(subItem.newScore, maxScore)) return false;
+            const selectedMembers = groupMemberScores.filter(m => m.selected && !m.hasPendingEdit);
+            const hasAnyScoreId = selectedMembers.some(m => {
+                const sub = groupMemberSubItemScores.get(m.studentId);
+                return sub?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId != null;
+            });
+            return hasAnyScoreId;
+        }
+
+        // For sub-items (individual)
         if (hasSubItems && selectedEditSubItemId !== null) {
             const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
             if (!subItem || !subItem.scoreId || !hasValidReason) return false;
@@ -937,7 +968,7 @@ export default function ScoreModal({
         if (!currentScore || !hasValidReason) return false;
         if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
         return true;
-    }, [currentScore, newScore, editReasonType, editReasonCustom, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores, isGroupAssignment, editSelectedGroup, groupMemberScores]);
+    }, [currentScore, newScore, editReasonType, editReasonCustom, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores, isGroupAssignment, editSelectedGroup, groupMemberScores, groupMemberSubItemScores]);
 
     const handleSubItemNewScoreChange = (subItemId: number, value: string) => {
         setEditSubItemScores(prev => prev.map(s =>
@@ -950,8 +981,35 @@ export default function ScoreModal({
         try {
             const finalReason = getFinalEditReason();
 
-            // For sub-items
-            if (hasSubItems && selectedEditSubItemId !== null) {
+            // Group + sub-items: batch edit request for all selected members' sub-item scores
+            if (isGroupAssignment && editSelectedGroup && hasSubItems && selectedEditSubItemId !== null) {
+                const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
+                if (!subItem) return;
+
+                const selectedMembers = groupMemberScores.filter(m => m.selected && !m.hasPendingEdit);
+                const scoreIds = selectedMembers
+                    .map(m => groupMemberSubItemScores.get(m.studentId)?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId ?? null)
+                    .filter((id): id is number => id !== null);
+
+                if (scoreIds.length === 0) {
+                    addToast({ title: "ไม่มีสมาชิกที่เลือก", description: "กรุณาเลือกอย่างน้อย 1 คนที่มีคะแนนในข้อย่อยนี้", color: "warning", timeout: 3000, shouldShowTimeoutProgress: true });
+                    return;
+                }
+
+                const batchResult = await scoreService.requestGroupScoreEdit({
+                    score_ids: scoreIds,
+                    new_score: parseFloat(subItem.newScore),
+                    reason: finalReason,
+                }, editImages);
+
+                if (batchResult.skipped > 0) {
+                    addToast({ title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)", description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`, color: "warning", timeout: 5000, shouldShowTimeoutProgress: true });
+                } else {
+                    addToast({ title: "ส่งคำขอแก้ไขสำเร็จ", description: `ส่งคำขอแก้ไขคะแนนข้อย่อยสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
+                }
+
+            // Individual sub-item edit
+            } else if (hasSubItems && selectedEditSubItemId !== null) {
                 const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
                 if (!subItem?.scoreId) return;
 
@@ -1032,6 +1090,7 @@ export default function ScoreModal({
             setEditSubItemScores([]);
             setSelectedEditSubItemId(null);
             setGroupMemberScores([]);
+            setGroupMemberSubItemScores(new Map());
             setEditGroupMode("all");
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "ไม่สามารถส่งคำขอแก้ไขได้";
@@ -1988,6 +2047,7 @@ export default function ScoreModal({
                                                                     setEditSubItemScores([]);
                                                                     setSelectedEditSubItemId(null);
                                                                     setGroupMemberScores([]);
+                                                                    setGroupMemberSubItemScores(new Map());
                                                                     setEditGroupMode("all");
                                                                 }}
                                                             >
