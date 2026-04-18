@@ -4,6 +4,7 @@ pipeline {
     options {
         timeout(time: 30, unit: 'MINUTES')
         disableConcurrentBuilds()
+        skipDefaultCheckout(true)
     }
 
     triggers {
@@ -22,6 +23,8 @@ pipeline {
 
         stage('📥 Checkout') {
             steps {
+                // Remove root-owned files (e.g. Traefik acme.json) that Jenkins cannot delete
+                sh 'sudo rm -rf traefik-dev traefik-prod 2>/dev/null || true'
                 checkout scm
             }
         }
@@ -192,10 +195,10 @@ EOF
             echo "❌ DEPLOY FAILED"
             sh """
             echo "📋 Backend logs:"
-            docker logs itii-${ENV_NAME}-backend --tail 100 || true
+            docker logs itii-${env.ENV_NAME}-backend --tail 100 || true
             echo ""
             echo "📋 Redis logs:"
-            docker logs itii-${ENV_NAME}-redis --tail 50 || true
+            docker logs itii-${env.ENV_NAME}-redis --tail 50 || true
             echo ""
             echo "📋 Container status:"
             docker ps -a | grep itii || true
