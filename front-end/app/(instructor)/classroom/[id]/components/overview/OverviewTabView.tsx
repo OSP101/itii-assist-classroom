@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import Image from "next/image";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Chip } from "@heroui/chip";
@@ -27,7 +27,9 @@ import {
     ScoreDistributionBar,
     StatsCard,
     AssignmentTypeSummaryCard,
+    StudentDetailModal,
 } from "./components";
+import type { OverviewStudent } from "@/services/course.service";
 
 interface OverviewTabViewProps {
     // Data
@@ -64,6 +66,8 @@ function OverviewTabViewComponent({
     onSetSelectedAssignmentType,
     onResetAssignmentTypeFilter,
 }: OverviewTabViewProps) {
+    const [selectedStudent, setSelectedStudent] = useState<OverviewStudent | null>(null);
+
     if (isLoading || !mounted) {
         return <OverviewSkeleton />;
     }
@@ -245,12 +249,13 @@ function OverviewTabViewComponent({
                                 {overview.topStudents.map((student, index) => (
                                     <div 
                                         key={student.id} 
-                                        className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
+                                        className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer ${
                                             index === 0 ? "bg-gradient-to-r from-amber-50 to-amber-100 border border-amber-200" :
                                             index === 1 ? "bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200" :
                                             index === 2 ? "bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200" :
                                             "bg-slate-50 border border-slate-100"
                                         }`}
+                                        onClick={() => setSelectedStudent(student)}
                                     >
                                         <div className="flex items-center gap-3">
                                             {/* Rank Badge */}
@@ -316,11 +321,12 @@ function OverviewTabViewComponent({
                                 {overview.lowPerformers.slice(0, 5).map((student, index) => (
                                     <div 
                                         key={student.id} 
-                                        className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] ${
+                                        className={`flex items-center justify-between p-3 rounded-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer ${
                                             (student.percentage || 0) < 30 
                                                 ? "bg-gradient-to-r from-red-50 to-red-100 border border-red-200" 
                                                 : "bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200"
                                         }`}
+                                        onClick={() => setSelectedStudent(student)}
                                     >
                                         <div className="flex items-center gap-3">
                                             {/* Warning Badge */}
@@ -762,6 +768,13 @@ function OverviewTabViewComponent({
                     </CardBody>
                 </Card>
             </div>
+            {/* Student Detail Modal */}
+            <StudentDetailModal
+                isOpen={!!selectedStudent}
+                onClose={() => setSelectedStudent(null)}
+                student={selectedStudent}
+                courseId={course.id}
+            />
         </div>
     );
 }

@@ -843,9 +843,9 @@ TA สามารถส่งคำขอแก้ไขคะแนน ไป�
 
 | ส่วน | เทคโนโลยี |
 |---|---|
-| **Frontend** | Next.js 15, TypeScript, HeroUI (NextUI), Tailwind CSS |
+| **Frontend** | Next.js 16, TypeScript, HeroUI 3 (NextUI), Tailwind CSS 4 |
 | **Backend** | Node.js, Express.js, Sequelize ORM |
-| **Database** | MySQL |
+| **Database** | PostgreSQL |
 | **Real-time** | Socket.IO |
 | **Authentication** | JWT, Passport.js (Google/GitHub/Apple OAuth), TOTP (speakeasy) |
 | **Push Notifications** | Firebase Cloud Messaging (FCM) |

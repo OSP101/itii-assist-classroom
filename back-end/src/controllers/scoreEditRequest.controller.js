@@ -459,7 +459,14 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
         ],
     });
 
-    if (existingRequests.length > 0) {
+    // Separate scores into those that can proceed and those already pending
+    const alreadyPendingStudentIds = new Set(
+        existingRequests.map(r => r.score?.student_id).filter(Boolean)
+    );
+    const scoresToProcess = scores.filter(score => !alreadyPendingStudentIds.has(score.student_id));
+
+    // If ALL submitted members already have pending requests, return an error
+    if (scoresToProcess.length === 0) {
         const pendingDetails = new Map();
         for (const request of existingRequests) {
             const studentId = request.score?.student_id;
@@ -469,8 +476,17 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
                 pendingDetails.set(studentId, `${studentName} (ส่งโดย ${requesterName})`);
             }
         }
-
         throw new ApiError(400, `มีคำร้องแก้ไขคะแนนที่รออนุมัติอยู่แล้ว: ${[...pendingDetails.values()].join(', ')}`);
+    }
+
+    // Build info about skipped members (already have pending requests)
+    const skippedDetails = [];
+    for (const request of existingRequests) {
+        const studentId = request.score?.student_id;
+        if (alreadyPendingStudentIds.has(studentId)) {
+            const studentName = request.score?.student?.full_name || `student_id:${studentId}`;
+            skippedDetails.push(studentName);
+        }
     }
 
     // Process uploaded images - same images for all batch requests
@@ -483,9 +499,9 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
     const t = await sequelize.transaction();
 
     try {
-        // Create edit requests for all scores
+        // Create edit requests only for scores without existing pending requests
         const editRequests = await Promise.all(
-            scores.map(score =>
+            scoresToProcess.map(score =>
                 ScoreEditRequest.create({
                     score_id: score.id,
                     old_score: score.score,
@@ -500,11 +516,17 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
 
         await t.commit();
 
+        const message = skippedDetails.length > 0
+            ? `สร้างคำร้องแก้ไข ${editRequests.length} รายการ (ข้าม ${skippedDetails.length} รายการที่มีคำร้องรออนุมัติอยู่แล้ว: ${skippedDetails.join(', ')})`
+            : `Created ${editRequests.length} edit request(s) successfully`;
+
         res.status(201).json({
             success: true,
-            message: `Created ${editRequests.length} edit request(s) successfully`,
+            message,
             data: {
                 count: editRequests.length,
+                skipped: skippedDetails.length,
+                skipped_names: skippedDetails,
                 requests: editRequests.map(r => ({
                     id: r.id,
                     score_id: r.score_id,

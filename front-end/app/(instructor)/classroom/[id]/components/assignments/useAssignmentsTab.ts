@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { addToast } from "@heroui/toast";
 import assignmentService from "@/services/assignment.service";
+import scoreService from "@/services/score.service";
+import type { UngradedSummary } from "@/services/score.service";
 import { useSocket } from "@/contexts/SocketContext";
 import type { AssignmentType } from "../types";
 import type { AssignmentTabType, ViewMode } from "./config";
@@ -31,6 +33,7 @@ export interface UseAssignmentsTabReturn {
     groupAssignments: AssignmentType[];
     currentAssignments: AssignmentType[];
     courseId: string;
+    ungradedSummary: UngradedSummary;
     // Actions
     setSearchQuery: (query: string) => void;
     setActiveTab: (tab: AssignmentTabType) => void;
@@ -72,6 +75,24 @@ export function useAssignmentsTab({
     // Create/Edit modal states
     const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
     const [editingAssignment, setEditingAssignment] = useState<AssignmentType | null>(null);
+
+    // Ungraded summary state
+    const [ungradedSummary, setUngradedSummary] = useState<UngradedSummary>({});
+
+    // Fetch ungraded summary when assignments change
+    useEffect(() => {
+        if (!courseId || assignments.length === 0) {
+            setUngradedSummary({});
+            return;
+        }
+        let cancelled = false;
+        scoreService.getUngradedSummary(courseId).then((data) => {
+            if (!cancelled) setUngradedSummary(data);
+        }).catch(() => {
+            // silently ignore
+        });
+        return () => { cancelled = true; };
+    }, [courseId, assignments]);
 
     // Separate assignments by type
     const labAssignments = useMemo(() => 
@@ -201,6 +222,7 @@ export function useAssignmentsTab({
         groupAssignments,
         currentAssignments,
         courseId,
+        ungradedSummary,
         // Actions
         setSearchQuery,
         setActiveTab,

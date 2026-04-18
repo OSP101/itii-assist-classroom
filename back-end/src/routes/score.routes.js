@@ -21,6 +21,9 @@ router.get('/students/search', scoreController.searchStudents);
 // GET /api/scores/groups - Get groups for assignment
 router.get('/groups', scoreController.getGroupsForAssignment);
 
+// GET /api/scores/ungraded-summary - Get ungraded students summary per assignment
+router.get('/ungraded-summary', scoreController.getUngradedSummary);
+
 // POST /api/scores - Submit single score
 router.post('/', checkCourseActive, scoreController.submitScore);
 

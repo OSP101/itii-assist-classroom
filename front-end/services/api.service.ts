@@ -129,6 +129,7 @@ class ApiService {
       headers['Content-Type'] = 'application/json';
     }
 
+    // ส่งโทเคนเพื่อยืนยันตัวตนในการใช้งาน
     const accessToken = this.getAccessToken();
     if (accessToken) {
       headers['Authorization'] = `Bearer ${accessToken}`;

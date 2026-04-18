@@ -256,7 +256,7 @@ export default function UsersPage() {
                 avatar: formData.avatar,
             };
 
-            const response = await userService.updateUser(selectedUser.id, updateData);
+            const response = await userService.updateUser(selectedUser.ID, updateData);
             if (response.success) {
                 addToast({
                     title: "อัปเดตผู้ใช้สำเร็จ",
@@ -268,7 +268,7 @@ export default function UsersPage() {
                 setIsEditModalOpen(false);
                 resetForm();
                 fetchUsers();
-                emitDataUpdate("user", "update", selectedUser.id);
+                emitDataUpdate("user", "update", selectedUser.ID);
             } else {
                 const errorMessage = (response as { error?: { message?: string } }).error?.message || "เกิดข้อผิดพลาด";
                 addToast({
@@ -300,7 +300,7 @@ export default function UsersPage() {
         setIsSubmitting(true);
         isUpdatingRef.current = true;
         try {
-            const response = await userService.deleteUser(selectedUser.id);
+            const response = await userService.deleteUser(selectedUser.ID);
             if (response.success) {
                 addToast({
                     title: "ลบผู้ใช้สำเร็จ",
@@ -313,7 +313,7 @@ export default function UsersPage() {
                 setSelectedUser(null);
                 fetchUsers();
                 fetchStats();
-                emitDataUpdate("user", "delete", selectedUser.id);
+                emitDataUpdate("user", "delete", selectedUser.ID);
             } else {
                 addToast({
                     title: "ไม่สามารถลบผู้ใช้ได้",
@@ -350,7 +350,7 @@ export default function UsersPage() {
         isUpdatingRef.current = true;
         setIsToggleStatusModalOpen(false);
         try {
-            const response = await userService.toggleStatus(user.id);
+            const response = await userService.toggleStatus(user.ID);
             if (response.success) {
                 addToast({
                     title: user.is_active ? "ปิดใช้งานสำเร็จ" : "เปิดใช้งานสำเร็จ",
@@ -361,7 +361,7 @@ export default function UsersPage() {
                 });
                 fetchUsers();
                 fetchStats();
-                emitDataUpdate("user", "toggle", user.id);
+                emitDataUpdate("user", "toggle", user.ID);
             } else {
                 addToast({
                     title: "เกิดข้อผิดพลาด",
@@ -482,7 +482,7 @@ export default function UsersPage() {
                         />
                         <div>
                             <p className="font-medium">{user.username}</p>
-                            <p className="text-xs text-default-400">ID: {user.id}</p>
+                            <p className="text-xs text-default-400">ID: {user.ID}</p>
                         </div>
                     </div>
                 );
@@ -762,7 +762,7 @@ export default function UsersPage() {
                                     loadingContent={<Spinner color="primary" label="กำลังโหลด..." />}
                                 >
                                     {(item) => (
-                                        <TableRow key={item.id}>
+                                        <TableRow key={item.ID}>
                                             {(columnKey) => (
                                                 <TableCell>{renderCell(item, columnKey)}</TableCell>
                                             )}
@@ -1110,7 +1110,7 @@ export default function UsersPage() {
                                         setFormData({ ...formData, role: value });
                                     }}
                                     isRequired
-                                    isDisabled={selectedUser?.id === authUser?.id}
+                                    isDisabled={selectedUser?.ID === authUser?.id}
                                     classNames={{
                                         trigger: "bg-white border-slate-200 hover:border-blue-300 data-[focus=true]:border-blue-400",
                                         label: "text-slate-600 font-medium text-sm",

@@ -230,9 +230,11 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             const buildScoreSheet = (
                 matrix: NonNullable<Awaited<ReturnType<typeof scoreService.getScoreSummaryMatrix>>>,
                 sheetName: string,
+                isGroup = false,
             ) => {
                 const ws = wb.addWorksheet(sheetName);
-                const FIXED = 3;
+                // For group sheets: 1 extra fixed col (ชื่อกลุ่ม)
+                const FIXED = isGroup ? 4 : 3;
                 const asgmts = matrix.assignments;
 
                 const scoreCols: ColDef[] = [];
@@ -252,10 +254,17 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 const totalCols = FIXED + scoreCols.length + 2;
 
                 // Column widths (1-indexed)
-                ws.getColumn(1).width = 16;
-                ws.getColumn(2).width = 28;
-                ws.getColumn(3).width = 10;
-                for (let c = 4; c < 4 + scoreCols.length; c++) ws.getColumn(c).width = 11;
+                if (isGroup) {
+                    ws.getColumn(1).width = 22; // ชื่อกลุ่ม
+                    ws.getColumn(2).width = 16; // รหัสนักศึกษา
+                    ws.getColumn(3).width = 28; // ชื่อ-นามสกุล
+                    ws.getColumn(4).width = 10; // กลุ่มเรียน
+                } else {
+                    ws.getColumn(1).width = 16;
+                    ws.getColumn(2).width = 28;
+                    ws.getColumn(3).width = 10;
+                }
+                for (let c = FIXED + 1; c < FIXED + 1 + scoreCols.length; c++) ws.getColumn(c).width = 11;
                 ws.getColumn(FIXED + scoreCols.length + 1).width = 9;
                 ws.getColumn(FIXED + scoreCols.length + 2).width = 11;
 
@@ -265,9 +274,16 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
 
                 // ─ Row 1: main headers ─
                 const r1 = ws.getRow(1);
-                r1.getCell(1).value = "รหัสนักศึกษา";
-                r1.getCell(2).value = "ชื่อ-นามสกุล";
-                r1.getCell(3).value = "กลุ่มเรียน";
+                if (isGroup) {
+                    r1.getCell(1).value = "ชื่อกลุ่ม";
+                    r1.getCell(2).value = "รหัสนักศึกษา";
+                    r1.getCell(3).value = "ชื่อ-นามสกุล";
+                    r1.getCell(4).value = "กลุ่มเรียน";
+                } else {
+                    r1.getCell(1).value = "รหัสนักศึกษา";
+                    r1.getCell(2).value = "ชื่อ-นามสกุล";
+                    r1.getCell(3).value = "กลุ่มเรียน";
+                }
 
                 let ci = FIXED; // 0-based cursor
                 for (const col of scoreCols) {
@@ -289,9 +305,16 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
 
                 // ─ Merges for headers ─
                 // Fixed cols: vertical merge rows 1-2
-                ws.mergeCells(1, 1, 2, 1);
-                ws.mergeCells(1, 2, 2, 2);
-                ws.mergeCells(1, 3, 2, 3);
+                if (isGroup) {
+                    ws.mergeCells(1, 1, 2, 1);
+                    ws.mergeCells(1, 2, 2, 2);
+                    ws.mergeCells(1, 3, 2, 3);
+                    ws.mergeCells(1, 4, 2, 4);
+                } else {
+                    ws.mergeCells(1, 1, 2, 1);
+                    ws.mergeCells(1, 2, 2, 2);
+                    ws.mergeCells(1, 3, 2, 3);
+                }
                 ws.mergeCells(1, totalCols - 1, 2, totalCols - 1);
                 ws.mergeCells(1, totalCols, 2, totalCols);
 
@@ -309,11 +332,37 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                 }
 
                 // ─ Data rows ─
+                // Pre-compute group merge ranges for group sheets
+                const groupMergeRanges: Array<{ startRow: number; endRow: number; group_id: number | null; group_name: string | null }> = [];
+                if (isGroup) {
+                    let i = 0;
+                    while (i < matrix.students.length) {
+                        const gid = matrix.students[i].group_id ?? null;
+                        let j = i;
+                        while (j < matrix.students.length && (matrix.students[j].group_id ?? null) === gid) j++;
+                        groupMergeRanges.push({
+                            startRow: 3 + i,
+                            endRow: 3 + j - 1,
+                            group_id: gid,
+                            group_name: matrix.students[i].group_name ?? null,
+                        });
+                        i = j;
+                    }
+                }
+
                 matrix.students.forEach((stu, rowOffset) => {
                     const r = ws.getRow(3 + rowOffset);
-                    r.getCell(1).value = stu.student_id;
-                    r.getCell(2).value = stu.full_name;
-                    r.getCell(3).value = stu.section_number;
+                    if (isGroup) {
+                        // group cols: col1 = ชื่อกลุ่ม, col2 = รหัสนักศึกษา, col3 = ชื่อ-นามสกุล, col4 = กลุ่มเรียน
+                        r.getCell(1).value = stu.group_name ?? "-";
+                        r.getCell(2).value = stu.student_id;
+                        r.getCell(3).value = stu.full_name;
+                        r.getCell(4).value = stu.section_number;
+                    } else {
+                        r.getCell(1).value = stu.student_id;
+                        r.getCell(2).value = stu.full_name;
+                        r.getCell(3).value = stu.section_number;
+                    }
 
                     scoreCols.forEach((col, scIdx) => {
                         const scoreObj = stu.scores[col.key];
@@ -375,12 +424,20 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     }
 
                     // Fixed col styles
-                    r.getCell(1).alignment = LEFT_ALIGN;
-                    r.getCell(2).alignment = LEFT_ALIGN;
-                    r.getCell(3).alignment = CENTER_ALIGN;
-                    r.getCell(1).border = THIN_BORDER;
-                    r.getCell(2).border = THIN_BORDER;
-                    r.getCell(3).border = THIN_BORDER;
+                    if (isGroup) {
+                        r.getCell(1).alignment = CENTER_ALIGN;
+                        r.getCell(2).alignment = LEFT_ALIGN;
+                        r.getCell(3).alignment = LEFT_ALIGN;
+                        r.getCell(4).alignment = CENTER_ALIGN;
+                        for (let c = 1; c <= FIXED; c++) r.getCell(c).border = THIN_BORDER;
+                    } else {
+                        r.getCell(1).alignment = LEFT_ALIGN;
+                        r.getCell(2).alignment = LEFT_ALIGN;
+                        r.getCell(3).alignment = CENTER_ALIGN;
+                        r.getCell(1).border = THIN_BORDER;
+                        r.getCell(2).border = THIN_BORDER;
+                        r.getCell(3).border = THIN_BORDER;
+                    }
                     // Alternate row
                     if (rowOffset % 2 === 1) {
                         for (let c = 1; c <= FIXED; c++) {
@@ -390,17 +447,35 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     }
                 });
 
-                ws.views = [{ state: "frozen", xSplit: 3, ySplit: 2 }];
+                // ─ Group cell merges (vertical) for group sheets ─
+                if (isGroup) {
+                    const GROUP_FILL = solidFill("FFE0E7FF"); // indigo-100
+                    const GROUP_FONT: Partial<ExcelJS.Font> = { bold: true, color: { argb: "FF3730A3" }, size: 10, name: "Calibri" }; // indigo-800
+                    for (const range of groupMergeRanges) {
+                        // Merge ชื่อกลุ่ม and รหัสกลุ่ม columns vertically
+                        if (range.endRow > range.startRow) {
+                            ws.mergeCells(range.startRow, 1, range.endRow, 1);
+                        }
+                        // Style the merged group cell
+                        const nameCell = ws.getCell(range.startRow, 1);
+                        nameCell.fill = GROUP_FILL;
+                        nameCell.font = GROUP_FONT;
+                        nameCell.alignment = CENTER_ALIGN;
+                        nameCell.border = THIN_BORDER;
+                    }
+                }
+
+                ws.views = [{ state: "frozen", xSplit: isGroup ? 4 : 3, ySplit: 2 }];
                 return ws;
             };
 
             // ════════════════════════════════════════════════════════════════
-            // Sheets 1-3: Score matrices
+            // Sheets 1-3: Score matrices (individual, assignment, permanent group)
             // ════════════════════════════════════════════════════════════════
-            const scoreTypes: Array<{ key: "individual" | "assignment" | "group"; sheet: string }> = [
-                { key: "individual", sheet: "คะแนนแลป" },
-                { key: "assignment", sheet: "คะแนนการบ้าน" },
-                { key: "group",      sheet: "คะแนนกลุ่ม" },
+            const scoreTypes: Array<{ key: "individual" | "assignment" | "permanent_group"; sheet: string }> = [
+                { key: "individual",      sheet: "คะแนนแลป" },
+                { key: "assignment",      sheet: "คะแนนการบ้าน" },
+                { key: "permanent_group", sheet: "คะแนนกลุ่ม" },
             ];
 
             type SummaryEntry = {
@@ -436,8 +511,165 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     prev.bonus = stu.bonus_score;
                     summaryMap.set(stu.student_id, prev);
                 }
-                buildScoreSheet(matrix, scoreTypes[idx].sheet);
+                buildScoreSheet(matrix, scoreTypes[idx].sheet, false);
             });
+
+            // ════════════════════════════════════════════════════════════════
+            // Sheet 4: คะแนนกลุ่ม (สัปดาห์) — weekly group
+            // Columns: รหัสนักศึกษา | ชื่อ-นามสกุล | กลุ่มเรียน | [Asgmt 1 scores] | ...
+            // Group name is shown as an Excel note on each score cell
+            // ════════════════════════════════════════════════════════════════
+            const weeklyMatrix = await scoreService.getScoreSummaryMatrix(courseId, { assignmentType: "weekly_group" });
+            if (!weeklyMatrix || weeklyMatrix.assignments.length === 0) {
+                const ws = wb.addWorksheet("คะแนนกลุ่ม (สัปดาห์)");
+                ws.addRow(["ไม่มีข้อมูลคะแนนกลุ่มตามสัปดาห์"]);
+            } else {
+                const wws = wb.addWorksheet("คะแนนกลุ่ม (สัปดาห์)");
+                const WFIXED = 3; // รหัสนักศึกษา, ชื่อ, กลุ่มเรียน
+                const wasgmts = weeklyMatrix.assignments;
+
+                // Score cols only — group name will appear as cell note
+                type WColDef = { scoreKey: string; asgmtId: number; asgmtTitle: string; asgmtMax: number; subLabel: string | null; isFirstOfAsgmt: boolean };
+                const wCols: WColDef[] = [];
+                for (const a of wasgmts) {
+                    if (a.subItems.length === 0) {
+                        wCols.push({ scoreKey: `${a.id}_main`, asgmtId: a.id, asgmtTitle: a.title, asgmtMax: a.max_score, subLabel: null, isFirstOfAsgmt: true });
+                    } else {
+                        for (let si = 0; si < a.subItems.length; si++) {
+                            const sub = a.subItems[si];
+                            wCols.push({ scoreKey: `${a.id}_${sub.id}`, asgmtId: a.id, asgmtTitle: a.title, asgmtMax: sub.max_score, subLabel: `${sub.name} (${sub.max_score})`, isFirstOfAsgmt: si === 0 });
+                        }
+                    }
+                }
+                const wTotalCols = WFIXED + wCols.length + 2;
+
+                // Column widths
+                wws.getColumn(1).width = 16;
+                wws.getColumn(2).width = 28;
+                wws.getColumn(3).width = 10;
+                for (let c = WFIXED + 1; c <= WFIXED + wCols.length; c++) wws.getColumn(c).width = 11;
+                wws.getColumn(wTotalCols - 1).width = 9;
+                wws.getColumn(wTotalCols).width = 11;
+                wws.getRow(1).height = 32;
+                wws.getRow(2).height = 22;
+
+                // Row 1: fixed headers + assignment titles
+                const wr1 = wws.getRow(1);
+                wr1.getCell(1).value = "รหัสนักศึกษา";
+                wr1.getCell(2).value = "ชื่อ-นามสกุล";
+                wr1.getCell(3).value = "กลุ่มเรียน";
+                let wci = WFIXED;
+                for (const wc of wCols) {
+                    if (wc.isFirstOfAsgmt) wr1.getCell(wci + 1).value = `${wc.asgmtTitle} (${wc.asgmtMax})`;
+                    wci++;
+                }
+                wr1.getCell(wTotalCols - 1).value = "รวม";
+                wr1.getCell(wTotalCols).value = "คะแนนเต็ม";
+                for (let c = 1; c <= wTotalCols; c++) applyHdr1(wr1.getCell(c));
+
+                // Row 2: sub-item labels
+                const wr2 = wws.getRow(2);
+                wci = WFIXED;
+                for (const wc of wCols) {
+                    if (wc.subLabel) wr2.getCell(wci + 1).value = wc.subLabel;
+                    wci++;
+                }
+                for (let c = 1; c <= wTotalCols; c++) applyHdr2(wr2.getCell(c));
+
+                // Merges: fixed cols vertical
+                wws.mergeCells(1, 1, 2, 1);
+                wws.mergeCells(1, 2, 2, 2);
+                wws.mergeCells(1, 3, 2, 3);
+                wws.mergeCells(1, wTotalCols - 1, 2, wTotalCols - 1);
+                wws.mergeCells(1, wTotalCols, 2, wTotalCols);
+                // Per-assignment: merge title across all its score cols
+                wci = WFIXED;
+                for (const a of wasgmts) {
+                    const span = a.subItems.length === 0 ? 1 : a.subItems.length;
+                    if (span > 1) {
+                        wws.mergeCells(1, wci + 1, 1, wci + span);
+                    } else {
+                        wws.mergeCells(1, wci + 1, 2, wci + 1); // single col: vertical merge
+                    }
+                    wci += span;
+                }
+
+                // Data rows
+                weeklyMatrix.students.forEach((stu, rowOffset) => {
+                    const wr = wws.getRow(3 + rowOffset);
+                    wr.getCell(1).value = stu.student_id;
+                    wr.getCell(2).value = stu.full_name;
+                    wr.getCell(3).value = stu.section_number;
+                    wr.getCell(1).alignment = LEFT_ALIGN;
+                    wr.getCell(2).alignment = LEFT_ALIGN;
+                    wr.getCell(3).alignment = CENTER_ALIGN;
+                    for (let c = 1; c <= WFIXED; c++) wr.getCell(c).border = THIN_BORDER;
+
+                    wci = WFIXED;
+                    for (const wc of wCols) {
+                        const cell = wr.getCell(wci + 1);
+                        cell.border = THIN_BORDER;
+                        const scoreObj = stu.scores[wc.scoreKey];
+                        const val = scoreObj?.score ?? null;
+                        cell.alignment = CENTER_ALIGN;
+                        const argb = scoreArgb(val, wc.asgmtMax);
+                        if (argb) {
+                            cell.fill = solidFill(argb);
+                            cell.font = { color: { argb: scoreWhite(val, wc.asgmtMax) ? "FFFFFFFF" : "FF1E293B" }, size: 10, bold: val !== null && val / wc.asgmtMax >= 0.9 };
+                        } else {
+                            cell.font = { size: 10, color: { argb: "FF64748B" } };
+                        }
+
+                        // Build note: group name first, then edit history, then comment
+                        const noteLines: string[] = [];
+                        const gName = scoreObj?.group_name;
+                        if (gName) noteLines.push(`กลุ่ม: ${gName}`);
+                        const editReqs = scoreObj?.edit_requests ?? [];
+                        if (editReqs.length > 0) {
+                            if (noteLines.length > 0) noteLines.push("");
+                            for (const er of editReqs) {
+                                const oldStr = er.old_score !== null && er.old_score !== undefined ? String(er.old_score) : "-";
+                                noteLines.push(`แก้ไขคะแนน: ${oldStr} → ${er.new_score}`);
+                                if (er.reason) noteLines.push(`เหตุผล: ${er.reason}`);
+                                if (er.requester) noteLines.push(`ผู้ขอแก้ไข: ${er.requester}`);
+                                if (er.reviewer) noteLines.push(`ผู้อนุมัติ: ${er.reviewer}`);
+                                if (er.review_comment) noteLines.push(`ความเห็น: ${er.review_comment}`);
+                                noteLines.push("");
+                            }
+                        }
+                        if (scoreObj?.comment) noteLines.push(`หมายเหตุ: ${scoreObj.comment}`);
+
+                        const hasNote = noteLines.filter(l => l.length > 0).length > 0;
+                        cell.value = hasNote && val !== null ? `${val} *` : val;
+                        if (hasNote) cell.note = noteLines.join("\n").trim();
+
+                        wci++;
+                    }
+
+                    // Total + max
+                    const wTotalCell = wr.getCell(wTotalCols - 1);
+                    const wMaxCell   = wr.getCell(wTotalCols);
+                    wTotalCell.value = stu.total_score;
+                    wMaxCell.value   = stu.total_max_score;
+                    wTotalCell.alignment = CENTER_ALIGN;
+                    wMaxCell.alignment   = CENTER_ALIGN;
+                    wTotalCell.border = THIN_BORDER;
+                    wMaxCell.border   = THIN_BORDER;
+                    const wTotalArgb = scoreArgb(stu.total_score, stu.total_max_score);
+                    if (wTotalArgb) {
+                        wTotalCell.fill = solidFill(wTotalArgb);
+                        wTotalCell.font = { bold: true, color: { argb: scoreWhite(stu.total_score, stu.total_max_score) ? "FFFFFFFF" : "FF1E293B" }, size: 10 };
+                    }
+                    if (rowOffset % 2 === 1) {
+                        for (let c = 1; c <= WFIXED; c++) {
+                            if (!(wr.getCell(c).fill as FillSolid)?.fgColor?.argb)
+                                wr.getCell(c).fill = solidFill("FFF8FAFC");
+                        }
+                    }
+                });
+
+                wws.views = [{ state: "frozen", xSplit: WFIXED, ySplit: 2 }];
+            }
 
             // ════════════════════════════════════════════════════════════════
             // Sheet 4: การเช็คชื่อ

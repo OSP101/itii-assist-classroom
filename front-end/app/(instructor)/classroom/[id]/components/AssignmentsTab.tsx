@@ -46,6 +46,7 @@ export default function AssignmentsTab({
         homeworkAssignments,
         groupAssignments,
         currentAssignments,
+        ungradedSummary,
         // Actions
         setSearchQuery,
         setActiveTab,
@@ -98,6 +99,7 @@ export default function AssignmentsTab({
             onOpenScoreModal={onOpenScoreModal}
             onOpenBonusScoreModal={onOpenBonusScoreModal}
             isCourseActive={isCourseActive}
+            ungradedSummary={ungradedSummary}
             hasPendingUpdate={hasPendingUpdate}
             onPendingUpdateAck={onPendingUpdateAck}
         />

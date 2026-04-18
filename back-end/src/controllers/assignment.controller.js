@@ -59,6 +59,8 @@ const getAssignments = asyncHandler(async (req, res) => {
 const getAssignment = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
+    
+
     const assignment = await Assignment.findByPk(id, {
         include: [
             {
