@@ -7,7 +7,7 @@ import { API_ENDPOINTS } from '@/config/api';
 
 // Types
 export interface User {
-  id: number;
+  ID: number;
   username: string;
   full_name: string;
   email: string | null;

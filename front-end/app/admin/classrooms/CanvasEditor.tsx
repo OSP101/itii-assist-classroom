@@ -395,7 +395,7 @@ export default function CanvasEditor({
             listening: false,
         }));
 
-        // ============ Draw Zones (draggable + resizable) ============
+        // ============ Draw Zones (draggable + resizable) โซน ============
         zones.forEach((zone) => {
             const zoneGroup = new Konva.Group({
                 x: zone.x,
@@ -657,6 +657,7 @@ export default function CanvasEditor({
                 }));
             }
 
+            // สีของโต๊ะ
             const color = !desk.isEnabled ? "#cbd5e1"
                 : desk.type === "computer" ? "#3b82f6"
                 : desk.type === "teacher" ? "#f59e0b"

@@ -14,6 +14,7 @@ import type { AssignmentType } from "../types";
 import type { AssignmentTabType, ViewMode } from "./config";
 import { getTypeInfo, getTypeBgColor, getTypeTextColor } from "./config";
 import { AssignmentModal } from "./AssignmentModal";
+import type { UngradedSummary } from "@/services/score.service";
 
 interface AssignmentsTabViewProps {
     // Data
@@ -53,6 +54,7 @@ interface AssignmentsTabViewProps {
     onOpenScoreModal: (assignment: AssignmentType) => void;
     onOpenBonusScoreModal?: () => void;
     isCourseActive?: boolean;
+    ungradedSummary?: UngradedSummary;
     hasPendingUpdate?: boolean;
     onPendingUpdateAck?: () => void;
 }
@@ -88,9 +90,66 @@ function AssignmentsTabViewComponent({
     onOpenScoreModal,
     onOpenBonusScoreModal,
     isCourseActive = true,
+    ungradedSummary = {},
     hasPendingUpdate,
     onPendingUpdateAck,
 }: AssignmentsTabViewProps) {
+    const getUngradedTooltipContent = (assignment: AssignmentType) => {
+        const info = ungradedSummary[assignment.id];
+        if (!info || info.ungraded_count === 0) {
+            return null;
+        }
+
+        const previewStudents = info.students.slice(0, 3);
+
+        return (
+            <div className="max-w-xs px-1 py-0.5">
+                <p className="mb-1 font-medium">
+                    {"\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E30\u0E41\u0E19\u0E19 "}
+                    {info.ungraded_count}/{info.total_students}
+                    {" \u0E04\u0E19"}
+                </p>
+                <div className="space-y-1">
+                    {previewStudents.map((student) => (
+                        <p key={student.student_id} className="text-xs leading-5">
+                            {student.student_id} - {student.full_name}
+                        </p>
+                    ))}
+                </div>
+                {info.ungraded_count > previewStudents.length && (
+                    <p className="mt-1 text-xs text-slate-300">
+                        {"\u0E41\u0E25\u0E30\u0E2D\u0E35\u0E01 "}
+                        {info.ungraded_count - previewStudents.length}
+                        {" \u0E04\u0E19..."}
+                    </p>
+                )}
+            </div>
+        );
+    };
+
+    const renderUngradedInfo = (assignment: AssignmentType) => {
+        const info = ungradedSummary[assignment.id];
+        if (!info || info.ungraded_count === 0) {
+            return null;
+        }
+
+        return (
+            <div className="mt-2 border-t border-slate-100 pt-2">
+                <Tooltip content={getUngradedTooltipContent(assignment)}>
+                    <div className="inline-flex cursor-help items-center gap-1.5 text-xs text-orange-600">
+                        <Icon icon="solar:user-cross-rounded-bold" className="text-sm" />
+                        <span className="font-medium">
+                            {"\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E30\u0E41\u0E19\u0E19 "}
+                            {info.ungraded_count}/{info.total_students}
+                            {" \u0E04\u0E19"}
+                        </span>
+                        <Icon icon="solar:info-circle-linear" className="text-sm text-orange-500" />
+                    </div>
+                </Tooltip>
+            </div>
+        );
+    };
+
     // Render grid card view
     const renderGridCard = (assignment: AssignmentType) => {
         const typeInfo = getTypeInfo(assignment.assignment_type);
@@ -144,6 +203,7 @@ function AssignmentsTabViewComponent({
                             <span className="font-medium text-slate-700">{assignment.max_score}</span> คะแนน
                         </span>
                     </div>
+                    {renderUngradedInfo(assignment)}
                 </CardBody>
             </Card>
         );
@@ -190,6 +250,19 @@ function AssignmentsTabViewComponent({
                                         {assignment.subItems.length} ข้อย่อย
                                     </span>
                                 )}
+                                {ungradedSummary[assignment.id] && ungradedSummary[assignment.id].ungraded_count > 0 ? (
+                                    <Tooltip content={getUngradedTooltipContent(assignment)}>
+                                        <span className="flex items-center gap-1 cursor-help text-orange-500">
+                                            <Icon icon="solar:user-cross-rounded-bold" className="text-sm" />
+                                            <span className="text-xs font-medium">
+                                                {"\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E30\u0E41\u0E19\u0E19 "}
+                                                {ungradedSummary[assignment.id].ungraded_count}
+                                                {" \u0E04\u0E19"}
+                                            </span>
+                                            <Icon icon="solar:info-circle-linear" className="text-sm" />
+                                        </span>
+                                    </Tooltip>
+                                ) : null}
                             </div>
                         </div>
 

@@ -85,21 +85,87 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
     // Image preview modal
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
-    // Keep each request as its own item to avoid incorrectly merging different students.
-    const groupedRequests = useMemo(() => {
-        return requests.map((req) => ({
-            key: `single-${req.id}`,
-            requests: [req],
-            assignment: req.assignment,
-            sub_item: req.sub_item,
-            new_score: req.new_score,
-            old_score: req.old_score,
-            reason: req.reason,
-            images: req.images,
-            requester: req.requester,
-            created_at: req.created_at,
-            status: req.status,
-        }));
+    // Group batch requests together: same assignment + sub_item + requester + reason + new_score,
+    // created within 30 seconds of each other → treated as one batch submission.
+    const groupedRequests = useMemo((): RequestGroup[] => {
+        const groups: RequestGroup[] = [];
+        const used = new Set<number>();
+
+        // Sort by created_at ascending so we process earliest first
+        const sorted = [...requests].sort(
+            (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+
+        for (const req of sorted) {
+            if (used.has(req.id)) continue;
+
+            // Find all requests that belong to the same batch:
+            // same assignment, sub_item, requester, new_score, reason,
+            // and created within 30 s of this request.
+            const refTime = new Date(req.created_at).getTime();
+            const batchMembers = sorted.filter(
+                (r) =>
+                    !used.has(r.id) &&
+                    r.assignment.id === req.assignment.id &&
+                    (r.sub_item?.id ?? null) === (req.sub_item?.id ?? null) &&
+                    r.requester.id === req.requester.id &&
+                    r.new_score === req.new_score &&
+                    r.reason === req.reason &&
+                    r.student.id !== req.student.id && // different students
+                    Math.abs(new Date(r.created_at).getTime() - refTime) <= 30_000
+            );
+
+            if (batchMembers.length > 0) {
+                // This is a batch group — combine req + all batchMembers
+                const allInGroup = [req, ...batchMembers];
+                allInGroup.forEach((r) => used.add(r.id));
+
+                // Overall status: pending if any member is still pending
+                const overallStatus =
+                    allInGroup.some((r) => r.status === "pending")
+                        ? "pending"
+                        : allInGroup.every((r) => r.status === "approved")
+                        ? "approved"
+                        : "rejected";
+
+                groups.push({
+                    key: `batch-${allInGroup.map((r) => r.id).join("-")}`,
+                    requests: allInGroup,
+                    assignment: req.assignment,
+                    sub_item: req.sub_item,
+                    new_score: req.new_score,
+                    old_score: req.old_score,
+                    reason: req.reason,
+                    images: req.images,
+                    requester: req.requester,
+                    created_at: req.created_at,
+                    status: overallStatus,
+                });
+            } else {
+                // Single request
+                used.add(req.id);
+                groups.push({
+                    key: `single-${req.id}`,
+                    requests: [req],
+                    assignment: req.assignment,
+                    sub_item: req.sub_item,
+                    new_score: req.new_score,
+                    old_score: req.old_score,
+                    reason: req.reason,
+                    images: req.images,
+                    requester: req.requester,
+                    created_at: req.created_at,
+                    status: req.status,
+                });
+            }
+        }
+
+        // Sort final groups: pending first, then by created_at desc
+        return groups.sort((a, b) => {
+            if (a.status === "pending" && b.status !== "pending") return -1;
+            if (a.status !== "pending" && b.status === "pending") return 1;
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
     }, [requests]);
 
     // Fetch requests
@@ -498,24 +564,57 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                 }
                             >
                                 <div className="space-y-4">
-                                    {/* Group Members List (for group requests) */}
+                                    {/* Group Members List (for group batch requests) */}
                                     {isGroup && (
-                                        <div className="p-3 bg-purple-50 rounded-lg border border-purple-100">
-                                            <p className="text-xs text-purple-600 font-medium mb-2">
-                                                <Icon icon="solar:users-group-rounded-bold" className="inline mr-1" />
-                                                สมาชิกในกลุ่ม ({group.requests.length} คน)
-                                            </p>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="rounded-lg border border-slate-200 overflow-hidden">
+                                            <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
+                                                <p className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                                                    <Icon icon="solar:users-group-two-rounded-bold" className="text-blue-500" />
+                                                    สมาชิก ({group.requests.length} คน)
+                                                </p>
+                                                {group.status === "pending" && (
+                                                    <span className="text-xs text-slate-400">
+                                                        รออนุมัติ {group.requests.filter(r => r.status === "pending").length} คน
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="divide-y divide-slate-100">
                                                 {group.requests.map(req => (
-                                                    <div key={req.id} className="flex items-center gap-2 text-sm">
-                                                        <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center">
-                                                            <Icon icon="solar:user-bold" className="text-purple-600 text-xs" />
+                                                    <div key={req.id} className={`flex items-center justify-between px-3 py-2.5 ${
+                                                        req.status === "approved" ? "bg-emerald-50/40" :
+                                                        req.status === "rejected" ? "bg-red-50/40" : "bg-white"
+                                                    }`}>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                                                                req.status === "approved" ? "bg-emerald-100" :
+                                                                req.status === "rejected" ? "bg-red-100" : "bg-blue-100"
+                                                            }`}>
+                                                                <Icon icon="solar:user-bold" className={`text-sm ${
+                                                                    req.status === "approved" ? "text-emerald-600" :
+                                                                    req.status === "rejected" ? "text-red-500" : "text-blue-600"
+                                                                }`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-sm font-medium text-slate-800">{req.student.full_name}</p>
+                                                                <p className="text-xs text-slate-400">{req.student.student_id}</p>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-slate-700">{req.student.full_name}</span>
-                                                        <span className="text-slate-400 text-xs">{req.student.student_id}</span>
-                                                        <span className="text-slate-400 text-xs ml-auto">
-                                                            {req.old_score ?? "-"} → {req.new_score}
-                                                        </span>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-sm text-slate-500 hidden sm:inline">
+                                                                <span className="text-slate-400">{req.old_score ?? "-"}</span>
+                                                                <span className="mx-1 text-slate-300">→</span>
+                                                                <span className="text-emerald-600 font-semibold">{req.new_score}</span>
+                                                            </span>
+                                                            {req.status === "approved" && (
+                                                                <Chip size="sm" color="success" variant="flat" className="text-xs shrink-0" startContent={<Icon icon="solar:check-circle-bold" className="mr-0.5 text-xs" />}>อนุมัติแล้ว</Chip>
+                                                            )}
+                                                            {req.status === "rejected" && (
+                                                                <Chip size="sm" color="danger" variant="flat" className="text-xs shrink-0" startContent={<Icon icon="solar:close-circle-bold" className="mr-0.5 text-xs" />}>ปฏิเสธ</Chip>
+                                                            )}
+                                                            {req.status === "pending" && (
+                                                                <Chip size="sm" color="warning" variant="flat" className="text-xs shrink-0" startContent={<Icon icon="solar:hourglass-bold" className="mr-0.5 text-xs" />}>รออนุมัติ</Chip>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -524,20 +623,24 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
 
                                     {/* Score Change Details */}
                                     <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-lg">
-                                        <div className="text-center flex-1">
-                                            <p className="text-xs text-slate-500 mb-1">คะแนนเดิม</p>
-                                            <p className="text-2xl font-bold text-slate-600">
-                                                {group.old_score ?? "-"}
-                                            </p>
-                                        </div>
-                                        <Icon icon="solar:arrow-right-linear" className="text-2xl text-slate-300" />
+                                        {!isGroup && (
+                                            <>
+                                                <div className="text-center flex-1">
+                                                    <p className="text-xs text-slate-500 mb-1">คะแนนเดิม</p>
+                                                    <p className="text-2xl font-bold text-slate-600">
+                                                        {group.old_score ?? "-"}
+                                                    </p>
+                                                </div>
+                                                <Icon icon="solar:arrow-right-linear" className="text-2xl text-slate-300" />
+                                            </>
+                                        )}
                                         <div className="text-center flex-1">
                                             <p className="text-xs text-slate-500 mb-1">คะแนนใหม่</p>
                                             <p className="text-2xl font-bold text-emerald-600">
                                                 {group.new_score}
                                             </p>
                                         </div>
-                                        <div className="text-center flex-1 pl-4 border-l border-slate-200">
+                                        <div className={`text-center flex-1 pl-4 border-l border-slate-200 ${isGroup ? "" : ""}`}>
                                             <p className="text-xs text-slate-500 mb-1">คะแนนเต็ม</p>
                                             <p className="text-2xl font-medium text-slate-400">
                                                 {group.sub_item?.max_score ?? group.assignment.max_score}
@@ -590,7 +693,7 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                     )}
 
                                     {/* Review Comment (for approved/rejected) */}
-                                    {firstRequest.review_comment && firstRequest.status !== "pending" && (
+                                    {!isGroup && firstRequest.review_comment && firstRequest.status !== "pending" && (
                                         <div className={`p-3 rounded-lg border ${firstRequest.status === "approved"
                                             ? "bg-emerald-50 border-emerald-100"
                                             : "bg-red-50 border-red-100"
@@ -601,6 +704,22 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                                 {firstRequest.status === "approved" ? "หมายเหตุการอนุมัติ" : "เหตุผลการปฏิเสธ"}
                                             </p>
                                             <p className="text-sm text-slate-700">{firstRequest.review_comment}</p>
+                                        </div>
+                                    )}
+                                    {isGroup && group.requests.some(r => r.review_comment && r.status !== "pending") && (
+                                        <div className="space-y-2">
+                                            {group.requests.filter(r => r.review_comment && r.status !== "pending").map(req => (
+                                                <div key={req.id} className={`p-3 rounded-lg border ${req.status === "approved"
+                                                    ? "bg-emerald-50 border-emerald-100"
+                                                    : "bg-red-50 border-red-100"
+                                                }`}>
+                                                    <p className={`text-xs font-medium mb-1 ${req.status === "approved" ? "text-emerald-600" : "text-red-600"}`}>
+                                                        <Icon icon={req.status === "approved" ? "solar:check-circle-bold" : "solar:close-circle-bold"} className="inline mr-1" />
+                                                        {req.student.full_name} — {req.status === "approved" ? "หมายเหตุการอนุมัติ" : "เหตุผลการปฏิเสธ"}
+                                                    </p>
+                                                    <p className="text-sm text-slate-700">{req.review_comment}</p>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 
@@ -658,16 +777,36 @@ export default function ScoreApprovalTab({ courseId, userRole, onPendingCountCha
                                         )}
 
                                         {group.status === "pending" && isReadOnly && (
-                                            <Button
-                                                color="warning"
-                                                variant="flat"
-                                                size="sm"
-                                                startContent={<Icon icon="solar:close-square-bold" />}
-                                                isLoading={cancellingRequestId === firstRequest.id}
-                                                onPress={() => setCancelModalRequest(firstRequest)}
-                                            >
-                                                ยกเลิกคำร้อง
-                                            </Button>
+                                            <>
+                                                {isGroup ? (
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {group.requests.filter(r => r.status === "pending").map(req => (
+                                                            <Button
+                                                                key={req.id}
+                                                                color="warning"
+                                                                variant="flat"
+                                                                size="sm"
+                                                                startContent={<Icon icon="solar:close-square-bold" />}
+                                                                isLoading={cancellingRequestId === req.id}
+                                                                onPress={() => setCancelModalRequest(req)}
+                                                            >
+                                                                ยกเลิก ({req.student.full_name})
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <Button
+                                                        color="warning"
+                                                        variant="flat"
+                                                        size="sm"
+                                                        startContent={<Icon icon="solar:close-square-bold" />}
+                                                        isLoading={cancellingRequestId === firstRequest.id}
+                                                        onPress={() => setCancelModalRequest(firstRequest)}
+                                                    >
+                                                        ยกเลิกคำร้อง
+                                                    </Button>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>

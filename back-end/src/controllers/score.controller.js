@@ -947,6 +947,14 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
         assignmentTypeFilter = { 
             assignment_type: { [Op.in]: ['permanent_group', 'weekly_group'] } 
         };
+    } else if (assignment_type === 'permanent_group') {
+        assignmentTypeFilter = { assignment_type: 'permanent_group' };
+    } else if (assignment_type === 'weekly_group') {
+        assignmentTypeFilter = { assignment_type: 'weekly_group' };
+    } else if (assignment_type === 'permanent_group') {
+        assignmentTypeFilter = { assignment_type: 'permanent_group' };
+    } else if (assignment_type === 'weekly_group') {
+        assignmentTypeFilter = { assignment_type: 'weekly_group' };
     }
     
     logger.debug(`[getScoreSummaryMatrix] assignmentTypeFilter:`, JSON.stringify(assignmentTypeFilter));
@@ -974,18 +982,46 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
     const studentIds = studentsWithSection.map(s => s.id);
     const assignmentIds = assignments.map(a => a.id);
 
+    // For permanent group assignments: fetch group membership per student (one group per student).
+    const studentGroupMap = {}; // studentDbId → { group_id, group_name }
+    if ((assignment_type === 'group' || assignment_type === 'permanent_group') && studentIds.length > 0) {
+        const groupMembers = await StudentGroupMember.findAll({
+            where: { student_id: { [Op.in]: studentIds } },
+            include: [{
+                model: StudentGroup,
+                as: 'group',
+                where: { course_id, group_type: 'permanent' },
+                attributes: ['id', 'name'],
+                required: true,
+            }],
+        });
+        for (const gm of groupMembers) {
+            studentGroupMap[gm.student_id] = {
+                group_id: gm.group.id,
+                group_name: gm.group.name,
+            };
+        }
+    }
+
+    // For weekly group: include StudentGroup in scores so we can return group_name per score.
+    const scoreInclude = [
+        { model: User, as: 'grader', attributes: ['id', 'full_name'] },
+    ];
+    if (assignment_type === 'weekly_group' || assignment_type === 'group') {
+        scoreInclude.push({
+            model: StudentGroup,
+            as: 'group',
+            attributes: ['id', 'name'],
+            required: false,
+        });
+    }
+
     const scores = await Score.findAll({
         where: {
             student_id: { [Op.in]: studentIds },
             assignment_id: { [Op.in]: assignmentIds },
         },
-        include: [
-            {
-                model: User,
-                as: 'grader',
-                attributes: ['id', 'full_name'],
-            },
-        ],
+        include: scoreInclude,
     });
 
     // Get bonus scores for all students in this course
@@ -1018,6 +1054,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
             graded_at: score.graded_at || score.createdAt,
             updated_at: score.updatedAt,
             comment: score.comment || null,
+            group_name: score.group?.name || null,
             edit_requests: [],
         };
         scoreIdToKeyMap[score.id] = key;
@@ -1055,11 +1092,14 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
     // Build matrix data
     const matrixData = studentsWithSection.map(student => {
+        const groupInfo = studentGroupMap[student.id] ?? null;
         const row = {
             student_id: student.student_id,
             full_name: student.full_name,
             section_number: student.section_number,
             bonus_score: bonusScoreMap[student.id] || 0,
+            group_id: groupInfo?.group_id ?? null,
+            group_name: groupInfo?.group_name ?? null,
             scores: {},
             total_score: 0,
             total_max_score: 0,
@@ -1091,6 +1131,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                         graded_at: scoreObj?.graded_at || null,
                         updated_at: scoreObj?.updated_at || null,
                         comment: scoreObj?.comment || null,
+                        group_name: scoreObj?.group_name || null,
                         edit_requests: scoreObj?.edit_requests || [],
                     };
 
@@ -1117,6 +1158,7 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
                     graded_at: scoreObj?.graded_at || null,
                     updated_at: scoreObj?.updated_at || null,
                     comment: scoreObj?.comment || null,
+                    group_name: scoreObj?.group_name || null,
                     edit_requests: scoreObj?.edit_requests || [],
                 };
 
@@ -1131,6 +1173,16 @@ const getScoreSummaryMatrix = asyncHandler(async (req, res) => {
 
         return row;
     });
+
+    // For permanent group assignments, re-sort by group_id then student_id so members are contiguous
+    if (assignment_type === 'group' || assignment_type === 'permanent_group') {
+        matrixData.sort((a, b) => {
+            const gA = a.group_id ?? Infinity;
+            const gB = b.group_id ?? Infinity;
+            if (gA !== gB) return gA - gB;
+            return a.student_id.localeCompare(b.student_id);
+        });
+    }
 
     // Calculate class averages per assignment
     const averages = {};
@@ -1286,6 +1338,111 @@ const getGroupsForAssignment = asyncHandler(async (req, res) => {
     });
 });
 
+/**
+ * Get ungraded summary - students without scores per assignment (top 3 + count) เพิ่มเติม ดูคนที่ยังไม่มีคะแนน 3 คน
+ */
+const getUngradedSummary = asyncHandler(async (req, res) => {
+    const { course_id } = req.query;
+
+    if (!course_id) {
+        throw new ApiError(400, 'course_id is required');
+    }
+
+    // Get all active assignments for this course (include subItems to know structure)
+    const assignments = await Assignment.findAll({
+        where: { course_id, is_active: true },
+        attributes: ['id'],
+        include: [{
+            model: AssignmentSubItem,
+            as: 'subItems',
+            attributes: ['id'],
+        }],
+    });
+
+    if (assignments.length === 0) {
+        return res.json({ success: true, data: {} });
+    }
+
+    const assignmentIds = assignments.map(a => a.id);
+
+    // Build map of assignments that have sub-items
+    const assignmentSubItemMap = {};
+    for (const a of assignments) {
+        assignmentSubItemMap[a.id] = (a.subItems && a.subItems.length > 0) ? a.subItems.length : 0;
+    }
+
+    // Get all students enrolled in this course
+    const [studentsResult] = await sequelize.query(`
+        SELECT DISTINCT s.id, s.student_id, s.full_name
+        FROM students s
+        INNER JOIN course_section_students css ON s.id = css.student_id
+        INNER JOIN course_sections cs ON css.course_section_id = cs.id
+        WHERE cs.course_id = ?
+        ORDER BY s.student_id
+    `, {
+        replacements: [course_id],
+    });
+
+    const totalStudents = studentsResult.length;
+
+    if (totalStudents === 0) {
+        return res.json({ success: true, data: {} });
+    }
+
+    const studentIds = studentsResult.map(s => s.id);
+
+    // Get ALL score records (both main and sub-item) for these assignments and students
+    // A student is considered "graded" if they have ANY score record for that assignment
+    const scores = await Score.findAll({
+        where: {
+            assignment_id: { [Op.in]: assignmentIds },
+            student_id: { [Op.in]: studentIds },
+        },
+        attributes: ['assignment_id', 'student_id'],
+        group: ['assignment_id', 'student_id'],
+    });
+
+    // Build set of scored student IDs per assignment
+    const scoredMap = {};
+    for (const score of scores) {
+        if (!scoredMap[score.assignment_id]) {
+            scoredMap[score.assignment_id] = new Set();
+        }
+        scoredMap[score.assignment_id].add(score.student_id);
+    }
+
+    // Build student lookup
+    const studentMap = {};
+    for (const s of studentsResult) {
+        studentMap[s.id] = { student_id: s.student_id, full_name: s.full_name };
+    }
+
+    // For each assignment, find ungraded students (top 3 + total count)
+    const summary = {};
+    for (const assignmentId of assignmentIds) {
+        const scored = scoredMap[assignmentId] || new Set();
+        const ungradedStudents = [];
+
+        for (const sid of studentIds) {
+            if (!scored.has(sid)) {
+                ungradedStudents.push(studentMap[sid]);
+            }
+        }
+
+        summary[assignmentId] = {
+            ungraded_count: ungradedStudents.length,
+            total_students: totalStudents,
+            graded_count: scored.size,
+            students: ungradedStudents.slice(0, 3),
+        };
+    }
+
+    res.json({
+        success: true,
+        data: summary,
+    });
+});
+
 module.exports = {
     getScores,
     submitScore,
@@ -1298,4 +1455,5 @@ module.exports = {
     getScoreSummaryMatrix,
     searchStudents,
     getGroupsForAssignment,
+    getUngradedSummary,
 };

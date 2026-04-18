@@ -253,7 +253,7 @@ export default function InstructorLayout({
                             {/* Separator */}
                             <Icon icon="solar:alt-arrow-right-linear" className="text-slate-400 text-lg flex-shrink-0" />
 
-                            {/* User/Organization Dropdown */}
+                            {/* เมนูบาร์ ผู้ใช้ */}
                             <Dropdown>
                                 <DropdownTrigger>
                                     <button className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors text-slate-700">

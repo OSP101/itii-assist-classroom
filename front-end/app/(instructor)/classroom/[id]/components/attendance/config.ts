@@ -103,7 +103,7 @@ export const AUTO_UPDATE_INTERVAL_MS = 30000; // 30 seconds
 // ============================================================================
 
 /**
- * Format date for Thai locale display
+ * Format date for Thai locale display รูปแบบวันที่
  */
 export function formatDate(dateString: string): string {
     const date = new Date(dateString);

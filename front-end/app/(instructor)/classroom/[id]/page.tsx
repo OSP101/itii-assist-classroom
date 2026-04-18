@@ -480,6 +480,7 @@ export default function ClassroomDetailPage() {
     const handleAddTA = async () => {
         modals.setIsSubmitting(true);
         const success = await classroomActions.addTAs(modals.taModal.selectedIds);
+        console.log("Add TA result:", modals.taModal.selectedIds);
         modals.setIsSubmitting(false);
         if (success) modals.taModal.reset();
     };

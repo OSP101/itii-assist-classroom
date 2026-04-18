@@ -258,7 +258,7 @@ const scoreService = {
         score_ids: number[];
         new_score: number;
         reason: string;
-    }, images?: File[]): Promise<boolean> {
+    }, images?: File[]): Promise<{ created: number; skipped: number; skipped_names: string[] }> {
         // If images provided, use FormData
         if (images && images.length > 0) {
             const formData = new FormData();
@@ -268,17 +268,17 @@ const scoreService = {
             images.forEach((image) => {
                 formData.append('images', image);
             });
-            const response = await api.post<unknown>('/score-edit-requests/batch', formData);
+            const response = await api.post<{ count: number; skipped: number; skipped_names: string[] }>('/score-edit-requests/batch', formData);
             if (!response.success) {
                 throw new Error(getApiErrorMessage(response));
             }
-            return true;
+            return { created: response.data?.count ?? 0, skipped: response.data?.skipped ?? 0, skipped_names: response.data?.skipped_names ?? [] };
         }
-        const response = await api.post<unknown>('/score-edit-requests/batch', data);
+        const response = await api.post<{ count: number; skipped: number; skipped_names: string[] }>('/score-edit-requests/batch', data);
         if (!response.success) {
             throw new Error(getApiErrorMessage(response));
         }
-        return true;
+        return { created: response.data?.count ?? 0, skipped: response.data?.skipped ?? 0, skipped_names: response.data?.skipped_names ?? [] };
     },
 
     /**
@@ -307,7 +307,7 @@ const scoreService = {
     /**
      * Get student scores summary
      */
-    async getStudentScoresSummary(courseId: number, studentId?: number): Promise<Assignment[]> {
+    async getStudentScoresSummary(courseId: string | number, studentId?: number): Promise<Assignment[]> {
         let url = `/scores/summary?course_id=${courseId}`;
         if (studentId) {
             url += `&student_id=${studentId}`;
@@ -323,7 +323,7 @@ const scoreService = {
         courseId: string,
         options?: {
             sectionId?: number;
-            assignmentType?: 'individual' | 'assignment' | 'group';
+            assignmentType?: 'individual' | 'assignment' | 'group' | 'permanent_group' | 'weekly_group';
         }
     ): Promise<ScoreSummaryMatrix | null> {
         let url = `/scores/matrix?course_id=${courseId}`;
@@ -336,7 +336,30 @@ const scoreService = {
         const response = await api.get<ScoreSummaryMatrix>(url);
         return response.data || null;
     },
+
+    /**
+     * Get ungraded students summary per assignment
+     */
+    async getUngradedSummary(courseId: string): Promise<UngradedSummary> {
+        const response = await api.get<UngradedSummary>(`/scores/ungraded-summary?course_id=${courseId}`);
+        return response.data || {};
+    },
 };
+
+// Types for Ungraded Summary
+export interface UngradedStudentInfo {
+    student_id: string;
+    full_name: string;
+}
+
+export interface UngradedAssignmentInfo {
+    ungraded_count: number;
+    total_students: number;
+    graded_count: number;
+    students: UngradedStudentInfo[];
+}
+
+export type UngradedSummary = Record<string, UngradedAssignmentInfo>;
 
 // Types for Score Summary Matrix
 export interface ScoreSummaryMatrixStudent {
@@ -344,6 +367,8 @@ export interface ScoreSummaryMatrixStudent {
     full_name: string;
     section_number: number;
     bonus_score: number;
+    group_id?: number | null;
+    group_name?: string | null;
     scores: {
         [key: string]: {
             score: number | null;
@@ -353,6 +378,7 @@ export interface ScoreSummaryMatrixStudent {
             graded_at?: string | null;
             updated_at?: string | null;
             comment?: string | null;
+            group_name?: string | null;
             edit_requests?: {
                 old_score: number | null;
                 new_score: number;

@@ -16,6 +16,7 @@ import { Tooltip } from "@heroui/tooltip";
 import { Icon } from "@iconify/react";
 import { addToast } from "@heroui/toast";
 import scoreService, { type Student, type Group, type StudentScore, type ScoresData, type SubItemScoreData } from "@/services/score.service";
+import scoreEditRequestService from "@/services/scoreEditRequest.service";
 import type { AssignmentType } from "./types";
 
 // Preset reasons for score edit requests
@@ -117,7 +118,7 @@ export default function ScoreModal({
     const [editSubItemScores, setEditSubItemScores] = useState<{ subItemId: number; scoreId: number | null; currentScore: number | null; newScore: string }[]>([]);
     const [selectedEditSubItemId, setSelectedEditSubItemId] = useState<number | null>(null);
     // For group editing - store all member scores
-    const [groupMemberScores, setGroupMemberScores] = useState<{ studentId: number; studentName: string; scoreId: number | null; score: number | null; selected: boolean }[]>([]);
+    const [groupMemberScores, setGroupMemberScores] = useState<{ studentId: number; studentName: string; scoreId: number | null; score: number | null; selected: boolean; hasPendingEdit: boolean }[]>([]);
     const [editGroupMode, setEditGroupMode] = useState<"all" | "selected">("all"); // "all" = edit all members, "selected" = edit selected members only
 
     // Existing score states (for checking duplicates)
@@ -829,17 +830,32 @@ export default function ScoreModal({
             try {
                 const scoresData = await scoreService.getScores(assignment.id);
 
+                // Fetch pending edit requests to mark locked members
+                let pendingStudentIds = new Set<number>();
+                try {
+                    const pendingRequests = await scoreEditRequestService.getEditRequests(courseId, 'pending');
+                    if (pendingRequests?.data) {
+                        pendingRequests.data
+                            .filter(req => req.assignment.id === assignment.id)
+                            .forEach(req => pendingStudentIds.add(req.student.id));
+                    }
+                } catch {
+                    // If pending request fetch fails, continue without lock info
+                }
+
                 // Collect scores for ALL members in the group
                 const memberScoresData = group.members.map(member => {
                     const studentScore = scoresData?.student_scores.find(
                         ss => ss.student.id === member.id
                     );
+                    const hasPendingEdit = pendingStudentIds.has(member.id);
                     return {
                         studentId: member.id,
                         studentName: member.full_name,
                         scoreId: studentScore?.score_id || null,
                         score: studentScore?.score ?? null,
-                        selected: true, // Default all selected
+                        selected: !hasPendingEdit, // Don't auto-select members with pending requests
+                        hasPendingEdit,
                     };
                 });
                 setGroupMemberScores(memberScoresData);
@@ -868,16 +884,19 @@ export default function ScoreModal({
         }
     };
 
-    // Toggle member selection for group edit
+    // Toggle member selection for group edit (cannot toggle members with pending edit requests)
     const toggleMemberSelection = (studentId: number) => {
         setGroupMemberScores(prev => prev.map(m =>
-            m.studentId === studentId ? { ...m, selected: !m.selected } : m
+            m.studentId === studentId && !m.hasPendingEdit ? { ...m, selected: !m.selected } : m
         ));
     };
 
-    // Select/deselect all members
+    // Select/deselect all members (hasPendingEdit members are always excluded from selection)
     const toggleAllMembersSelection = (selected: boolean) => {
-        setGroupMemberScores(prev => prev.map(m => ({ ...m, selected })));
+        setGroupMemberScores(prev => prev.map(m => ({
+            ...m,
+            selected: selected ? !m.hasPendingEdit : false,
+        })));
     };
 
     // Filter groups for edit search
@@ -906,9 +925,9 @@ export default function ScoreModal({
             return true;
         }
 
-        // For group edit - check if at least one member is selected with valid score
+        // For group edit - check if at least one member is selected with valid score (and no pending edit)
         if (isGroupAssignment && editSelectedGroup) {
-            const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId);
+            const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit);
             if (selectedMembers.length === 0 || !hasValidReason) return false;
             if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
             return true;
@@ -942,8 +961,8 @@ export default function ScoreModal({
                     reason: finalReason,
                 }, editImages);
             } else if (isGroupAssignment && editSelectedGroup) {
-                // For group edit - submit edit requests for all selected members
-                const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId);
+                // For group edit - submit edit requests for all selected members (excluding those with pending edits)
+                const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit);
 
                 if (selectedMembers.length === 0) {
                     addToast({
@@ -957,19 +976,29 @@ export default function ScoreModal({
                 }
 
                 // Submit batch edit request
-                await scoreService.requestGroupScoreEdit({
+                const batchResult = await scoreService.requestGroupScoreEdit({
                     score_ids: selectedMembers.map(m => m.scoreId!),
                     new_score: parseFloat(newScore),
                     reason: finalReason,
                 }, editImages);
 
-                addToast({
-                    title: "ส่งคำขอแก้ไขสำเร็จ",
-                    description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${selectedMembers.length} คนเรียบร้อยแล้ว`,
-                    color: "success",
-                    timeout: 3000,
-                shouldShowTimeoutProgress: true,
-                });
+                if (batchResult.skipped > 0) {
+                    addToast({
+                        title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)",
+                        description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`,
+                        color: "warning",
+                        timeout: 5000,
+                        shouldShowTimeoutProgress: true,
+                    });
+                } else {
+                    addToast({
+                        title: "ส่งคำขอแก้ไขสำเร็จ",
+                        description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`,
+                        color: "success",
+                        timeout: 3000,
+                        shouldShowTimeoutProgress: true,
+                    });
+                }
             } else {
                 // For main score (individual)
                 if (!currentScore?.score_id) return;
@@ -1993,7 +2022,10 @@ export default function ScoreModal({
                                                                 size="sm"
                                                                 variant={editGroupMode === "selected" ? "solid" : "bordered"}
                                                                 color={editGroupMode === "selected" ? "warning" : "default"}
-                                                                onPress={() => setEditGroupMode("selected")}
+                                                                onPress={() => {
+                                                                    setEditGroupMode("selected");
+                                                                    toggleAllMembersSelection(false); // Deselect all so user can choose explicitly
+                                                                }}
                                                                 startContent={<Icon icon="solar:user-check-bold" />}
                                                                 className={editGroupMode === "selected" ? "shadow-md" : ""}
                                                             >
@@ -2034,27 +2066,29 @@ export default function ScoreModal({
                                                                     {groupMemberScores.map((member) => (
                                                                         <div
                                                                             key={member.studentId}
-                                                                            className={`flex items-center justify-between p-3 cursor-pointer transition-all ${!member.scoreId
+                                                                            className={`flex items-center justify-between p-3 transition-all ${!member.scoreId || member.hasPendingEdit
                                                                                 ? 'bg-slate-50/50 cursor-not-allowed'
                                                                                 : member.selected
-                                                                                    ? 'bg-amber-50/70'
-                                                                                    : 'hover:bg-slate-50'
+                                                                                    ? 'bg-amber-50/70 cursor-pointer'
+                                                                                    : 'hover:bg-slate-50 cursor-pointer'
                                                                                 }`}
-                                                                            onClick={() => member.scoreId && toggleMemberSelection(member.studentId)}
+                                                                            onClick={() => member.scoreId && !member.hasPendingEdit && toggleMemberSelection(member.studentId)}
                                                                         >
                                                                             <div className="flex items-center gap-3">
-                                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${!member.scoreId
+                                                                                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${!member.scoreId || member.hasPendingEdit
                                                                                     ? 'bg-slate-100 border-slate-300'
                                                                                     : member.selected
                                                                                         ? 'bg-amber-500 border-amber-500 shadow-sm'
                                                                                         : 'border-slate-300 bg-white hover:border-amber-300'
                                                                                     }`}>
-                                                                                    {member.selected && member.scoreId && (
+                                                                                    {member.hasPendingEdit ? (
+                                                                                        <Icon icon="solar:lock-bold" className="text-slate-400 text-xs" />
+                                                                                    ) : member.selected && member.scoreId ? (
                                                                                         <Icon icon="solar:check-bold" className="text-white text-xs" />
-                                                                                    )}
+                                                                                    ) : null}
                                                                                 </div>
                                                                                 <div className="flex items-center gap-2">
-                                                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${!member.scoreId
+                                                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium ${!member.scoreId || member.hasPendingEdit
                                                                                         ? 'bg-slate-100 text-slate-400'
                                                                                         : member.selected
                                                                                             ? 'bg-amber-100 text-amber-600'
@@ -2062,15 +2096,23 @@ export default function ScoreModal({
                                                                                         }`}>
                                                                                         <Icon icon="solar:user-bold" className="text-sm" />
                                                                                     </div>
-                                                                                    <span className={`text-sm font-medium ${!member.scoreId ? 'text-slate-400' : 'text-slate-700'}`}>
-                                                                                        {member.studentName}
-                                                                                    </span>
+                                                                                    <div>
+                                                                                        <span className={`text-sm font-medium ${!member.scoreId || member.hasPendingEdit ? 'text-slate-400' : 'text-slate-700'}`}>
+                                                                                            {member.studentName}
+                                                                                        </span>
+                                                                                        {member.hasPendingEdit && (
+                                                                                            <p className="text-xs text-orange-500">รออนุมัติการแก้ไข</p>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </div>
                                                                             </div>
                                                                             <div>
-                                                                                {member.scoreId ? (
+                                                                                {member.hasPendingEdit ? (
+                                                                                    <Chip size="sm" color="warning" variant="flat" className="text-xs" startContent={<Icon icon="solar:hourglass-bold" className="mr-1 text-xs" />}>
+                                                                                        รออนุมัติ
+                                                                                    </Chip>
+                                                                                ) : member.scoreId ? (
                                                                                     <Chip size="sm" color="success" variant="flat" className="text-xs" startContent={<Icon icon="solar:medal-star-bold" className="mr-1 text-xs" />}>
-
                                                                                         {member.score ?? 0} คะแนน
                                                                                     </Chip>
                                                                                 ) : (
@@ -2085,9 +2127,9 @@ export default function ScoreModal({
                                                                 <div className="flex items-center justify-between text-xs">
                                                                     <p className="text-slate-500 flex items-center gap-1">
                                                                         <Icon icon="solar:user-check-bold" className="text-amber-500" />
-                                                                        เลือกแล้ว {groupMemberScores.filter(m => m.selected && m.scoreId).length} / {groupMemberScores.filter(m => m.scoreId).length} คน
+                                                                        เลือกแล้ว {groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit).length} / {groupMemberScores.filter(m => m.scoreId && !m.hasPendingEdit).length} คน
                                                                     </p>
-                                                                    {groupMemberScores.filter(m => m.selected && m.scoreId).length === 0 && (
+                                                                    {groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit).length === 0 && (
                                                                         <p className="text-amber-600 flex items-center gap-1">
                                                                             <Icon icon="solar:danger-triangle-bold" />
                                                                             กรุณาเลือกอย่างน้อย 1 คน
@@ -2097,29 +2139,28 @@ export default function ScoreModal({
                                                             </div>
                                                         )}
 
-                                                        {/* Show members chips only in "all" mode */}
-                                                        {/* {editGroupMode === "all" && (
-                                                            <div className="flex flex-wrap gap-2 mt-3">
-                                                                {groupMemberScores.map((member) => (
-                                                                    <Chip
-                                                                        key={member.studentId}
-                                                                        size="sm"
-                                                                        variant="flat"
-                                                                        className={member.scoreId ? "bg-white border border-slate-200" : "bg-slate-100 text-slate-400"}
-                                                                        startContent={
-                                                                            member.scoreId ? (
-                                                                                <Icon icon="solar:user-check-bold" className="text-emerald-500 text-xs" />
-                                                                            ) : (
-                                                                                <Icon icon="solar:user-cross-bold" className="text-slate-400 text-xs" />
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        {member.studentName}
-                                                                        {member.scoreId && <span className="ml-1 text-emerald-600 font-medium">({member.score})</span>}
-                                                                    </Chip>
-                                                                ))}
+                                                        {/* Show locked members notice in "all" mode */}
+                                                        {editGroupMode === "all" && groupMemberScores.some(m => m.hasPendingEdit) && (
+                                                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                                                <p className="text-xs font-medium text-orange-700 flex items-center gap-1.5 mb-2">
+                                                                    <Icon icon="solar:lock-bold" className="text-orange-500" />
+                                                                    สมาชิกที่รออนุมัติการแก้ไข (จะถูกข้ามอัตโนมัติ)
+                                                                </p>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {groupMemberScores.filter(m => m.hasPendingEdit).map(member => (
+                                                                        <Chip
+                                                                            key={member.studentId}
+                                                                            size="sm"
+                                                                            variant="flat"
+                                                                            className="bg-orange-100 text-orange-700 border border-orange-200"
+                                                                            startContent={<Icon icon="solar:hourglass-bold" className="text-orange-500 text-xs mr-0.5" />}
+                                                                        >
+                                                                            {member.studentName}
+                                                                        </Chip>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        )} */}
+                                                        )}
                                                     </div>
                                                 </>
                                             )}
