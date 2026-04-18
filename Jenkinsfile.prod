@@ -23,8 +23,8 @@ pipeline {
 
         stage('📥 Checkout') {
             steps {
-                // Remove root-owned files (e.g. Traefik acme.json) that Jenkins cannot delete
-                sh 'sudo rm -rf traefik-dev traefik-prod 2>/dev/null || true'
+                // Use Docker (runs as root) to remove Traefik-owned files Jenkins cannot delete
+                sh 'docker run --rm -v "${PWD}:/ws" alpine sh -c "rm -rf /ws/traefik-dev /ws/traefik-prod" || true'
                 checkout scm
             }
         }
