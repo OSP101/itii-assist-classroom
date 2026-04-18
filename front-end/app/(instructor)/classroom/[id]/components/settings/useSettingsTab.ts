@@ -511,7 +511,7 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
                     prev.bonus = stu.bonus_score;
                     summaryMap.set(stu.student_id, prev);
                 }
-                buildScoreSheet(matrix, scoreTypes[idx].sheet, false);
+                buildScoreSheet(matrix, scoreTypes[idx].sheet, scoreTypes[idx].key === "permanent_group");
             });
 
             // ════════════════════════════════════════════════════════════════
@@ -520,9 +520,34 @@ export function useSettingsTab({ courseId, course, onCourseUpdate }: UseSettings
             // Group name is shown as an Excel note on each score cell
             // ════════════════════════════════════════════════════════════════
             const weeklyMatrix = await scoreService.getScoreSummaryMatrix(courseId, { assignmentType: "weekly_group" });
+            // If no weekly assignments yet, show student list without score columns
             if (!weeklyMatrix || weeklyMatrix.assignments.length === 0) {
-                const ws = wb.addWorksheet("คะแนนกลุ่ม (สัปดาห์)");
-                ws.addRow(["ไม่มีข้อมูลคะแนนกลุ่มตามสัปดาห์"]);
+                const wws = wb.addWorksheet("คะแนนกลุ่ม (สัปดาห์)");
+                wws.getColumn(1).width = 16;
+                wws.getColumn(2).width = 28;
+                wws.getColumn(3).width = 10;
+                wws.getRow(1).height = 28;
+                const noDataHdr = wws.getRow(1);
+                noDataHdr.getCell(1).value = "รหัสนักศึกษา";
+                noDataHdr.getCell(2).value = "ชื่อ-นามสกุล";
+                noDataHdr.getCell(3).value = "กลุ่มเรียน";
+                for (let c = 1; c <= 3; c++) applyHdr1(noDataHdr.getCell(c));
+                if (weeklyMatrix?.students.length) {
+                    weeklyMatrix.students.forEach((stu, rowOffset) => {
+                        const wr = wws.getRow(2 + rowOffset);
+                        wr.getCell(1).value = stu.student_id;
+                        wr.getCell(2).value = stu.full_name;
+                        wr.getCell(3).value = stu.section_number;
+                        wr.getCell(1).alignment = LEFT_ALIGN;
+                        wr.getCell(2).alignment = LEFT_ALIGN;
+                        wr.getCell(3).alignment = CENTER_ALIGN;
+                        for (let c = 1; c <= 3; c++) wr.getCell(c).border = THIN_BORDER;
+                        if (rowOffset % 2 === 1) {
+                            for (let c = 1; c <= 3; c++) wr.getCell(c).fill = solidFill("FFF8FAFC");
+                        }
+                    });
+                }
+                wws.views = [{ state: "frozen", xSplit: 0, ySplit: 1 }];
             } else {
                 const wws = wb.addWorksheet("คะแนนกลุ่ม (สัปดาห์)");
                 const WFIXED = 3; // รหัสนักศึกษา, ชื่อ, กลุ่มเรียน
