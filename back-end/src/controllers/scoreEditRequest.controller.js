@@ -542,6 +542,218 @@ const createBatchEditRequest = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Create detailed batch score edit requests (TA only)
+ * Supports multiple score_id/new_score pairs in a single request.
+ */
+const createDetailedBatchEditRequest = asyncHandler(async (req, res) => {
+    let edits = req.body.edits;
+    const { reason } = req.body;
+    const userId = req.user.id;
+
+    // If edits is a string (from FormData), parse it
+    if (typeof edits === 'string') {
+        try {
+            edits = JSON.parse(edits);
+        } catch (e) {
+            throw new ApiError(400, 'Invalid edits format');
+        }
+    }
+
+    if (!Array.isArray(edits) || edits.length === 0) {
+        throw new ApiError(400, 'edits array is required and must not be empty');
+    }
+
+    // Normalize input and de-duplicate by score_id (last value wins)
+    const normalizedByScoreId = new Map();
+    for (const edit of edits) {
+        let scoreId = edit?.score_id;
+        let newScore = edit?.new_score;
+
+        if (typeof scoreId === 'string') {
+            scoreId = parseInt(scoreId, 10);
+        }
+        if (typeof newScore === 'string') {
+            newScore = parseFloat(newScore);
+        }
+
+        if (!scoreId || newScore === undefined || isNaN(newScore)) {
+            throw new ApiError(400, 'Each edit item must contain valid score_id and new_score');
+        }
+
+        normalizedByScoreId.set(scoreId, { score_id: scoreId, new_score: newScore });
+    }
+
+    const normalizedEdits = [...normalizedByScoreId.values()];
+    const scoreIds = normalizedEdits.map(e => e.score_id);
+
+    // Get all target scores with assignment and sub-item info
+    const scores = await Score.findAll({
+        where: {
+            id: { [Op.in]: scoreIds },
+        },
+        include: [
+            {
+                model: Assignment,
+                as: 'assignment',
+                include: [{ model: Course, as: 'course' }],
+            },
+            {
+                model: AssignmentSubItem,
+                as: 'subItem',
+            },
+            {
+                model: Student,
+                as: 'student',
+                attributes: ['id', 'student_id', 'full_name'],
+            },
+        ],
+    });
+
+    if (scores.length === 0) {
+        throw new ApiError(404, 'No scores found');
+    }
+
+    if (scores.length !== normalizedEdits.length) {
+        throw new ApiError(400, 'Some score_ids were not found');
+    }
+
+    const scoreMap = new Map(scores.map(score => [score.id, score]));
+
+    // Validate assignment consistency and each new_score max
+    const assignmentIds = [...new Set(scores.map(score => score.assignment_id))];
+    if (assignmentIds.length !== 1) {
+        throw new ApiError(400, 'All score_ids must belong to the same assignment');
+    }
+
+    const detailedTargets = normalizedEdits.map((edit) => {
+        const score = scoreMap.get(edit.score_id);
+        if (!score) {
+            throw new ApiError(400, `Score not found: ${edit.score_id}`);
+        }
+
+        const maxScore = score.subItem ? score.subItem.max_score : score.assignment.max_score;
+        if (edit.new_score < 0 || edit.new_score > maxScore) {
+            throw new ApiError(400, `Score for score_id ${edit.score_id} must be between 0 and ${maxScore}`);
+        }
+
+        return {
+            score,
+            score_id: edit.score_id,
+            new_score: edit.new_score,
+        };
+    });
+
+    // Check for existing pending requests by assignment + student.
+    const studentIds = [...new Set(scores.map(score => score.student_id))];
+    const existingRequests = await ScoreEditRequest.findAll({
+        where: {
+            status: 'pending',
+        },
+        include: [
+            {
+                model: Score,
+                as: 'score',
+                required: true,
+                where: {
+                    assignment_id: assignmentIds[0],
+                    student_id: { [Op.in]: studentIds },
+                },
+                include: [
+                    {
+                        model: Student,
+                        as: 'student',
+                        attributes: ['id', 'full_name'],
+                    },
+                ],
+            },
+            {
+                model: User,
+                as: 'requester',
+                attributes: ['id', 'username', 'full_name'],
+            },
+        ],
+    });
+
+    const alreadyPendingStudentIds = new Set(
+        existingRequests.map(r => r.score?.student_id).filter(Boolean)
+    );
+
+    const targetsToProcess = detailedTargets.filter(target => !alreadyPendingStudentIds.has(target.score.student_id));
+
+    if (targetsToProcess.length === 0) {
+        const pendingDetails = new Map();
+        for (const request of existingRequests) {
+            const studentId = request.score?.student_id;
+            if (!pendingDetails.has(studentId)) {
+                const studentName = request.score?.student?.full_name || `student_id:${studentId}`;
+                const requesterName = getRequesterDisplayName(request.requester);
+                pendingDetails.set(studentId, `${studentName} (ส่งโดย ${requesterName})`);
+            }
+        }
+        throw new ApiError(400, `มีคำร้องแก้ไขคะแนนที่รออนุมัติอยู่แล้ว: ${[...pendingDetails.values()].join(', ')}`);
+    }
+
+    // Build info about skipped members (already have pending requests)
+    const skippedDetails = [];
+    for (const request of existingRequests) {
+        const studentId = request.score?.student_id;
+        if (alreadyPendingStudentIds.has(studentId)) {
+            const studentName = request.score?.student?.full_name || `student_id:${studentId}`;
+            skippedDetails.push(studentName);
+        }
+    }
+
+    // Process uploaded images - same images for all requests in this batch
+    let imagePaths = null;
+    if (req.files && req.files.length > 0) {
+        imagePaths = req.files.map(file => `uploads/score-edit-requests/${file.filename}`);
+    }
+
+    const t = await sequelize.transaction();
+
+    try {
+        const editRequests = await Promise.all(
+            targetsToProcess.map(target =>
+                ScoreEditRequest.create({
+                    score_id: target.score_id,
+                    old_score: target.score.score,
+                    new_score: target.new_score,
+                    reason: reason || null,
+                    images: imagePaths,
+                    status: 'pending',
+                    requested_by: userId,
+                }, { transaction: t })
+            )
+        );
+
+        await t.commit();
+
+        const message = skippedDetails.length > 0
+            ? `สร้างคำร้องแก้ไข ${editRequests.length} รายการ (ข้าม ${skippedDetails.length} รายการที่มีคำร้องรออนุมัติอยู่แล้ว: ${skippedDetails.join(', ')})`
+            : `Created ${editRequests.length} detailed edit request(s) successfully`;
+
+        res.status(201).json({
+            success: true,
+            message,
+            data: {
+                count: editRequests.length,
+                skipped: skippedDetails.length,
+                skipped_names: skippedDetails,
+                requests: editRequests.map(r => ({
+                    id: r.id,
+                    score_id: r.score_id,
+                    status: r.status,
+                    images: r.images,
+                })),
+            },
+        });
+    } catch (error) {
+        await t.rollback();
+        throw error;
+    }
+});
+
+/**
  * Approve a score edit request (instructor only)
  */
 const approveEditRequest = asyncHandler(async (req, res) => {
@@ -878,6 +1090,7 @@ module.exports = {
     getPendingCount,
     createEditRequest,
     createBatchEditRequest,
+    createDetailedBatchEditRequest,
     cancelEditRequest,
     approveEditRequest,
     rejectEditRequest,

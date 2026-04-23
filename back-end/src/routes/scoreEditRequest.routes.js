@@ -19,6 +19,9 @@ router.post('/', handleScoreEditImageUpload, checkCourseActive, scoreEditRequest
 // Create batch edit request for group (TA) - with optional image upload
 router.post('/batch', handleScoreEditImageUpload, checkCourseActive, scoreEditRequestController.createBatchEditRequest);
 
+// Create detailed batch edit request for mixed sub-item scores (TA) - with optional image upload
+router.post('/batch-detailed', handleScoreEditImageUpload, checkCourseActive, scoreEditRequestController.createDetailedBatchEditRequest);
+
 // Cancel pending edit request (requester only)
 router.delete('/:id/cancel', scoreEditRequestController.cancelEditRequest);
 

@@ -282,6 +282,34 @@ const scoreService = {
     },
 
     /**
+     * Request detailed score edits (multiple score_id/new_score pairs in one request)
+     */
+    async requestDetailedScoreEdits(data: {
+        edits: { score_id: number; new_score: number }[];
+        reason: string;
+    }, images?: File[]): Promise<{ created: number; skipped: number; skipped_names: string[] }> {
+        if (images && images.length > 0) {
+            const formData = new FormData();
+            formData.append('edits', JSON.stringify(data.edits));
+            formData.append('reason', data.reason);
+            images.forEach((image) => {
+                formData.append('images', image);
+            });
+            const response = await api.post<{ count: number; skipped: number; skipped_names: string[] }>('/score-edit-requests/batch-detailed', formData);
+            if (!response.success) {
+                throw new Error(getApiErrorMessage(response));
+            }
+            return { created: response.data?.count ?? 0, skipped: response.data?.skipped ?? 0, skipped_names: response.data?.skipped_names ?? [] };
+        }
+
+        const response = await api.post<{ count: number; skipped: number; skipped_names: string[] }>('/score-edit-requests/batch-detailed', data);
+        if (!response.success) {
+            throw new Error(getApiErrorMessage(response));
+        }
+        return { created: response.data?.count ?? 0, skipped: response.data?.skipped ?? 0, skipped_names: response.data?.skipped_names ?? [] };
+    },
+
+    /**
      * Get pending edit requests
      */
     async getPendingEditRequests(courseId?: string): Promise<ScoreEditRequest[]> {
