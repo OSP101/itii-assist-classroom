@@ -64,6 +64,20 @@ interface SubItemExistingScore {
     graded_at?: string;
 }
 
+type CopySource = "from_above" | "from_first";
+
+interface MainScoreCopySnapshot {
+    scores: Record<number, string>;
+    copiedScores: Record<number, boolean>;
+    copiedScoreSources: Record<number, CopySource | undefined>;
+}
+
+interface SubItemScoreCopySnapshot {
+    subItemScores: Record<number, Record<number, string>>;
+    copiedSubItemScores: Record<number, Record<number, boolean>>;
+    copiedSubItemScoreSources: Record<number, Record<number, CopySource | undefined>>;
+}
+
 export default function ScoreModal({
     isOpen,
     onClose,
@@ -99,6 +113,16 @@ export default function ScoreModal({
         gradedBy: string | null;
         gradedAt: string | null;
     }[]>([]);
+    const [gradeGroupMemberScores, setGradeGroupMemberScores] = useState<Record<number, string>>({});
+    const [gradeGroupMemberSubItemScores, setGradeGroupMemberSubItemScores] = useState<Record<number, Record<number, string>>>({});
+    const [copiedGradeMemberScores, setCopiedGradeMemberScores] = useState<Record<number, boolean>>({});
+    const [copiedGradeMemberSubItemScores, setCopiedGradeMemberSubItemScores] = useState<Record<number, Record<number, boolean>>>({});
+    const [copiedGradeMemberScoreSources, setCopiedGradeMemberScoreSources] = useState<Record<number, CopySource | undefined>>({});
+    const [copiedGradeMemberSubItemScoreSources, setCopiedGradeMemberSubItemScoreSources] = useState<Record<number, Record<number, CopySource | undefined>>>({});
+    const [mainCopyUndoHistory, setMainCopyUndoHistory] = useState<MainScoreCopySnapshot[]>([]);
+    const [mainCopyRedoHistory, setMainCopyRedoHistory] = useState<MainScoreCopySnapshot[]>([]);
+    const [subItemCopyUndoHistory, setSubItemCopyUndoHistory] = useState<SubItemScoreCopySnapshot[]>([]);
+    const [subItemCopyRedoHistory, setSubItemCopyRedoHistory] = useState<SubItemScoreCopySnapshot[]>([]);
 
     // Edit tab states
     const [editSearchQuery, setEditSearchQuery] = useState("");
@@ -122,6 +146,8 @@ export default function ScoreModal({
     // For group editing with sub-items - map studentId → [{subItemId, scoreId}]
     const [groupMemberSubItemScores, setGroupMemberSubItemScores] = useState<Map<number, { subItemId: number; scoreId: number | null }[]>>(new Map());
     const [editGroupMode, setEditGroupMode] = useState<"all" | "selected">("all"); // "all" = edit all members, "selected" = edit selected members only
+    const [editGroupMemberScores, setEditGroupMemberScores] = useState<Record<number, string>>({});
+    const [editGroupMemberSubItemScores, setEditGroupMemberSubItemScores] = useState<Record<number, Record<number, string>>>({});
 
     // Existing score states (for checking duplicates)
     const [scoresData, setScoresData] = useState<ScoresData | null>(null);
@@ -206,6 +232,16 @@ export default function ScoreModal({
         setComment("");
         setGradeGroupMode("all");
         setGradeGroupMembers([]);
+        setGradeGroupMemberScores({});
+        setGradeGroupMemberSubItemScores({});
+        setCopiedGradeMemberScores({});
+        setCopiedGradeMemberSubItemScores({});
+        setCopiedGradeMemberScoreSources({});
+        setCopiedGradeMemberSubItemScoreSources({});
+        setMainCopyUndoHistory([]);
+        setMainCopyRedoHistory([]);
+        setSubItemCopyUndoHistory([]);
+        setSubItemCopyRedoHistory([]);
         setEditSearchQuery("");
         setEditGroupSearchQuery("");
         setEditSelectedStudent(null);
@@ -225,6 +261,8 @@ export default function ScoreModal({
         setGroupMemberScores([]);
         setGroupMemberSubItemScores(new Map());
         setEditGroupMode("all");
+        setEditGroupMemberScores({});
+        setEditGroupMemberSubItemScores({});
     };
 
     // Helper function to get final edit reason
@@ -517,6 +555,16 @@ export default function ScoreModal({
             setExistingScore(null);
             setSubItemExistingScores([]);
             setGradeGroupMembers([]);
+            setGradeGroupMemberScores({});
+            setGradeGroupMemberSubItemScores({});
+            setCopiedGradeMemberScores({});
+            setCopiedGradeMemberSubItemScores({});
+            setCopiedGradeMemberScoreSources({});
+            setCopiedGradeMemberSubItemScoreSources({});
+            setMainCopyUndoHistory([]);
+            setMainCopyRedoHistory([]);
+            setSubItemCopyUndoHistory([]);
+            setSubItemCopyRedoHistory([]);
             setGradeGroupMode("all");
             return;
         }
@@ -563,26 +611,526 @@ export default function ScoreModal({
                 };
             });
             setGradeGroupMembers(members);
+
+            const initialScores: Record<number, string> = {};
+            members.forEach((member) => {
+                if (member.selected) {
+                    initialScores[member.studentId] = "";
+                }
+            });
+            setGradeGroupMemberScores(initialScores);
+            setGradeGroupMemberSubItemScores({});
+            setCopiedGradeMemberScores({});
+            setCopiedGradeMemberSubItemScores({});
+            setCopiedGradeMemberScoreSources({});
+            setCopiedGradeMemberSubItemScoreSources({});
+            setMainCopyUndoHistory([]);
+            setMainCopyRedoHistory([]);
+            setSubItemCopyUndoHistory([]);
+            setSubItemCopyRedoHistory([]);
         }
     };
 
     // Toggle single grade group member selection (only if they don't have score yet)
     const toggleGradeMemberSelection = (studentId: number) => {
-        setGradeGroupMembers(prev =>
-            prev.map(m => {
+        setGradeGroupMembers(prev => {
+            const next = prev.map(m => {
                 if (m.studentId === studentId && !m.hasScore) {
                     return { ...m, selected: !m.selected };
                 }
                 return m;
-            })
-        );
+            });
+
+            const changedMember = next.find(m => m.studentId === studentId);
+            if (changedMember && !changedMember.hasScore) {
+                setGradeGroupMemberScores(prevScores => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevScores,
+                            [studentId]: prevScores[studentId] ?? "",
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevScores;
+                    return rest;
+                });
+
+                setCopiedGradeMemberScores(prevCopied => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevCopied,
+                            [studentId]: prevCopied[studentId] ?? false,
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevCopied;
+                    return rest;
+                });
+
+                setCopiedGradeMemberScoreSources(prevSources => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevSources,
+                            [studentId]: prevSources[studentId],
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevSources;
+                    return rest;
+                });
+
+                setGradeGroupMemberSubItemScores(prevSubScores => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevSubScores,
+                            [studentId]: prevSubScores[studentId] ?? {},
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevSubScores;
+                    return rest;
+                });
+
+                setCopiedGradeMemberSubItemScores(prevCopiedSub => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevCopiedSub,
+                            [studentId]: prevCopiedSub[studentId] ?? {},
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevCopiedSub;
+                    return rest;
+                });
+
+                setCopiedGradeMemberSubItemScoreSources(prevSources => {
+                    if (changedMember.selected) {
+                        return {
+                            ...prevSources,
+                            [studentId]: prevSources[studentId] ?? {},
+                        };
+                    }
+                    const { [studentId]: _, ...rest } = prevSources;
+                    return rest;
+                });
+            }
+
+            return next;
+        });
     };
 
     // Toggle all grade group members selection (only those without scores)
     const toggleAllGradeMembersSelection = (selectAll: boolean) => {
-        setGradeGroupMembers(prev =>
-            prev.map(m => ({ ...m, selected: selectAll && m.canScore && !m.hasScore }))
-        );
+        setGradeGroupMembers(prev => {
+            const next = prev.map(m => ({ ...m, selected: selectAll && m.canScore && !m.hasScore }));
+
+            setGradeGroupMemberScores(prevScores => {
+                if (!selectAll) {
+                    return {};
+                }
+
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, string> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevScores[id] ?? "";
+                });
+                return merged;
+            });
+
+            setCopiedGradeMemberScores(prevCopied => {
+                if (!selectAll) {
+                    return {};
+                }
+
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, boolean> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevCopied[id] ?? false;
+                });
+                return merged;
+            });
+
+            setCopiedGradeMemberScoreSources(prevSources => {
+                if (!selectAll) {
+                    return {};
+                }
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, CopySource | undefined> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevSources[id];
+                });
+                return merged;
+            });
+
+            setGradeGroupMemberSubItemScores(prevSubScores => {
+                if (!selectAll) {
+                    return {};
+                }
+
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, Record<number, string>> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevSubScores[id] ?? {};
+                });
+                return merged;
+            });
+
+            setCopiedGradeMemberSubItemScores(prevCopiedSub => {
+                if (!selectAll) {
+                    return {};
+                }
+
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, Record<number, boolean>> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevCopiedSub[id] ?? {};
+                });
+                return merged;
+            });
+
+            setCopiedGradeMemberSubItemScoreSources(prevSources => {
+                if (!selectAll) {
+                    return {};
+                }
+                const allSelectableIds = next
+                    .filter(m => m.selected)
+                    .map(m => m.studentId);
+                const merged: Record<number, Record<number, CopySource | undefined>> = {};
+                allSelectableIds.forEach((id) => {
+                    merged[id] = prevSources[id] ?? {};
+                });
+                return merged;
+            });
+
+            return next;
+        });
+    };
+
+    const handleGradeGroupMemberScoreChange = (studentId: number, value: string) => {
+        setGradeGroupMemberScores(prev => ({
+            ...prev,
+            [studentId]: value,
+        }));
+        setCopiedGradeMemberScores(prev => ({
+            ...prev,
+            [studentId]: false,
+        }));
+        setCopiedGradeMemberScoreSources(prev => ({
+            ...prev,
+            [studentId]: undefined,
+        }));
+    };
+
+    const handleGradeGroupMemberSubItemScoreChange = (studentId: number, subItemId: number, value: string) => {
+        setGradeGroupMemberSubItemScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: value,
+            },
+        }));
+        setCopiedGradeMemberSubItemScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: false,
+            },
+        }));
+        setCopiedGradeMemberSubItemScoreSources(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: undefined,
+            },
+        }));
+    };
+
+    const copyPreviousGradeMemberScore = (studentId: number) => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        const currentIndex = selectedMembers.findIndex(m => m.studentId === studentId);
+        if (currentIndex <= 0) return;
+
+        const previousMember = selectedMembers[currentIndex - 1];
+        const previousScore = gradeGroupMemberScores[previousMember.studentId] ?? "";
+        if (previousScore === "") return;
+
+        setGradeGroupMemberScores(prev => ({
+            ...prev,
+            [studentId]: previousScore,
+        }));
+        setCopiedGradeMemberScores(prev => ({
+            ...prev,
+            [studentId]: true,
+        }));
+        setCopiedGradeMemberScoreSources(prev => ({
+            ...prev,
+            [studentId]: "from_above",
+        }));
+    };
+
+    const copyPreviousGradeMemberSubItemScore = (studentId: number, subItemId: number) => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        const currentIndex = selectedMembers.findIndex(m => m.studentId === studentId);
+        if (currentIndex <= 0) return;
+
+        const previousMember = selectedMembers[currentIndex - 1];
+        const previousScore = gradeGroupMemberSubItemScores[previousMember.studentId]?.[subItemId] ?? "";
+        if (previousScore === "") return;
+
+        setGradeGroupMemberSubItemScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: previousScore,
+            },
+        }));
+        setCopiedGradeMemberSubItemScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: true,
+            },
+        }));
+        setCopiedGradeMemberSubItemScoreSources(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: "from_above",
+            },
+        }));
+    };
+
+    const applyFirstGradeMemberScoreToAll = () => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        if (selectedMembers.length < 2) return;
+
+        const firstMemberId = selectedMembers[0].studentId;
+        const firstScore = gradeGroupMemberScores[firstMemberId] ?? "";
+        if (firstScore === "") return;
+
+        setMainCopyUndoHistory(prev => [...prev, {
+            scores: { ...gradeGroupMemberScores },
+            copiedScores: { ...copiedGradeMemberScores },
+            copiedScoreSources: { ...copiedGradeMemberScoreSources },
+        }]);
+        setMainCopyRedoHistory([]);
+
+        setGradeGroupMemberScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                next[member.studentId] = firstScore;
+            });
+            return next;
+        });
+        setCopiedGradeMemberScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member, index) => {
+                next[member.studentId] = index !== 0;
+            });
+            return next;
+        });
+        setCopiedGradeMemberScoreSources(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member, index) => {
+                next[member.studentId] = index !== 0 ? "from_first" : undefined;
+            });
+            return next;
+        });
+    };
+
+    const applyFirstGradeMemberSubItemScoresToAll = () => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        if (selectedMembers.length < 2) return;
+
+        const firstMemberId = selectedMembers[0].studentId;
+        const firstSubScores = gradeGroupMemberSubItemScores[firstMemberId] || {};
+        if (Object.keys(firstSubScores).length === 0) return;
+
+        setSubItemCopyUndoHistory(prev => [...prev, {
+            subItemScores: { ...gradeGroupMemberSubItemScores },
+            copiedSubItemScores: { ...copiedGradeMemberSubItemScores },
+            copiedSubItemScoreSources: { ...copiedGradeMemberSubItemScoreSources },
+        }]);
+        setSubItemCopyRedoHistory([]);
+
+        setGradeGroupMemberSubItemScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                next[member.studentId] = {
+                    ...(next[member.studentId] || {}),
+                    ...firstSubScores,
+                };
+            });
+            return next;
+        });
+        setCopiedGradeMemberSubItemScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member, index) => {
+                const copiedMap = { ...(next[member.studentId] || {}) };
+                Object.keys(firstSubScores).forEach((subItemId) => {
+                    copiedMap[Number(subItemId)] = index !== 0;
+                });
+                next[member.studentId] = copiedMap;
+            });
+            return next;
+        });
+        setCopiedGradeMemberSubItemScoreSources(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member, index) => {
+                const sourceMap = { ...(next[member.studentId] || {}) };
+                Object.keys(firstSubScores).forEach((subItemId) => {
+                    sourceMap[Number(subItemId)] = index !== 0 ? "from_first" : undefined;
+                });
+                next[member.studentId] = sourceMap;
+            });
+            return next;
+        });
+    };
+
+    const resetCopiedGradeMemberScores = () => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        setGradeGroupMemberScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                if (copiedGradeMemberScores[member.studentId]) {
+                    next[member.studentId] = "";
+                }
+            });
+            return next;
+        });
+        setCopiedGradeMemberScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                next[member.studentId] = false;
+            });
+            return next;
+        });
+        setCopiedGradeMemberScoreSources(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                next[member.studentId] = undefined;
+            });
+            return next;
+        });
+    };
+
+    const resetCopiedGradeMemberSubItemScores = () => {
+        const selectedMembers = gradeGroupMembers.filter(m => m.selected && m.canScore && !m.hasScore);
+        setGradeGroupMemberSubItemScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                const copiedMap = copiedGradeMemberSubItemScores[member.studentId] || {};
+                const memberScores = { ...(next[member.studentId] || {}) };
+                Object.entries(copiedMap).forEach(([subItemId, copied]) => {
+                    if (copied) {
+                        memberScores[Number(subItemId)] = "";
+                    }
+                });
+                next[member.studentId] = memberScores;
+            });
+            return next;
+        });
+        setCopiedGradeMemberSubItemScores(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                const copiedMap = { ...(next[member.studentId] || {}) };
+                Object.keys(copiedMap).forEach((subItemId) => {
+                    copiedMap[Number(subItemId)] = false;
+                });
+                next[member.studentId] = copiedMap;
+            });
+            return next;
+        });
+        setCopiedGradeMemberSubItemScoreSources(prev => {
+            const next = { ...prev };
+            selectedMembers.forEach((member) => {
+                const sourceMap = { ...(next[member.studentId] || {}) };
+                Object.keys(sourceMap).forEach((subItemId) => {
+                    sourceMap[Number(subItemId)] = undefined;
+                });
+                next[member.studentId] = sourceMap;
+            });
+            return next;
+        });
+    };
+
+    const undoMainBulkCopy = () => {
+        if (mainCopyUndoHistory.length === 0) return;
+
+        const previousState = mainCopyUndoHistory[mainCopyUndoHistory.length - 1];
+        setMainCopyRedoHistory(prev => [...prev, {
+            scores: { ...gradeGroupMemberScores },
+            copiedScores: { ...copiedGradeMemberScores },
+            copiedScoreSources: { ...copiedGradeMemberScoreSources },
+        }]);
+
+        setGradeGroupMemberScores(previousState.scores);
+        setCopiedGradeMemberScores(previousState.copiedScores);
+        setCopiedGradeMemberScoreSources(previousState.copiedScoreSources);
+        setMainCopyUndoHistory(prev => prev.slice(0, -1));
+    };
+
+    const redoMainBulkCopy = () => {
+        if (mainCopyRedoHistory.length === 0) return;
+
+        const nextState = mainCopyRedoHistory[mainCopyRedoHistory.length - 1];
+        setMainCopyUndoHistory(prev => [...prev, {
+            scores: { ...gradeGroupMemberScores },
+            copiedScores: { ...copiedGradeMemberScores },
+            copiedScoreSources: { ...copiedGradeMemberScoreSources },
+        }]);
+
+        setGradeGroupMemberScores(nextState.scores);
+        setCopiedGradeMemberScores(nextState.copiedScores);
+        setCopiedGradeMemberScoreSources(nextState.copiedScoreSources);
+        setMainCopyRedoHistory(prev => prev.slice(0, -1));
+    };
+
+    const undoSubItemBulkCopy = () => {
+        if (subItemCopyUndoHistory.length === 0) return;
+
+        const previousState = subItemCopyUndoHistory[subItemCopyUndoHistory.length - 1];
+        setSubItemCopyRedoHistory(prev => [...prev, {
+            subItemScores: { ...gradeGroupMemberSubItemScores },
+            copiedSubItemScores: { ...copiedGradeMemberSubItemScores },
+            copiedSubItemScoreSources: { ...copiedGradeMemberSubItemScoreSources },
+        }]);
+
+        setGradeGroupMemberSubItemScores(previousState.subItemScores);
+        setCopiedGradeMemberSubItemScores(previousState.copiedSubItemScores);
+        setCopiedGradeMemberSubItemScoreSources(previousState.copiedSubItemScoreSources);
+        setSubItemCopyUndoHistory(prev => prev.slice(0, -1));
+    };
+
+    const redoSubItemBulkCopy = () => {
+        if (subItemCopyRedoHistory.length === 0) return;
+
+        const nextState = subItemCopyRedoHistory[subItemCopyRedoHistory.length - 1];
+        setSubItemCopyUndoHistory(prev => [...prev, {
+            subItemScores: { ...gradeGroupMemberSubItemScores },
+            copiedSubItemScores: { ...copiedGradeMemberSubItemScores },
+            copiedSubItemScoreSources: { ...copiedGradeMemberSubItemScoreSources },
+        }]);
+
+        setGradeGroupMemberSubItemScores(nextState.subItemScores);
+        setCopiedGradeMemberSubItemScores(nextState.copiedSubItemScores);
+        setCopiedGradeMemberSubItemScoreSources(nextState.copiedSubItemScoreSources);
+        setSubItemCopyRedoHistory(prev => prev.slice(0, -1));
+    };
+
+    const getCopySourceLabel = (source?: CopySource) => {
+        if (source === "from_first") return "คัดลอกจากคนแรก";
+        return "คัดลอกจากคนบน";
+    };
+
+    const getMemberSubItemScoreData = (studentId: number, subItemId: number): SubItemScoreData | undefined => {
+        const studentScore = scoresData?.student_scores?.find(ss => ss.student.id === studentId);
+        return studentScore?.sub_item_scores?.find(si => si.sub_item_id === subItemId);
     };
 
     // Get selected grade group member IDs (only those without existing scores)
@@ -643,6 +1191,37 @@ export default function ScoreModal({
             
             // Must have at least 1 member selected who needs scoring
             if (selectedGradeMembers.length === 0) return false;
+
+            // In selected mode (non sub-items), require a valid score for every selected member
+            if (!hasSubItems && gradeGroupMode === "selected") {
+                return selectedGradeMembers.every((studentId) => {
+                    const scoreValue = gradeGroupMemberScores[studentId] ?? "";
+                    return scoreValue !== "" && validateScore(scoreValue, assignment.max_score);
+                });
+            }
+
+            if (hasSubItems && gradeGroupMode === "selected") {
+                let hasAnyValidEntry = false;
+                for (const studentId of selectedGradeMembers) {
+                    const memberScores = gradeGroupMemberSubItemScores[studentId] || {};
+                    for (const item of subItemScores) {
+                        const existingSubScore = getMemberSubItemScoreData(studentId, item.subItemId);
+                        if (existingSubScore?.score !== null && existingSubScore?.score !== undefined) {
+                            continue;
+                        }
+
+                        const value = memberScores[item.subItemId] ?? "";
+                        if (value === "") continue;
+
+                        if (!validateScore(value, item.maxScore)) {
+                            return false;
+                        }
+                        hasAnyValidEntry = true;
+                    }
+                }
+
+                return hasAnyValidEntry;
+            }
         }
 
         if (hasSubItems) {
@@ -657,7 +1236,7 @@ export default function ScoreModal({
         } else {
             return mainScore !== "" && validateScore(mainScore, assignment.max_score);
         }
-    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore, canScoreSelected, gradeGroupMode, selectedGradeMembers, allMembersHaveScores]);
+    }, [assignment, selectedStudent, selectedGroup, mainScore, subItemScores, hasSubItems, isGroupAssignment, existingScore, subItemExistingScores, isCheckingScore, canScoreSelected, gradeGroupMode, selectedGradeMembers, allMembersHaveScores, gradeGroupMemberScores, gradeGroupMemberSubItemScores, scoresData]);
 
     const handleSubmitGrade = async () => {
         if (!assignment || !canSubmitGrade) return;
@@ -678,15 +1257,37 @@ export default function ScoreModal({
 
                 if (isGroupAssignment && selectedGroup) {
                     // For group with sub-items
-                    for (const item of itemsToSubmit) {
-                        await scoreService.submitGroupScore({
-                            assignment_id: assignment.id,
-                            group_id: selectedGroup.id,
-                            score: parseFloat(item.score.toString()),
-                            sub_item_id: item.subItemId,
-                            comment: comment || undefined,
-                            student_ids: studentIdsForGrade,
-                        });
+                    if (gradeGroupMode === "selected") {
+                        for (const studentId of selectedGradeMembers) {
+                            const memberScores = gradeGroupMemberSubItemScores[studentId] || {};
+                            for (const item of subItemScores) {
+                                const value = memberScores[item.subItemId] ?? "";
+                                const existingSubScore = getMemberSubItemScoreData(studentId, item.subItemId);
+                                if (value === "" || (existingSubScore?.score !== null && existingSubScore?.score !== undefined)) {
+                                    continue;
+                                }
+
+                                await scoreService.submitGroupScore({
+                                    assignment_id: assignment.id,
+                                    group_id: selectedGroup.id,
+                                    score: parseFloat(value),
+                                    sub_item_id: item.subItemId,
+                                    comment: comment || undefined,
+                                    student_ids: [studentId],
+                                });
+                            }
+                        }
+                    } else {
+                        for (const item of itemsToSubmit) {
+                            await scoreService.submitGroupScore({
+                                assignment_id: assignment.id,
+                                group_id: selectedGroup.id,
+                                score: parseFloat(item.score.toString()),
+                                sub_item_id: item.subItemId,
+                                comment: comment || undefined,
+                                student_ids: studentIdsForGrade,
+                            });
+                        }
                     }
                 } else if (selectedStudent) {
                     // For individual with sub-items
@@ -703,22 +1304,38 @@ export default function ScoreModal({
             } else {
                 // Single score (no sub-items)
                 if (isGroupAssignment && selectedGroup) {
-                    console.log('Submitting group score:', {
-                        assignment_id: assignment.id,
-                        group_id: selectedGroup.id,
-                        score: parseFloat(mainScore),
-                        student_ids: studentIdsForGrade,
-                    });
-                    const result = await scoreService.submitGroupScore({
-                        assignment_id: assignment.id,
-                        group_id: selectedGroup.id,
-                        score: parseFloat(mainScore),
-                        comment: comment || undefined,
-                        student_ids: studentIdsForGrade,
-                    });
-                    console.log('Group score result:', result);
-                    if (!result) {
-                        throw new Error('Failed to submit group score');
+                    if (gradeGroupMode === "selected") {
+                        for (const studentId of selectedGradeMembers) {
+                            const memberScore = parseFloat(gradeGroupMemberScores[studentId]);
+                            const result = await scoreService.submitGroupScore({
+                                assignment_id: assignment.id,
+                                group_id: selectedGroup.id,
+                                score: memberScore,
+                                comment: comment || undefined,
+                                student_ids: [studentId],
+                            });
+                            if (!result) {
+                                throw new Error(`Failed to submit score for student ${studentId}`);
+                            }
+                        }
+                    } else {
+                        console.log('Submitting group score:', {
+                            assignment_id: assignment.id,
+                            group_id: selectedGroup.id,
+                            score: parseFloat(mainScore),
+                            student_ids: studentIdsForGrade,
+                        });
+                        const result = await scoreService.submitGroupScore({
+                            assignment_id: assignment.id,
+                            group_id: selectedGroup.id,
+                            score: parseFloat(mainScore),
+                            comment: comment || undefined,
+                            student_ids: studentIdsForGrade,
+                        });
+                        console.log('Group score result:', result);
+                        if (!result) {
+                            throw new Error('Failed to submit group score');
+                        }
                     }
                 } else if (selectedStudent) {
                     const result = await scoreService.submitScore({
@@ -757,6 +1374,8 @@ export default function ScoreModal({
             setSubItemExistingScores([]);
             setGradeGroupMode("all");
             setGradeGroupMembers([]);
+            setGradeGroupMemberScores({});
+            setGradeGroupMemberSubItemScores({});
 
             onScoreSubmitted?.();
         } catch (error) {
@@ -822,6 +1441,8 @@ export default function ScoreModal({
             setGroupMemberScores([]);
             setGroupMemberSubItemScores(new Map());
             setEditGroupMode("all");
+            setEditGroupMemberScores({});
+            setEditGroupMemberSubItemScores({});
             return;
         }
 
@@ -863,6 +1484,13 @@ export default function ScoreModal({
                     };
                 });
                 setGroupMemberScores(memberScoresData);
+                const initialEditMemberScores: Record<number, string> = {};
+                memberScoresData.forEach((member) => {
+                    if (member.selected && member.scoreId && member.score !== null && member.score !== undefined) {
+                        initialEditMemberScores[member.studentId] = member.score.toString();
+                    }
+                });
+                setEditGroupMemberScores(initialEditMemberScores);
 
                 // Build sub-item score map for all members
                 const subItemMap = new Map<number, { subItemId: number; scoreId: number | null }[]>();
@@ -876,6 +1504,20 @@ export default function ScoreModal({
                     }
                 }
                 setGroupMemberSubItemScores(subItemMap);
+                const initialEditMemberSubItemScores: Record<number, Record<number, string>> = {};
+                for (const member of group.members) {
+                    const studentScore = scoresData?.student_scores.find(ss => ss.student.id === member.id);
+                    if (!studentScore?.sub_item_scores) continue;
+
+                    const memberSubScores: Record<number, string> = {};
+                    studentScore.sub_item_scores.forEach((si) => {
+                        if (si.score !== null && si.score !== undefined) {
+                            memberSubScores[si.sub_item_id] = si.score.toString();
+                        }
+                    });
+                    initialEditMemberSubItemScores[member.id] = memberSubScores;
+                }
+                setEditGroupMemberSubItemScores(initialEditMemberSubItemScores);
 
                 // Get score from first member (for display purposes)
                 const memberScore = scoresData?.student_scores.find(
@@ -903,17 +1545,68 @@ export default function ScoreModal({
 
     // Toggle member selection for group edit (cannot toggle members with pending edit requests)
     const toggleMemberSelection = (studentId: number) => {
-        setGroupMemberScores(prev => prev.map(m =>
-            m.studentId === studentId && !m.hasPendingEdit ? { ...m, selected: !m.selected } : m
-        ));
+        setGroupMemberScores(prev => {
+            const next = prev.map(m =>
+                m.studentId === studentId && !m.hasPendingEdit ? { ...m, selected: !m.selected } : m
+            );
+
+            const changedMember = next.find(m => m.studentId === studentId);
+            if (changedMember && !changedMember.hasPendingEdit) {
+                if (changedMember.selected) {
+                    setEditGroupMemberScores(prevScores => ({
+                        ...prevScores,
+                        [studentId]: prevScores[studentId] ?? (changedMember.score?.toString() || ""),
+                    }));
+                } else {
+                    setEditGroupMemberScores(prevScores => {
+                        const { [studentId]: _, ...rest } = prevScores;
+                        return rest;
+                    });
+                }
+            }
+
+            return next;
+        });
     };
 
     // Select/deselect all members (hasPendingEdit members are always excluded from selection)
     const toggleAllMembersSelection = (selected: boolean) => {
-        setGroupMemberScores(prev => prev.map(m => ({
-            ...m,
-            selected: selected ? !m.hasPendingEdit : false,
-        })));
+        setGroupMemberScores(prev => {
+            const next = prev.map(m => ({
+                ...m,
+                selected: selected ? !m.hasPendingEdit : false,
+            }));
+
+            setEditGroupMemberScores(prevScores => {
+                if (!selected) return {};
+                const merged: Record<number, string> = {};
+                next.forEach((m) => {
+                    if (m.selected && m.scoreId) {
+                        merged[m.studentId] = prevScores[m.studentId] ?? (m.score?.toString() || "");
+                    }
+                });
+                return merged;
+            });
+
+            return next;
+        });
+    };
+
+    const handleEditGroupMemberScoreChange = (studentId: number, value: string) => {
+        setEditGroupMemberScores(prev => ({
+            ...prev,
+            [studentId]: value,
+        }));
+    };
+
+    const handleEditGroupMemberSubItemScoreChange = (studentId: number, subItemId: number, value: string) => {
+        setEditGroupMemberSubItemScores(prev => ({
+            ...prev,
+            [studentId]: {
+                ...(prev[studentId] || {}),
+                [subItemId]: value,
+            },
+        }));
     };
 
     // Filter groups for edit search
@@ -938,8 +1631,25 @@ export default function ScoreModal({
             const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
             if (!hasValidReason) return false;
             const maxScore = assignment?.subItems?.find(si => si.id === selectedEditSubItemId)?.max_score || 0;
-            if (!subItem || subItem.newScore === "" || !validateScore(subItem.newScore, maxScore)) return false;
             const selectedMembers = groupMemberScores.filter(m => m.selected && !m.hasPendingEdit);
+
+            if (selectedMembers.length === 0) return false;
+
+            if (editGroupMode === "selected") {
+                const targetMembers = selectedMembers.filter(m => {
+                    const sub = groupMemberSubItemScores.get(m.studentId);
+                    return sub?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId != null;
+                });
+
+                if (targetMembers.length === 0) return false;
+
+                return targetMembers.every((member) => {
+                    const value = editGroupMemberSubItemScores[member.studentId]?.[selectedEditSubItemId] ?? "";
+                    return value !== "" && validateScore(value, maxScore);
+                });
+            }
+
+            if (!subItem || subItem.newScore === "" || !validateScore(subItem.newScore, maxScore)) return false;
             const hasAnyScoreId = selectedMembers.some(m => {
                 const sub = groupMemberSubItemScores.get(m.studentId);
                 return sub?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId != null;
@@ -960,6 +1670,12 @@ export default function ScoreModal({
         if (isGroupAssignment && editSelectedGroup) {
             const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit);
             if (selectedMembers.length === 0 || !hasValidReason) return false;
+            if (editGroupMode === "selected") {
+                return selectedMembers.every((member) => {
+                    const value = editGroupMemberScores[member.studentId] ?? "";
+                    return value !== "" && validateScore(value, assignment?.max_score || 0);
+                });
+            }
             if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
             return true;
         }
@@ -968,12 +1684,65 @@ export default function ScoreModal({
         if (!currentScore || !hasValidReason) return false;
         if (newScore === "" || !validateScore(newScore, assignment?.max_score || 0)) return false;
         return true;
-    }, [currentScore, newScore, editReasonType, editReasonCustom, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores, isGroupAssignment, editSelectedGroup, groupMemberScores, groupMemberSubItemScores]);
+    }, [currentScore, newScore, editReasonType, editReasonCustom, assignment, hasSubItems, selectedEditSubItemId, editSubItemScores, isGroupAssignment, editSelectedGroup, groupMemberScores, groupMemberSubItemScores, editGroupMode, editGroupMemberScores, editGroupMemberSubItemScores]);
 
     const handleSubItemNewScoreChange = (subItemId: number, value: string) => {
         setEditSubItemScores(prev => prev.map(s =>
             s.subItemId === subItemId ? { ...s, newScore: value } : s
         ));
+    };
+
+    const buildEditConfirmationLines = (): string[] => {
+        const lines: string[] = [];
+
+        if (isGroupAssignment && editSelectedGroup && hasSubItems && selectedEditSubItemId !== null) {
+            const subItemName = assignment?.subItems?.find(si => si.id === selectedEditSubItemId)?.name || `ข้อ ${selectedEditSubItemId}`;
+            lines.push(`กลุ่ม: ${editSelectedGroup.name}`);
+            lines.push(`ข้อย่อย: ${subItemName}`);
+
+            const selectedMembers = groupMemberScores.filter(m => m.selected && !m.hasPendingEdit);
+            if (editGroupMode === "selected") {
+                selectedMembers.forEach((member) => {
+                    const hasSubItemScore = groupMemberSubItemScores
+                        .get(member.studentId)
+                        ?.some((s) => s.subItemId === selectedEditSubItemId && s.scoreId);
+                    if (!hasSubItemScore) return;
+                    const targetScore = editGroupMemberSubItemScores[member.studentId]?.[selectedEditSubItemId] ?? "";
+                    lines.push(`- ${member.studentName}: ${targetScore}`);
+                });
+            } else {
+                const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
+                lines.push(`แก้ทั้งกลุ่มเป็น: ${subItem?.newScore || ""}`);
+                lines.push(`จำนวนสมาชิกที่มีคะแนนข้อนี้: ${selectedMembers.length} คน`);
+            }
+            return lines;
+        }
+
+        if (isGroupAssignment && editSelectedGroup) {
+            lines.push(`กลุ่ม: ${editSelectedGroup.name}`);
+            const selectedMembers = groupMemberScores.filter(m => m.selected && m.scoreId && !m.hasPendingEdit);
+            if (editGroupMode === "selected") {
+                selectedMembers.forEach((member) => {
+                    const targetScore = editGroupMemberScores[member.studentId] ?? "";
+                    lines.push(`- ${member.studentName}: ${targetScore}`);
+                });
+            } else {
+                lines.push(`แก้ทั้งกลุ่มเป็น: ${newScore}`);
+                lines.push(`จำนวนสมาชิก: ${selectedMembers.length} คน`);
+            }
+            return lines;
+        }
+
+        if (hasSubItems && selectedEditSubItemId !== null) {
+            const subItemName = assignment?.subItems?.find(si => si.id === selectedEditSubItemId)?.name || `ข้อ ${selectedEditSubItemId}`;
+            const subItem = editSubItemScores.find(s => s.subItemId === selectedEditSubItemId);
+            lines.push(`ข้อย่อย: ${subItemName}`);
+            lines.push(`คะแนนใหม่: ${subItem?.newScore || ""}`);
+            return lines;
+        }
+
+        lines.push(`คะแนนใหม่: ${newScore}`);
+        return lines;
     };
 
     const handleSubmitEdit = async () => {
@@ -987,25 +1756,47 @@ export default function ScoreModal({
                 if (!subItem) return;
 
                 const selectedMembers = groupMemberScores.filter(m => m.selected && !m.hasPendingEdit);
-                const scoreIds = selectedMembers
-                    .map(m => groupMemberSubItemScores.get(m.studentId)?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId ?? null)
-                    .filter((id): id is number => id !== null);
+                const targets = selectedMembers
+                    .map((m) => {
+                        const scoreId = groupMemberSubItemScores.get(m.studentId)?.find(s => s.subItemId === selectedEditSubItemId)?.scoreId ?? null;
+                        return { studentId: m.studentId, scoreId };
+                    })
+                    .filter((t): t is { studentId: number; scoreId: number } => t.scoreId !== null);
 
-                if (scoreIds.length === 0) {
+                if (targets.length === 0) {
                     addToast({ title: "ไม่มีสมาชิกที่เลือก", description: "กรุณาเลือกอย่างน้อย 1 คนที่มีคะแนนในข้อย่อยนี้", color: "warning", timeout: 3000, shouldShowTimeoutProgress: true });
                     return;
                 }
 
-                const batchResult = await scoreService.requestGroupScoreEdit({
-                    score_ids: scoreIds,
-                    new_score: parseFloat(subItem.newScore),
-                    reason: finalReason,
-                }, editImages);
+                if (editGroupMode === "selected") {
+                    for (const target of targets) {
+                        const targetScore = editGroupMemberSubItemScores[target.studentId]?.[selectedEditSubItemId] ?? "";
+                        await scoreService.requestScoreEdit({
+                            score_id: target.scoreId,
+                            new_score: parseFloat(targetScore),
+                            reason: finalReason,
+                        }, editImages);
+                    }
 
-                if (batchResult.skipped > 0) {
-                    addToast({ title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)", description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`, color: "warning", timeout: 5000, shouldShowTimeoutProgress: true });
+                    addToast({
+                        title: "ส่งคำขอแก้ไขสำเร็จ",
+                        description: `ส่งคำขอแก้ไขคะแนนข้อย่อยแบบรายบุคคล ${targets.length} คนเรียบร้อยแล้ว`,
+                        color: "success",
+                        timeout: 3000,
+                        shouldShowTimeoutProgress: true,
+                    });
                 } else {
-                    addToast({ title: "ส่งคำขอแก้ไขสำเร็จ", description: `ส่งคำขอแก้ไขคะแนนข้อย่อยสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
+                    const batchResult = await scoreService.requestGroupScoreEdit({
+                        score_ids: targets.map(t => t.scoreId),
+                        new_score: parseFloat(subItem.newScore),
+                        reason: finalReason,
+                    }, editImages);
+
+                    if (batchResult.skipped > 0) {
+                        addToast({ title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)", description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`, color: "warning", timeout: 5000, shouldShowTimeoutProgress: true });
+                    } else {
+                        addToast({ title: "ส่งคำขอแก้ไขสำเร็จ", description: `ส่งคำขอแก้ไขคะแนนข้อย่อยสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`, color: "success", timeout: 3000, shouldShowTimeoutProgress: true });
+                    }
                 }
 
             // Individual sub-item edit
@@ -1033,29 +1824,48 @@ export default function ScoreModal({
                     return;
                 }
 
-                // Submit batch edit request
-                const batchResult = await scoreService.requestGroupScoreEdit({
-                    score_ids: selectedMembers.map(m => m.scoreId!),
-                    new_score: parseFloat(newScore),
-                    reason: finalReason,
-                }, editImages);
+                if (editGroupMode === "selected") {
+                    for (const member of selectedMembers) {
+                        const memberScore = editGroupMemberScores[member.studentId] ?? "";
+                        await scoreService.requestScoreEdit({
+                            score_id: member.scoreId!,
+                            new_score: parseFloat(memberScore),
+                            reason: finalReason,
+                        }, editImages);
+                    }
 
-                if (batchResult.skipped > 0) {
-                    addToast({
-                        title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)",
-                        description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`,
-                        color: "warning",
-                        timeout: 5000,
-                        shouldShowTimeoutProgress: true,
-                    });
-                } else {
                     addToast({
                         title: "ส่งคำขอแก้ไขสำเร็จ",
-                        description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`,
+                        description: `ส่งคำขอแก้ไขคะแนนแบบรายบุคคล ${selectedMembers.length} คนเรียบร้อยแล้ว`,
                         color: "success",
                         timeout: 3000,
                         shouldShowTimeoutProgress: true,
                     });
+                } else {
+                    // Submit batch edit request
+                    const batchResult = await scoreService.requestGroupScoreEdit({
+                        score_ids: selectedMembers.map(m => m.scoreId!),
+                        new_score: parseFloat(newScore),
+                        reason: finalReason,
+                    }, editImages);
+
+                    if (batchResult.skipped > 0) {
+                        addToast({
+                            title: "ส่งคำขอแก้ไขสำเร็จ (บางส่วน)",
+                            description: `ส่งคำขอสำหรับ ${batchResult.created} คน | ข้าม ${batchResult.skipped} คนที่มีคำร้องรออนุมัติอยู่แล้ว: ${batchResult.skipped_names.join(', ')}`,
+                            color: "warning",
+                            timeout: 5000,
+                            shouldShowTimeoutProgress: true,
+                        });
+                    } else {
+                        addToast({
+                            title: "ส่งคำขอแก้ไขสำเร็จ",
+                            description: `ส่งคำขอแก้ไขคะแนนสำหรับ ${batchResult.created} คนเรียบร้อยแล้ว`,
+                            color: "success",
+                            timeout: 3000,
+                            shouldShowTimeoutProgress: true,
+                        });
+                    }
                 }
             } else {
                 // For main score (individual)
@@ -1092,6 +1902,8 @@ export default function ScoreModal({
             setGroupMemberScores([]);
             setGroupMemberSubItemScores(new Map());
             setEditGroupMode("all");
+            setEditGroupMemberScores({});
+            setEditGroupMemberSubItemScores({});
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "ไม่สามารถส่งคำขอแก้ไขได้";
             addToast({
@@ -1126,6 +1938,7 @@ export default function ScoreModal({
     if (!assignment) return null;
 
     const typeInfo = getTypeInfo();
+    const editConfirmationLines = activeTab === "edit" ? buildEditConfirmationLines() : [];
 
     return (
         <Modal
@@ -1699,7 +2512,7 @@ export default function ScoreModal({
                                             <Divider />
 
                                             <div>
-                                                <label className="text-slate-600 font-medium text-sm mb-3 block flex items-center gap-2">
+                                                <label className="text-slate-600 font-medium text-sm mb-3 flex items-center gap-2">
                                                     {/* <Icon icon="solar:medal-star-bold" className="text-amber-500" /> */}
                                                     กรอกคะแนน
                                                 </label>
@@ -1707,7 +2520,120 @@ export default function ScoreModal({
                                                 {hasSubItems ? (
                                                     /* Sub-items score inputs */
                                                     <div className="space-y-3 bg-slate-50 p-4 rounded-xl">
-                                                        {assignment.subItems?.filter(item => item.id !== undefined).slice().sort((a, b) => a.id! - b.id!).map((subItem, idx) => {
+                                                        {isGroupAssignment && gradeGroupMode === "selected" ? (
+                                                            <div className="space-y-4">
+                                                                <div className="flex justify-end gap-2">
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="primary"
+                                                                        className="text-xs"
+                                                                        onPress={applyFirstGradeMemberSubItemScoresToAll}
+                                                                    >
+                                                                        ใช้คะแนนรายข้อของคนแรกกับทุกคน
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="default"
+                                                                        className="text-xs"
+                                                                        onPress={resetCopiedGradeMemberSubItemScores}
+                                                                    >
+                                                                        รีเซ็ตค่าที่คัดลอก
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="secondary"
+                                                                        className="text-xs"
+                                                                        isDisabled={subItemCopyUndoHistory.length === 0}
+                                                                        onPress={undoSubItemBulkCopy}
+                                                                    >
+                                                                        Undo คัดลอกล่าสุด
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="secondary"
+                                                                        className="text-xs"
+                                                                        isDisabled={subItemCopyRedoHistory.length === 0}
+                                                                        onPress={redoSubItemBulkCopy}
+                                                                    >
+                                                                        Redo
+                                                                    </Button>
+                                                                </div>
+                                                                {gradeGroupMembers
+                                                                    .filter((member) => member.selected && member.canScore && !member.hasScore)
+                                                                    .map((member) => (
+                                                                        <div key={member.studentId} className="p-3 bg-white rounded-lg border border-slate-200 space-y-3">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Icon icon="solar:user-bold" className="text-amber-600" />
+                                                                                <span className="text-sm font-semibold text-slate-700">{member.studentName}</span>
+                                                                            </div>
+
+                                                                            {assignment.subItems?.filter(item => item.id !== undefined).slice().sort((a, b) => a.id! - b.id!).map((subItem, idx) => {
+                                                                                const subItemId = subItem.id!;
+                                                                                const existingSubScore = getMemberSubItemScoreData(member.studentId, subItemId);
+                                                                                const isLocked = existingSubScore && existingSubScore.score !== null;
+                                                                                const value = gradeGroupMemberSubItemScores[member.studentId]?.[subItemId] ?? "";
+
+                                                                                return (
+                                                                                    <div key={`${member.studentId}_${subItemId}`} className={`flex items-center gap-3 p-2 rounded-md border ${isLocked ? 'bg-amber-50 border-amber-200' : copiedGradeMemberSubItemScores[member.studentId]?.[subItemId] ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                                                        <span className={`w-7 h-7 flex items-center justify-center text-xs font-bold rounded-full shrink-0 ${isLocked ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                                                            {idx + 1}
+                                                                                        </span>
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <p className="text-xs font-medium text-slate-700 truncate">{subItem.name}</p>
+                                                                                                {copiedGradeMemberSubItemScores[member.studentId]?.[subItemId] && (
+                                                                                                    <Tooltip content={getCopySourceLabel(copiedGradeMemberSubItemScoreSources[member.studentId]?.[subItemId])}>
+                                                                                                        <Chip size="sm" variant="flat" color="primary" className="text-[10px] h-5">
+                                                                                                            {copiedGradeMemberSubItemScoreSources[member.studentId]?.[subItemId] === "from_first" ? "คัดลอกจากคนแรก" : "คัดลอกจากคนบน"}
+                                                                                                        </Chip>
+                                                                                                    </Tooltip>
+                                                                                                )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        {isLocked ? (
+                                                                                            <span className="text-xs font-semibold text-amber-700">{existingSubScore?.score} / {subItem.max_score}</span>
+                                                                                        ) : (
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Input
+                                                                                                    type="number"
+                                                                                                    placeholder="0"
+                                                                                                    value={value}
+                                                                                                    onValueChange={(v) => handleGradeGroupMemberSubItemScoreChange(member.studentId, subItemId, v)}
+                                                                                                    min={0}
+                                                                                                    max={subItem.max_score}
+                                                                                                    step="any"
+                                                                                                    className="w-20"
+                                                                                                    size="sm"
+                                                                                                    variant="bordered"
+                                                                                                    classNames={{
+                                                                                                        input: "text-center font-semibold",
+                                                                                                        inputWrapper: "bg-white border-slate-200",
+                                                                                                    }}
+                                                                                                />
+                                                                                                <span className="text-xs text-slate-500">/ {subItem.max_score}</span>
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="flat"
+                                                                                                    color="default"
+                                                                                                    className="text-xs h-7 px-2"
+                                                                                                    onPress={() => copyPreviousGradeMemberSubItemScore(member.studentId, subItemId)}
+                                                                                                >
+                                                                                                    คัดลอกจากคนบน
+                                                                                                </Button>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ))}
+                                                            </div>
+                                                        ) : (
+                                                        assignment.subItems?.filter(item => item.id !== undefined).slice().sort((a, b) => a.id! - b.id!).map((subItem, idx) => {
                                                             const subItemId = subItem.id!;
                                                             const existingSubScore = subItemExistingScores.find(s => s.subItemId === subItemId);
                                                             const isLocked = existingSubScore && existingSubScore.score !== null;
@@ -1794,7 +2720,7 @@ export default function ScoreModal({
                                                                     </div>
                                                                 </div>
                                                             );
-                                                        })}
+                                                        }))}
 
                                                         {/* Total Score Display */}
                                                         {/* <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
@@ -1808,57 +2734,153 @@ export default function ScoreModal({
                                                 ) : (
                                                     /* Single score input */
                                                     <div className="bg-slate-50 p-4 rounded-xl space-y-3">
-                                                        <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
-                                                            <div className="p-2 bg-amber-100 rounded-lg shrink-0">
-                                                                <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
-                                                            </div>
-                                                            <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Input
-                                                                    type="number"
-                                                                    placeholder="0"
-                                                                    value={mainScore}
-                                                                    onValueChange={setMainScore}
-                                                                    min={0}
-                                                                    max={assignment.max_score}
-                                                                    step="any"
-                                                                    className="w-20"
-                                                                    size="sm"
-                                                                    variant="bordered"
-                                                                    classNames={{
-                                                                        input: "text-center font-semibold",
-                                                                        inputWrapper: "bg-white border-slate-200",
-                                                                    }}
-                                                                />
-                                                                <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
-                                                            </div>
-                                                        </div>
-                                                        {/* Quick score buttons */}
-                                                        <div className="flex justify-end gap-2">
-                                                            {(() => {
-                                                                const max = Number(assignment.max_score);
-                                                                // Always show 3 buttons: 0, half, full
-                                                                const half = max / 2;
-                                                                const options = [0, half, max];
-                                                                return options.map(score => (
+                                                        {isGroupAssignment && gradeGroupMode === "selected" ? (
+                                                            <div className="space-y-3">
+                                                                <div className="flex justify-end gap-2">
                                                                     <Button
-                                                                        key={score}
                                                                         size="sm"
-                                                                        variant={mainScore === score.toString() ? "solid" : "flat"}
-                                                                        color={mainScore === score.toString() ? "primary" : "default"}
-                                                                        className={mainScore === score.toString()
-                                                                            ? "bg-blue-500 text-white font-semibold min-w-[3rem]"
-                                                                            : "bg-white border border-slate-200 font-medium min-w-[3rem]"
-                                                                        }
-                                                                        onPress={() => setMainScore(score.toString())}
+                                                                        variant="flat"
+                                                                        color="primary"
+                                                                        className="text-xs"
+                                                                        onPress={applyFirstGradeMemberScoreToAll}
                                                                     >
-                                                                        {Number.isInteger(score) ? score : score.toFixed(1)}
+                                                                        ใช้คะแนนคนแรกกับทุกคน
                                                                     </Button>
-                                                                ));
-                                                            })()}
-                                                        </div>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="default"
+                                                                        className="text-xs"
+                                                                        onPress={resetCopiedGradeMemberScores}
+                                                                    >
+                                                                        รีเซ็ตค่าที่คัดลอก
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="secondary"
+                                                                        className="text-xs"
+                                                                        isDisabled={mainCopyUndoHistory.length === 0}
+                                                                        onPress={undoMainBulkCopy}
+                                                                    >
+                                                                        Undo คัดลอกล่าสุด
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="flat"
+                                                                        color="secondary"
+                                                                        className="text-xs"
+                                                                        isDisabled={mainCopyRedoHistory.length === 0}
+                                                                        onPress={redoMainBulkCopy}
+                                                                    >
+                                                                        Redo
+                                                                    </Button>
+                                                                </div>
+                                                                {gradeGroupMembers
+                                                                    .filter((member) => member.selected && member.canScore && !member.hasScore)
+                                                                    .map((member) => (
+                                                                        <div key={member.studentId} className={`flex items-center gap-3 p-3 rounded-lg border ${copiedGradeMemberScores[member.studentId] ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200'}`}>
+                                                                            <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                                <Icon icon="solar:user-bold" className="text-lg text-amber-600" />
+                                                                            </div>
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <p className="text-sm font-medium text-slate-700 truncate">{member.studentName}</p>
+                                                                                    {copiedGradeMemberScores[member.studentId] && (
+                                                                                        <Tooltip content={getCopySourceLabel(copiedGradeMemberScoreSources[member.studentId])}>
+                                                                                            <Chip size="sm" variant="flat" color="primary" className="text-[10px] h-5">
+                                                                                                {copiedGradeMemberScoreSources[member.studentId] === "from_first" ? "คัดลอกจากคนแรก" : "คัดลอกจากคนบน"}
+                                                                                            </Chip>
+                                                                                        </Tooltip>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    placeholder="0"
+                                                                                    value={gradeGroupMemberScores[member.studentId] ?? ""}
+                                                                                    onValueChange={(value) => handleGradeGroupMemberScoreChange(member.studentId, value)}
+                                                                                    min={0}
+                                                                                    max={assignment.max_score}
+                                                                                    step="any"
+                                                                                    className="w-20"
+                                                                                    size="sm"
+                                                                                    variant="bordered"
+                                                                                    classNames={{
+                                                                                        input: "text-center font-semibold",
+                                                                                        inputWrapper: "bg-white border-slate-200",
+                                                                                    }}
+                                                                                />
+                                                                                <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                                <Button
+                                                                                    size="sm"
+                                                                                    variant="flat"
+                                                                                    color="default"
+                                                                                    className="text-xs h-7 px-2"
+                                                                                    onPress={() => copyPreviousGradeMemberScore(member.studentId)}
+                                                                                >
+                                                                                    คัดลอกจากคนบน
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+                                                                    <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                        <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Input
+                                                                            type="number"
+                                                                            placeholder="0"
+                                                                            value={mainScore}
+                                                                            onValueChange={setMainScore}
+                                                                            min={0}
+                                                                            max={assignment.max_score}
+                                                                            step="any"
+                                                                            className="w-20"
+                                                                            size="sm"
+                                                                            variant="bordered"
+                                                                            classNames={{
+                                                                                input: "text-center font-semibold",
+                                                                                inputWrapper: "bg-white border-slate-200",
+                                                                            }}
+                                                                        />
+                                                                        <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                    </div>
+                                                                </div>
+                                                                {/* Quick score buttons */}
+                                                                <div className="flex justify-end gap-2">
+                                                                    {(() => {
+                                                                        const max = Number(assignment.max_score);
+                                                                        // Always show 3 buttons: 0, half, full
+                                                                        const half = max / 2;
+                                                                        const options = [0, half, max];
+                                                                        return options.map(score => (
+                                                                            <Button
+                                                                                key={score}
+                                                                                size="sm"
+                                                                                variant={mainScore === score.toString() ? "solid" : "flat"}
+                                                                                color={mainScore === score.toString() ? "primary" : "default"}
+                                                                                className={mainScore === score.toString()
+                                                                                    ? "bg-blue-500 text-white font-semibold min-w-[3rem]"
+                                                                                    : "bg-white border border-slate-200 font-medium min-w-[3rem]"
+                                                                                }
+                                                                                onPress={() => setMainScore(score.toString())}
+                                                                            >
+                                                                                {Number.isInteger(score) ? score : score.toFixed(1)}
+                                                                            </Button>
+                                                                        ));
+                                                                    })()}
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>
@@ -2049,6 +3071,8 @@ export default function ScoreModal({
                                                                     setGroupMemberScores([]);
                                                                     setGroupMemberSubItemScores(new Map());
                                                                     setEditGroupMode("all");
+                                                                    setEditGroupMemberScores({});
+                                                                    setEditGroupMemberSubItemScores({});
                                                                 }}
                                                             >
                                                                 <Icon icon="solar:close-circle-bold" className="text-xl text-slate-400" />
@@ -2309,36 +3333,74 @@ export default function ScoreModal({
 
                                                                 {/* Score Input */}
                                                                 <div className="bg-white p-4 rounded-lg border border-slate-200">
-                                                                    <label className="text-slate-600 font-medium text-sm mb-3 block flex items-center gap-2">
-                                                                        {/* <Icon icon="solar:star-bold" className="text-amber-500" /> */}
+                                                                    <label className="text-slate-600 font-medium text-sm mb-3 flex items-center gap-2">
                                                                         คะแนนใหม่
                                                                     </label>
-                                                                    <div className="flex items-center justify-center gap-3">
-                                                                        <Input
-                                                                            type="number"
-                                                                            isRequired
-                                                                            placeholder="0"
-                                                                            value={selectedEditScore?.newScore || ""}
-                                                                            onValueChange={(val) => handleSubItemNewScoreChange(selectedEditSubItemId, val)}
-                                                                            min={0}
-                                                                            max={selectedSubItem?.max_score || 0}
-                                                                            step="any"
-                                                                            size="lg"
-                                                                            variant="bordered"
-                                                                            classNames={{
-                                                                                base: "w-28",
-                                                                                input: "text-center text-2xl font-bold text-blue-600",
-                                                                                inputWrapper: "bg-white border-blue-200 hover:border-blue-400",
-                                                                            }}
-                                                                        />
-                                                                        <div className="text-center">
-                                                                            <span className="text-2xl text-slate-400">/</span>
+                                                                    {isGroupAssignment && editSelectedGroup && editGroupMode === "selected" ? (
+                                                                        <div className="space-y-2">
+                                                                            {groupMemberScores
+                                                                                .filter((m) => m.selected && m.scoreId && !m.hasPendingEdit)
+                                                                                .map((member) => {
+                                                                                    const hasSubItemScore = groupMemberSubItemScores
+                                                                                        .get(member.studentId)
+                                                                                        ?.some((s) => s.subItemId === selectedEditSubItemId && s.scoreId);
+                                                                                    if (!hasSubItemScore) return null;
+
+                                                                                    return (
+                                                                                        <div key={`${member.studentId}_${selectedEditSubItemId}`} className="flex items-center justify-between gap-3 p-2 rounded-md border border-slate-200">
+                                                                                            <span className="text-sm font-medium text-slate-700 truncate">{member.studentName}</span>
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <Input
+                                                                                                    type="number"
+                                                                                                    isRequired
+                                                                                                    placeholder="0"
+                                                                                                    value={editGroupMemberSubItemScores[member.studentId]?.[selectedEditSubItemId] ?? ""}
+                                                                                                    onValueChange={(val) => handleEditGroupMemberSubItemScoreChange(member.studentId, selectedEditSubItemId, val)}
+                                                                                                    min={0}
+                                                                                                    max={selectedSubItem?.max_score || 0}
+                                                                                                    step="any"
+                                                                                                    size="sm"
+                                                                                                    variant="bordered"
+                                                                                                    className="w-24"
+                                                                                                    classNames={{
+                                                                                                        input: "text-center font-semibold",
+                                                                                                        inputWrapper: "bg-white border-blue-200 hover:border-blue-400",
+                                                                                                    }}
+                                                                                                />
+                                                                                                <span className="text-xs text-slate-500">/ {selectedSubItem?.max_score}</span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
                                                                         </div>
-                                                                        <div className="text-center">
-                                                                            <span className="text-2xl font-bold text-slate-700">{selectedSubItem?.max_score}</span>
-                                                                            <p className="text-xs text-slate-500">คะแนนเต็ม</p>
+                                                                    ) : (
+                                                                        <div className="flex items-center justify-center gap-3">
+                                                                            <Input
+                                                                                type="number"
+                                                                                isRequired
+                                                                                placeholder="0"
+                                                                                value={selectedEditScore?.newScore || ""}
+                                                                                onValueChange={(val) => handleSubItemNewScoreChange(selectedEditSubItemId, val)}
+                                                                                min={0}
+                                                                                max={selectedSubItem?.max_score || 0}
+                                                                                step="any"
+                                                                                size="lg"
+                                                                                variant="bordered"
+                                                                                classNames={{
+                                                                                    base: "w-28",
+                                                                                    input: "text-center text-2xl font-bold text-blue-600",
+                                                                                    inputWrapper: "bg-white border-blue-200 hover:border-blue-400",
+                                                                                }}
+                                                                            />
+                                                                            <div className="text-center">
+                                                                                <span className="text-2xl text-slate-400">/</span>
+                                                                            </div>
+                                                                            <div className="text-center">
+                                                                                <span className="text-2xl font-bold text-slate-700">{selectedSubItem?.max_score}</span>
+                                                                                <p className="text-xs text-slate-500">คะแนนเต็ม</p>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
+                                                                    )}
                                                                 </div>
 
                                                                 {/* Reason Input */}
@@ -2467,38 +3529,74 @@ export default function ScoreModal({
 
 
                                                         <div className="bg-slate-50 p-4 rounded-xl">
-                                                            <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
-                                                                <div className="p-2 bg-amber-100 rounded-lg shrink-0">
-                                                                    <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
+                                                            {isGroupAssignment && editSelectedGroup && editGroupMode === "selected" ? (
+                                                                <div className="space-y-2">
+                                                                    {groupMemberScores
+                                                                        .filter((m) => m.selected && m.scoreId && !m.hasPendingEdit)
+                                                                        .map((member) => (
+                                                                            <div key={member.studentId} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+                                                                                <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                                    <Icon icon="solar:user-bold" className="text-lg text-amber-600" />
+                                                                                </div>
+                                                                                <div className="flex-1 min-w-0">
+                                                                                    <p className="text-sm font-medium text-slate-700 truncate">{member.studentName}</p>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        placeholder="0"
+                                                                                        value={editGroupMemberScores[member.studentId] ?? ""}
+                                                                                        onValueChange={(value) => handleEditGroupMemberScoreChange(member.studentId, value)}
+                                                                                        min={0}
+                                                                                        max={assignment.max_score}
+                                                                                        step="any"
+                                                                                        className="w-20"
+                                                                                        size="sm"
+                                                                                        variant="bordered"
+                                                                                        classNames={{
+                                                                                            input: "text-center font-semibold",
+                                                                                            inputWrapper: "bg-white border-slate-200",
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
                                                                 </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
+                                                            ) : (
+                                                                <div className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200">
+                                                                    <div className="p-2 bg-amber-100 rounded-lg shrink-0">
+                                                                        <Icon icon="solar:medal-star-bold" className="text-xl text-amber-600" />
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <p className="text-sm font-medium text-slate-700">คะแนนรวม</p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Input
+                                                                            type="number"
+                                                                            placeholder="0"
+                                                                            value={newScore}
+                                                                            onValueChange={setNewScore}
+                                                                            min={0}
+                                                                            max={assignment.max_score}
+                                                                            step="any"
+                                                                            className="w-20"
+                                                                            size="sm"
+                                                                            variant="bordered"
+                                                                            classNames={{
+                                                                                input: "text-center font-semibold",
+                                                                                inputWrapper: "bg-white border-slate-200",
+                                                                            }}
+                                                                        />
+                                                                        <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
+                                                                    </div>
                                                                 </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <Input
-                                                                        type="number"
-                                                                        placeholder="0"
-                                                                        value={newScore}
-                                                                        onValueChange={setNewScore}
-                                                                        min={0}
-                                                                        max={assignment.max_score}
-                                                                        step="any"
-                                                                        className="w-20"
-                                                                        size="sm"
-                                                                        variant="bordered"
-                                                                        classNames={{
-                                                                            input: "text-center font-semibold",
-                                                                            inputWrapper: "bg-white border-slate-200",
-                                                                        }}
-                                                                    />
-                                                                    <span className="text-sm text-slate-500">/ {assignment.max_score}</span>
-                                                                </div>
-                                                            </div>
+                                                            )}
                                                         </div>
                                                     </div>
 
                                                     <div className="space-y-3">
-                                                        <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
+                                                        <label className="text-slate-600 font-medium text-sm mb-2 flex items-center gap-2">
                                                             <Icon icon="solar:document-text-bold" className="text-slate-400" />
                                                             เหตุผลในการแก้ไข *
                                                         </label>
@@ -2545,7 +3643,7 @@ export default function ScoreModal({
 
                                                     {/* Image Upload */}
                                                     <div className="space-y-3">
-                                                        <label className="text-slate-600 font-medium text-sm mb-2 block flex items-center gap-2">
+                                                        <label className="text-slate-600 font-medium text-sm mb-2 flex items-center gap-2">
                                                             <Icon icon="solar:camera-bold" className="text-slate-400" />
                                                             แนบรูปภาพประกอบ (ไม่บังคับ, สูงสุด 3 รูป)
                                                         </label>
@@ -2604,32 +3702,45 @@ export default function ScoreModal({
                 </ModalBody>
 
                 <ModalFooter className="px-6 py-4 border-t border-slate-200">
-                    <div className="flex items-center justify-end w-full">
-                        <Button variant="light" onPress={onClose}>
-                            ปิด
-                        </Button>
-                        {activeTab === "grade" ? (
-                            <Button
-                                color="primary"
-                                onPress={handleSubmitGrade}
-                                isDisabled={!canSubmitGrade}
-                                isLoading={isSubmitting}
-                                className="bg-blue-500"
-                                startContent={!isSubmitting && <Icon icon="solar:check-circle-bold" />}
-                            >
-                                บันทึกคะแนน
-                            </Button>
-                        ) : (
-                            <Button
-                                color="warning"
-                                onPress={handleSubmitEdit}
-                                isDisabled={!canSubmitEdit}
-                                isLoading={isSubmitting}
-                                startContent={!isSubmitting && <Icon icon="solar:pen-2-bold" />}
-                            >
-                                ส่งคำขอแก้ไข
-                            </Button>
+                    <div className="w-full space-y-3">
+                        {activeTab === "edit" && editConfirmationLines.length > 0 && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                <p className="text-xs font-semibold text-amber-800 mb-2">สรุปรายการที่จะส่งแก้ไข</p>
+                                <div className="space-y-1">
+                                    {editConfirmationLines.map((line, index) => (
+                                        <p key={`${line}-${index}`} className="text-xs text-amber-900">{line}</p>
+                                    ))}
+                                </div>
+                            </div>
                         )}
+
+                        <div className="flex items-center justify-end w-full">
+                            <Button variant="light" onPress={onClose}>
+                                ปิด
+                            </Button>
+                            {activeTab === "grade" ? (
+                                <Button
+                                    color="primary"
+                                    onPress={handleSubmitGrade}
+                                    isDisabled={!canSubmitGrade}
+                                    isLoading={isSubmitting}
+                                    className="bg-blue-500"
+                                    startContent={!isSubmitting && <Icon icon="solar:check-circle-bold" />}
+                                >
+                                    บันทึกคะแนน
+                                </Button>
+                            ) : (
+                                <Button
+                                    color="warning"
+                                    onPress={handleSubmitEdit}
+                                    isDisabled={!canSubmitEdit}
+                                    isLoading={isSubmitting}
+                                    startContent={!isSubmitting && <Icon icon="solar:pen-2-bold" />}
+                                >
+                                    ส่งคำขอแก้ไข
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </ModalFooter>
             </ModalContent>
