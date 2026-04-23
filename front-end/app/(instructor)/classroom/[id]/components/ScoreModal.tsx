@@ -3519,15 +3519,6 @@ export default function ScoreModal({
                                                                         <div className="flex-1 min-w-0">
                                                                             <p className="text-sm font-medium text-slate-700 truncate">{subItem.name}</p>
                                                                         </div>
-                                                                        <div className="flex items-center gap-2">
-                                                                            {hasScore ? (
-                                                                                <span className="font-bold text-slate-700">
-                                                                                    {editScore?.currentScore} / {subItem.max_score}
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-slate-400">ยังไม่มีคะแนน</span>
-                                                                            )}
-                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })}
